@@ -45,7 +45,7 @@ body { margin: 0; }
   font-weight: 700;
   font-family: 'Noto Sans Thai', 'Noto Sans TC', sans-serif;
   transform: translate(-50%, -50%);
-  animation: glyphBlink 1.1s ease-in-out infinite;
+  animation: glyphPulse 1.1s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -231,7 +231,7 @@ body { margin: 0; }
   75% { transform: translate(1px, -1px); }
 }
 @keyframes glitch { 0%,100% { opacity: 1; } 50% { opacity: .65; } }
-@keyframes glyphBlink { 0%,100% { opacity: .18; } 35% { opacity: 1; } 65% { opacity: .25; } }
+@keyframes glyphPulse { 0%,100% { opacity: .2; } 40% { opacity: 1; } 70% { opacity: .35; } }
 
 .scene-view.curse-low .overlay.noise { opacity: .14; }
 .scene-view.curse-mid { filter: blur(1px); }

@@ -1,37 +1,31 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../core/state/types';
 import ChatMessage from './ChatMessage';
 
-export type ChatPanelSettings = {
-  title: string;
-  inputPlaceholder: string;
-  submitLabel: string;
-  jumpToLatestLabel: string;
-  maxRenderCount: number;
-  stickBottomThreshold: number;
-  audienceMinMs: number;
-  audienceMaxMs: number;
-};
-
 type Props = {
-  settings: ChatPanelSettings;
   messages: ChatMessageType[];
   input: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onToggleTranslation: (id: string) => void;
+  onAutoPauseChange: (paused: boolean) => void;
 };
 
+const STICK_BOTTOM_THRESHOLD = 24;
+const MAX_RENDER_COUNT = 100;
+
 export default function ChatPanel({
-  settings,
   messages,
   input,
   onChange,
   onSubmit,
-  onToggleTranslation
+  onToggleTranslation,
+  onAutoPauseChange
 }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const idleTimer = useRef<number>(0);
   const [stickBottom, setStickBottom] = useState(true);
+  const [autoPaused, setAutoPaused] = useState(false);
 
   useLayoutEffect(() => {
     const box = scrollerRef.current;
@@ -39,10 +33,42 @@ export default function ChatPanel({
     box.scrollTop = box.scrollHeight;
   }, [messages, stickBottom]);
 
+  useEffect(() => {
+    const box = scrollerRef.current;
+    if (!box) return;
+
+    const overflowed = box.scrollHeight > box.clientHeight * 1.2;
+    if (overflowed && stickBottom) {
+      setAutoPaused(true);
+      onAutoPauseChange(true);
+    }
+  }, [messages, stickBottom, onAutoPauseChange]);
+
+  useEffect(() => {
+    const resume = () => {
+      if (!autoPaused) return;
+      window.clearTimeout(idleTimer.current);
+      idleTimer.current = window.setTimeout(() => {
+        setAutoPaused(false);
+        onAutoPauseChange(false);
+      }, 1000);
+    };
+
+    window.addEventListener('mousemove', resume);
+    window.addEventListener('keydown', resume);
+    window.addEventListener('wheel', resume, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', resume);
+      window.removeEventListener('keydown', resume);
+      window.removeEventListener('wheel', resume);
+      window.clearTimeout(idleTimer.current);
+    };
+  }, [autoPaused, onAutoPauseChange]);
+
   return (
     <aside className="chat-panel">
       <header className="chat-header">
-        <strong>{settings.title}</strong>
+        <strong>聊天室</strong>
       </header>
 
       <div
@@ -50,12 +76,12 @@ export default function ChatPanel({
         className="chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;
-          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < settings.stickBottomThreshold;
+          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_BOTTOM_THRESHOLD;
           setStickBottom(isBottom);
         }}
       >
         <div className="chat-items">
-          {messages.slice(-settings.maxRenderCount).map((message) => (
+          {messages.slice(-MAX_RENDER_COUNT).map((message) => (
             <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
           ))}
         </div>
@@ -71,7 +97,7 @@ export default function ChatPanel({
             setStickBottom(true);
           }}
         >
-          {settings.jumpToLatestLabel}
+          最新訊息
         </button>
       )}
 
@@ -82,10 +108,10 @@ export default function ChatPanel({
           onKeyDown={(event) => {
             if (event.key === 'Enter') onSubmit();
           }}
-          placeholder={settings.inputPlaceholder}
+          placeholder="傳送訊息"
         />
         <button type="button" onClick={onSubmit}>
-          {settings.submitLabel}
+          送出
         </button>
       </div>
     </aside>
