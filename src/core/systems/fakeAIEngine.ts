@@ -23,6 +23,7 @@ type ReplyCorpus = {
 };
 
 type InputKind = 'correct' | 'wrong' | 'phonetic' | 'smallTalk';
+type ReplyMode = 'normal' | 'urbanLegend' | 'thaiFlood';
 
 type GenerateReplyInput = {
   playerInput: string;
@@ -31,8 +32,6 @@ type GenerateReplyInput = {
   anchor: AnchorType;
   recentHistory: string[];
 };
-
-type ReplyMode = 'normal' | 'urbanLegend' | 'thaiFlood';
 
 type GeneratedReply = {
   mode: ReplyMode;
@@ -84,6 +83,11 @@ function stripEndingPunctuation(text: string) {
   return text.replace(/[。．｡.!！？?]+$/g, '');
 }
 
+function extractChineseSnippet(source: string) {
+  const filtered = source.replace(/[^\u4e00-\u9fff0-9，、？！「」《》\s]/g, '').trim();
+  return filtered.slice(0, 12);
+}
+
 function createAnchorZhMessage(input: GenerateReplyInput): string {
   const kind = classifyInput(input);
   const anchorKey = `anchor_${input.anchor}` as const;
@@ -99,10 +103,9 @@ function createAnchorZhMessage(input: GenerateReplyInput): string {
   }
 
   const toneLine = pickWeighted(tonePool).zh;
-  const trailing =
-    input.recentHistory.length > 0 && Math.random() < 0.18
-      ? `（剛剛那句${input.recentHistory[input.recentHistory.length - 1].slice(0, 12)}）`
-      : '';
+  const recent = input.recentHistory[input.recentHistory.length - 1] ?? '';
+  const recentZh = extractChineseSnippet(recent);
+  const trailing = recentZh && Math.random() < 0.18 ? `（剛剛那句${recentZh}）` : '';
 
   return stripEndingPunctuation(`${anchorLine} ${toneLine}${trailing}`);
 }
@@ -111,20 +114,22 @@ export function generateReply(input: GenerateReplyInput): GeneratedReply {
   const anchorMessage = createAnchorZhMessage(input);
 
   if (input.curse > 70 && Math.random() < 0.08) {
+    const floodPool = corpus.thaiFlood.length > 0 ? corpus.thaiFlood : ['มันกำลังฟังอยู่'];
     return {
       mode: 'thaiFlood',
       text_zh: anchorMessage,
-      thaiFloodText: corpus.thaiFlood[Math.floor(Math.random() * corpus.thaiFlood.length)],
+      thaiFloodText: floodPool[Math.floor(Math.random() * floodPool.length)],
       thaiFloodCount: 3 + Math.floor(Math.random() * 3)
     };
   }
 
   const urbanChance = input.curse > 40 ? 0.1 : 0.05;
   if (Math.random() < urbanChance) {
+    const urbanPool = corpus.urbanLegend_th.length > 0 ? corpus.urbanLegend_th : ['เขาว่ากันว่าที่นี่ไม่ว่าง'];
     return {
       mode: 'urbanLegend',
       text_zh: anchorMessage,
-      text_th: corpus.urbanLegend_th[Math.floor(Math.random() * corpus.urbanLegend_th.length)]
+      text_th: urbanPool[Math.floor(Math.random() * urbanPool.length)]
     };
   }
 
