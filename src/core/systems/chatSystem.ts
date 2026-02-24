@@ -66,8 +66,9 @@ export function createAudienceMessage(curse: number, anchor: AnchorType, recentH
   return {
     id: crypto.randomUUID(),
     username,
-    text_th: text,
-    text_zh: text
+    text,
+    language: 'zh',
+    translation: text
   };
 }
 
@@ -87,7 +88,9 @@ export function createFakeAiAudienceMessage(input: {
       messages: Array.from({ length: floodCount }, () => ({
         id: crypto.randomUUID(),
         username: 'fake_ai',
-        text_th: floodText
+        text: floodText,
+        language: 'th',
+        translation: floodText
       })),
       pauseMs: 3000
     };
@@ -99,13 +102,16 @@ export function createFakeAiAudienceMessage(input: {
         {
           id: crypto.randomUUID(),
           username: 'fake_ai',
-          text_th: reply.text_zh,
-          text_zh: reply.text_zh
+          text: reply.text_zh,
+          language: 'zh',
+          translation: reply.text_zh
         },
         {
           id: crypto.randomUUID(),
           username: 'fake_ai',
-          text_th: reply.text_th
+          text: reply.text_th,
+          language: 'th',
+          translation: reply.text_zh
         }
       ]
     };
@@ -116,8 +122,9 @@ export function createFakeAiAudienceMessage(input: {
       {
         id: crypto.randomUUID(),
         username: 'fake_ai',
-        text_th: reply.text_zh,
-        text_zh: reply.text_zh
+        text: reply.text_zh,
+        language: 'zh',
+        translation: reply.text_zh
       }
     ]
   };
@@ -136,7 +143,8 @@ export function createPlayerMessage(raw: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
     username: 'you',
-    text_th: raw,
+    text: raw,
+    language: 'zh',
     isSelf: true
   };
 }
@@ -145,8 +153,9 @@ export function createSuccessMessage(): ChatMessage {
   return {
     id: crypto.randomUUID(),
     username: 'mod_live',
-    text_th: '答對了 房間氣氛立刻變好 ✨',
-    text_zh: '答對了 房間氣氛立刻變好 ✨'
+    text: '答對了 房間氣氛立刻變好 ✨',
+    language: 'zh',
+    translation: '答對了 房間氣氛立刻變好 ✨'
   };
 }
 
@@ -161,7 +170,8 @@ export function createWrongMessage(curse: number): ChatMessage {
   return {
     id: crypto.randomUUID(),
     username: 'chat_mod',
-    text_th: zhTier[tier],
-    text_zh: zhTier[tier]
+    text: zhTier[tier],
+    language: 'zh',
+    translation: zhTier[tier]
   };
 }

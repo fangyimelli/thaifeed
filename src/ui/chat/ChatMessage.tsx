@@ -16,9 +16,9 @@ export default function ChatMessage({ message, onToggleTranslation }: Props) {
           {message.isVip && <img src="/assets/icons/icon_crown.svg" alt="vip" className="crown" />}
           {message.username}
         </span>
-        <span className="msg">{message.text_th}</span>
+        <span className="msg">{message.text}</span>
       </div>
-      {message.text_zh && (
+      {message.language === 'th' && message.translation && (
         <div className="translation-actions">
           <TranslationToggle
             expanded={Boolean(message.showTranslation)}
@@ -26,7 +26,9 @@ export default function ChatMessage({ message, onToggleTranslation }: Props) {
           />
         </div>
       )}
-      {message.showTranslation && message.text_zh && <p className="translation">{message.text_zh}</p>}
+      {message.language === 'th' && message.showTranslation && message.translation && (
+        <p className="translation">{message.translation}</p>
+      )}
     </article>
   );
 }

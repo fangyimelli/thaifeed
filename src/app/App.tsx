@@ -99,7 +99,7 @@ export default function App() {
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(
         state.curse,
         state.currentAnchor,
-        state.messages.slice(-12).map((message) => message.text_zh ?? message.text_th)
+        state.messages.slice(-12).map((message) => message.translation ?? message.text)
       ) });
       const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
@@ -127,7 +127,7 @@ export default function App() {
       targetConsonant: state.targetConsonant,
       curse: state.curse,
       anchor: state.currentAnchor,
-      recentHistory: state.messages.slice(-12).map((message) => message.text_zh ?? message.text_th)
+      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
     });
 
     fakeAiBatch.messages.forEach((message) => {

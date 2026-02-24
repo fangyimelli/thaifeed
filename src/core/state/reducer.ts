@@ -19,14 +19,16 @@ export const initialState: GameState = {
     {
       id: 'boot-1',
       username: 'system',
-      text_th: 'เหมือนเราเห็นพยัญชนะบางตัว...มันอ่านว่าอะไรนะ?',
-      text_zh: '好像看到了某個子音…這個子音怎麼唸呢？'
+      text: 'เหมือนเราเห็นพยัญชนะบางตัว...มันอ่านว่าอะไรนะ?',
+      language: 'th',
+      translation: '好像看到了某個子音…這個子音怎麼唸呢？'
     },
     {
       id: 'boot-2',
       username: 'system',
-      text_th: 'ลองพิมพ์ออกมาดูสิ ถ้าถูกอาจเห็นตัวถัดไป',
-      text_zh: '試著把它打出來，打對好像就能看到下一個字。'
+      text: 'ลองพิมพ์ออกมาดูสิ ถ้าถูกอาจเห็นตัวถัดไป',
+      language: 'th',
+      translation: '試著把它打出來，打對好像就能看到下一個字。'
     }
   ],
   donateToasts: []
@@ -67,7 +69,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         messages: state.messages.map((message) =>
-          message.id === action.payload.id
+          message.id === action.payload.id && message.language === 'th' && message.translation
             ? { ...message, showTranslation: !message.showTranslation }
             : message
         )

@@ -1,8 +1,9 @@
 export type ChatMessage = {
   id: string;
   username: string;
-  text_th: string;
-  text_zh?: string;
+  text: string;
+  language: 'zh' | 'th';
+  translation?: string;
   isVip?: 'VIP_NORMAL' | 'VIP_STILL_HERE';
   isSelf?: boolean;
   showTranslation?: boolean;
