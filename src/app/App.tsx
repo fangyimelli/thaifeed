@@ -63,6 +63,7 @@ export default function App() {
   const [requiredErrors, setRequiredErrors] = useState<string[]>([]);
   const [optionalErrors, setOptionalErrors] = useState<string[]>([]);
   const [retryToken, setRetryToken] = useState(0);
+  const [showOptionalWarning, setShowOptionalWarning] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -87,6 +88,7 @@ export default function App() {
       setRequiredErrors(result.requiredErrors);
       setOptionalErrors(result.optionalErrors);
       if (result.requiredErrors.length === 0) {
+        setShowOptionalWarning(result.optionalErrors.length > 0);
         setIsReady(true);
       }
     };
@@ -185,6 +187,14 @@ export default function App() {
 
   return (
     <div className="app-layout">
+      {showOptionalWarning && (
+        <div className="optional-asset-warning" role="status">
+          部分非必要素材載入失敗，遊戲可正常進行。
+          <button type="button" onClick={() => setShowOptionalWarning(false)}>
+            關閉
+          </button>
+        </div>
+      )}
       <SceneView roomName={state.roomName} targetConsonant={state.targetConsonant} curse={state.curse} />
       <ChatPanel
         settings={CHAT_SETTINGS}
