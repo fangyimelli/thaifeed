@@ -31,6 +31,14 @@ function normalizeText(text: string): string {
   return normalized;
 }
 
+const playerSpeechPattern = /(哈哈|lol|www|可怕|恐怖|救命|是不是|好像|我猜|我覺得|你覺得|\?|？)/i;
+
+export function playerSpeechParser(raw: string) {
+  const normalized = raw.trim();
+  if (!normalized) return false;
+  return playerSpeechPattern.test(normalized);
+}
+
 function rememberNormalized(text: string) {
   recentAudienceNormalized.push(text);
   recentAudienceNormalizedSet.add(text);
