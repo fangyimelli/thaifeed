@@ -6,6 +6,11 @@ type Props = {
 };
 
 export default function LoadingScreen({ progress, requiredErrors, optionalErrors, onRetry }: Props) {
+  errors: string[];
+  onRetry: () => void;
+};
+
+export default function LoadingScreen({ progress, errors, onRetry }: Props) {
   const safeProgress = Math.max(0, Math.min(100, progress));
 
   return (
