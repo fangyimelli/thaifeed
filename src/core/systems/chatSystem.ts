@@ -90,28 +90,21 @@ export function createFakeAiAudienceMessage(input: {
         username: 'fake_ai',
         text: floodText,
         language: 'th',
-        translation: floodText
+        translation: reply.translation_zh
       })),
       pauseMs: 3000
     };
   }
 
-  if (reply.mode === 'urbanLegend' && reply.text_th) {
+  if (reply.mode === 'urbanLegend') {
     return {
       messages: [
         {
           id: crypto.randomUUID(),
           username: 'fake_ai',
-          text: reply.text_zh,
-          language: 'zh',
-          translation: reply.text_zh
-        },
-        {
-          id: crypto.randomUUID(),
-          username: 'fake_ai',
-          text: reply.text_th,
+          text: reply.text,
           language: 'th',
-          translation: reply.text_zh
+          translation: reply.translation_zh
         }
       ]
     };
@@ -122,9 +115,9 @@ export function createFakeAiAudienceMessage(input: {
       {
         id: crypto.randomUUID(),
         username: 'fake_ai',
-        text: reply.text_zh,
+        text: reply.text,
         language: 'zh',
-        translation: reply.text_zh
+        translation: reply.text
       }
     ]
   };
