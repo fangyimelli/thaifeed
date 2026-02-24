@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import CurseMeter from '../hud/CurseMeter';
+import { getCachedAsset } from '../../utils/preload';
 
 type Props = {
   roomName: string;
@@ -39,6 +40,9 @@ function randomGlyphPosition(): GlyphPosition {
 export default function SceneView({ roomName, targetConsonant, curse }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [glyphPos, setGlyphPos] = useState<GlyphPosition>(randomGlyphPosition());
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoAsset = getCachedAsset('/assets/scenes/oldhouse_room_loop.mp4');
+  const videoSrc = videoAsset instanceof HTMLVideoElement ? videoAsset.src : '/assets/scenes/oldhouse_room_loop.mp4';
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -48,11 +52,17 @@ export default function SceneView({ roomName, targetConsonant, curse }: Props) {
     return () => window.clearInterval(timer);
   }, []);
 
+
+  useEffect(() => {
+    void videoRef.current?.play().catch(() => undefined);
+  }, []);
   return (
     <section className={`scene-view ${curseVisualClass(curse)}`}>
       <video
         className="scene-video"
-        src="/assets/scenes/oldhouse_room_loop.mp4"
+        ref={videoRef}
+        src={videoSrc}
+        preload="auto"
         muted
         loop
         playsInline
