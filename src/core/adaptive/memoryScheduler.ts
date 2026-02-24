@@ -1,4 +1,4 @@
-import commonConsonantPool from '../../content/pools/consonantPoolCommon.json';
+import consonantAliasesCommon from '../../content/pools/consonantAliasesCommon.json';
 
 export interface MemoryNode {
   letter: string;
@@ -15,7 +15,7 @@ const INITIAL_INTERVAL_SECONDS = 20;
 const INITIAL_DELAY_SECONDS = 10;
 
 const memoryMap = new Map<string, MemoryNode>();
-const commonLetterSet = new Set(commonConsonantPool);
+const commonLetterSet = new Set(consonantAliasesCommon.map((item) => item.letter));
 
 function nowMs() {
   return Date.now();

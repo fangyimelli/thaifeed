@@ -301,6 +301,19 @@ export default function App() {
       return;
     }
 
+    const speechHit = parsePlayerSpeech(raw);
+    const now = Date.now();
+    const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
+    if (canTriggerSpeech) {
+      speechCooldownUntil.current = now + 10_000;
+      const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
+      speechResponses.forEach((message) => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+      });
+      setInput('');
+      return;
+    }
+
     const fakeAiBatch = createFakeAiAudienceMessage({
       playerInput: raw,
       targetConsonant: playableConsonant.letter,
@@ -316,19 +329,6 @@ export default function App() {
     if (fakeAiBatch.pauseMs) {
       setChatAutoPaused(true);
       window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
-      setInput('');
-      return;
-    }
-
-    const speechHit = parsePlayerSpeech(raw);
-    const now = Date.now();
-    const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
-    if (canTriggerSpeech) {
-      speechCooldownUntil.current = now + 10_000;
-      const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
-      speechResponses.forEach((message) => {
-        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
-      });
       setInput('');
       return;
     }

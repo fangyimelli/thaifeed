@@ -1,15 +1,36 @@
 import thaiConsonants from '../../content/thaiConsonants.json';
-import commonConsonantPool from '../../content/pools/consonantPoolCommon.json';
+import consonantAliasesCommon from '../../content/pools/consonantAliasesCommon.json';
 import { pickScheduledLetter } from '../adaptive/memoryScheduler';
 
-export type ThaiConsonant = (typeof thaiConsonants)[number];
+type ThaiConsonantBase = (typeof thaiConsonants)[number];
+type CommonAlias = (typeof consonantAliasesCommon)[number];
 
-const consonantMap = new Map((thaiConsonants as ThaiConsonant[]).map((item) => [item.letter, item]));
-const commonLetterSet = new Set(commonConsonantPool);
+export type ThaiConsonant = ThaiConsonantBase & {
+  pinyin: string[];
+  bopomofo: string[];
+  allowSingleLetter?: boolean;
+};
 
-export const consonantPool = (thaiConsonants as ThaiConsonant[]).filter(
-  (item) => item.isCommon && commonLetterSet.has(item.letter)
+const commonAliasMap = new Map((consonantAliasesCommon as CommonAlias[]).map((item) => [item.letter, item]));
+const consonantMap = new Map(
+  (thaiConsonants as ThaiConsonantBase[]).map((item) => {
+    const alias = commonAliasMap.get(item.letter);
+    return [
+      item.letter,
+      {
+        ...item,
+        pinyin: alias?.roman ?? item.pinyin,
+        bopomofo: alias?.bopomofo ?? item.bopomofo,
+        allowSingleLetter: alias?.allowSingleLetter
+      } satisfies ThaiConsonant
+    ];
+  })
 );
+const commonLetterSet = new Set((consonantAliasesCommon as CommonAlias[]).map((item) => item.letter));
+
+export const consonantPool = (thaiConsonants as ThaiConsonantBase[])
+  .filter((item) => commonLetterSet.has(item.letter))
+  .map((item) => findConsonant(item.letter));
 const playableLetterSet = new Set(consonantPool.map((item) => item.letter));
 
 function randomFromCommonPool(): ThaiConsonant {
