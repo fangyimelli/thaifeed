@@ -45,6 +45,23 @@ function playSound(src: string) {
   void sound.play().catch(() => undefined);
 }
 
+function formatViewerCount(value: number) {
+  if (value < 1000) return `${value}`;
+  if (value < 10_000) return `${(value / 1000).toFixed(1)}K`;
+  return `${Math.floor(value / 1000)}K`;
+}
+
+function computeViewerCount(curse: number) {
+  const baseViewers = 600;
+  const randomPart = Math.floor(Math.random() * (curse * 10 + 1));
+  const raw = baseViewers + curse * 35 + randomPart;
+  return Math.max(100, Math.min(99_999, raw));
+}
+
+function nextJoinDelayMs() {
+  return 8_000 + Math.floor(Math.random() * 7_001);
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [input, setInput] = useState('');
@@ -55,6 +72,7 @@ export default function App() {
   const [retryToken, setRetryToken] = useState(0);
   const [showOptionalWarning, setShowOptionalWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
+  const [viewerCount, setViewerCount] = useState(() => computeViewerCount(initialState.curse));
 
   useEffect(() => {
     let isCancelled = false;
@@ -109,6 +127,48 @@ export default function App() {
     timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     return () => window.clearTimeout(timer);
   }, [state.curse, state.targetConsonant, state.currentAnchor, input, isReady, chatAutoPaused]);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    setViewerCount(computeViewerCount(state.curse));
+    const timer = window.setInterval(() => {
+      setViewerCount(computeViewerCount(state.curse));
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [state.curse, isReady]);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    let timer = 0;
+
+    const tick = () => {
+      const baseChance = 0.35;
+      const boostedChance = state.curse > 50 ? Math.min(0.95, baseChance * 1.5) : baseChance;
+
+      if (Math.random() < boostedChance) {
+        const username = pickOne(usernames);
+        dispatch({
+          type: 'AUDIENCE_MESSAGE',
+          payload: {
+            id: crypto.randomUUID(),
+            type: 'system',
+            subtype: 'join',
+            username: 'system',
+            text: `${username} 加入聊天室`,
+            language: 'zh'
+          }
+        });
+      }
+
+      timer = window.setTimeout(tick, nextJoinDelayMs());
+    };
+
+    timer = window.setTimeout(tick, nextJoinDelayMs());
+    return () => window.clearTimeout(timer);
+  }, [state.curse, isReady]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -213,10 +273,10 @@ export default function App() {
         </div>
       )}
       <SceneView
-        roomName={state.roomName}
         targetConsonant={state.targetConsonant}
         curse={state.curse}
         anchor={state.currentAnchor}
+        viewerCountLabel={formatViewerCount(viewerCount)}
       />
       <ChatPanel
         messages={state.messages}

@@ -3,6 +3,8 @@ export type ChatMessage = {
   username: string;
   text: string;
   language: 'zh' | 'th';
+  type?: 'chat' | 'system';
+  subtype?: 'join';
   translation?: string;
   isVip?: 'VIP_NORMAL' | 'VIP_STILL_HERE';
   isSelf?: boolean;

@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import type { AnchorType } from '../../core/state/types';
-import CurseMeter from '../hud/CurseMeter';
 import { getCachedAsset } from '../../utils/preload';
 
 type Props = {
-  roomName: string;
   targetConsonant: string;
   curse: number;
   anchor: AnchorType;
+  viewerCountLabel: string;
 };
 
 type SceneAssetState = {
@@ -34,7 +33,7 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
   corner: { top: 20, left: 16 }
 };
 
-export default function SceneView({ roomName, targetConsonant, curse, anchor }: Props) {
+export default function SceneView({ targetConsonant, curse, anchor, viewerCountLabel }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoAsset = getCachedAsset('/assets/scenes/oldhouse_room_loop.mp4');
@@ -111,8 +110,9 @@ export default function SceneView({ roomName, targetConsonant, curse, anchor }: 
       </span>
 
       <div className="scene-hud">
-        <h1>{roomName}</h1>
-        <CurseMeter curse={curse} />
+        <div className="live-tag">🔴 LIVE</div>
+        <h1>Old House Live</h1>
+        <div className="viewer-count">👁 {viewerCountLabel}</div>
       </div>
 
       {!assets.videoOk && (

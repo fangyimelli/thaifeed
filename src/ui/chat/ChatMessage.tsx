@@ -7,18 +7,22 @@ type Props = {
 };
 
 export default function ChatMessage({ message, onToggleTranslation }: Props) {
+  const isSystemJoin = message.type === 'system' && message.subtype === 'join';
+
   return (
     <article
-      className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''} ${message.isSelf ? 'self' : ''}`}
+      className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''} ${message.isSelf ? 'self' : ''} ${isSystemJoin ? 'system join' : ''}`}
     >
       <div className="chat-line">
-        <span className="name">
-          {message.isVip && <img src="/assets/icons/icon_crown.svg" alt="vip" className="crown" />}
-          {message.username}
-        </span>
+        {!isSystemJoin && (
+          <span className="name">
+            {message.isVip && <img src="/assets/icons/icon_crown.svg" alt="vip" className="crown" />}
+            {message.username}
+          </span>
+        )}
         <span className="msg">{message.text}</span>
       </div>
-      {message.language === 'th' && message.translation && (
+      {!isSystemJoin && message.language === 'th' && message.translation && (
         <div className="translation-actions">
           <TranslationToggle
             expanded={Boolean(message.showTranslation)}
@@ -26,7 +30,7 @@ export default function ChatMessage({ message, onToggleTranslation }: Props) {
           />
         </div>
       )}
-      {message.language === 'th' && message.showTranslation && message.translation && (
+      {!isSystemJoin && message.language === 'th' && message.showTranslation && message.translation && (
         <p className="translation">{message.translation}</p>
       )}
     </article>
