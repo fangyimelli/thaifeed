@@ -1,20 +1,68 @@
-import thaiChatPools from '../../content/pools/thaiChatPools.json';
 import usernames from '../../content/pools/usernames.json';
 import { pickOne } from '../../utils/random';
 import { curseTier } from './curseSystem';
 import { generateReply } from './fakeAIEngine';
+import { buildPersonaMessage } from './personaSystem';
 import type { AnchorType, ChatMessage } from '../state/types';
 
-export function createAudienceMessage(curse: number): ChatMessage {
+function anchorKeyword(anchor: AnchorType): string {
+  if (anchor === 'under_table') return '桌子';
+  if (anchor === 'door') return '門';
+  if (anchor === 'window') return '窗';
+  return '角落';
+}
+
+function tierReaction(curse: number): string {
   const tier = curseTier(curse);
-  const pool = thaiChatPools[tier];
-  const sample = pickOne(pool);
+  if (tier === 'low') return '感覺有動靜';
+  if (tier === 'mid') return '壓力越來越大';
+  return '那邊真的怪到不行';
+}
+
+const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
+const trailingParticles = ['啦', '吧', '好嗎', '對不對', '是不是'];
+const recentAudienceNormalized: string[] = [];
+
+function normalizeText(text: string): string {
+  let normalized = text.trim().replace(emojiRegex, '').replace(/\s+/g, ' ');
+  const match = trailingParticles.find((particle) => normalized.endsWith(particle));
+  if (match) normalized = normalized.slice(0, -match.length).trim();
+  return normalized;
+}
+
+function rememberNormalized(text: string) {
+  recentAudienceNormalized.push(text);
+  if (recentAudienceNormalized.length > 30) recentAudienceNormalized.shift();
+}
+
+export function createAudienceMessage(curse: number, anchor: AnchorType, recentHistory: string[]): ChatMessage {
+  const username = pickOne(usernames);
+  const viewport = recentHistory.slice(-12).map(normalizeText);
+
+  let text = `${anchorKeyword(anchor)}那邊 ${tierReaction(curse)}`;
+  let accepted = false;
+  for (let i = 0; i < 12; i += 1) {
+    const candidate = buildPersonaMessage({
+      username,
+      anchorKeyword: anchorKeyword(anchor),
+      anchorBaseText: `${anchorKeyword(anchor)}那邊 ${tierReaction(curse)}`
+    });
+    const normalized = normalizeText(candidate);
+    if (!viewport.includes(normalized) && !recentAudienceNormalized.includes(normalized)) {
+      text = candidate;
+      rememberNormalized(normalized);
+      accepted = true;
+      break;
+    }
+  }
+
+  if (!accepted) rememberNormalized(normalizeText(text));
 
   return {
     id: crypto.randomUUID(),
-    username: pickOne(usernames),
-    text_th: sample.zh,
-    text_zh: sample.zh
+    username,
+    text_th: text,
+    text_zh: text
   };
 }
 
