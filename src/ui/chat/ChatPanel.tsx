@@ -23,8 +23,7 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
   return (
     <aside className="chat-panel">
       <header className="chat-header">
-        <strong>直播聊天室</strong>
-        <span>{messages.length} 則訊息</span>
+        <strong>聊天室</strong>
       </header>
 
       <div
@@ -32,11 +31,11 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
         className="chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;
-          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
           setStickBottom(isBottom);
         }}
       >
-        {messages.slice(-80).map((message) => (
+        {messages.slice(-100).map((message) => (
           <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
         ))}
       </div>
@@ -51,7 +50,7 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
             setStickBottom(true);
           }}
         >
-          查看最新訊息
+          最新訊息
         </button>
       )}
 
@@ -62,7 +61,7 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
           onKeyDown={(event) => {
             if (event.key === 'Enter') onSubmit();
           }}
-          placeholder="輸入訊息"
+          placeholder="傳送訊息"
         />
         <button type="button" onClick={onSubmit}>
           送出

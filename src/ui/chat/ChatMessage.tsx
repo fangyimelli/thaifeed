@@ -15,13 +15,15 @@ export default function ChatMessage({ message, onToggleTranslation }: Props) {
           {message.username}
         </span>
         <span className="msg">{message.text_th}</span>
-        {message.text_zh && (
+      </div>
+      {message.text_zh && (
+        <div className="translation-actions">
           <TranslationToggle
             expanded={Boolean(message.showTranslation)}
             onClick={() => onToggleTranslation(message.id)}
           />
-        )}
-      </div>
+        </div>
+      )}
       {message.showTranslation && message.text_zh && <p className="translation">{message.text_zh}</p>}
     </article>
   );

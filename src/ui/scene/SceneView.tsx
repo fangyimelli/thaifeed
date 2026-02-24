@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import CurseMeter from '../hud/CurseMeter';
 
@@ -16,6 +16,11 @@ type SceneAssetState = {
   vignetteOk: boolean;
 };
 
+type GlyphPosition = {
+  top: number;
+  left: number;
+};
+
 const initialAssets: SceneAssetState = {
   videoOk: true,
   smokeOk: true,
@@ -24,8 +29,24 @@ const initialAssets: SceneAssetState = {
   vignetteOk: true
 };
 
+function randomGlyphPosition(): GlyphPosition {
+  return {
+    top: Math.floor(Math.random() * 58) + 14,
+    left: Math.floor(Math.random() * 62) + 10
+  };
+}
+
 export default function SceneView({ roomName, targetConsonant, curse }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
+  const [glyphPos, setGlyphPos] = useState<GlyphPosition>(randomGlyphPosition());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setGlyphPos(randomGlyphPosition());
+    }, 2100);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <section className={`scene-view ${curseVisualClass(curse)}`}>
@@ -72,7 +93,9 @@ export default function SceneView({ roomName, targetConsonant, curse }: Props) {
         />
       )}
 
-      <span className="glyph-blink">{targetConsonant}</span>
+      <span className="glyph-blink" style={{ top: `${glyphPos.top}%`, left: `${glyphPos.left}%` }}>
+        {targetConsonant}
+      </span>
 
       <div className="scene-hud">
         <h1>{roomName}</h1>
