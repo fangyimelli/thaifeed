@@ -8,6 +8,9 @@ export type ChatMessage = {
   showTranslation?: boolean;
 };
 
+export type AnchorType = 'under_table' | 'door' | 'window' | 'corner';
+export type LanguageType = 'zh' | 'th';
+
 export type DonateMessage = {
   id: string;
   username: string;
@@ -24,6 +27,9 @@ export type GameState = {
   curse: number;
   wrongStreak: number;
   vipStillHereTriggered: boolean;
+  currentAnchor: AnchorType;
+  lastLanguage: LanguageType;
+  sameLanguageStreak: number;
   messages: ChatMessage[];
   donateToasts: DonateMessage[];
 };
@@ -33,6 +39,13 @@ export type GameAction =
   | { type: 'ANSWER_CORRECT'; payload: { message: ChatMessage; donate: DonateMessage } }
   | { type: 'ANSWER_WRONG'; payload: { message: ChatMessage; vipMessage?: ChatMessage } }
   | { type: 'AUDIENCE_MESSAGE'; payload: ChatMessage }
+  | {
+      type: 'FAKE_AI_LANGUAGE_STATE';
+      payload: {
+        lastLanguage: LanguageType;
+        sameLanguageStreak: number;
+      };
+    }
   | { type: 'TOGGLE_CHAT_TRANSLATION'; payload: { id: string } }
   | { type: 'TOGGLE_DONATE_TRANSLATION'; payload: { id: string } }
   | { type: 'DISMISS_DONATE'; payload: { id: string } };

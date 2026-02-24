@@ -4,21 +4,22 @@ import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
 import {
   createAudienceMessage,
+  createFakeAiAudienceMessage,
   createPlayerMessage,
   createSuccessMessage,
-  createWrongMessage
+  createWrongMessage,
+  getAudienceIntervalMs
 } from '../core/systems/chatSystem';
 import { createVipAiReply, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import LoadingScreen from '../ui/loading/LoadingScreen';
-import ChatPanel, { type ChatPanelSettings } from '../ui/chat/ChatPanel';
+import ChatPanel from '../ui/chat/ChatPanel';
 import DonateToast from '../ui/donate/DonateToast';
 import SceneView from '../ui/scene/SceneView';
 import { getCachedAsset, preloadAssets } from '../utils/preload';
 import { pickOne } from '../utils/random';
-import { createRandomInterval } from '../utils/timing';
 
 const SFX_SRC = {
   typing: '/assets/sfx/sfx_typing.wav',
@@ -27,17 +28,6 @@ const SFX_SRC = {
   error: '/assets/sfx/sfx_error.wav',
   glitch: '/assets/sfx/sfx_glitch.wav'
 } as const;
-
-const CHAT_SETTINGS: ChatPanelSettings = {
-  title: '聊天室',
-  inputPlaceholder: '傳送訊息',
-  submitLabel: '送出',
-  jumpToLatestLabel: '最新訊息',
-  maxRenderCount: 100,
-  stickBottomThreshold: 24,
-  audienceMinMs: 2500,
-  audienceMaxMs: 4000
-};
 
 function getSfxAudio(src: string) {
   const cached = getCachedAsset(src);
@@ -64,6 +54,7 @@ export default function App() {
   const [optionalErrors, setOptionalErrors] = useState<string[]>([]);
   const [retryToken, setRetryToken] = useState(0);
   const [showOptionalWarning, setShowOptionalWarning] = useState(false);
+  const [chatAutoPaused, setChatAutoPaused] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -101,16 +92,19 @@ export default function App() {
   }, [retryToken]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || chatAutoPaused) return;
 
-    const stop = createRandomInterval(() => {
+    let timer = 0;
+    const tick = () => {
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(state.curse) });
       const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
-    }, CHAT_SETTINGS.audienceMinMs, CHAT_SETTINGS.audienceMaxMs);
+      timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
+    };
 
-    return stop;
-  }, [state.curse, state.targetConsonant, input, isReady]);
+    timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
+    return () => window.clearTimeout(timer);
+  }, [state.curse, state.targetConsonant, input, isReady, chatAutoPaused]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -123,6 +117,17 @@ export default function App() {
 
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
+    const fakeAi = createFakeAiAudienceMessage({
+      playerInput: raw,
+      targetConsonant: state.targetConsonant,
+      curse: state.curse,
+      anchor: state.currentAnchor,
+      recentHistory: state.messages.slice(-4).map((message) => message.text_zh ?? message.text_th),
+      lastLanguage: state.lastLanguage,
+      sameLanguageStreak: state.sameLanguageStreak
+    });
+    dispatch({ type: 'AUDIENCE_MESSAGE', payload: fakeAi.message });
+    dispatch({ type: 'FAKE_AI_LANGUAGE_STATE', payload: fakeAi.languageState });
 
     if (isAnswerCorrect(raw, state.targetConsonant)) {
       const donateSample = pickOne(donatePools.messages);
@@ -195,9 +200,13 @@ export default function App() {
           </button>
         </div>
       )}
-      <SceneView roomName={state.roomName} targetConsonant={state.targetConsonant} curse={state.curse} />
+      <SceneView
+        roomName={state.roomName}
+        targetConsonant={state.targetConsonant}
+        curse={state.curse}
+        anchor={state.currentAnchor}
+      />
       <ChatPanel
-        settings={CHAT_SETTINGS}
         messages={state.messages}
         input={input}
         onChange={(value) => {
@@ -206,6 +215,7 @@ export default function App() {
         }}
         onSubmit={submit}
         onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
+        onAutoPauseChange={setChatAutoPaused}
       />
       <DonateToast
         toasts={state.donateToasts}
