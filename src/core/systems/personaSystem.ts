@@ -205,7 +205,7 @@ const personaVariants: Record<PersonaName, Partial<PersonaCorpus>> = {
   },
   gamer: {
     openings: ['這邊', '等等我 call', '我看', '這波要', '有怪', '像 bug'],
-    generalResponses: ['像地圖觸發事件', '像怪在卡視角', '這格像隱藏關卡', '那邊像延遲抖動', '畫面像被鎖定'],
+    generalResponses: ['像地圖觸發事件', '像怪在卡視角', '這格像藏著訊號', '那邊像延遲抖動', '畫面像被鎖定'],
     endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.28
   },
