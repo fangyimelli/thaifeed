@@ -18,6 +18,7 @@ import LoadingScreen from '../ui/loading/LoadingScreen';
 import ChatPanel from '../ui/chat/ChatPanel';
 import DonateToast from '../ui/donate/DonateToast';
 import SceneView from '../ui/scene/SceneView';
+import LiveHeader from '../ui/hud/LiveHeader';
 import { getCachedAsset, preloadAssets } from '../utils/preload';
 import { pickOne } from '../utils/random';
 
@@ -310,7 +311,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-shell">
       {showOptionalWarning && (
         <div className="optional-asset-warning" role="status">
           部分非必要素材載入失敗，遊戲可正常進行。
@@ -319,23 +320,25 @@ export default function App() {
           </button>
         </div>
       )}
-      <SceneView
-        targetConsonant={state.targetConsonant}
-        curse={state.curse}
-        anchor={state.currentAnchor}
-        viewerCountLabel={formatViewerCount(viewerCount)}
-      />
-      <ChatPanel
-        messages={state.messages}
-        input={input}
-        onChange={(value) => {
-          setInput(value);
-          playSound(SFX_SRC.typing);
-        }}
-        onSubmit={submit}
-        onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
-        onAutoPauseChange={setChatAutoPaused}
-      />
+      <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+      <main className="app-layout">
+        <SceneView
+          targetConsonant={state.targetConsonant}
+          curse={state.curse}
+          anchor={state.currentAnchor}
+        />
+        <ChatPanel
+          messages={state.messages}
+          input={input}
+          onChange={(value) => {
+            setInput(value);
+            playSound(SFX_SRC.typing);
+          }}
+          onSubmit={submit}
+          onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
+          onAutoPauseChange={setChatAutoPaused}
+        />
+      </main>
       <DonateToast
         toasts={state.donateToasts}
         onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_DONATE_TRANSLATION', payload: { id } })}
