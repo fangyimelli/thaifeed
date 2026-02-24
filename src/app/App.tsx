@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
@@ -51,15 +51,16 @@ function formatViewerCount(value: number) {
   return `${Math.floor(value / 1000)}K`;
 }
 
-function computeViewerCount(curse: number) {
-  const baseViewers = 600;
-  const randomPart = Math.floor(Math.random() * (curse * 10 + 1));
-  const raw = baseViewers + curse * 35 + randomPart;
-  return Math.max(100, Math.min(99_999, raw));
+function randomInt(min: number, max: number) {
+  return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
+}
+
+function nextLeaveDelayMs() {
+  return randomInt(30_000, 45_000);
 }
 
 export default function App() {
@@ -72,7 +73,8 @@ export default function App() {
   const [retryToken, setRetryToken] = useState(0);
   const [showOptionalWarning, setShowOptionalWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
-  const [viewerCount, setViewerCount] = useState(() => computeViewerCount(initialState.curse));
+  const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
+  const burstCooldownUntil = useRef(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -131,12 +133,70 @@ export default function App() {
   useEffect(() => {
     if (!isReady) return;
 
-    setViewerCount(computeViewerCount(state.curse));
-    const timer = window.setInterval(() => {
-      setViewerCount(computeViewerCount(state.curse));
-    }, 5000);
+    let timer = 0;
+    const burstTimers: number[] = [];
 
-    return () => window.clearInterval(timer);
+    const tick = () => {
+      const baseChance = 0.35;
+      const boostedChance = state.curse > 50 ? Math.min(0.95, baseChance * 1.5) : baseChance;
+
+      if (Math.random() < boostedChance) {
+        const now = Date.now();
+        const canBurst = now >= burstCooldownUntil.current;
+        const shouldBurst = canBurst && (state.curse > 60 || Math.random() < 0.12);
+
+        if (shouldBurst) {
+          burstCooldownUntil.current = now + 25_000;
+          const burstMessages = randomInt(3, 6);
+          const burstTotal = randomInt(5, 20);
+
+          setViewerCount((value) => Math.min(99_999, value + burstTotal));
+
+          for (let i = 0; i < burstMessages; i += 1) {
+            const delayMs = i * randomInt(100, 200);
+            const burstTimer = window.setTimeout(() => {
+              const username = pickOne(usernames);
+              dispatch({
+                type: 'AUDIENCE_MESSAGE',
+                payload: {
+                  id: crypto.randomUUID(),
+                  type: 'system',
+                  subtype: 'join',
+                  username: 'system',
+                  text: `${username} 加入聊天室`,
+                  language: 'zh'
+                }
+              });
+            }, delayMs);
+            burstTimers.push(burstTimer);
+          }
+        } else {
+          const username = pickOne(usernames);
+          const normalJoinBoost = randomInt(1, 3);
+
+          setViewerCount((value) => Math.min(99_999, value + normalJoinBoost));
+          dispatch({
+            type: 'AUDIENCE_MESSAGE',
+            payload: {
+              id: crypto.randomUUID(),
+              type: 'system',
+              subtype: 'join',
+              username: 'system',
+              text: `${username} 加入聊天室`,
+              language: 'zh'
+            }
+          });
+        }
+      }
+
+      timer = window.setTimeout(tick, nextJoinDelayMs());
+    };
+
+    timer = window.setTimeout(tick, nextJoinDelayMs());
+    return () => {
+      window.clearTimeout(timer);
+      burstTimers.forEach((id) => window.clearTimeout(id));
+    };
   }, [state.curse, isReady]);
 
   useEffect(() => {
@@ -145,30 +205,17 @@ export default function App() {
     let timer = 0;
 
     const tick = () => {
-      const baseChance = 0.35;
-      const boostedChance = state.curse > 50 ? Math.min(0.95, baseChance * 1.5) : baseChance;
-
-      if (Math.random() < boostedChance) {
-        const username = pickOne(usernames);
-        dispatch({
-          type: 'AUDIENCE_MESSAGE',
-          payload: {
-            id: crypto.randomUUID(),
-            type: 'system',
-            subtype: 'join',
-            username: 'system',
-            text: `${username} 加入聊天室`,
-            language: 'zh'
-          }
-        });
+      if (Math.random() < 0.08) {
+        const leaveCount = randomInt(1, 5);
+        setViewerCount((value) => Math.max(0, value - leaveCount));
       }
 
-      timer = window.setTimeout(tick, nextJoinDelayMs());
+      timer = window.setTimeout(tick, nextLeaveDelayMs());
     };
 
-    timer = window.setTimeout(tick, nextJoinDelayMs());
+    timer = window.setTimeout(tick, nextLeaveDelayMs());
     return () => window.clearTimeout(timer);
-  }, [state.curse, isReady]);
+  }, [isReady]);
 
   useEffect(() => {
     if (!isReady) return;
