@@ -23,20 +23,33 @@ export default function ChatPanel({
   onAutoPauseChange
 }: Props) {
   const panelRef = useRef<HTMLElement>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const messageEndRef = useRef<HTMLDivElement>(null);
   const idleTimer = useRef<number>(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
   const [viewportMaxHeight, setViewportMaxHeight] = useState<number | undefined>(undefined);
 
+  const forceScrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const conditionalScrollToBottom = () => {
+    const el = messageListRef.current;
+    if (!el) return;
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < STICK_BOTTOM_THRESHOLD) {
+      forceScrollToBottom();
+    }
+  };
+
   useLayoutEffect(() => {
-    const box = scrollerRef.current;
-    if (!box || !stickBottom) return;
-    box.scrollTop = box.scrollHeight;
-  }, [messages, stickBottom]);
+    conditionalScrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
-    const box = scrollerRef.current;
+    const box = messageListRef.current;
     if (!box) return;
 
     const overflowed = box.scrollHeight > box.clientHeight * 1.2;
@@ -93,7 +106,7 @@ export default function ChatPanel({
       </header>
 
       <div
-        ref={scrollerRef}
+        ref={messageListRef}
         className="chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;
@@ -105,6 +118,7 @@ export default function ChatPanel({
           {messages.slice(-MAX_RENDER_COUNT).map((message) => (
             <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
           ))}
+          <div ref={messageEndRef} />
         </div>
       </div>
 
@@ -113,8 +127,7 @@ export default function ChatPanel({
           className="jump-bottom"
           type="button"
           onClick={() => {
-            const box = scrollerRef.current;
-            if (box) box.scrollTop = box.scrollHeight;
+            forceScrollToBottom();
             setStickBottom(true);
           }}
         >
@@ -127,11 +140,20 @@ export default function ChatPanel({
           value={input}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') onSubmit();
+            if (event.key === 'Enter') {
+              onSubmit();
+              window.setTimeout(forceScrollToBottom, 0);
+            }
           }}
           placeholder="傳送訊息"
         />
-        <button type="button" onClick={onSubmit}>
+        <button
+          type="button"
+          onClick={() => {
+            onSubmit();
+            window.setTimeout(forceScrollToBottom, 0);
+          }}
+        >
           送出
         </button>
       </div>
