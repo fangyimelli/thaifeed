@@ -32,8 +32,9 @@ export function maybeCreateVipNormalMessage(input: string, curse: number, target
     id: crypto.randomUUID(),
     username: 'VIP_GoldenLotus',
     isVip: 'VIP_NORMAL',
-    text_th: chosen,
-    text_zh: chosen
+    text: chosen,
+    language: 'zh',
+    translation: chosen
   };
 }
 
@@ -49,8 +50,9 @@ export function createVipAiReply(params: VipAiParams): ChatMessage {
       id: crypto.randomUUID(),
       username: '_still_here',
       isVip: 'VIP_STILL_HERE',
-      text_th: message,
-      text_zh: message
+      text: message,
+      language: 'zh',
+      translation: message
     };
   }
 
@@ -60,7 +62,8 @@ export function createVipAiReply(params: VipAiParams): ChatMessage {
     id: crypto.randomUUID(),
     username: 'VIP_GoldenLotus',
     isVip: 'VIP_NORMAL',
-    text_th: normal,
-    text_zh: normal
+    text: normal,
+    language: 'zh',
+    translation: normal
   };
 }
