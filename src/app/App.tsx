@@ -8,7 +8,7 @@ import usernames from '../content/pools/usernames.json';
 import { createRandomInterval } from '../utils/timing';
 import { pickOne } from '../utils/random';
 import SceneView from '../ui/scene/SceneView';
-import ChatPanel from '../ui/chat/ChatPanel';
+import ChatPanel, { type ChatPanelSettings } from '../ui/chat/ChatPanel';
 import DonateToast from '../ui/donate/DonateToast';
 import type { DonateMessage } from '../core/state/types';
 
@@ -18,6 +18,17 @@ const sfx = {
   success: new Audio('/assets/sfx/sfx_success.wav'),
   error: new Audio('/assets/sfx/sfx_error.wav'),
   glitch: new Audio('/assets/sfx/sfx_glitch.wav')
+};
+
+const CHAT_SETTINGS: ChatPanelSettings = {
+  title: '聊天室',
+  inputPlaceholder: '傳送訊息',
+  submitLabel: '送出',
+  jumpToLatestLabel: '最新訊息',
+  maxRenderCount: 100,
+  stickBottomThreshold: 24,
+  audienceMinMs: 2500,
+  audienceMaxMs: 4000
 };
 
 Object.values(sfx).forEach((audio) => {
@@ -38,7 +49,7 @@ export default function App() {
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(state.curse) });
       const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
-    }, 2500, 4000);
+    }, CHAT_SETTINGS.audienceMinMs, CHAT_SETTINGS.audienceMaxMs);
 
     return stop;
   }, [state.curse, state.targetConsonant, input]);
@@ -107,6 +118,7 @@ export default function App() {
     <div className="app-layout">
       <SceneView roomName={state.roomName} targetConsonant={state.targetConsonant} curse={state.curse} />
       <ChatPanel
+        settings={CHAT_SETTINGS}
         messages={state.messages}
         input={input}
         onChange={(value) => {

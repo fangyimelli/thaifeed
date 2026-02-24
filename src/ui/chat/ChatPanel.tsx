@@ -2,7 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../core/state/types';
 import ChatMessage from './ChatMessage';
 
+export type ChatPanelSettings = {
+  title: string;
+  inputPlaceholder: string;
+  submitLabel: string;
+  jumpToLatestLabel: string;
+  maxRenderCount: number;
+  stickBottomThreshold: number;
+  audienceMinMs: number;
+  audienceMaxMs: number;
+};
+
 type Props = {
+  settings: ChatPanelSettings;
   messages: ChatMessageType[];
   input: string;
   onChange: (value: string) => void;
@@ -10,7 +22,7 @@ type Props = {
   onToggleTranslation: (id: string) => void;
 };
 
-export default function ChatPanel({ messages, input, onChange, onSubmit, onToggleTranslation }: Props) {
+export default function ChatPanel({ settings, messages, input, onChange, onSubmit, onToggleTranslation }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [stickBottom, setStickBottom] = useState(true);
 
@@ -23,7 +35,7 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
   return (
     <aside className="chat-panel">
       <header className="chat-header">
-        <strong>聊天室</strong>
+        <strong>{settings.title}</strong>
       </header>
 
       <div
@@ -31,11 +43,11 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
         className="chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;
-          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < settings.stickBottomThreshold;
           setStickBottom(isBottom);
         }}
       >
-        {messages.slice(-100).map((message) => (
+        {messages.slice(-settings.maxRenderCount).map((message) => (
           <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
         ))}
       </div>
@@ -50,7 +62,7 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
             setStickBottom(true);
           }}
         >
-          最新訊息
+          {settings.jumpToLatestLabel}
         </button>
       )}
 
@@ -61,10 +73,10 @@ export default function ChatPanel({ messages, input, onChange, onSubmit, onToggl
           onKeyDown={(event) => {
             if (event.key === 'Enter') onSubmit();
           }}
-          placeholder="傳送訊息"
+          placeholder={settings.inputPlaceholder}
         />
         <button type="button" onClick={onSubmit}>
-          送出
+          {settings.submitLabel}
         </button>
       </div>
     </aside>
