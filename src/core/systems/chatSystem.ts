@@ -44,6 +44,7 @@ export function createFakeAiAudienceMessage(input: {
         {
           id: crypto.randomUUID(),
           username: 'fake_ai',
+          text_th: reply.text_zh,
           text_zh: reply.text_zh
         },
         {
@@ -60,6 +61,7 @@ export function createFakeAiAudienceMessage(input: {
       {
         id: crypto.randomUUID(),
         username: 'fake_ai',
+        text_th: reply.text_zh,
         text_zh: reply.text_zh
       }
     ]
