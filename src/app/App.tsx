@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
+import { resolvePlayableConsonant } from '../core/systems/consonantSelector';
 import { parsePlayerSpeech } from '../core/systems/playerSpeechParser';
 import {
   createAudienceMessage,
@@ -242,22 +243,24 @@ export default function App() {
     const raw = input.trim();
     if (!raw || chatAutoPaused) return;
 
+    const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
+
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
     if (isHintCommand(raw)) {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipHintMessage(state.currentConsonant.letter) });
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipHintMessage(playableConsonant.letter) });
       setInput('');
       return;
     }
 
     const handlePass = () => {
-      markReview(state.currentConsonant.letter, 'pass', state.curse);
-      const entry = getMemoryNode(state.currentConsonant.letter);
+      markReview(playableConsonant.letter, 'pass', state.curse);
+      const entry = getMemoryNode(playableConsonant.letter);
       dispatch({
         type: 'ANSWER_PASS',
         payload: {
-          message: createVipPassMessage(state.currentConsonant, entry.lapseCount)
+          message: createVipPassMessage(playableConsonant, entry.lapseCount)
         }
       });
       setInput('');
@@ -268,7 +271,7 @@ export default function App() {
       return;
     }
 
-    if (isAnswerCorrect(raw, state.currentConsonant)) {
+    if (isAnswerCorrect(raw, playableConsonant)) {
       const donateSample = pickOne(donatePools.messages);
       const donate: DonateMessage = {
         id: crypto.randomUUID(),
@@ -289,7 +292,7 @@ export default function App() {
         input: raw,
         curse: state.curse,
         isCorrect: true,
-        target: state.currentConsonant.letter,
+        target: playableConsonant.letter,
         vipType: 'VIP_NORMAL'
       });
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
@@ -300,7 +303,7 @@ export default function App() {
 
     const fakeAiBatch = createFakeAiAudienceMessage({
       playerInput: raw,
-      targetConsonant: state.currentConsonant.letter,
+      targetConsonant: playableConsonant.letter,
       curse: state.curse,
       anchor: state.currentAnchor,
       recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
@@ -341,7 +344,7 @@ export default function App() {
               input: raw,
               curse: state.curse,
               isCorrect: false,
-              target: state.currentConsonant.letter,
+              target: playableConsonant.letter,
               vipType: 'VIP_STILL_HERE'
             })
           : undefined
