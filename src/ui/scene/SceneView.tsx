@@ -110,8 +110,8 @@ export default function SceneView({ targetConsonant, curse, anchor, viewerCountL
       </span>
 
       <div className="scene-hud">
-        <div className="live-tag">🔴 LIVE</div>
-        <h1>Old House Live</h1>
+        <div className="live-tag">LIVE</div>
+        <h1>深夜老屋觀察</h1>
         <div className="viewer-count">👁 {viewerCountLabel}</div>
       </div>
 
