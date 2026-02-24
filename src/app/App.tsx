@@ -60,10 +60,8 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [requiredErrors, setRequiredErrors] = useState<string[]>([]);
-  const [optionalErrors, setOptionalErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
   const [retryToken, setRetryToken] = useState(0);
-  const [showOptionalWarning, setShowOptionalWarning] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -71,24 +69,20 @@ export default function App() {
     const runPreload = async () => {
       setIsReady(false);
       setProgress(0);
-      setRequiredErrors([]);
-      setOptionalErrors([]);
+      setErrors([]);
 
       const result = await preloadAssets(ASSET_MANIFEST, {
         onProgress: (snapshot) => {
           if (isCancelled) return;
           setProgress(snapshot.progress);
-          setRequiredErrors(snapshot.requiredErrors);
-          setOptionalErrors(snapshot.optionalErrors);
+          setErrors(snapshot.errors);
         }
       });
 
       if (isCancelled) return;
 
-      setRequiredErrors(result.requiredErrors);
-      setOptionalErrors(result.optionalErrors);
-      if (result.requiredErrors.length === 0) {
-        setShowOptionalWarning(result.optionalErrors.length > 0);
+      setErrors(result.errors);
+      if (result.errors.length === 0) {
         setIsReady(true);
       }
     };
@@ -178,8 +172,7 @@ export default function App() {
     return (
       <LoadingScreen
         progress={progress}
-        requiredErrors={requiredErrors}
-        optionalErrors={optionalErrors}
+        errors={errors}
         onRetry={() => setRetryToken((value) => value + 1)}
       />
     );
@@ -187,14 +180,6 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      {showOptionalWarning && (
-        <div className="optional-asset-warning" role="status">
-          部分非必要素材載入失敗，遊戲可正常進行。
-          <button type="button" onClick={() => setShowOptionalWarning(false)}>
-            關閉
-          </button>
-        </div>
-      )}
       <SceneView roomName={state.roomName} targetConsonant={state.targetConsonant} curse={state.curse} />
       <ChatPanel
         settings={CHAT_SETTINGS}

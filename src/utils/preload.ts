@@ -5,8 +5,6 @@ type ProgressSnapshot = {
   loaded: number;
   total: number;
   errors: string[];
-  requiredErrors: string[];
-  optionalErrors: string[];
 };
 
 type PreloadOptions = {
@@ -29,8 +27,7 @@ const assetCache =
 function emitProgress(
   loaded: number,
   total: number,
-  requiredErrors: string[],
-  optionalErrors: string[],
+  errors: string[],
   onProgress?: (state: ProgressSnapshot) => void
 ) {
   const progress = total === 0 ? 100 : Math.round((loaded / total) * 100);
@@ -38,9 +35,7 @@ function emitProgress(
     progress,
     loaded,
     total,
-    errors: [...requiredErrors, ...optionalErrors],
-    requiredErrors: [...requiredErrors],
-    optionalErrors: [...optionalErrors]
+    errors: [...errors]
   });
 }
 
@@ -107,24 +102,19 @@ export async function preloadAssets(
 ): Promise<ProgressSnapshot> {
   const total = manifest.length;
   let loaded = 0;
-  const requiredErrors: string[] = [];
-  const optionalErrors: string[] = [];
+  const errors: string[] = [];
 
-  emitProgress(loaded, total, requiredErrors, optionalErrors, options.onProgress);
+  emitProgress(loaded, total, errors, options.onProgress);
 
   await Promise.all(
     manifest.map(async (asset) => {
       try {
         await preloadAsset(asset);
       } catch {
-        if (asset.required) {
-          requiredErrors.push(asset.src);
-        } else {
-          optionalErrors.push(asset.src);
-        }
+        errors.push(asset.src);
       } finally {
         loaded += 1;
-        emitProgress(loaded, total, requiredErrors, optionalErrors, options.onProgress);
+        emitProgress(loaded, total, errors, options.onProgress);
       }
     })
   );
@@ -133,9 +123,7 @@ export async function preloadAssets(
     progress: total === 0 ? 100 : Math.round((loaded / total) * 100),
     loaded,
     total,
-    errors: [...requiredErrors, ...optionalErrors],
-    requiredErrors,
-    optionalErrors
+    errors
   };
 }
 

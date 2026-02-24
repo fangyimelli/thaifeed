@@ -3,26 +3,25 @@ export type AssetType = 'video' | 'image' | 'audio';
 export type AssetManifestItem = {
   type: AssetType;
   src: string;
-  required: boolean;
 };
 
 export const ASSET_MANIFEST: AssetManifestItem[] = [
-  // Required: Scene
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop.mp4', required: true },
+  // Scene
+  { type: 'video', src: '/assets/scenes/oldhouse_room_loop.mp4' },
 
-  // Required: Overlays
-  { type: 'image', src: '/assets/overlays/overlay_smoke_room.png', required: true },
-  { type: 'image', src: '/assets/overlays/overlay_crack_glass.png', required: true },
-  { type: 'image', src: '/assets/overlays/overlay_noise_film.png', required: true },
-  { type: 'image', src: '/assets/overlays/overlay_vignette.png', required: true },
+  // Overlays
+  { type: 'image', src: '/assets/overlays/overlay_smoke_room.png' },
+  { type: 'image', src: '/assets/overlays/overlay_crack_glass.png' },
+  { type: 'image', src: '/assets/overlays/overlay_noise_film.png' },
+  { type: 'image', src: '/assets/overlays/overlay_vignette.png' },
 
-  // Optional: Icons
-  { type: 'image', src: '/assets/icons/icon_crown.svg', required: false },
+  // Icons
+  { type: 'image', src: '/assets/icons/icon_crown.svg' },
 
-  // Optional: SFX
-  { type: 'audio', src: '/assets/sfx/sfx_typing.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_send.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_success.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_error.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_glitch.wav', required: false }
+  // SFX
+  { type: 'audio', src: '/assets/sfx/sfx_typing.wav' },
+  { type: 'audio', src: '/assets/sfx/sfx_send.wav' },
+  { type: 'audio', src: '/assets/sfx/sfx_success.wav' },
+  { type: 'audio', src: '/assets/sfx/sfx_error.wav' },
+  { type: 'audio', src: '/assets/sfx/sfx_glitch.wav' }
 ];
