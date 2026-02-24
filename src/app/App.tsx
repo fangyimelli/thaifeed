@@ -12,7 +12,7 @@ import {
   createPlayerSpeechResponses,
   getAudienceIntervalMs
 } from '../core/systems/chatSystem';
-import { createVipAiReply, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
+import { createVipAiReply, createVipHintMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
@@ -60,6 +60,12 @@ function randomInt(min: number, max: number) {
 
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
+}
+
+
+function isHintCommand(raw: string) {
+  const normalized = raw.trim().toLowerCase();
+  return normalized === '提示' || normalized === 'hint' || normalized === 'h';
 }
 
 function nextLeaveDelayMs() {
@@ -232,6 +238,12 @@ export default function App() {
 
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
+
+    if (isHintCommand(raw)) {
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipHintMessage(state.currentConsonant.letter) });
+      setInput('');
+      return;
+    }
 
     const fakeAiBatch = createFakeAiAudienceMessage({
       playerInput: raw,

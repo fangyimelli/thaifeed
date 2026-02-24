@@ -1,0 +1,212 @@
+{
+  "ข": {
+    "classTone": "高音",
+    "ipa": "/kʰ/（送氣，像ㄎ）",
+    "aspirated": "是",
+    "reference": "ข ไข่（蛋）",
+    "imageHint": "「恐」龍"
+  },
+  "ฉ": {
+    "classTone": "高音",
+    "ipa": "/tɕʰ/（送氣，像「ㄑ」）",
+    "aspirated": "是",
+    "reference": "ฉ ฉิ่ง（鈸/小鈸）",
+    "imageHint": "建議圖像：敲小鈸「ฉ！」同時噴一口氣＝送氣 /tɕʰ/（待你自選，子音結束再提醒）"
+  },
+  "ถ": {
+    "classTone": "高音",
+    "ipa": "/tʰ/（送氣，像ㄊ）",
+    "aspirated": "是",
+    "reference": "ถ ถุง（袋子）",
+    "imageHint": "雞「躺」蛋上"
+  },
+  "ผ": {
+    "classTone": "高音",
+    "ipa": "/pʰ/（送氣，像 ph、吐一口氣的 p）",
+    "aspirated": "是",
+    "reference": "ผ ผึ้ง（蜜蜂）",
+    "imageHint": "建議圖像：蜜蜂飛過時噴一口白氣「pʰ—」＝送氣（待你自選，子音結束再提醒）"
+  },
+  "ฝ": {
+    "classTone": "高音",
+    "ipa": "/f/（像英文 f；跟 ฟ 同音）",
+    "aspirated": "—",
+    "reference": "ฝ ฝา（蓋子）",
+    "imageHint": "建議圖像：掀蓋子時吹出「ffff」＝/f/（待你自選，子音結束再提醒）"
+  },
+  "ส": {
+    "classTone": "高音",
+    "ipa": "/s/（像ㄙ）",
+    "aspirated": "—",
+    "reference": "ส เสือ（老虎）",
+    "imageHint": "雞脖子折斷就 S 了"
+  },
+  "ห": {
+    "classTone": "高音",
+    "ipa": "/h/（像英文 H）",
+    "aspirated": "—",
+    "reference": "ห หีบ（箱子/櫃子）",
+    "imageHint": "建議圖像：打開箱子噴出「哈—」氣＝/h/"
+  },
+  "ก": {
+    "classTone": "中音",
+    "ipa": "/k/（不送氣，像ㄍ）",
+    "aspirated": "否",
+    "reference": "ก ไก่（雞）",
+    "imageHint": "雞的台語"
+  },
+  "จ": {
+    "classTone": "中音",
+    "ipa": "/tɕ/（像ㄐ/J）",
+    "aspirated": "—",
+    "reference": "จ จาน（盤子）",
+    "imageHint": "英文的 J"
+  },
+  "ด": {
+    "classTone": "中音",
+    "ipa": "/d/（不送氣，像ㄉ）",
+    "aspirated": "否",
+    "reference": "ด เด็ก（小孩）",
+    "imageHint": "溫室「豆」芽"
+  },
+  "ต": {
+    "classTone": "中音",
+    "ipa": "/t/（不送氣，像ㄊ但不送氣）",
+    "aspirated": "否",
+    "reference": "ต เต่า（烏龜）",
+    "imageHint": "溫室坍「塌」"
+  },
+  "บ": {
+    "classTone": "中音",
+    "ipa": "/b/（不送氣，像英文 b）",
+    "aspirated": "否",
+    "reference": "บ ใบไม้（葉子）",
+    "imageHint": "建議圖像：葉子上貼大寫 B，嘴巴不吐氣、乾脆發 b（待你自選，子音結束再提醒）"
+  },
+  "ป": {
+    "classTone": "中音",
+    "ipa": "/p/（不送氣，像英文 p 但不吐氣）",
+    "aspirated": "否",
+    "reference": "ป ปลา（魚）",
+    "imageHint": "建議圖像：魚在憋氣、泡泡很小＝不送氣 /p/（待你自選，子音結束再提醒）"
+  },
+  "อ": {
+    "classTone": "中音",
+    "ipa": "/ʔ/（喉塞音；常當母音載體，看起來像「沒子音」）",
+    "aspirated": "—",
+    "reference": "อ อ่าง（盆/缸）",
+    "imageHint": "建議圖像：水盆「空空」當載體，開頭喉嚨輕輕卡一下 /ʔ/（待你自選，子音結束再提醒）"
+  },
+  "ค": {
+    "classTone": "低音",
+    "ipa": "/kʰ/（送氣，像ㄎ）",
+    "aspirated": "是",
+    "reference": "ค ควาย（水牛）",
+    "imageHint": "防「空」洞（中間那個圓）"
+  },
+  "ง": {
+    "classTone": "低音",
+    "ipa": "/ŋ/（ng，像ㄥ，可當開頭）",
+    "aspirated": "—",
+    "reference": "ง งู（蛇）",
+    "imageHint": "ng 的 KK 音標 /ŋ/"
+  },
+  "ช": {
+    "classTone": "低音",
+    "ipa": "/tɕʰ/（送氣，像「ㄑ」或很送氣的ㄐ）",
+    "aspirated": "是",
+    "reference": "ช ช้าง（大象）",
+    "imageHint": "醜龍尾巴有毛"
+  },
+  "ซ": {
+    "classTone": "低音",
+    "ipa": "/s/（像ㄙ）",
+    "aspirated": "—",
+    "reference": "ซ โซ่（鎖鏈）",
+    "imageHint": "龍脖子折斷就 S 了"
+  },
+  "ท": {
+    "classTone": "低音",
+    "ipa": "/tʰ/（送氣，像ㄊ）",
+    "aspirated": "是",
+    "reference": "ท ทหาร（士兵）",
+    "imageHint": "駱「駝」"
+  },
+  "น": {
+    "classTone": "低音",
+    "ipa": "/n/（像ㄋ）",
+    "aspirated": "—",
+    "reference": "น หนู（老鼠）",
+    "imageHint": "英文 N"
+  },
+  "พ": {
+    "classTone": "低音",
+    "ipa": "/pʰ/（送氣，像 ph、吐一口氣的 p）",
+    "aspirated": "是",
+    "reference": "พ พาน（托盤）",
+    "imageHint": "泰星 PP（พีพี）名字的那個「พ」"
+  },
+  "ฟ": {
+    "classTone": "低音",
+    "ipa": "/f/（像英文 f）",
+    "aspirated": "—",
+    "reference": "ฟ ฟัน（牙齒）",
+    "imageHint": "建議圖像：牙齒咬下唇吹氣「ffff」＝/f/"
+  },
+  "ม": {
+    "classTone": "低音",
+    "ipa": "/m/（像ㄇ）",
+    "aspirated": "—",
+    "reference": "ม ม้า（馬）",
+    "imageHint": "建議圖像：馬嘴閉著哼「mmm」＝/m/（待你自選，子音結束再提醒）"
+  },
+  "ย": {
+    "classTone": "低音",
+    "ipa": "/j/（像英文 Y 的 y 音）",
+    "aspirated": "—",
+    "reference": "ย ยักษ์（巨人）",
+    "imageHint": "建議圖像：巨人頭上頂著大寫 Y，發 /y/"
+  },
+  "ร": {
+    "classTone": "低音",
+    "ipa": "/r/（像彈舌 r；很多人會唸得像 l）",
+    "aspirated": "—",
+    "reference": "ร เรือ（船）",
+    "imageHint": "建議圖像：船頭在抖、發出 rrr（舌頭顫一下）"
+  },
+  "ล": {
+    "classTone": "低音",
+    "ipa": "/l/（像英文 L）",
+    "aspirated": "—",
+    "reference": "ล ลิง（猴子）",
+    "imageHint": "建議圖像：猴子拿著一根大寫 L 的香蕉"
+  },
+  "ว": {
+    "classTone": "低音",
+    "ipa": "/w/（像英文 W）",
+    "aspirated": "—",
+    "reference": "ว แหวน（戒指）",
+    "imageHint": "建議圖像：戒指刻著 W；嘴唇圓圓發 /w/"
+  },
+  "ฮ": {
+    "classTone": "低音",
+    "ipa": "/h/（像英文 h）",
+    "aspirated": "—",
+    "reference": "ฮ นกฮูก（貓頭鷹）",
+    "imageHint": "建議圖像：貓頭鷹哈一口氣「ha—」＝/h/（待你自選，子音結束再提醒）"
+  },
+  "ธ": {
+    "classTone": "先不學",
+    "ipa": "/tʰ/（送氣，像ㄊ）",
+    "aspirated": "是",
+    "reference": "ธ",
+    "imageHint": "建議圖像：旗子迎風「ㄊ哈—」一口氣＝送氣"
+  },
+  "ภ": {
+    "classTone": "先不學",
+    "ipa": "/pʰ/（送氣，像 ph）",
+    "aspirated": "是",
+    "reference": "ภ",
+    "imageHint": "建議圖像：帆船揚帆噴一口氣「pʰ—」＝送氣"
+  }
+}
