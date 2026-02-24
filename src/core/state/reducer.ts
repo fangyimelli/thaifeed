@@ -26,6 +26,8 @@ export const initialState: GameState = {
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
+    case 'PLAYER_MESSAGE':
+      return { ...state, messages: [...state.messages, action.payload] };
     case 'ANSWER_CORRECT': {
       const nextCurse = Math.max(0, state.curse - 10);
       return {

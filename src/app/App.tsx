@@ -1,7 +1,12 @@
 import { useEffect, useReducer, useState } from 'react';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
-import { createAudienceMessage, createSuccessMessage, createWrongMessage } from '../core/systems/chatSystem';
+import {
+  createAudienceMessage,
+  createPlayerMessage,
+  createSuccessMessage,
+  createWrongMessage
+} from '../core/systems/chatSystem';
 import { createVipAiReply, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
@@ -63,6 +68,7 @@ export default function App() {
     if (!raw) return;
 
     playSound(sfx.send);
+    dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
     if (isAnswerCorrect(raw, state.targetConsonant)) {
       const donateSample = pickOne(donatePools.messages);

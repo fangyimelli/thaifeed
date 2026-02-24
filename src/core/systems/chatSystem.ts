@@ -17,6 +17,16 @@ export function createAudienceMessage(curse: number): ChatMessage {
   };
 }
 
+
+export function createPlayerMessage(raw: string): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    username: 'you',
+    text_th: raw,
+    isSelf: true
+  };
+}
+
 export function createSuccessMessage(): ChatMessage {
   return {
     id: crypto.randomUUID(),

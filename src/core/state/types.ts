@@ -4,6 +4,7 @@ export type ChatMessage = {
   text_th: string;
   text_zh?: string;
   isVip?: 'VIP_NORMAL' | 'VIP_STILL_HERE';
+  isSelf?: boolean;
   showTranslation?: boolean;
 };
 
@@ -28,6 +29,7 @@ export type GameState = {
 };
 
 export type GameAction =
+  | { type: 'PLAYER_MESSAGE'; payload: ChatMessage }
   | { type: 'ANSWER_CORRECT'; payload: { message: ChatMessage; donate: DonateMessage } }
   | { type: 'ANSWER_WRONG'; payload: { message: ChatMessage; vipMessage?: ChatMessage } }
   | { type: 'AUDIENCE_MESSAGE'; payload: ChatMessage }

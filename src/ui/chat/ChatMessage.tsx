@@ -8,7 +8,9 @@ type Props = {
 
 export default function ChatMessage({ message, onToggleTranslation }: Props) {
   return (
-    <article className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''}`}>
+    <article
+      className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''} ${message.isSelf ? 'self' : ''}`}
+    >
       <div className="chat-line">
         <span className="name">
           {message.isVip && <img src="/assets/icons/icon_crown.svg" alt="vip" className="crown" />}
