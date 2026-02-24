@@ -1,4 +1,4 @@
-import { normalizeInput } from './answerParser';
+import { normalizeInputForMatch } from '../../utils/inputNormalize';
 
 const speechKeywordGroups = [
   ['好可怕', '超可怕', '好恐怖', '很恐怖', '怕爆'],
@@ -16,10 +16,10 @@ const speechKeywordGroups = [
   ['空氣怪怪的', '氣氛怪怪的'],
   ['這裡有問題', '這邊有問題'],
   ['有人嗎', '這裡有人嗎']
-].map((group) => group.map(normalizeInput));
+].map((group) => group.map(normalizeInputForMatch));
 
 export function parsePlayerSpeech(input: string): string[] | null {
-  const normalized = normalizeInput(input);
+  const normalized = normalizeInputForMatch(input);
   if (!normalized) return null;
 
   for (const group of speechKeywordGroups) {
