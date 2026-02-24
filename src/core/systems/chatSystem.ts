@@ -22,6 +22,7 @@ function tierReaction(curse: number): string {
 const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
 const trailingParticles = ['啦', '吧', '好嗎', '對不對', '是不是'];
 const recentAudienceNormalized: string[] = [];
+const recentAudienceNormalizedSet = new Set<string>();
 
 function normalizeText(text: string): string {
   let normalized = text.trim().replace(emojiRegex, '').replace(/\s+/g, ' ');
@@ -32,7 +33,11 @@ function normalizeText(text: string): string {
 
 function rememberNormalized(text: string) {
   recentAudienceNormalized.push(text);
-  if (recentAudienceNormalized.length > 30) recentAudienceNormalized.shift();
+  recentAudienceNormalizedSet.add(text);
+  if (recentAudienceNormalized.length > 30) {
+    const overflow = recentAudienceNormalized.shift();
+    if (overflow && !recentAudienceNormalized.includes(overflow)) recentAudienceNormalizedSet.delete(overflow);
+  }
 }
 
 export function createAudienceMessage(curse: number, anchor: AnchorType, recentHistory: string[]): ChatMessage {
@@ -41,14 +46,14 @@ export function createAudienceMessage(curse: number, anchor: AnchorType, recentH
 
   let text = `${anchorKeyword(anchor)}那邊 ${tierReaction(curse)}`;
   let accepted = false;
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; i < 20; i += 1) {
     const candidate = buildPersonaMessage({
       username,
       anchorKeyword: anchorKeyword(anchor),
       anchorBaseText: `${anchorKeyword(anchor)}那邊 ${tierReaction(curse)}`
     });
     const normalized = normalizeText(candidate);
-    if (!viewport.includes(normalized) && !recentAudienceNormalized.includes(normalized)) {
+    if (!viewport.includes(normalized) && !recentAudienceNormalizedSet.has(normalized)) {
       text = candidate;
       rememberNormalized(normalized);
       accepted = true;
