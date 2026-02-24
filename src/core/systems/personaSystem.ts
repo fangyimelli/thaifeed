@@ -35,6 +35,11 @@ type PersonaCorpus = {
   emojiRate: number;
 };
 
+const leadingParticles = ['欸', 'ㄟ', '欸欸', '蛤', '靠', '真的假的', '等一下', '欸不是'];
+const endingParticles = ['啦', '欸', '啊', '齁', '耶'];
+const bannedTerms = ['似乎', '看起來', '應該是', '或許', '可能是', '顯示', '判斷', '認為'];
+const endingParticleHistory: string[] = [];
+
 const personaNames: PersonaName[] = [
   'chill',
   'nervous',
@@ -75,7 +80,7 @@ const baseCorpus = {
   ],
   generalResponses: [
     '剛剛有動一下',
-    '看起來不太穩',
+    '有點不太穩',
     '我看了會起雞皮',
     '這畫面不太單純',
     '整個氣氛變重',
@@ -136,31 +141,31 @@ const baseCorpus = {
     '這樣真的沒問題嗎',
     '你們也覺得涼嗎'
   ],
-  endings: ['吧', '啦', '好嗎', '對不對', '是不是', '欸', '捏', '內', '喔', '先不要'],
+  endings: ['啦', '欸', '啊', '齁', '耶'],
   emojis: ['👀', '😰', '😨', '😬', '😳', '🤯', '🫠', '🥶', '🫣', '😵']
 };
 
 const personaVariants: Record<PersonaName, Partial<PersonaCorpus>> = {
   chill: {
-    openings: ['欸', '先說', '我覺得', '老實講', '看起來', '有點喔'],
-    endings: ['啦', '吧', '喔', '先看一下', '慢慢來'],
+    openings: ['欸', '先說', '有點', '老實講', '怪怪的', '等一下'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.2
   },
   nervous: {
-    openings: ['欸欸', '等一下', '蛤', '不要吧', '我不行', '先暫停'],
+    openings: ['欸欸', '等一下', '蛤', '欸不是', '我不行', '先暫停'],
     emotionalResponses: ['我快不能呼吸', '我手都軟了', '我真的要哭', '我整個炸毛', '我腿在抖'],
     emojiRate: 0.45
   },
   troll: {
     openings: ['笑死', '欸不是', '好喔', '真假啦', '你確定', '鬧欸'],
     generalResponses: ['這段也太會演', '那塊在偷刷存在感', '畫面故意搞我', '這邊很會鬧', '這段很會挑時間'],
-    endings: ['欸', '吧', '笑死', '先別鬧', '太扯了'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.35
   },
   quiet: {
     openings: ['嗯', '欸', '我看', '這邊', '剛剛', '有點'],
     shortInterjections: ['欸', '喔', '嗯', '先看', '等等'],
-    endings: ['欸', '吧', '喔', '嗯'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.1
   },
   observer: {
@@ -171,12 +176,12 @@ const personaVariants: Record<PersonaName, Partial<PersonaCorpus>> = {
   hype: {
     openings: ['哇靠', '太猛了', '欸欸欸', '衝了', '這太炸', '靠北'],
     emotionalResponses: ['我腎上腺素滿了', '我直接醒了', '我整個燃起來', '我心臟在蹦', '我現在超嗨又怕'],
-    endings: ['啦', '吧', '太扯', '衝了', '有夠猛'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.4
   },
   skeptical: {
-    openings: ['先等等', '我不太信', '這個嘛', '認真說', '有可能', '先別急'],
-    generalResponses: ['可能是光源偏掉', '也可能是壓縮雜訊', '先別太快下結論', '我想再看一次', '先排除鏡頭問題'],
+    openings: ['先等等', '我不太信', '這個嘛', '認真說', '有點怪', '先別急'],
+    generalResponses: ['光有點偏掉', '壓縮有點亂', '先別太快定案', '我想再看一次', '先看鏡頭有沒有怪'],
     questions: ['有人能比對前一格嗎', '這會不會是反光', '你們有看到一致嗎', '這段有原檔嗎', '先確認幀數好嗎'],
     emojiRate: 0.08
   },
@@ -189,25 +194,25 @@ const personaVariants: Record<PersonaName, Partial<PersonaCorpus>> = {
   meme: {
     openings: ['這波', '笑不出來', '要命', '先存圖', '欸這啥', '有梗'],
     generalResponses: ['這幕直接變迷因', '那塊像在偷上線', '我腦中警報梗圖全開', '這段可以封神', '這畫面太會'],
-    endings: ['笑死', '有梗', '太會了', '先存', '吧'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.38
   },
   foodie: {
     openings: ['欸我剛', '這感覺', '有夠像', '突然想到', '先講', '我覺得像'],
     generalResponses: ['氣氛像冰箱半夜打開', '那塊像焦掉的吐司', '這壓迫感像鍋巴黏底', '畫面悶到像蒸籠', '整個像冷掉的湯'],
-    endings: ['欸', '吧', '好餓又怕', '先別', '太怪了'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.22
   },
   gamer: {
-    openings: ['這邊', '等等我 call', '我判斷', '這波要', '有怪', '像 bug'],
+    openings: ['這邊', '等等我 call', '我看', '這波要', '有怪', '像 bug'],
     generalResponses: ['像地圖觸發事件', '像怪在卡視角', '這格像隱藏關卡', '那邊像延遲抖動', '畫面像被鎖定'],
-    endings: ['吧', '先拉視角', '這波不妙', '等 CD', '穩住'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.28
   },
   sleepy: {
     openings: ['哈欠一下', '我本來快睡', '欸突然', '半夢半醒', '我眼睛很重', '結果'],
     emotionalResponses: ['我直接清醒', '我睡意瞬間沒了', '我腦袋被拍醒', '我現在完全不睏', '我被嚇醒'],
-    endings: ['喔', '吧', '我醒了', '先別睡', '好扯'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.2
   },
   detective: {
@@ -230,32 +235,32 @@ const personaVariants: Record<PersonaName, Partial<PersonaCorpus>> = {
   },
   polite: {
     openings: ['不好意思', '借我說一下', '我這邊看', '請問', '先提醒', '冒昧講'],
-    endings: ['好嗎', '謝謝', '請注意', '麻煩了', '吧'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.06
   },
   impatient: {
     openings: ['快點看', '別拖了', '先切過去', '現在就', '立刻', '快快快'],
-    endings: ['快', '吧', '先處理', '不要拖', '現在'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emotionalResponses: ['我真的等不及', '再慢就來不及', '我快爆氣', '這節奏太慢了', '我已經急起來'],
     emojiRate: 0.24
   },
   storyteller: {
     openings: ['我跟你說', '剛剛那感覺', '這畫面讓我想到', '以前我遇過', '這種我懂', '聽我一句'],
     generalResponses: ['超像半夜走廊那種壓力', '像停電前那種靜', '像舊屋木板在呼吸', '像雨夜突然停電', '像電扇停掉那秒'],
-    endings: ['真的', '吧', '我有感', '超像', '先記住'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.2
   },
   minimalist: {
     openings: ['欸', '看', '這裡', '有了', '剛剛', '那格'],
     generalResponses: ['很怪', '不對', '有動', '太黑', '太近'],
     emotionalResponses: ['我會怕', '我不行', '有壓力', '有點冷', '我發麻'],
-    endings: ['吧', '欸', '喔'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.05
   },
   latecomer: {
     openings: ['我剛進來', '晚到報到', '剛補看到', '才進來就', '我剛跟上', '剛開就'],
     questions: ['有人能補前情嗎', '剛剛發生什麼', '我錯過哪段', '能幫我指一下嗎', '現在重點在哪'],
-    endings: ['嗎', '吧', '先帶我', '我剛來', '感謝'],
+    endings: ['啦', '欸', '啊', '齁', '耶'],
     emojiRate: 0.18
   }
 };
@@ -296,10 +301,66 @@ function sanitizeText(text: string): string {
   return text.replace(/[。．｡!！?？,，、;；:：]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+function naturalizeTaiwanChat(text: string): string {
+  let next = text;
+  const replacements: Record<string, string> = {
+    似乎: '好像',
+    看起來: '有點',
+    應該是: '好像',
+    或許: '好像',
+    可能是: '好像',
+    顯示: '有點',
+    判斷: '看',
+    認為: '覺得'
+  };
+
+  Object.entries(replacements).forEach(([from, to]) => {
+    next = next.split(from).join(to);
+  });
+
+  bannedTerms.forEach((term) => {
+    if (next.includes(term)) next = next.split(term).join('怪怪的');
+  });
+
+  if (next.endsWith('吧')) next = next.slice(0, -1).trim();
+  next = next.replace(/\s+/g, ' ').trim();
+  if (next.length > 28) next = next.slice(0, 28).trim();
+  return next;
+}
+
+
+function enforceParticleLimit(text: string): string {
+  const tokens = text.split(' ').filter(Boolean);
+  let seenParticle = false;
+  const nextTokens = tokens.filter((token) => {
+    const isParticle = leadingParticles.includes(token) || endingParticles.includes(token);
+    if (!isParticle) return true;
+    if (!seenParticle) {
+      seenParticle = true;
+      return true;
+    }
+    return false;
+  });
+  return nextTokens.join(' ').trim();
+}
+
+function pickEndingParticle(corpus: PersonaCorpus): string {
+  if (Math.random() >= 0.4) return '';
+  const pool = corpus.endings.filter((particle) => {
+    const size = endingParticleHistory.length;
+    if (size < 2) return true;
+    return !(endingParticleHistory[size - 1] === particle && endingParticleHistory[size - 2] === particle);
+  });
+  const selected = pickOne(pool.length > 0 ? pool : endingParticles);
+  endingParticleHistory.push(selected);
+  if (endingParticleHistory.length > 8) endingParticleHistory.shift();
+  return selected;
+}
+
 function buildFromFragments(corpus: PersonaCorpus, anchorKeyword: string, anchorBaseText: string): string {
   const opening = pickOne(corpus.openings);
   const anchorFragment = pickOne(corpus.anchorTemplates).split('anchorKeyword').join(anchorKeyword);
-  const short = Math.random() < 0.35 ? pickOne(corpus.shortInterjections) : '';
+  const short = Math.random() < 0.35 ? pickOne(leadingParticles) : '';
 
   const midPool = [
     pickOne(corpus.generalResponses),
@@ -308,13 +369,15 @@ function buildFromFragments(corpus: PersonaCorpus, anchorKeyword: string, anchor
     pickOne(corpus.questions)
   ];
   const core = pickOne(midPool);
-  const ending = Math.random() < 0.65 ? pickOne(corpus.endings) : '';
+  const ending = pickEndingParticle(corpus);
 
   const useAnchorBase = Math.random() < 0.2;
-  const raw = [short, opening, useAnchorBase ? anchorBaseText : anchorFragment, core, ending].filter(Boolean).join(' ');
-  const noPunctuation = sanitizeText(raw);
-  if (Math.random() < corpus.emojiRate) return `${noPunctuation} ${pickOne(corpus.emojis)}`;
-  return noPunctuation;
+  const raw = [short, opening, useAnchorBase ? anchorBaseText : anchorFragment, core].filter(Boolean).join(' ');
+  const noPunctuation = naturalizeTaiwanChat(sanitizeText(raw));
+  const withEnding = ending ? `${noPunctuation} ${ending}` : noPunctuation;
+  const naturalLine = enforceParticleLimit(withEnding);
+  if (Math.random() < corpus.emojiRate) return `${naturalLine} ${pickOne(corpus.emojis)}`;
+  return naturalLine;
 }
 
 function buildPersonaCacheKey(persona: PersonaName, anchorKeyword: string) {
@@ -347,8 +410,8 @@ function ensurePersonaCache(persona: PersonaName, anchorKeyword: string, anchorB
 function forceUnique(sentence: string, corpus: PersonaCorpus): string {
   if (!globalMessageSet.has(sentence)) return sentence;
 
-  const withEnding = `${sentence} ${pickOne(corpus.endings)}`.trim();
-  if (!globalMessageSet.has(withEnding)) return withEnding;
+  const withPrefix = `${pickOne(leadingParticles)} ${sentence}`.trim();
+  if (!globalMessageSet.has(withPrefix)) return withPrefix;
 
   const withEmoji = `${sentence} ${pickOne(corpus.emojis)}`.trim();
   if (!globalMessageSet.has(withEmoji)) return withEmoji;

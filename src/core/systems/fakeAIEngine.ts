@@ -32,7 +32,7 @@ let lastUrbanLegendAt = 0;
 let lastThaiFloodAt = 0;
 const globalRecentNormalized: string[] = [];
 
-const trailingParticles = ['啦', '吧', '好嗎', '對不對', '是不是'];
+const trailingParticles = ['啦', '欸', '啊', '齁', '耶'];
 const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
 
 function stripEndingPunctuation(text: string) {

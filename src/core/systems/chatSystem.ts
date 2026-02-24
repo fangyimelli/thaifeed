@@ -20,7 +20,7 @@ function tierReaction(curse: number): string {
 }
 
 const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
-const trailingParticles = ['啦', '吧', '好嗎', '對不對', '是不是'];
+const trailingParticles = ['啦', '欸', '啊', '齁', '耶'];
 const recentAudienceNormalized: string[] = [];
 const recentAudienceNormalizedSet = new Set<string>();
 
