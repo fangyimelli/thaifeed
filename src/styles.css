@@ -7,13 +7,19 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 
-.app-layout {
+.app-shell {
   height: 100vh;
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  position: relative;
+}
+
+.app-layout {
   display: grid;
   grid-template-columns: 1fr 390px;
   gap: 12px;
-  padding: 12px;
-  position: relative;
 }
 
 .scene-view {
@@ -23,6 +29,19 @@ body { margin: 0; }
   border: 1px solid #2b3140;
   background: #05070c;
 }
+
+.video-layer-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.scene-video-layer {
+  position: absolute;
+  inset: 0;
+}
+
 .scene-video, .overlay {
   position: absolute;
   width: 100%;
@@ -49,12 +68,10 @@ body { margin: 0; }
   pointer-events: none;
 }
 
-
-.scene-hud {
-  position: absolute;
-  left: 14px;
-  top: 14px;
-  right: 14px;
+.live-header {
+  position: relative;
+  z-index: 1000;
+  pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -64,7 +81,7 @@ body { margin: 0; }
   padding: 10px 12px;
   border-radius: 10px;
 }
-.scene-hud h1 {
+.live-header h1 {
   margin: 0;
   flex: 1;
   text-align: center;
@@ -243,7 +260,7 @@ body { margin: 0; }
 .donate-stack {
   position: absolute;
   right: 410px;
-  top: 20px;
+  top: 74px;
   display: grid;
   gap: 10px;
 }
@@ -287,12 +304,17 @@ body { margin: 0; }
   50% { transform: scale(1.35); opacity: 1; }
 }
 
-.scene-view.curse-low .overlay.noise { opacity: .14; }
-.scene-view.curse-mid { filter: blur(1px); }
-.scene-view.curse-mid .overlay.noise { opacity: .25; }
-.scene-view.curse-high { filter: blur(2px); animation: shake .16s infinite; }
-.scene-view.curse-critical {
+.scene-view .curse-low.overlay.noise { opacity: .14; }
+.distortion-overlay { z-index: 2; }
+.filter-layer.curse-mid { filter: blur(1px); transform: scale(1.01); }
+.scene-view .curse-mid.overlay.noise { opacity: .25; }
+.filter-layer.curse-high { filter: blur(2px); transform: scale(1.015); }
+.scene-view .curse-high.distortion-overlay { animation: shake .16s infinite; }
+.filter-layer.curse-critical {
   filter: blur(2px) hue-rotate(8deg);
+  transform: scale(1.02);
+}
+.scene-view .curse-critical.distortion-overlay {
   animation: shake .12s infinite, glitch .45s infinite;
 }
 
