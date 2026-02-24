@@ -1,14 +1,15 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
-import { isAnswerCorrect } from '../core/systems/answerParser';
+import { matchAnswerContains, normalizeInputForMatch } from '../core/systems/answerParser';
 import {
   createAudienceMessage,
   createFakeAiAudienceMessage,
   createPlayerMessage,
   createSuccessMessage,
   createWrongMessage,
-  getAudienceIntervalMs
+  getAudienceIntervalMs,
+  playerSpeechParser
 } from '../core/systems/chatSystem';
 import { createVipAiReply, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
 import type { DonateMessage } from '../core/state/types';
@@ -230,26 +231,9 @@ export default function App() {
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
-    const fakeAiBatch = createFakeAiAudienceMessage({
-      playerInput: raw,
-      targetConsonant: state.targetConsonant,
-      curse: state.curse,
-      anchor: state.currentAnchor,
-      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
-    });
+    const normalized = normalizeInputForMatch(raw);
 
-    fakeAiBatch.messages.forEach((message) => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
-    });
-
-    if (fakeAiBatch.pauseMs) {
-      setChatAutoPaused(true);
-      window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
-      setInput('');
-      return;
-    }
-
-    if (isAnswerCorrect(raw, state.targetConsonant)) {
+    if (matchAnswerContains(normalized, state.targetConsonant)) {
       const donateSample = pickOne(donatePools.messages);
       const donate: DonateMessage = {
         id: crypto.randomUUID(),
@@ -275,6 +259,23 @@ export default function App() {
       });
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
       playSound(SFX_SRC.success);
+    } else if (playerSpeechParser(raw)) {
+      const fakeAiBatch = createFakeAiAudienceMessage({
+        playerInput: raw,
+        targetConsonant: state.targetConsonant,
+        curse: state.curse,
+        anchor: state.currentAnchor,
+        recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
+      });
+
+      fakeAiBatch.messages.forEach((message) => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+      });
+
+      if (fakeAiBatch.pauseMs) {
+        setChatAutoPaused(true);
+        window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
+      }
     } else {
       const wrongMessage = createWrongMessage(state.curse);
       const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
