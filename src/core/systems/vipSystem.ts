@@ -8,24 +8,24 @@ type VipAiParams = {
   vipType: 'VIP_NORMAL' | 'VIP_STILL_HERE';
 };
 
-function mirrorInput(input: string, target: string) {
+function mirrorInput(input: string) {
   const normalized = input.trim();
   if (!normalized) {
-    return `先專心看這個位置 輸入「${target}」就能往下走`;
+    return `先盯著那個位置看一下 直覺先不要亂掉`;
   }
 
-  return `你剛剛輸入「${normalized}」了 再對照這個位置看一次`;
+  return `你剛剛輸入「${normalized}」 我建議再對照那個位置看一次`;
 }
 
 export function maybeCreateVipNormalMessage(input: string, curse: number, target: string): ChatMessage | null {
   if (Math.random() > 0.2) return null;
 
   const tips = [
-    `我也覺得是「${target}」 先盯著現在這個位置再輸入一次`,
-    '聊天室都在看這個位置 你再確認一次字形'
+    `我也在看「${target}」附近的那塊 你再穩一點看一次`,
+    '我覺得那個位置有在回穩 你先別急'
   ];
 
-  const mirrored = mirrorInput(input, target);
+  const mirrored = mirrorInput(input);
   const chosen = curse > 60 ? mirrored : (Math.random() < 0.5 ? tips[0] : tips[1]);
 
   return {
@@ -39,11 +39,11 @@ export function maybeCreateVipNormalMessage(input: string, curse: number, target
 }
 
 export function createVipAiReply(params: VipAiParams): ChatMessage {
-  const { input, curse, isCorrect, target, vipType } = params;
+  const { input, curse, isCorrect, vipType } = params;
 
   if (vipType === 'VIP_STILL_HERE') {
-    const mirrored = mirrorInput(input, target);
-    const extra = curse > 70 ? '我還在這裡 角落越來越不穩 快答對' : '我還在這裡 你可以慢慢再輸入一次';
+    const mirrored = mirrorInput(input);
+    const extra = curse > 70 ? '我還在這裡 角落又開始晃了 先把呼吸穩住' : '我還在這裡 你慢慢來 先看清楚那邊';
     const message = `${mirrored} ${extra}`;
 
     return {
@@ -56,7 +56,9 @@ export function createVipAiReply(params: VipAiParams): ChatMessage {
     };
   }
 
-  const normal = isCorrect ? '超準 下一個字已經打開了 ✨' : mirrorInput(input, target);
+  const normal = isCorrect
+    ? '等一下 現在真的比較穩 剛剛那個位置亮了一下'
+    : mirrorInput(input);
 
   return {
     id: crypto.randomUUID(),

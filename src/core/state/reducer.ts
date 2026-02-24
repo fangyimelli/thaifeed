@@ -28,7 +28,7 @@ export const initialState: GameState = {
       username: 'system',
       text: 'ลองพิมพ์ออกมาดูสิ ถ้าถูกอาจเห็นตัวถัดไป',
       language: 'th',
-      translation: '試著把它打出來，打對好像就能看到下一個字。'
+      translation: '試著把你看到的內容打出來，先感受房間的變化。'
     }
   ],
   donateToasts: []

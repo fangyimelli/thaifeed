@@ -150,21 +150,33 @@ export function createPlayerMessage(raw: string): ChatMessage {
 }
 
 export function createSuccessMessage(): ChatMessage {
+  const atmospherePool = [
+    '欸 現在好像正常一點',
+    '剛剛那個抖動沒那麼嚴重了',
+    '桌子那邊好像穩下來',
+    '欸 等一下 空氣感覺比較沒那麼怪',
+    '是不是比較不抖了',
+    '欸 那邊沒那麼黑了',
+    '磁場感覺好一點',
+    '畫面突然順很多'
+  ];
+  const selected = pickOne(atmospherePool);
+
   return {
     id: crypto.randomUUID(),
     username: 'mod_live',
-    text: '答對了 房間氣氛立刻變好 ✨',
+    text: selected,
     language: 'zh',
-    translation: '答對了 房間氣氛立刻變好 ✨'
+    translation: selected
   };
 }
 
 export function createWrongMessage(curse: number): ChatMessage {
   const tier = curseTier(curse);
   const zhTier = {
-    low: '差一點點 再試一次',
-    mid: '房間開始有點怪 快重打一次',
-    high: '畫面抖得很嚴重 快答對'
+    low: '剛剛好像更怪',
+    mid: '欸 怎麼更抖了',
+    high: '空氣又變重了 磁場又亂了'
   } as const;
 
   return {
