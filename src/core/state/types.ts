@@ -8,6 +8,8 @@ export type ChatMessage = {
   showTranslation?: boolean;
 };
 
+export type AnchorType = 'under_table' | 'door' | 'window' | 'corner';
+
 export type DonateMessage = {
   id: string;
   username: string;
@@ -24,6 +26,7 @@ export type GameState = {
   curse: number;
   wrongStreak: number;
   vipStillHereTriggered: boolean;
+  currentAnchor: AnchorType;
   messages: ChatMessage[];
   donateToasts: DonateMessage[];
 };

@@ -1,4 +1,11 @@
-import type { GameAction, GameState } from './types';
+import type { AnchorType, GameAction, GameState } from './types';
+
+function anchorFromCurse(curse: number): AnchorType {
+  if (curse >= 75) return 'under_table';
+  if (curse >= 50) return 'corner';
+  if (curse >= 30) return 'window';
+  return 'door';
+}
 
 export const initialState: GameState = {
   roomName: '老屋房間',
@@ -7,6 +14,7 @@ export const initialState: GameState = {
   curse: 20,
   wrongStreak: 0,
   vipStillHereTriggered: false,
+  currentAnchor: 'door',
   messages: [
     {
       id: 'boot-1',
@@ -33,6 +41,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         curse: nextCurse,
+        currentAnchor: anchorFromCurse(nextCurse),
         wrongStreak: 0,
         messages: [...state.messages, action.payload.message],
         donateToasts: [...state.donateToasts, action.payload.donate].slice(-2)
@@ -46,6 +55,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         curse: nextCurse,
+        currentAnchor: anchorFromCurse(nextCurse),
         wrongStreak: nextWrongStreak,
         vipStillHereTriggered: state.vipStillHereTriggered || Boolean(action.payload.vipMessage),
         messages: list

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
+import type { AnchorType } from '../../core/state/types';
 import CurseMeter from '../hud/CurseMeter';
 import { getCachedAsset } from '../../utils/preload';
 
@@ -7,6 +8,7 @@ type Props = {
   roomName: string;
   targetConsonant: string;
   curse: number;
+  anchor: AnchorType;
 };
 
 type SceneAssetState = {
@@ -17,11 +19,6 @@ type SceneAssetState = {
   vignetteOk: boolean;
 };
 
-type GlyphPosition = {
-  top: number;
-  left: number;
-};
-
 const initialAssets: SceneAssetState = {
   videoOk: true,
   smokeOk: true,
@@ -30,32 +27,27 @@ const initialAssets: SceneAssetState = {
   vignetteOk: true
 };
 
-function randomGlyphPosition(): GlyphPosition {
-  return {
-    top: Math.floor(Math.random() * 58) + 14,
-    left: Math.floor(Math.random() * 62) + 10
-  };
-}
+const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
+  under_table: { top: 74, left: 46 },
+  door: { top: 52, left: 84 },
+  window: { top: 31, left: 66 },
+  corner: { top: 20, left: 16 }
+};
 
-export default function SceneView({ roomName, targetConsonant, curse }: Props) {
+export default function SceneView({ roomName, targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
-  const [glyphPos, setGlyphPos] = useState<GlyphPosition>(randomGlyphPosition());
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoAsset = getCachedAsset('/assets/scenes/oldhouse_room_loop.mp4');
   const videoSrc = videoAsset instanceof HTMLVideoElement ? videoAsset.src : '/assets/scenes/oldhouse_room_loop.mp4';
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setGlyphPos(randomGlyphPosition());
-    }, 2100);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-
-  useEffect(() => {
     void videoRef.current?.play().catch(() => undefined);
   }, []);
+
+  const anchorPos = ANCHOR_POSITIONS[anchor];
+  const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
+  const pulseOpacity = Math.min(1, 0.35 + curse / 120);
+
   return (
     <section className={`scene-view ${curseVisualClass(curse)}`}>
       <video
@@ -103,7 +95,18 @@ export default function SceneView({ roomName, targetConsonant, curse }: Props) {
         />
       )}
 
-      <span className="glyph-blink" style={{ top: `${glyphPos.top}%`, left: `${glyphPos.left}%` }}>
+      <span
+        className="glyph-blink"
+        style={{
+          top: `${anchorPos.top}%`,
+          left: `${anchorPos.left}%`,
+          filter: `contrast(${1 + curse / 180})`,
+          opacity: pulseOpacity,
+          textShadow: `0 0 ${18 + curse / 3}px rgba(134, 217, 255, ${0.7 + curse / 300}), 0 0 ${40 + curse / 2}px rgba(88, 162, 255, ${0.45 + curse / 250})`,
+          animationDuration: `${Math.max(0.45, 1.1 - curse / 200)}s`,
+          transform: `translate(-50%, -50%) scale(${pulseStrength})`
+        }}
+      >
         {targetConsonant}
       </span>
 

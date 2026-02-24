@@ -2,7 +2,8 @@ import thaiChatPools from '../../content/pools/thaiChatPools.json';
 import usernames from '../../content/pools/usernames.json';
 import { pickOne } from '../../utils/random';
 import { curseTier } from './curseSystem';
-import type { ChatMessage } from '../state/types';
+import { generateReply } from './fakeAIEngine';
+import type { AnchorType, ChatMessage } from '../state/types';
 
 export function createAudienceMessage(curse: number): ChatMessage {
   const tier = curseTier(curse);
@@ -17,6 +18,30 @@ export function createAudienceMessage(curse: number): ChatMessage {
   };
 }
 
+export function createFakeAiAudienceMessage(input: {
+  playerInput: string;
+  targetConsonant: string;
+  curse: number;
+  anchor: AnchorType;
+  recentHistory: string[];
+}): ChatMessage {
+  const reply = generateReply(input);
+  return {
+    id: crypto.randomUUID(),
+    username: 'fake_ai',
+    text_th: reply.text_th,
+    text_zh: reply.text_zh
+  };
+}
+
+export function getAudienceIntervalMs(curse: number) {
+  const minMs = 1200;
+  const maxMs = 6000;
+  const pressure = Math.min(0.45, curse / 220);
+  const low = Math.floor(minMs - minMs * pressure * 0.25);
+  const high = Math.floor(maxMs - maxMs * pressure);
+  return Math.floor(Math.random() * (high - low + 1) + low);
+}
 
 export function createPlayerMessage(raw: string): ChatMessage {
   return {
