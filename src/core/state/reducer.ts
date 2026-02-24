@@ -1,6 +1,6 @@
 import { pickOne } from '../../utils/random';
 import { markReview } from '../adaptive/memoryScheduler';
-import { pickRandomConsonant } from '../systems/consonantSelector';
+import { pickRandomConsonant, resolvePlayableConsonant } from '../systems/consonantSelector';
 import type { AnchorType, GameAction, GameState } from './types';
 
 const anchors: AnchorType[] = ['door', 'window', 'corner', 'under_table'];
@@ -12,7 +12,7 @@ function anchorFromCurse(curse: number): AnchorType {
   return 'door';
 }
 
-const initialConsonant = pickRandomConsonant(undefined, true, 20);
+const initialConsonant = resolvePlayableConsonant();
 
 export const initialState: GameState = {
   roomName: '老屋房間',
@@ -43,63 +43,71 @@ export const initialState: GameState = {
   donateToasts: []
 };
 
+function ensurePlayableState(state: GameState): GameState {
+  const playable = resolvePlayableConsonant(state.currentConsonant?.letter);
+  if (playable.letter === state.currentConsonant.letter) return state;
+  return { ...state, currentConsonant: playable };
+}
+
 export function gameReducer(state: GameState, action: GameAction): GameState {
+  const safeState = ensurePlayableState(state);
+
   switch (action.type) {
     case 'PLAYER_MESSAGE':
-      return { ...state, messages: [...state.messages, action.payload] };
+      return { ...safeState, messages: [...safeState.messages, action.payload] };
     case 'ANSWER_CORRECT': {
-      const nextCurse = Math.max(0, state.curse - 10);
-      markReview(state.currentConsonant.letter, 'correct', nextCurse);
+      const nextCurse = Math.max(0, safeState.curse - 10);
+      markReview(safeState.currentConsonant.letter, 'correct', nextCurse);
       const nextConsonant = pickRandomConsonant(
-        state.currentConsonant.letter,
-        state.allowConsonantRepeat,
+        safeState.currentConsonant.letter,
+        safeState.allowConsonantRepeat,
         nextCurse
       );
       return {
-        ...state,
+        ...safeState,
         currentConsonant: nextConsonant,
-        previousConsonant: state.currentConsonant,
+        previousConsonant: safeState.currentConsonant,
         curse: nextCurse,
         currentAnchor: pickOne(anchors),
         wrongStreak: 0,
-        messages: [...state.messages, action.payload.message],
-        donateToasts: [...state.donateToasts, action.payload.donate].slice(-2)
+        messages: [...safeState.messages, action.payload.message],
+        donateToasts: [...safeState.donateToasts, action.payload.donate].slice(-2)
       };
     }
     case 'ANSWER_PASS': {
       const nextConsonant = pickRandomConsonant(
-        state.currentConsonant.letter,
-        state.allowConsonantRepeat,
-        state.curse
+        safeState.currentConsonant.letter,
+        safeState.allowConsonantRepeat,
+        safeState.curse
       );
       return {
-        ...state,
+        ...safeState,
         currentConsonant: nextConsonant,
-        previousConsonant: state.currentConsonant,
-        messages: [...state.messages, action.payload.message]
+        previousConsonant: safeState.currentConsonant,
+        messages: [...safeState.messages, action.payload.message]
       };
     }
     case 'ANSWER_WRONG': {
-      const nextCurse = Math.min(100, state.curse + 10);
-      markReview(state.currentConsonant.letter, 'wrong', nextCurse);
-      const nextWrongStreak = state.wrongStreak + 1;
-      const list = [...state.messages, action.payload.message];
+      const nextCurse = Math.min(100, safeState.curse + 10);
+      markReview(safeState.currentConsonant.letter, 'wrong', nextCurse);
+      const nextWrongStreak = safeState.wrongStreak + 1;
+      const list = [...safeState.messages, action.payload.message];
       if (action.payload.vipMessage) list.push(action.payload.vipMessage);
       return {
-        ...state,
+        ...safeState,
         curse: nextCurse,
         currentAnchor: anchorFromCurse(nextCurse),
         wrongStreak: nextWrongStreak,
-        vipStillHereTriggered: state.vipStillHereTriggered || Boolean(action.payload.vipMessage),
+        vipStillHereTriggered: safeState.vipStillHereTriggered || Boolean(action.payload.vipMessage),
         messages: list
       };
     }
     case 'AUDIENCE_MESSAGE':
-      return { ...state, messages: [...state.messages, action.payload] };
+      return { ...safeState, messages: [...safeState.messages, action.payload] };
     case 'TOGGLE_CHAT_TRANSLATION':
       return {
-        ...state,
-        messages: state.messages.map((message) =>
+        ...safeState,
+        messages: safeState.messages.map((message) =>
           message.id === action.payload.id && message.language === 'th' && message.translation
             ? { ...message, showTranslation: !message.showTranslation }
             : message
@@ -107,8 +115,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     case 'TOGGLE_DONATE_TRANSLATION':
       return {
-        ...state,
-        donateToasts: state.donateToasts.map((toast) =>
+        ...safeState,
+        donateToasts: safeState.donateToasts.map((toast) =>
           toast.id === action.payload.id
             ? { ...toast, showTranslation: !toast.showTranslation }
             : toast
@@ -116,10 +124,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     case 'DISMISS_DONATE':
       return {
-        ...state,
-        donateToasts: state.donateToasts.filter((toast) => toast.id !== action.payload.id)
+        ...safeState,
+        donateToasts: safeState.donateToasts.filter((toast) => toast.id !== action.payload.id)
       };
     default:
-      return state;
+      return safeState;
   }
 }

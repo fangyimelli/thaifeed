@@ -1,3 +1,5 @@
+import commonConsonantPool from '../../content/pools/consonantPoolCommon.json';
+
 export interface MemoryNode {
   letter: string;
   easeFactor: number;
@@ -13,6 +15,7 @@ const INITIAL_INTERVAL_SECONDS = 20;
 const INITIAL_DELAY_SECONDS = 10;
 
 const memoryMap = new Map<string, MemoryNode>();
+const commonLetterSet = new Set(commonConsonantPool);
 
 function nowMs() {
   return Date.now();
@@ -33,6 +36,10 @@ function createInitialNode(letter: string, now: number): MemoryNode {
 }
 
 export function getMemoryNode(letter: string): MemoryNode {
+  if (!commonLetterSet.has(letter)) {
+    throw new Error(`memory node is only supported for common consonants: ${letter}`);
+  }
+
   const now = nowMs();
   const existing = memoryMap.get(letter);
   if (existing) return existing;
@@ -56,6 +63,8 @@ function accelerateForCurse(curse: number, now: number) {
 }
 
 export function markReview(letter: string, result: ReviewResult, curse: number) {
+  if (!commonLetterSet.has(letter)) return;
+
   const now = nowMs();
   const node = getMemoryNode(letter);
 
@@ -100,20 +109,21 @@ export function pickScheduledLetter(
   allowRepeat: boolean,
   curse: number
 ): string {
-  if (letters.length === 0) throw new Error('letter pool is empty');
+  const scopedLetters = letters.filter((letter) => commonLetterSet.has(letter));
+  if (scopedLetters.length === 0) throw new Error('letter pool is empty');
 
   const now = nowMs();
-  letters.forEach((letter) => {
+  scopedLetters.forEach((letter) => {
     getMemoryNode(letter);
   });
 
   accelerateForCurse(curse, now);
 
-  const candidates = allowRepeat || letters.length === 1 || !previousLetter
-    ? letters
-    : letters.filter((letter) => letter !== previousLetter);
+  const candidates = allowRepeat || scopedLetters.length === 1 || !previousLetter
+    ? scopedLetters
+    : scopedLetters.filter((letter) => letter !== previousLetter);
 
-  const scoped = candidates.length > 0 ? candidates : letters;
+  const scoped = candidates.length > 0 ? candidates : scopedLetters;
   const dueLetters = scoped.filter((letter) => getMemoryNode(letter).nextDue <= now);
 
   if (dueLetters.length > 0) {

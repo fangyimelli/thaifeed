@@ -1,46 +1,552 @@
 [
-  {"letter":"ก","name_th":"กอ ไก่","pinyin":["g","k"],"bopomofo":["ㄍ"],"group":"mid"},
-  {"letter":"ข","name_th":"ขอ ไข่","pinyin":["kh","k"],"bopomofo":["ㄎ"],"group":"high"},
-  {"letter":"ฃ","name_th":"ฃอ ขวด","pinyin":["kh","k"],"bopomofo":["ㄎ"],"group":"high"},
-  {"letter":"ค","name_th":"คอ ควาย","pinyin":["kh","k"],"bopomofo":["ㄎ"],"group":"low"},
-  {"letter":"ฅ","name_th":"ฅอ คน","pinyin":["kh","k"],"bopomofo":["ㄎ"],"group":"low"},
-  {"letter":"ฆ","name_th":"ฆอ ระฆัง","pinyin":["kh","k"],"bopomofo":["ㄎ"],"group":"low"},
-  {"letter":"ง","name_th":"งอ งู","pinyin":["ng"],"bopomofo":["ㄫ"],"group":"low"},
-  {"letter":"จ","name_th":"จอ จาน","pinyin":["j","ch"],"bopomofo":["ㄐ"],"group":"mid"},
-  {"letter":"ฉ","name_th":"ฉอ ฉิ่ง","pinyin":["ch"],"bopomofo":["ㄔ"],"group":"high"},
-  {"letter":"ช","name_th":"ชอ ช้าง","pinyin":["ch","sh"],"bopomofo":["ㄔ"],"group":"low"},
-  {"letter":"ซ","name_th":"ซอ โซ่","pinyin":["s"],"bopomofo":["ㄙ"],"group":"low"},
-  {"letter":"ฌ","name_th":"ฌอ เฌอ","pinyin":["ch"],"bopomofo":["ㄔ"],"group":"low"},
-  {"letter":"ญ","name_th":"ญอ หญิง","pinyin":["y","ny"],"bopomofo":["ㄧ","ㄋㄩ"],"group":"low"},
-  {"letter":"ฎ","name_th":"ฎอ ชฎา","pinyin":["d"],"bopomofo":["ㄉ"],"group":"mid"},
-  {"letter":"ฏ","name_th":"ฏอ ปฏัก","pinyin":["t"],"bopomofo":["ㄊ"],"group":"mid"},
-  {"letter":"ฐ","name_th":"ฐอ ฐาน","pinyin":["th","t"],"bopomofo":["ㄊ"],"group":"high"},
-  {"letter":"ฑ","name_th":"ฑอ มณโฑ","pinyin":["th","t"],"bopomofo":["ㄊ"],"group":"low"},
-  {"letter":"ฒ","name_th":"ฒอ ผู้เฒ่า","pinyin":["th","t"],"bopomofo":["ㄊ"],"group":"low"},
-  {"letter":"ณ","name_th":"ณอ เณร","pinyin":["n"],"bopomofo":["ㄋ"],"group":"low"},
-  {"letter":"ด","name_th":"ดอ เด็ก","pinyin":["d"],"bopomofo":["ㄉ"],"group":"mid"},
-  {"letter":"ต","name_th":"ตอ เต่า","pinyin":["t"],"bopomofo":["ㄊ"],"group":"mid"},
-  {"letter":"ถ","name_th":"ถอ ถุง","pinyin":["th","t"],"bopomofo":["ㄊ"],"group":"high"},
-  {"letter":"ท","name_th":"ทอ ทหาร","pinyin":["th","t"],"bopomofo":["ㄊ"],"group":"low"},
-  {"letter":"ธ","name_th":"ธอ ธง","pinyin":["th","t"],"bopomofo":["ㄊ"],"group":"low"},
-  {"letter":"น","name_th":"นอ หนู","pinyin":["n"],"bopomofo":["ㄋ"],"group":"low"},
-  {"letter":"บ","name_th":"บอ ใบไม้","pinyin":["b"],"bopomofo":["ㄅ"],"group":"mid"},
-  {"letter":"ป","name_th":"ปอ ปลา","pinyin":["p"],"bopomofo":["ㄆ"],"group":"mid"},
-  {"letter":"ผ","name_th":"ผอ ผึ้ง","pinyin":["ph","p"],"bopomofo":["ㄆ"],"group":"high"},
-  {"letter":"ฝ","name_th":"ฝอ ฝา","pinyin":["f"],"bopomofo":["ㄈ"],"group":"high"},
-  {"letter":"พ","name_th":"พอ พาน","pinyin":["ph","p"],"bopomofo":["ㄆ"],"group":"low"},
-  {"letter":"ฟ","name_th":"ฟอ ฟัน","pinyin":["f"],"bopomofo":["ㄈ"],"group":"low"},
-  {"letter":"ภ","name_th":"ภอ สำเภา","pinyin":["ph","p"],"bopomofo":["ㄆ"],"group":"low"},
-  {"letter":"ม","name_th":"มอ ม้า","pinyin":["m"],"bopomofo":["ㄇ"],"group":"low"},
-  {"letter":"ย","name_th":"ยอ ยักษ์","pinyin":["y"],"bopomofo":["ㄧ"],"group":"low"},
-  {"letter":"ร","name_th":"รอ เรือ","pinyin":["r"],"bopomofo":["ㄖ"],"group":"low"},
-  {"letter":"ล","name_th":"ลอ ลิง","pinyin":["l"],"bopomofo":["ㄌ"],"group":"low"},
-  {"letter":"ว","name_th":"วอ แหวน","pinyin":["w","v"],"bopomofo":["ㄨ"],"group":"low"},
-  {"letter":"ศ","name_th":"ศอ ศาลา","pinyin":["s"],"bopomofo":["ㄙ"],"group":"high"},
-  {"letter":"ษ","name_th":"ษอ ฤๅษี","pinyin":["s"],"bopomofo":["ㄙ"],"group":"high"},
-  {"letter":"ส","name_th":"สอ เสือ","pinyin":["s"],"bopomofo":["ㄙ"],"group":"high"},
-  {"letter":"ห","name_th":"หอ หีบ","pinyin":["h"],"bopomofo":["ㄏ"],"group":"high"},
-  {"letter":"ฬ","name_th":"ฬอ จุฬา","pinyin":["l"],"bopomofo":["ㄌ"],"group":"low"},
-  {"letter":"อ","name_th":"ออ อ่าง","pinyin":["o","a"],"bopomofo":["ㄛ"],"group":"mid"},
-  {"letter":"ฮ","name_th":"ฮอ นกฮูก","pinyin":["h"],"bopomofo":["ㄏ"],"group":"low"}
+  {
+    "letter": "ก",
+    "name_th": "กอ ไก่",
+    "pinyin": [
+      "g",
+      "k"
+    ],
+    "bopomofo": [
+      "ㄍ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ข",
+    "name_th": "ขอ ไข่",
+    "pinyin": [
+      "kh",
+      "k"
+    ],
+    "bopomofo": [
+      "ㄎ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "ฃ",
+    "name_th": "ฃอ ขวด",
+    "pinyin": [
+      "kh",
+      "k"
+    ],
+    "bopomofo": [
+      "ㄎ"
+    ],
+    "group": "high",
+    "isCommon": false
+  },
+  {
+    "letter": "ค",
+    "name_th": "คอ ควาย",
+    "pinyin": [
+      "kh",
+      "k"
+    ],
+    "bopomofo": [
+      "ㄎ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ฅ",
+    "name_th": "ฅอ คน",
+    "pinyin": [
+      "kh",
+      "k"
+    ],
+    "bopomofo": [
+      "ㄎ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ฆ",
+    "name_th": "ฆอ ระฆัง",
+    "pinyin": [
+      "kh",
+      "k"
+    ],
+    "bopomofo": [
+      "ㄎ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ง",
+    "name_th": "งอ งู",
+    "pinyin": [
+      "ng"
+    ],
+    "bopomofo": [
+      "ㄫ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "จ",
+    "name_th": "จอ จาน",
+    "pinyin": [
+      "j",
+      "ch"
+    ],
+    "bopomofo": [
+      "ㄐ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ฉ",
+    "name_th": "ฉอ ฉิ่ง",
+    "pinyin": [
+      "ch"
+    ],
+    "bopomofo": [
+      "ㄔ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "ช",
+    "name_th": "ชอ ช้าง",
+    "pinyin": [
+      "ch",
+      "sh"
+    ],
+    "bopomofo": [
+      "ㄔ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ซ",
+    "name_th": "ซอ โซ่",
+    "pinyin": [
+      "s"
+    ],
+    "bopomofo": [
+      "ㄙ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ฌ",
+    "name_th": "ฌอ เฌอ",
+    "pinyin": [
+      "ch"
+    ],
+    "bopomofo": [
+      "ㄔ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ญ",
+    "name_th": "ญอ หญิง",
+    "pinyin": [
+      "y",
+      "ny"
+    ],
+    "bopomofo": [
+      "ㄧ",
+      "ㄋㄩ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ฎ",
+    "name_th": "ฎอ ชฎา",
+    "pinyin": [
+      "d"
+    ],
+    "bopomofo": [
+      "ㄉ"
+    ],
+    "group": "mid",
+    "isCommon": false
+  },
+  {
+    "letter": "ฏ",
+    "name_th": "ฏอ ปฏัก",
+    "pinyin": [
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "mid",
+    "isCommon": false
+  },
+  {
+    "letter": "ฐ",
+    "name_th": "ฐอ ฐาน",
+    "pinyin": [
+      "th",
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "high",
+    "isCommon": false
+  },
+  {
+    "letter": "ฑ",
+    "name_th": "ฑอ มณโฑ",
+    "pinyin": [
+      "th",
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ฒ",
+    "name_th": "ฒอ ผู้เฒ่า",
+    "pinyin": [
+      "th",
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ณ",
+    "name_th": "ณอ เณร",
+    "pinyin": [
+      "n"
+    ],
+    "bopomofo": [
+      "ㄋ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ด",
+    "name_th": "ดอ เด็ก",
+    "pinyin": [
+      "d"
+    ],
+    "bopomofo": [
+      "ㄉ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ต",
+    "name_th": "ตอ เต่า",
+    "pinyin": [
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ถ",
+    "name_th": "ถอ ถุง",
+    "pinyin": [
+      "th",
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "ท",
+    "name_th": "ทอ ทหาร",
+    "pinyin": [
+      "th",
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ธ",
+    "name_th": "ธอ ธง",
+    "pinyin": [
+      "th",
+      "t"
+    ],
+    "bopomofo": [
+      "ㄊ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "น",
+    "name_th": "นอ หนู",
+    "pinyin": [
+      "n"
+    ],
+    "bopomofo": [
+      "ㄋ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "บ",
+    "name_th": "บอ ใบไม้",
+    "pinyin": [
+      "b"
+    ],
+    "bopomofo": [
+      "ㄅ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ป",
+    "name_th": "ปอ ปลา",
+    "pinyin": [
+      "p"
+    ],
+    "bopomofo": [
+      "ㄆ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ผ",
+    "name_th": "ผอ ผึ้ง",
+    "pinyin": [
+      "ph",
+      "p"
+    ],
+    "bopomofo": [
+      "ㄆ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "ฝ",
+    "name_th": "ฝอ ฝา",
+    "pinyin": [
+      "f"
+    ],
+    "bopomofo": [
+      "ㄈ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "พ",
+    "name_th": "พอ พาน",
+    "pinyin": [
+      "ph",
+      "p"
+    ],
+    "bopomofo": [
+      "ㄆ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ฟ",
+    "name_th": "ฟอ ฟัน",
+    "pinyin": [
+      "f"
+    ],
+    "bopomofo": [
+      "ㄈ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ภ",
+    "name_th": "ภอ สำเภา",
+    "pinyin": [
+      "ph",
+      "p"
+    ],
+    "bopomofo": [
+      "ㄆ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "ม",
+    "name_th": "มอ ม้า",
+    "pinyin": [
+      "m"
+    ],
+    "bopomofo": [
+      "ㄇ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ย",
+    "name_th": "ยอ ยักษ์",
+    "pinyin": [
+      "y"
+    ],
+    "bopomofo": [
+      "ㄧ"
+    ],
+    "group": "low",
+    "isCommon": true,
+    "allowSingleLetter": true
+  },
+  {
+    "letter": "ร",
+    "name_th": "รอ เรือ",
+    "pinyin": [
+      "r"
+    ],
+    "bopomofo": [
+      "ㄖ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ล",
+    "name_th": "ลอ ลิง",
+    "pinyin": [
+      "l"
+    ],
+    "bopomofo": [
+      "ㄌ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ว",
+    "name_th": "วอ แหวน",
+    "pinyin": [
+      "w",
+      "v"
+    ],
+    "bopomofo": [
+      "ㄨ"
+    ],
+    "group": "low",
+    "isCommon": true
+  },
+  {
+    "letter": "ศ",
+    "name_th": "ศอ ศาลา",
+    "pinyin": [
+      "s"
+    ],
+    "bopomofo": [
+      "ㄙ"
+    ],
+    "group": "high",
+    "isCommon": false
+  },
+  {
+    "letter": "ษ",
+    "name_th": "ษอ ฤๅษี",
+    "pinyin": [
+      "s"
+    ],
+    "bopomofo": [
+      "ㄙ"
+    ],
+    "group": "high",
+    "isCommon": false
+  },
+  {
+    "letter": "ส",
+    "name_th": "สอ เสือ",
+    "pinyin": [
+      "s"
+    ],
+    "bopomofo": [
+      "ㄙ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "ห",
+    "name_th": "หอ หีบ",
+    "pinyin": [
+      "h"
+    ],
+    "bopomofo": [
+      "ㄏ"
+    ],
+    "group": "high",
+    "isCommon": true
+  },
+  {
+    "letter": "ฬ",
+    "name_th": "ฬอ จุฬา",
+    "pinyin": [
+      "l"
+    ],
+    "bopomofo": [
+      "ㄌ"
+    ],
+    "group": "low",
+    "isCommon": false
+  },
+  {
+    "letter": "อ",
+    "name_th": "ออ อ่าง",
+    "pinyin": [
+      "o",
+      "a"
+    ],
+    "bopomofo": [
+      "ㄛ"
+    ],
+    "group": "mid",
+    "isCommon": true
+  },
+  {
+    "letter": "ฮ",
+    "name_th": "ฮอ นกฮูก",
+    "pinyin": [
+      "h"
+    ],
+    "bopomofo": [
+      "ㄏ"
+    ],
+    "group": "low",
+    "isCommon": true
+  }
 ]
