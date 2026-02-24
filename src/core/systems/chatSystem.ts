@@ -24,13 +24,49 @@ export function createFakeAiAudienceMessage(input: {
   curse: number;
   anchor: AnchorType;
   recentHistory: string[];
-}): ChatMessage {
+}): { messages: ChatMessage[]; pauseMs?: number } {
   const reply = generateReply(input);
+
+  if (reply.mode === 'thaiFlood' && reply.thaiFloodText && reply.thaiFloodCount) {
+    const floodText = reply.thaiFloodText;
+    const floodCount = reply.thaiFloodCount;
+    return {
+      messages: Array.from({ length: floodCount }, () => ({
+        id: crypto.randomUUID(),
+        username: 'fake_ai',
+        text_th: floodText
+      })),
+      pauseMs: 3000
+    };
+  }
+
+  if (reply.mode === 'urbanLegend' && reply.text_th) {
+    return {
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          username: 'fake_ai',
+          text_th: reply.text_zh,
+          text_zh: reply.text_zh
+        },
+        {
+          id: crypto.randomUUID(),
+          username: 'fake_ai',
+          text_th: reply.text_th
+        }
+      ]
+    };
+  }
+
   return {
-    id: crypto.randomUUID(),
-    username: 'fake_ai',
-    text_th: reply.text_th,
-    text_zh: reply.text_zh
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        username: 'fake_ai',
+        text_th: reply.text_zh,
+        text_zh: reply.text_zh
+      }
+    ]
   };
 }
 
