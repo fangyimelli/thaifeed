@@ -1,11 +1,14 @@
-import consonantAliases from '../../content/aliases/consonantAliases.json';
+import type { ThaiConsonant } from './consonantSelector';
 
-export function parseAnswer(raw: string) {
-  return raw.trim().toLowerCase();
+export function normalizeInput(input: string) {
+  return input.trim().toLowerCase().replace(/\s+/g, '');
 }
 
-export function isAnswerCorrect(raw: string, targetConsonant: string) {
-  const normalized = parseAnswer(raw);
-  const aliases = consonantAliases[targetConsonant as keyof typeof consonantAliases] ?? [];
-  return aliases.map((alias) => alias.toLowerCase()).includes(normalized);
+export function isAnswerCorrect(raw: string, targetConsonant: ThaiConsonant) {
+  const normalized = normalizeInput(raw);
+  if (!normalized) return false;
+
+  if (normalized === normalizeInput(targetConsonant.letter)) return true;
+  if (targetConsonant.pinyin.some((item) => normalizeInput(item) === normalized)) return true;
+  return targetConsonant.bopomofo.some((item) => normalizeInput(item) === normalized);
 }

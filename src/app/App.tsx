@@ -2,12 +2,14 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
+import { parsePlayerSpeech } from '../core/systems/playerSpeechParser';
 import {
   createAudienceMessage,
   createFakeAiAudienceMessage,
   createPlayerMessage,
   createSuccessMessage,
   createWrongMessage,
+  createPlayerSpeechResponses,
   getAudienceIntervalMs
 } from '../core/systems/chatSystem';
 import { createVipAiReply, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
@@ -76,6 +78,7 @@ export default function App() {
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
+  const speechCooldownUntil = useRef(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -122,14 +125,14 @@ export default function App() {
         state.currentAnchor,
         state.messages.slice(-12).map((message) => message.translation ?? message.text)
       ) });
-      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
+      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.currentConsonant.letter);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
       timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     };
 
     timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.targetConsonant, state.currentAnchor, input, isReady, chatAutoPaused]);
+  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, input, isReady, chatAutoPaused]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -232,7 +235,7 @@ export default function App() {
 
     const fakeAiBatch = createFakeAiAudienceMessage({
       playerInput: raw,
-      targetConsonant: state.targetConsonant,
+      targetConsonant: state.currentConsonant.letter,
       curse: state.curse,
       anchor: state.currentAnchor,
       recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
@@ -249,7 +252,7 @@ export default function App() {
       return;
     }
 
-    if (isAnswerCorrect(raw, state.targetConsonant)) {
+    if (isAnswerCorrect(raw, state.currentConsonant)) {
       const donateSample = pickOne(donatePools.messages);
       const donate: DonateMessage = {
         id: crypto.randomUUID(),
@@ -270,12 +273,23 @@ export default function App() {
         input: raw,
         curse: state.curse,
         isCorrect: true,
-        target: state.targetConsonant,
+        target: state.currentConsonant.letter,
         vipType: 'VIP_NORMAL'
       });
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
       playSound(SFX_SRC.success);
     } else {
+      const speechHit = parsePlayerSpeech(raw);
+      const now = Date.now();
+      const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
+      if (canTriggerSpeech) {
+        speechCooldownUntil.current = now + 10_000;
+        const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
+        speechResponses.forEach((message) => {
+          dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+        });
+      }
+
       const wrongMessage = createWrongMessage(state.curse);
       const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
       dispatch({
@@ -287,7 +301,7 @@ export default function App() {
                 input: raw,
                 curse: state.curse,
                 isCorrect: false,
-                target: state.targetConsonant,
+                target: state.currentConsonant.letter,
                 vipType: 'VIP_STILL_HERE'
               })
             : undefined
@@ -324,7 +338,7 @@ export default function App() {
       <main className="app-layout">
         <div className="video-container">
           <SceneView
-            targetConsonant={state.targetConsonant}
+            targetConsonant={state.currentConsonant.letter}
             curse={state.curse}
             anchor={state.currentAnchor}
           />
