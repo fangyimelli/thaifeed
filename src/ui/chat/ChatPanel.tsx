@@ -22,7 +22,14 @@ type Props = {
   onToggleTranslation: (id: string) => void;
 };
 
-export default function ChatPanel({ settings, messages, input, onChange, onSubmit, onToggleTranslation }: Props) {
+export default function ChatPanel({
+  settings,
+  messages,
+  input,
+  onChange,
+  onSubmit,
+  onToggleTranslation
+}: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [stickBottom, setStickBottom] = useState(true);
 
