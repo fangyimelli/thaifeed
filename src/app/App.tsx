@@ -13,7 +13,7 @@ import {
   getAudienceIntervalMs
 } from '../core/systems/chatSystem';
 import { createVipAiReply, createVipHintMessage, createVipPassMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
-import { markPassed } from '../core/adaptive/unfamiliarStore';
+import { getMemoryNode, markReview } from '../core/adaptive/memoryScheduler';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
@@ -252,11 +252,12 @@ export default function App() {
     }
 
     const handlePass = () => {
-      const entry = markPassed(state.currentConsonant.letter);
+      markReview(state.currentConsonant.letter, 'pass', state.curse);
+      const entry = getMemoryNode(state.currentConsonant.letter);
       dispatch({
         type: 'ANSWER_PASS',
         payload: {
-          message: createVipPassMessage(state.currentConsonant, entry.count)
+          message: createVipPassMessage(state.currentConsonant, entry.lapseCount)
         }
       });
       setInput('');
