@@ -61,6 +61,19 @@ body { margin: 0; }
 }
 .scene-hud h1 { margin: 0 0 6px; font-size: 20px; }
 
+.live-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ff5c5c;
+  margin-bottom: 4px;
+}
+
+.viewer-count {
+  font-size: 14px;
+  color: #dbe7ff;
+}
+
 .curse-meter { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .curse-meter .bar { width: 140px; height: 8px; background: #262b38; border-radius: 99px; overflow: hidden; }
 .curse-meter .fill { height: 100%; background: linear-gradient(90deg,#62d2a2,#f2a347,#ed4b6a); }
@@ -140,6 +153,19 @@ body { margin: 0; }
 .vip.VIP_STILL_HERE .name { color: #c9b8ff; }
 .chat-message.self .name { color: #8cffc4; }
 .chat-message.self .msg { color: #dfffea; }
+
+.chat-message.system.join {
+  padding: 2px 0;
+}
+
+.chat-message.system.join .chat-line {
+  justify-content: center;
+}
+
+.chat-message.system.join .msg {
+  color: #9ca3af;
+  font-size: 12px;
+}
 
 .translation-toggle {
   border: 1px solid #414b64;
