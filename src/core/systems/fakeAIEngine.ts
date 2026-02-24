@@ -8,6 +8,20 @@ type ReplyEntry = {
   weight: number;
 };
 
+type ReplyCorpus = {
+  correct: ReplyEntry[];
+  wrong: ReplyEntry[];
+  smallTalk: ReplyEntry[];
+  highCurse: ReplyEntry[];
+  anchor_under_table: ReplyEntry[];
+  anchor_door: ReplyEntry[];
+  anchor_window: ReplyEntry[];
+  anchor_corner: ReplyEntry[];
+  unsettling: ReplyEntry[];
+  urbanLegend_th: string[];
+  thaiFlood: string[];
+};
+
 type InputKind = 'correct' | 'wrong' | 'phonetic' | 'smallTalk';
 
 type GenerateReplyInput = {
@@ -18,7 +32,17 @@ type GenerateReplyInput = {
   recentHistory: string[];
 };
 
-const thaiSuffixes = ['นะ', 'สิ', 'แหละ', 'โอเคไหม'];
+type ReplyMode = 'normal' | 'urbanLegend' | 'thaiFlood';
+
+type GeneratedReply = {
+  mode: ReplyMode;
+  text_zh: string;
+  text_th?: string;
+  thaiFloodText?: string;
+  thaiFloodCount?: number;
+};
+
+const corpus = replies as ReplyCorpus;
 
 function normalize(raw: string) {
   return raw.trim().toLowerCase();
@@ -56,43 +80,60 @@ function classifyInput({ playerInput, targetConsonant }: GenerateReplyInput): In
   return 'wrong';
 }
 
-function addThaiBlend(zh: string, th: string) {
-  if (Math.random() > 0.3) return zh;
-  const mode = Math.random();
-  if (mode < 0.5) return `${zh} ${th}`;
-  return `${zh}${thaiSuffixes[Math.floor(Math.random() * thaiSuffixes.length)]}`;
+function stripEndingPunctuation(text: string) {
+  return text.replace(/[。．｡.!！？?]+$/g, '');
 }
 
-export function generateReply({
-  playerInput,
-  targetConsonant,
-  curse,
-  anchor,
-  recentHistory
-}: GenerateReplyInput) {
-  const kind = classifyInput({ playerInput, targetConsonant, curse, anchor, recentHistory });
+function extractChineseSnippet(source: string) {
+  const filtered = source.replace(/[^一-鿿0-9，、？！「」《》\s]/g, '').trim();
+  return filtered.slice(0, 12);
+}
 
-  const basePool =
-    kind === 'correct' ? replies.correct : kind === 'smallTalk' ? replies.smallTalk : replies.wrong;
+function createAnchorZhMessage(input: GenerateReplyInput): string {
+  const kind = classifyInput(input);
+  const anchorKey = `anchor_${input.anchor}` as const;
+  const anchorLine = pickWeighted(corpus[anchorKey]).zh;
 
-  const selected: ReplyEntry[] = [...basePool];
+  const tonePool: ReplyEntry[] =
+    kind === 'correct' ? [...corpus.correct] : kind === 'smallTalk' ? [...corpus.smallTalk] : [...corpus.wrong];
 
-  if (curse >= 65) selected.push(pickWeighted(replies.highCurse));
-  if (Math.random() < 0.2) {
-    const anchorKey = `anchor_${anchor}` as const;
-    selected.push(pickWeighted(replies[anchorKey]));
-  }
-  if (curse >= 45 && Math.random() < 0.22) selected.push(pickWeighted(replies.unsettling));
-
+  if (input.curse >= 65) tonePool.push(pickWeighted(corpus.highCurse));
+  if (input.curse >= 45 && Math.random() < 0.22) tonePool.push(pickWeighted(corpus.unsettling));
   if (kind === 'phonetic') {
-    selected.push({ zh: '你在拼音附近了，但還沒到字本身', th: 'ใกล้แล้วแต่ยังไม่ใช่', weight: 2 });
+    tonePool.push({ zh: '你已經接近發音了 先盯著這個位置再想一次', th: 'ใกล้แล้วแต่ยังไม่ใช่', weight: 2 });
   }
 
-  const picked = pickWeighted(selected);
-  const trailing = recentHistory.length > 0 && Math.random() < 0.18 ? `（${recentHistory[recentHistory.length - 1].slice(0, 12)}…）` : '';
+  const toneLine = pickWeighted(tonePool).zh;
+  const recent = input.recentHistory[input.recentHistory.length - 1] ?? '';
+  const recentZh = extractChineseSnippet(recent);
+  const trailing = recentZh && Math.random() < 0.18 ? `（剛剛那句${recentZh}）` : '';
+
+  return stripEndingPunctuation(`${anchorLine} ${toneLine}${trailing}`);
+}
+
+export function generateReply(input: GenerateReplyInput): GeneratedReply {
+  const anchorMessage = createAnchorZhMessage(input);
+
+  if (input.curse > 70 && Math.random() < 0.08) {
+    return {
+      mode: 'thaiFlood',
+      text_zh: anchorMessage,
+      thaiFloodText: corpus.thaiFlood[Math.floor(Math.random() * corpus.thaiFlood.length)],
+      thaiFloodCount: 3 + Math.floor(Math.random() * 3)
+    };
+  }
+
+  const urbanChance = input.curse > 40 ? 0.1 : 0.05;
+  if (Math.random() < urbanChance) {
+    return {
+      mode: 'urbanLegend',
+      text_zh: anchorMessage,
+      text_th: corpus.urbanLegend_th[Math.floor(Math.random() * corpus.urbanLegend_th.length)]
+    };
+  }
 
   return {
-    text_zh: `${addThaiBlend(picked.zh, picked.th)}${trailing}`,
-    text_th: picked.th
+    mode: 'normal',
+    text_zh: anchorMessage
   };
 }
