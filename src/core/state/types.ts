@@ -42,6 +42,7 @@ export type GameAction =
   | { type: 'PLAYER_MESSAGE'; payload: ChatMessage }
   | { type: 'ANSWER_CORRECT'; payload: { message: ChatMessage; donate: DonateMessage } }
   | { type: 'ANSWER_WRONG'; payload: { message: ChatMessage; vipMessage?: ChatMessage } }
+  | { type: 'ANSWER_PASS'; payload: { message: ChatMessage } }
   | { type: 'AUDIENCE_MESSAGE'; payload: ChatMessage }
   | { type: 'TOGGLE_CHAT_TRANSLATION'; payload: { id: string } }
   | { type: 'TOGGLE_DONATE_TRANSLATION'; payload: { id: string } }

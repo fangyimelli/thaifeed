@@ -12,7 +12,8 @@ import {
   createPlayerSpeechResponses,
   getAudienceIntervalMs
 } from '../core/systems/chatSystem';
-import { createVipAiReply, createVipHintMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
+import { createVipAiReply, createVipHintMessage, createVipPassMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
+import { markPassed } from '../core/adaptive/unfamiliarStore';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
@@ -66,6 +67,11 @@ function nextJoinDelayMs() {
 function isHintCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === '提示' || normalized === 'hint' || normalized === 'h';
+}
+
+function isPassCommand(raw: string) {
+  const normalized = raw.trim().toLowerCase();
+  return normalized === 'pass' || raw.trim() === '跳過';
 }
 
 function nextLeaveDelayMs() {
@@ -245,22 +251,19 @@ export default function App() {
       return;
     }
 
-    const fakeAiBatch = createFakeAiAudienceMessage({
-      playerInput: raw,
-      targetConsonant: state.currentConsonant.letter,
-      curse: state.curse,
-      anchor: state.currentAnchor,
-      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
-    });
-
-    fakeAiBatch.messages.forEach((message) => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
-    });
-
-    if (fakeAiBatch.pauseMs) {
-      setChatAutoPaused(true);
-      window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
+    const handlePass = () => {
+      const entry = markPassed(state.currentConsonant.letter);
+      dispatch({
+        type: 'ANSWER_PASS',
+        payload: {
+          message: createVipPassMessage(state.currentConsonant, entry.count)
+        }
+      });
       setInput('');
+    };
+
+    if (isPassCommand(raw)) {
+      handlePass();
       return;
     }
 
@@ -290,37 +293,60 @@ export default function App() {
       });
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
       playSound(SFX_SRC.success);
-    } else {
-      const speechHit = parsePlayerSpeech(raw);
-      const now = Date.now();
-      const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
-      if (canTriggerSpeech) {
-        speechCooldownUntil.current = now + 10_000;
-        const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
-        speechResponses.forEach((message) => {
-          dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
-        });
-      }
-
-      const wrongMessage = createWrongMessage(state.curse);
-      const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
-      dispatch({
-        type: 'ANSWER_WRONG',
-        payload: {
-          message: wrongMessage,
-          vipMessage: shouldForceVip
-            ? createVipAiReply({
-                input: raw,
-                curse: state.curse,
-                isCorrect: false,
-                target: state.currentConsonant.letter,
-                vipType: 'VIP_STILL_HERE'
-              })
-            : undefined
-        }
-      });
-      playSound(SFX_SRC.error);
+      setInput('');
+      return;
     }
+
+    const fakeAiBatch = createFakeAiAudienceMessage({
+      playerInput: raw,
+      targetConsonant: state.currentConsonant.letter,
+      curse: state.curse,
+      anchor: state.currentAnchor,
+      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
+    });
+
+    fakeAiBatch.messages.forEach((message) => {
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+    });
+
+    if (fakeAiBatch.pauseMs) {
+      setChatAutoPaused(true);
+      window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
+      setInput('');
+      return;
+    }
+
+    const speechHit = parsePlayerSpeech(raw);
+    const now = Date.now();
+    const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
+    if (canTriggerSpeech) {
+      speechCooldownUntil.current = now + 10_000;
+      const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
+      speechResponses.forEach((message) => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+      });
+      setInput('');
+      return;
+    }
+
+    const wrongMessage = createWrongMessage(state.curse);
+    const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
+    dispatch({
+      type: 'ANSWER_WRONG',
+      payload: {
+        message: wrongMessage,
+        vipMessage: shouldForceVip
+          ? createVipAiReply({
+              input: raw,
+              curse: state.curse,
+              isCorrect: false,
+              target: state.currentConsonant.letter,
+              vipType: 'VIP_STILL_HERE'
+            })
+          : undefined
+      }
+    });
+    playSound(SFX_SRC.error);
 
     setInput('');
   };

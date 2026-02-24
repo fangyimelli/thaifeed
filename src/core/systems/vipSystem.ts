@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../state/types';
 import thaiConsonantMemory from '../../content/memory/thaiConsonantMemory.json';
+import type { ThaiConsonant } from './consonantSelector';
 
 type VipAiParams = {
   input: string;
@@ -104,6 +105,31 @@ export function createVipHintMessage(letter: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
     username: 'vipVIP_GoldenLotus',
+    isVip: 'VIP_NORMAL',
+    text,
+    language: 'zh',
+    translation: text
+  };
+}
+
+export function createVipPassMessage(consonant: ThaiConsonant, passCount: number): ChatMessage {
+  const base = [
+    '好 這題先放過你 👑',
+    `答案是 ${consonant.letter}`,
+    `拼音 ${consonant.pinyin.join('/')}`,
+    `注音 ${consonant.bopomofo.join('/')}`,
+    '記得這個字 下次還會再遇到'
+  ];
+
+  if (passCount > 0) {
+    base.push(`你已經跳過這個字 ${passCount} 次了`);
+  }
+
+  const text = base.join('\n');
+
+  return {
+    id: crypto.randomUUID(),
+    username: 'vipVIP_GoldenLotus 👑',
     isVip: 'VIP_NORMAL',
     text,
     language: 'zh',

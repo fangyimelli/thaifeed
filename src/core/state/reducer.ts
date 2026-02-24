@@ -1,4 +1,5 @@
 import { pickOne } from '../../utils/random';
+import { markCorrect, markWrong } from '../adaptive/unfamiliarStore';
 import { pickRandomConsonant } from '../systems/consonantSelector';
 import type { AnchorType, GameAction, GameState } from './types';
 
@@ -47,6 +48,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'PLAYER_MESSAGE':
       return { ...state, messages: [...state.messages, action.payload] };
     case 'ANSWER_CORRECT': {
+      markCorrect(state.currentConsonant.letter);
       const nextCurse = Math.max(0, state.curse - 10);
       const nextConsonant = pickRandomConsonant(
         state.currentConsonant.letter,
@@ -63,7 +65,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         donateToasts: [...state.donateToasts, action.payload.donate].slice(-2)
       };
     }
+    case 'ANSWER_PASS': {
+      const nextConsonant = pickRandomConsonant(
+        state.currentConsonant.letter,
+        state.allowConsonantRepeat
+      );
+      return {
+        ...state,
+        currentConsonant: nextConsonant,
+        previousConsonant: state.currentConsonant,
+        messages: [...state.messages, action.payload.message]
+      };
+    }
     case 'ANSWER_WRONG': {
+      markWrong(state.currentConsonant.letter);
       const nextCurse = Math.min(100, state.curse + 10);
       const nextWrongStreak = state.wrongStreak + 1;
       const list = [...state.messages, action.payload.message];
