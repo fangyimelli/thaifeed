@@ -3,7 +3,6 @@ import { normalizeInputForMatch } from '../../utils/inputNormalize';
 
 function includesToken(text: string, token: string): boolean {
   if (!token) return false;
-  if (token.length < 2) return false;
 
   if (/^[a-z]+$/.test(token)) {
     const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -14,13 +13,29 @@ function includesToken(text: string, token: string): boolean {
 }
 
 function matchAnswerContains(normalized: string, consonant: ThaiConsonant): boolean {
+  const singleLetterWhitelist = ['y'];
+
   if (normalized.includes(consonant.letter)) {
     return true;
   }
 
   for (const p of consonant.pinyin) {
     const token = p.toLowerCase();
-    if (token.length >= 2 && includesToken(normalized, token)) {
+
+    if (token.length === 1) {
+      if (!singleLetterWhitelist.includes(token)) {
+        continue;
+      }
+
+      const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`(^|[^a-z])${escapedToken}([^a-z]|$)`).test(normalized)) {
+        return true;
+      }
+
+      continue;
+    }
+
+    if (includesToken(normalized, token)) {
       return true;
     }
   }
