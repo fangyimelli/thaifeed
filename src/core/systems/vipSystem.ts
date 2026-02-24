@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../state/types';
+import thaiConsonantMemory from '../../content/memory/thaiConsonantMemory.json';
 
 type VipAiParams = {
   input: string;
@@ -7,6 +8,33 @@ type VipAiParams = {
   target: string;
   vipType: 'VIP_NORMAL' | 'VIP_STILL_HERE';
 };
+
+type ConsonantMemoryEntry = {
+  classTone: '高音' | '中音' | '低音' | '先不學';
+  ipa: string;
+  aspirated: '是' | '否' | '—';
+  reference: string;
+  imageHint: string;
+};
+
+const consonantMemoryMap = thaiConsonantMemory as Record<string, ConsonantMemoryEntry>;
+
+function createVipHintText(letter: string) {
+  const memory = consonantMemoryMap[letter];
+  if (!memory) {
+    return '這個字我還沒建圖像記憶 先用字母名記住也可以';
+  }
+
+  return [
+    '提示來了 👑',
+    `字母: ${letter}`,
+    `分類: ${memory.classTone}`,
+    `發音: ${memory.ipa}`,
+    `送氣: ${memory.aspirated}`,
+    `字母名: ${memory.reference}`,
+    `圖像: ${memory.imageHint}`
+  ].join('\n');
+}
 
 function mirrorInput(input: string) {
   const normalized = input.trim();
@@ -67,5 +95,18 @@ export function createVipAiReply(params: VipAiParams): ChatMessage {
     text: normal,
     language: 'zh',
     translation: normal
+  };
+}
+
+export function createVipHintMessage(letter: string): ChatMessage {
+  const text = createVipHintText(letter);
+
+  return {
+    id: crypto.randomUUID(),
+    username: 'vipVIP_GoldenLotus',
+    isVip: 'VIP_NORMAL',
+    text,
+    language: 'zh',
+    translation: text
   };
 }
