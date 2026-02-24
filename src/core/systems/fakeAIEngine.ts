@@ -21,8 +21,9 @@ type GenerateReplyInput = {
 
 type GeneratedReply = {
   mode: ReplyMode;
-  text_zh: string;
-  text_th?: string;
+  text: string;
+  language: 'zh' | 'th';
+  translation_zh?: string;
   thaiFloodText?: string;
   thaiFloodCount?: number;
 };
@@ -112,10 +113,13 @@ export function generateReply(input: GenerateReplyInput): GeneratedReply {
   if (canTriggerThaiFlood) {
     lastThaiFloodAt = now;
     const floodPool = corpus.thaiFlood;
+    const floodText = pickOne(floodPool, 'ฉันเห็นคุณ');
     return {
       mode: 'thaiFlood',
-      text_zh: buildNormalMessage(input),
-      thaiFloodText: pickOne(floodPool, 'ฉันเห็นคุณ'),
+      text: floodText,
+      language: 'th',
+      translation_zh: buildNormalMessage(input),
+      thaiFloodText: floodText,
       thaiFloodCount: 3 + Math.floor(Math.random() * 4)
     };
   }
@@ -126,13 +130,15 @@ export function generateReply(input: GenerateReplyInput): GeneratedReply {
     lastUrbanLegendAt = now;
     return {
       mode: 'urbanLegend',
-      text_zh: createUrbanLegendZhMessage(input.anchor),
-      text_th: pickOne(corpus.urbanLegend_th, 'เขาว่ากันว่าที่นี่ไม่ว่าง')
+      text: pickOne(corpus.urbanLegend_th, 'เขาว่ากันว่าที่นี่ไม่ว่าง'),
+      language: 'th',
+      translation_zh: createUrbanLegendZhMessage(input.anchor)
     };
   }
 
   return {
     mode: 'normal',
-    text_zh: buildNormalMessage(input)
+    text: buildNormalMessage(input),
+    language: 'zh'
   };
 }
