@@ -11,8 +11,14 @@ export const initialState: GameState = {
     {
       id: 'boot-1',
       username: 'system',
-      text_th: 'เริ่มห้องทดสอบ! พิมพ์พยัญชนะให้ถูกต้องนะ',
-      text_zh: '測試房開始！請輸入正確子音。'
+      text_th: 'เหมือนเราเห็นพยัญชนะบางตัว...มันอ่านว่าอะไรนะ?',
+      text_zh: '好像看到了某個子音…這個子音怎麼唸呢？'
+    },
+    {
+      id: 'boot-2',
+      username: 'system',
+      text_th: 'ลองพิมพ์ออกมาดูสิ ถ้าถูกอาจเห็นตัวถัดไป',
+      text_zh: '試著把它打出來，打對好像就能看到下一個字。'
     }
   ],
   donateToasts: []

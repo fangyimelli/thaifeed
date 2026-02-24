@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from 'react';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
 import { createAudienceMessage, createSuccessMessage, createWrongMessage } from '../core/systems/chatSystem';
-import { createVipStillHereMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
+import { createVipAiReply, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import { createRandomInterval } from '../utils/timing';
@@ -36,12 +36,12 @@ export default function App() {
   useEffect(() => {
     const stop = createRandomInterval(() => {
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(state.curse) });
-      const vipNormal = maybeCreateVipNormalMessage();
+      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
     }, 2500, 4000);
 
     return stop;
-  }, [state.curse]);
+  }, [state.curse, state.targetConsonant, input]);
 
   useEffect(() => {
     if (state.curse > 80) playSound(sfx.glitch);
@@ -75,6 +75,14 @@ export default function App() {
           donate
         }
       });
+      const aiVip = createVipAiReply({
+        input: raw,
+        curse: state.curse,
+        isCorrect: true,
+        target: state.targetConsonant,
+        vipType: 'VIP_NORMAL'
+      });
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
       playSound(sfx.success);
     } else {
       const wrongMessage = createWrongMessage(state.curse);
@@ -83,7 +91,15 @@ export default function App() {
         type: 'ANSWER_WRONG',
         payload: {
           message: wrongMessage,
-          vipMessage: shouldForceVip ? createVipStillHereMessage(raw) : undefined
+          vipMessage: shouldForceVip
+            ? createVipAiReply({
+                input: raw,
+                curse: state.curse,
+                isCorrect: false,
+                target: state.targetConsonant,
+                vipType: 'VIP_STILL_HERE'
+              })
+            : undefined
         }
       });
       playSound(sfx.error);

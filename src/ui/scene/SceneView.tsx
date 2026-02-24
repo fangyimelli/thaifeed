@@ -21,7 +21,7 @@ export default function SceneView({ roomName, targetConsonant, subtitle, curse }
       <div className="scene-hud">
         <h1>{roomName}</h1>
         <p>{subtitle}</p>
-        <p>目標：{targetConsonant}</p>
+        <p className="question-blink">看見的子音是：{targetConsonant}</p>
         <CurseMeter curse={curse} />
       </div>
     </section>

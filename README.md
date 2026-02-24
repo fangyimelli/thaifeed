@@ -60,3 +60,10 @@ npm run dev
 答對：curse -10（最小 0）、聊天室成功訊息、必出 DonateToast、success 音效。
 
 答錯：curse +10（最大 100）、聊天室依 curse 分級訊息、連錯 3 次會觸發一次 `_still_here` VIP 訊息、error 音效。
+
+## 新增：畫面提示與 AI VIP 回覆
+- SceneView 會閃爍顯示題目子音（提示玩家看見的字）。
+- 聊天室視窗高度固定，避免訊息區域跳動。
+- VIP 改成內建免費規則式小 AI（不需外部 API）：
+  - 可依玩家輸入語言（泰文/拼音/注音）做鏡像回覆
+  - `_still_here` 連錯觸發時會用 AI 句型回覆
