@@ -96,7 +96,11 @@ export default function App() {
 
     let timer = 0;
     const tick = () => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(state.curse) });
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(
+        state.curse,
+        state.currentAnchor,
+        state.messages.slice(-12).map((message) => message.text_zh ?? message.text_th)
+      ) });
       const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
       timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
@@ -104,7 +108,7 @@ export default function App() {
 
     timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.targetConsonant, input, isReady, chatAutoPaused]);
+  }, [state.curse, state.targetConsonant, state.currentAnchor, input, isReady, chatAutoPaused]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -123,7 +127,7 @@ export default function App() {
       targetConsonant: state.targetConsonant,
       curse: state.curse,
       anchor: state.currentAnchor,
-      recentHistory: state.messages.slice(-4).map((message) => message.text_zh ?? message.text_th)
+      recentHistory: state.messages.slice(-12).map((message) => message.text_zh ?? message.text_th)
     });
 
     fakeAiBatch.messages.forEach((message) => {
