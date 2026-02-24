@@ -70,10 +70,8 @@ function resolveLanguage(input: GenerateReplyInput): LanguageType {
     zhChance = Math.min(1, zhChance + 0.15);
   }
 
-  const forcedThaiChance = input.curse > 85 ? 0.3 : input.curse > 70 ? 0.2 : 0;
-  if (forcedThaiChance > 0 && Math.random() < forcedThaiChance) {
-    return 'th';
-  }
+  if (input.curse > 85 && Math.random() < 0.3) return 'th';
+  if (input.curse > 70 && Math.random() < 0.2) return 'th';
 
   return Math.random() < zhChance ? 'zh' : 'th';
 }
