@@ -1,5 +1,5 @@
 import { pickOne } from '../../utils/random';
-import { markCorrect, markWrong } from '../adaptive/unfamiliarStore';
+import { markReview } from '../adaptive/memoryScheduler';
 import { pickRandomConsonant } from '../systems/consonantSelector';
 import type { AnchorType, GameAction, GameState } from './types';
 
@@ -12,7 +12,7 @@ function anchorFromCurse(curse: number): AnchorType {
   return 'door';
 }
 
-const initialConsonant = pickRandomConsonant(undefined, true);
+const initialConsonant = pickRandomConsonant(undefined, true, 20);
 
 export const initialState: GameState = {
   roomName: '老屋房間',
@@ -48,11 +48,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'PLAYER_MESSAGE':
       return { ...state, messages: [...state.messages, action.payload] };
     case 'ANSWER_CORRECT': {
-      markCorrect(state.currentConsonant.letter);
       const nextCurse = Math.max(0, state.curse - 10);
+      markReview(state.currentConsonant.letter, 'correct', nextCurse);
       const nextConsonant = pickRandomConsonant(
         state.currentConsonant.letter,
-        state.allowConsonantRepeat
+        state.allowConsonantRepeat,
+        nextCurse
       );
       return {
         ...state,
@@ -68,7 +69,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'ANSWER_PASS': {
       const nextConsonant = pickRandomConsonant(
         state.currentConsonant.letter,
-        state.allowConsonantRepeat
+        state.allowConsonantRepeat,
+        state.curse
       );
       return {
         ...state,
@@ -78,8 +80,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
     case 'ANSWER_WRONG': {
-      markWrong(state.currentConsonant.letter);
       const nextCurse = Math.min(100, state.curse + 10);
+      markReview(state.currentConsonant.letter, 'wrong', nextCurse);
       const nextWrongStreak = state.wrongStreak + 1;
       const list = [...state.messages, action.payload.message];
       if (action.payload.vipMessage) list.push(action.payload.vipMessage);
