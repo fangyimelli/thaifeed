@@ -11,7 +11,7 @@ type Props = {
   onAutoPauseChange: (paused: boolean) => void;
 };
 
-const STICK_BOTTOM_THRESHOLD = 24;
+const STICK_BOTTOM_THRESHOLD = 80;
 const MAX_RENDER_COUNT = 100;
 
 export default function ChatPanel({
@@ -22,10 +22,12 @@ export default function ChatPanel({
   onToggleTranslation,
   onAutoPauseChange
 }: Props) {
+  const panelRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const idleTimer = useRef<number>(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
+  const [viewportMaxHeight, setViewportMaxHeight] = useState<number | undefined>(undefined);
 
   useLayoutEffect(() => {
     const box = scrollerRef.current;
@@ -65,8 +67,27 @@ export default function ChatPanel({
     };
   }, [autoPaused, onAutoPauseChange]);
 
+  useEffect(() => {
+    if (!window.visualViewport) return;
+
+    const syncViewport = () => {
+      const panelTop = panelRef.current?.getBoundingClientRect().top ?? 0;
+      const visibleHeight = Math.max(220, window.visualViewport!.height - panelTop);
+      setViewportMaxHeight(visibleHeight);
+    };
+
+    syncViewport();
+    window.visualViewport.addEventListener('resize', syncViewport);
+    window.visualViewport.addEventListener('scroll', syncViewport);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', syncViewport);
+      window.visualViewport?.removeEventListener('scroll', syncViewport);
+    };
+  }, []);
+
   return (
-    <aside className="chat-panel">
+    <aside className="chat-panel" ref={panelRef} style={viewportMaxHeight ? { maxHeight: `${viewportMaxHeight}px` } : undefined}>
       <header className="chat-header">
         <strong>聊天室</strong>
       </header>
@@ -76,8 +97,8 @@ export default function ChatPanel({
         className="chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;
-          const isBottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_BOTTOM_THRESHOLD;
-          setStickBottom(isBottom);
+          const distanceBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+          setStickBottom(distanceBottom < STICK_BOTTOM_THRESHOLD);
         }}
       >
         <div className="chat-items">

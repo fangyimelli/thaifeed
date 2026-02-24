@@ -322,22 +322,26 @@ export default function App() {
       )}
       <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
       <main className="app-layout">
-        <SceneView
-          targetConsonant={state.targetConsonant}
-          curse={state.curse}
-          anchor={state.currentAnchor}
-        />
-        <ChatPanel
-          messages={state.messages}
-          input={input}
-          onChange={(value) => {
-            setInput(value);
-            playSound(SFX_SRC.typing);
-          }}
-          onSubmit={submit}
-          onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
-          onAutoPauseChange={setChatAutoPaused}
-        />
+        <div className="video-container">
+          <SceneView
+            targetConsonant={state.targetConsonant}
+            curse={state.curse}
+            anchor={state.currentAnchor}
+          />
+        </div>
+        <div className="chat-container">
+          <ChatPanel
+            messages={state.messages}
+            input={input}
+            onChange={(value) => {
+              setInput(value);
+              playSound(SFX_SRC.typing);
+            }}
+            onSubmit={submit}
+            onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
+            onAutoPauseChange={setChatAutoPaused}
+          />
+        </div>
       </main>
       <DonateToast
         toasts={state.donateToasts}
