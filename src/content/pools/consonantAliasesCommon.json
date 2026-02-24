@@ -1,0 +1,39 @@
+[
+  { "letter": "ก", "roman": ["k"],  "bopomofo": ["ㄍ"], "allowSingleLetter": true },
+  { "letter": "ข", "roman": ["kh"], "bopomofo": ["ㄎ"] },
+  { "letter": "ค", "roman": ["kh"], "bopomofo": ["ㄎ"] },
+  { "letter": "ง", "roman": ["ng"], "bopomofo": ["ㄫ"] },
+
+  { "letter": "จ", "roman": ["j"],  "bopomofo": ["ㄐ"], "allowSingleLetter": true },
+  { "letter": "ฉ", "roman": ["ch"], "bopomofo": ["ㄑ"] },
+  { "letter": "ช", "roman": ["ch"], "bopomofo": ["ㄑ"] },
+  { "letter": "ซ", "roman": ["s"],  "bopomofo": ["ㄙ"], "allowSingleLetter": true },
+
+  { "letter": "ด", "roman": ["d"],  "bopomofo": ["ㄉ"], "allowSingleLetter": true },
+  { "letter": "ต", "roman": ["t"],  "bopomofo": ["ㄊ"], "allowSingleLetter": true },
+  { "letter": "ถ", "roman": ["th"], "bopomofo": ["ㄊ"] },
+  { "letter": "ท", "roman": ["th"], "bopomofo": ["ㄊ"] },
+
+  { "letter": "น", "roman": ["n"],  "bopomofo": ["ㄋ"], "allowSingleLetter": true },
+  { "letter": "บ", "roman": ["b"],  "bopomofo": ["ㄅ"], "allowSingleLetter": true },
+  { "letter": "ป", "roman": ["p"],  "bopomofo": ["ㄆ"], "allowSingleLetter": true },
+  { "letter": "ผ", "roman": ["ph"], "bopomofo": ["ㄆ"] },
+
+  { "letter": "ฝ", "roman": ["f"],  "bopomofo": ["ㄈ"], "allowSingleLetter": true },
+  { "letter": "ฟ", "roman": ["f"],  "bopomofo": ["ㄈ"], "allowSingleLetter": true },
+
+  { "letter": "ม", "roman": ["m"],  "bopomofo": ["ㄇ"], "allowSingleLetter": true },
+  { "letter": "ย", "roman": ["y"],  "bopomofo": ["ㄧ"], "allowSingleLetter": true },
+
+  { "letter": "ร", "roman": ["r"],  "bopomofo": ["ㄖ"], "allowSingleLetter": true },
+  { "letter": "ล", "roman": ["l"],  "bopomofo": ["ㄌ"], "allowSingleLetter": true },
+  { "letter": "ว", "roman": ["w"],  "bopomofo": ["ㄨ"], "allowSingleLetter": true },
+
+  { "letter": "ส", "roman": ["s"],  "bopomofo": ["ㄙ"], "allowSingleLetter": true },
+  { "letter": "ห", "roman": ["h"],  "bopomofo": ["ㄏ"], "allowSingleLetter": true },
+  { "letter": "ฮ", "roman": ["h"],  "bopomofo": ["ㄏ"], "allowSingleLetter": true },
+
+  { "letter": "อ", "roman": ["ʔ"], "bopomofo": [], "allowSingleLetter": false },
+
+  { "letter": "พ", "roman": ["ph"], "bopomofo": ["ㄆ"] }
+]

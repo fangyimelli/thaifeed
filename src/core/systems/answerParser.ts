@@ -1,19 +1,9 @@
 import type { ThaiConsonant } from './consonantSelector';
 import { normalizeInputForMatch } from '../../utils/inputNormalize';
 
-function includesToken(text: string, token: string, allowSingleLetter = false): boolean {
-  if (!token) return false;
-
-  if (token.length === 1 && !allowSingleLetter) {
-    return false;
-  }
-
-  if (/^[a-z]+$/.test(token)) {
-    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[^a-z])${escapedToken}([^a-z]|$)`).test(text);
-  }
-
-  return text.includes(token);
+function includesSingleRomanBoundary(text: string, token: string): boolean {
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z])${escapedToken}([^a-z]|$)`).test(text);
 }
 
 function matchAnswerContains(normalized: string, consonant: ThaiConsonant): boolean {
@@ -21,17 +11,22 @@ function matchAnswerContains(normalized: string, consonant: ThaiConsonant): bool
     return true;
   }
 
-  const allowSingleLetter = Boolean(consonant.allowSingleLetter);
-
-  for (const p of consonant.pinyin) {
-    const token = p.toLowerCase();
-    if (includesToken(normalized, token, allowSingleLetter)) {
+  for (const b of consonant.bopomofo) {
+    if (normalized.includes(b)) {
       return true;
     }
   }
 
-  for (const b of consonant.bopomofo) {
-    if (normalized.includes(b)) {
+  const allowSingleLetter = Boolean(consonant.allowSingleLetter);
+
+  for (const p of consonant.pinyin) {
+    const token = p.toLowerCase();
+
+    if (token.length >= 2 && normalized.includes(token)) {
+      return true;
+    }
+
+    if (token.length === 1 && allowSingleLetter && includesSingleRomanBoundary(normalized, token)) {
       return true;
     }
   }
