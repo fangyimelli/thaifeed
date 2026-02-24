@@ -113,20 +113,29 @@ export default function App() {
 
   const submit = () => {
     const raw = input.trim();
-    if (!raw) return;
+    if (!raw || chatAutoPaused) return;
 
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: createFakeAiAudienceMessage({
-        playerInput: raw,
-        targetConsonant: state.targetConsonant,
-        curse: state.curse,
-        anchor: state.currentAnchor,
-        recentHistory: state.messages.slice(-4).map((message) => message.text_zh ?? message.text_th)
-      })
+
+    const fakeAiBatch = createFakeAiAudienceMessage({
+      playerInput: raw,
+      targetConsonant: state.targetConsonant,
+      curse: state.curse,
+      anchor: state.currentAnchor,
+      recentHistory: state.messages.slice(-4).map((message) => message.text_zh ?? message.text_th)
     });
+
+    fakeAiBatch.messages.forEach((message) => {
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+    });
+
+    if (fakeAiBatch.pauseMs) {
+      setChatAutoPaused(true);
+      window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
+      setInput('');
+      return;
+    }
 
     if (isAnswerCorrect(raw, state.targetConsonant)) {
       const donateSample = pickOne(donatePools.messages);
