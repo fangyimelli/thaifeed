@@ -1,5 +1,4 @@
 import type { ChatMessage } from '../state/types';
-import { pickOne } from '../../utils/random';
 
 type VipAiParams = {
   input: string;
@@ -9,71 +8,32 @@ type VipAiParams = {
   vipType: 'VIP_NORMAL' | 'VIP_STILL_HERE';
 };
 
-function detectLanguage(input: string): 'thai' | 'bopomofo' | 'latin' | 'mixed' {
-  const hasThai = /[ก-๙]/.test(input);
-  const hasBopomofo = /[ㄅ-ㄦ]/.test(input);
-  const hasLatin = /[a-z]/i.test(input);
-  const count = [hasThai, hasBopomofo, hasLatin].filter(Boolean).length;
-  if (count > 1) return 'mixed';
-  if (hasThai) return 'thai';
-  if (hasBopomofo) return 'bopomofo';
-  if (hasLatin) return 'latin';
-  return 'mixed';
-}
-
-function buildLanguageMirror(input: string, target: string): { th: string; zh: string } {
-  const lang = detectLanguage(input);
-
-  if (lang === 'thai') {
-    return {
-      th: `เห็นตัว "${input}" แล้ว...แต่ตัวเป้าคือ "${target}" ลองอีกครั้งนะ`,
-      zh: `我看到你輸入「${input}」了…但目標是「${target}」，再試一次。`
-    };
+function mirrorInput(input: string, target: string) {
+  const normalized = input.trim();
+  if (!normalized) {
+    return `先專心看這個位置 輸入「${target}」就能往下走`;
   }
 
-  if (lang === 'bopomofo') {
-    return {
-      th: `ㄆ...เสียงใกล้แล้ว พิมพ์ "${target}" แล้วภาพอาจนิ่งขึ้น`,
-      zh: `ㄆ…發音接近了，打出「${target}」畫面可能會更穩。`
-    };
-  }
-
-  if (lang === 'latin') {
-    return {
-      th: `you typed "${input}"... almost. ลอง "ph" หรือ "${target}"`,
-      zh: `你打了「${input}」…很接近。試試「ph」或「${target}」。`
-    };
-  }
-
-  return {
-    th: `ห้องยังรอคำตอบอยู่ พิมพ์ "${target}" เพื่อเปิดตัวอักษรถัดไป`,
-    zh: `房間還在等答案，輸入「${target}」可以看到下一個字。`
-  };
+  return `你剛剛輸入「${normalized}」了 再對照這個位置看一次`;
 }
 
 export function maybeCreateVipNormalMessage(input: string, curse: number, target: string): ChatMessage | null {
   if (Math.random() > 0.2) return null;
 
   const tips = [
-    {
-      th: `เห็นเหมือนกันว่าเป็น "${target}" นะ ลองพิมพ์ออกเสียงดู`,
-      zh: `我也覺得是「${target}」，試著打出它的發音。`
-    },
-    {
-      th: 'แชตบอกว่าถ้าพิมพ์ถูก จะเห็นตัวต่อไปทันที',
-      zh: '聊天室說只要打對，就會立刻看到下一個字。'
-    }
+    `我也覺得是「${target}」 先盯著現在這個位置再輸入一次`,
+    '聊天室都在看這個位置 你再確認一次字形'
   ];
 
-  const mirrored = buildLanguageMirror(input, target);
-  const chosen = curse > 60 ? mirrored : pickOne([...tips, mirrored]);
+  const mirrored = mirrorInput(input, target);
+  const chosen = curse > 60 ? mirrored : (Math.random() < 0.5 ? tips[0] : tips[1]);
 
   return {
     id: crypto.randomUUID(),
     username: 'VIP_GoldenLotus',
     isVip: 'VIP_NORMAL',
-    text_th: chosen.th,
-    text_zh: chosen.zh
+    text_th: chosen,
+    text_zh: chosen
   };
 }
 
@@ -81,39 +41,26 @@ export function createVipAiReply(params: VipAiParams): ChatMessage {
   const { input, curse, isCorrect, target, vipType } = params;
 
   if (vipType === 'VIP_STILL_HERE') {
-    const mirrored = buildLanguageMirror(input, target);
-    const extra =
-      curse > 70
-        ? {
-            th: 'ฉันยังอยู่ตรงนี้ ภาพเริ่มสั่นแรง...รีบตอบให้ถูกเถอะ',
-            zh: '我還在這裡，畫面抖得更厲害了…快答對吧。'
-          }
-        : {
-            th: 'ฉันยังอยู่ตรงนี้นะ ตอบอีกครั้งช้า ๆ ก็ได้',
-            zh: '我還在這裡喔，再慢慢輸入一次也可以。'
-          };
+    const mirrored = mirrorInput(input, target);
+    const extra = curse > 70 ? '我還在這裡 角落越來越不穩 快答對' : '我還在這裡 你可以慢慢再輸入一次';
+    const message = `${mirrored} ${extra}`;
 
     return {
       id: crypto.randomUUID(),
       username: '_still_here',
       isVip: 'VIP_STILL_HERE',
-      text_th: `${mirrored.th} ${extra.th}`,
-      text_zh: `${mirrored.zh} ${extra.zh}`
+      text_th: message,
+      text_zh: message
     };
   }
 
-  const normal = isCorrect
-    ? {
-        th: 'เป๊ะมาก! เปิดทางไปตัวถัดไปแล้ว ✨',
-        zh: '超準！下一個字已經打開了 ✨'
-      }
-    : buildLanguageMirror(input, target);
+  const normal = isCorrect ? '超準 下一個字已經打開了 ✨' : mirrorInput(input, target);
 
   return {
     id: crypto.randomUUID(),
     username: 'VIP_GoldenLotus',
     isVip: 'VIP_NORMAL',
-    text_th: normal.th,
-    text_zh: normal.zh
+    text_th: normal,
+    text_zh: normal
   };
 }
