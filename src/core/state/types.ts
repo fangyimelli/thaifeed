@@ -1,3 +1,5 @@
+import type { ThaiConsonant } from '../systems/consonantSelector';
+
 export type ChatMessage = {
   id: string;
   username: string;
@@ -25,7 +27,9 @@ export type DonateMessage = {
 export type GameState = {
   roomName: string;
   roomType: 'IDENTIFY';
-  targetConsonant: string;
+  currentConsonant: ThaiConsonant;
+  previousConsonant?: ThaiConsonant;
+  allowConsonantRepeat: boolean;
   curse: number;
   wrongStreak: number;
   vipStillHereTriggered: boolean;

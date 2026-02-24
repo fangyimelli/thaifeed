@@ -77,6 +77,7 @@ export default function App() {
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
+  const speechCooldownUntil = useRef(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -123,14 +124,14 @@ export default function App() {
         state.currentAnchor,
         state.messages.slice(-12).map((message) => message.translation ?? message.text)
       ) });
-      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.targetConsonant);
+      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.currentConsonant.letter);
       if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
       timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     };
 
     timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.targetConsonant, state.currentAnchor, input, isReady, chatAutoPaused]);
+  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, input, isReady, chatAutoPaused]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -254,7 +255,7 @@ export default function App() {
         input: raw,
         curse: state.curse,
         isCorrect: true,
-        target: state.targetConsonant,
+        target: state.currentConsonant.letter,
         vipType: 'VIP_NORMAL'
       });
       dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
@@ -277,6 +278,17 @@ export default function App() {
         window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
       }
     } else {
+      const speechHit = parsePlayerSpeech(raw);
+      const now = Date.now();
+      const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
+      if (canTriggerSpeech) {
+        speechCooldownUntil.current = now + 10_000;
+        const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
+        speechResponses.forEach((message) => {
+          dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+        });
+      }
+
       const wrongMessage = createWrongMessage(state.curse);
       const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
       dispatch({
@@ -288,7 +300,7 @@ export default function App() {
                 input: raw,
                 curse: state.curse,
                 isCorrect: false,
-                target: state.targetConsonant,
+                target: state.currentConsonant.letter,
                 vipType: 'VIP_STILL_HERE'
               })
             : undefined
@@ -325,7 +337,7 @@ export default function App() {
       <main className="app-layout">
         <div className="video-container">
           <SceneView
-            targetConsonant={state.targetConsonant}
+            targetConsonant={state.currentConsonant.letter}
             curse={state.curse}
             anchor={state.currentAnchor}
           />

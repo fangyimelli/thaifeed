@@ -1,4 +1,4 @@
-import consonantAliases from '../../content/aliases/consonantAliases.json';
+import type { ThaiConsonant } from './consonantSelector';
 
 const fullWidthAsciiRegex = /[！-～]/g;
 const fullWidthSpaceRegex = /\u3000/g;

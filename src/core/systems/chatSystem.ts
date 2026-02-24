@@ -80,6 +80,54 @@ export function createAudienceMessage(curse: number, anchor: AnchorType, recentH
   };
 }
 
+
+const speechReplyPools = {
+  soothe: [
+    '{anchor}那邊我幫你盯著 先別慌',
+    '先深呼吸一下 我也在看{anchor}附近',
+    '別怕啦 我們一起看{anchor}那塊'
+  ],
+  agree: [
+    '我也覺得{anchor}那邊怪怪的',
+    '剛剛{anchor}那裡真的有晃一下',
+    '{anchor}那團影子真的不太對'
+  ],
+  doubt: [
+    '會不會是燈影啊 但{anchor}那邊確實有點怪',
+    '先別自己嚇自己 不過{anchor}剛剛有閃一下',
+    '我還不確定 但{anchor}那邊我有看到黑點'
+  ],
+  amplify: [
+    '不要一直看{anchor} 那裡越看越毛',
+    '剛剛{anchor}下面像有人蹲著',
+    '你看{anchor}那個角度 超像有人在動'
+  ]
+} as const;
+
+function fillAnchor(text: string, anchor: AnchorType) {
+  return text.replace(/\{anchor\}/g, anchorKeyword(anchor));
+}
+
+export function createPlayerSpeechResponses(anchor: AnchorType): ChatMessage[] {
+  const categoryOrder: (keyof typeof speechReplyPools)[] = ['soothe', 'agree', 'doubt', 'amplify'];
+  const count = 2 + Math.floor(Math.random() * 4);
+  const messages: ChatMessage[] = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const category = categoryOrder[i % categoryOrder.length];
+    const text = fillAnchor(pickOne([...speechReplyPools[category]]), anchor);
+    messages.push({
+      id: crypto.randomUUID(),
+      username: pickOne(usernames),
+      text,
+      language: 'zh',
+      translation: text
+    });
+  }
+
+  return messages;
+}
+
 export function createFakeAiAudienceMessage(input: {
   playerInput: string;
   targetConsonant: string;

@@ -1,4 +1,8 @@
+import { pickOne } from '../../utils/random';
+import { pickRandomConsonant } from '../systems/consonantSelector';
 import type { AnchorType, GameAction, GameState } from './types';
+
+const anchors: AnchorType[] = ['door', 'window', 'corner', 'under_table'];
 
 function anchorFromCurse(curse: number): AnchorType {
   if (curse >= 75) return 'under_table';
@@ -7,10 +11,14 @@ function anchorFromCurse(curse: number): AnchorType {
   return 'door';
 }
 
+const initialConsonant = pickRandomConsonant(undefined, true);
+
 export const initialState: GameState = {
   roomName: '老屋房間',
   roomType: 'IDENTIFY',
-  targetConsonant: 'ผ',
+  currentConsonant: initialConsonant,
+  previousConsonant: undefined,
+  allowConsonantRepeat: false,
   curse: 20,
   wrongStreak: 0,
   vipStillHereTriggered: false,
@@ -40,10 +48,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, messages: [...state.messages, action.payload] };
     case 'ANSWER_CORRECT': {
       const nextCurse = Math.max(0, state.curse - 10);
+      const nextConsonant = pickRandomConsonant(
+        state.currentConsonant.letter,
+        state.allowConsonantRepeat
+      );
       return {
         ...state,
+        currentConsonant: nextConsonant,
+        previousConsonant: state.currentConsonant,
         curse: nextCurse,
-        currentAnchor: anchorFromCurse(nextCurse),
+        currentAnchor: pickOne(anchors),
         wrongStreak: 0,
         messages: [...state.messages, action.payload.message],
         donateToasts: [...state.donateToasts, action.payload.donate].slice(-2)
