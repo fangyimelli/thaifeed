@@ -19,6 +19,17 @@ type SceneAssetState = {
 
 type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
 
+const LOOP_KEY_ALIASES: Record<string, OldhouseLoopKey> = {
+  oldhouse_room_loop: 'oldhouse_room_loop',
+  oldhouse_room_loop2: 'oldhouse_room_loop2',
+  oldhouse_room_loop3: 'oldhouse_room_loop3',
+  oldhouse_room_loop4: 'oldhouse_room_loop4',
+  loop1: 'oldhouse_room_loop',
+  loop2: 'oldhouse_room_loop2',
+  loop3: 'oldhouse_room_loop3',
+  loop4: 'oldhouse_room_loop4'
+};
+
 const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
 const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'];
 
@@ -66,6 +77,10 @@ const randomMs = (min: number, max: number) => {
 const randomPick = <T,>(items: T[]): T => {
   const index = Math.floor(Math.random() * items.length);
   return items[index];
+};
+
+const resolveLoopKey = (key: string): OldhouseLoopKey | null => {
+  return LOOP_KEY_ALIASES[key] ?? null;
 };
 
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
@@ -422,9 +437,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const onStartRandom = () => startOldhouseCalmMode();
     const onStopRandom = () => stopOldhouseCalmMode();
     const onPlayLoop = (event: Event) => {
-      const customEvent = event as CustomEvent<OldhouseLoopKey>;
-      const key = customEvent.detail;
-      if (VIDEO_PATH_BY_KEY[key]) {
+      const customEvent = event as CustomEvent<string>;
+      const key = resolveLoopKey(customEvent.detail);
+      if (key) {
         stopOldhouseCalmMode();
         void playOldhouseLoop(key);
       }
