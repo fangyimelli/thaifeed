@@ -51,6 +51,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>('oldhouse_room_loop');
   const [shuffleMode, setShuffleMode] = useState(true);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
+  const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
+  const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const currentLoopKeyRef = useRef<OldhouseLoopKey>('oldhouse_room_loop');
@@ -76,7 +78,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const tryPlayMedia = useCallback(async () => {
     const video = videoRef.current;
     const ambient = ambientRef.current;
-    if (!video) return false;
+    if (!video || !hasConfirmedPlayback) return false;
 
     applyAudibleDefaults();
 
@@ -87,7 +89,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     } catch {
       return false;
     }
-  }, [applyAudibleDefaults]);
+  }, [applyAudibleDefaults, hasConfirmedPlayback]);
 
   const stopAmbient = useCallback(() => {
     if (!ambientRef.current) return;
@@ -122,6 +124,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, []);
 
   const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
+    if (!hasConfirmedPlayback) return;
+
     currentLoopKeyRef.current = key;
     playlistIndexRef.current = OLDHOUSE_PLAYLIST.indexOf(key);
     setCurrentLoopKey(key);
@@ -146,7 +150,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     video.volume = 1;
     applyAudibleDefaults();
     await tryPlayMedia();
-  }, [applyAudibleDefaults, playAmbient, tryPlayMedia]);
+  }, [applyAudibleDefaults, hasConfirmedPlayback, playAmbient, tryPlayMedia]);
 
   const startOldhouseAutoShuffle = useCallback(() => {
     setAutoNextEnabled(true);
@@ -174,8 +178,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, [autoNextEnabled]);
 
   useEffect(() => {
+    if (!hasConfirmedPlayback) return;
     void playOldhouseLoop(currentLoopKeyRef.current);
-  }, [playOldhouseLoop]);
+  }, [hasConfirmedPlayback, playOldhouseLoop]);
 
   useEffect(() => {
     return () => {
@@ -221,11 +226,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             playsInline
             autoPlay
             onEnded={() => {
-              if (!autoNextEnabledRef.current) return;
+              if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
               void playOldhouseLoop(getNextOldhouseKey());
             }}
             onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
             onLoadedMetadata={() => {
+              if (!hasConfirmedPlayback) return;
               applyAudibleDefaults();
               void tryPlayMedia();
             }}
@@ -272,7 +278,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
           </span>
         </div>
 
-
         {assets.noiseOk && (
           <img
             className={`overlay noise distortion-overlay ${curseVisualClass(curse)}`}
@@ -280,6 +285,38 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             alt="noise"
             onError={() => setAssets((prev) => ({ ...prev, noiseOk: false }))}
           />
+        )}
+
+        {!hasConfirmedPlayback && (
+          <div className="content-warning-overlay" role="dialog" aria-modal="true" aria-label="內容警告">
+            <div className="content-warning-card">
+              <p>本影片含有驚悚內容，是否確認觀賞？</p>
+              <div className="content-warning-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasDeclinedPlayback(false);
+                    setHasConfirmedPlayback(true);
+                  }}
+                >
+                  是
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasDeclinedPlayback(true);
+                    setHasConfirmedPlayback(false);
+                    const video = videoRef.current;
+                    if (video) video.pause();
+                    stopAmbient();
+                  }}
+                >
+                  否
+                </button>
+              </div>
+              {hasDeclinedPlayback && <small>你可以稍後按「是」開始播放。</small>}
+            </div>
+          </div>
         )}
       </div>
 
