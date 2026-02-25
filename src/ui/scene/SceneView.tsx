@@ -25,8 +25,8 @@ const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop
 const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
   oldhouse_room_loop2: '/assets/scenes/oldhouse_room_loop2.mp4',
-  oldhouse_room_loop3: '/assets/scenes/oldhouse_room_loop.mp4',
-  oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop2.mp4'
+  oldhouse_room_loop3: '/assets/scenes/oldhouse_room_loop3.mp4',
+  oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop4.mp4'
 };
 
 const AMBIENT_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
