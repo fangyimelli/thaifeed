@@ -47,6 +47,10 @@ const AMBIENT_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop4: '/assets/sfx/oldhouse_room_loop2.wav'
 };
 
+const FAN_LOOP_PATH = '/assets/sfx/oldhouse_room_loop.wav';
+const FOOTSTEPS_PATH = '/assets/sfx/sfx_glitch.wav';
+const GHOST_FEMALE_PATH = '/assets/sfx/sfx_error.wav';
+
 const initialAssets: SceneAssetState = {
   videoOk: true,
   smokeOk: true,
@@ -74,6 +78,8 @@ const randomMs = (min: number, max: number) => {
   return Math.floor(Math.random() * (high - low + 1)) + low;
 };
 
+const clampCurse = (c: number) => Math.min(Math.max(c, 0), 100);
+
 const randomPick = <T,>(items: T[]): T => {
   const index = Math.floor(Math.random() * items.length);
   return items[index];
@@ -95,6 +101,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const currentVideoRef = useRef<'A' | 'B'>('A');
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const ambientBufferRef = useRef<HTMLAudioElement | null>(null);
+  const fanAudioRef = useRef<HTMLAudioElement | null>(null);
+  const footstepsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ghostAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentLoopKeyRef = useRef<OldhouseLoopKey>(MAIN_LOOP);
   const isInJumpRef = useRef(false);
   const jumpTimerRef = useRef<number | null>(null);
@@ -102,6 +111,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const autoNextEnabledRef = useRef(true);
   const isSwitchingRef = useRef(false);
   const needsUserGestureToPlayRef = useRef(false);
+  const footstepsTimerRef = useRef<number | null>(null);
+  const ghostTimerRef = useRef<number | null>(null);
+  const isAudioStartedRef = useRef(false);
 
   const getCurrentVideoEl = useCallback(() => {
     return currentVideoRef.current === 'A' ? videoARef.current : videoBRef.current;
@@ -139,7 +151,101 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       ambient.muted = false;
       ambient.volume = Math.max(ambient.volume, 0);
     });
+
+    [fanAudioRef.current, footstepsAudioRef.current, ghostAudioRef.current].forEach((audio) => {
+      if (!audio) return;
+      audio.muted = false;
+      if (audio.volume <= 0) {
+        audio.volume = 0.4;
+      }
+    });
   }, [getBufferVideoEl, getCurrentVideoEl]);
+
+  const computeFootstepsIntervalMs = useCallback((curseValue: number) => {
+    const c = clampCurse(curseValue) / 100;
+    const minBase = 120000;
+    const maxBase = 180000;
+    const minFast = 20000;
+    const maxFast = 45000;
+    const min = minBase - (minBase - minFast) * c;
+    const max = maxBase - (maxBase - maxFast) * c;
+    return randomMs(min, max);
+  }, []);
+
+  const computeGhostIntervalMs = useCallback((curseValue: number) => {
+    const c = clampCurse(curseValue) / 100;
+    const minBase = 300000;
+    const maxBase = 300000;
+    const minFast = 60000;
+    const maxFast = 120000;
+    const min = minBase - (minBase - minFast) * c;
+    const max = maxBase - (maxBase - maxFast) * c;
+    return randomMs(min, max) + randomMs(-15000, 15000);
+  }, []);
+
+  const startFanLoop = useCallback(async () => {
+    const fanAudio = fanAudioRef.current;
+    if (!fanAudio) return;
+    fanAudio.loop = true;
+    fanAudio.muted = false;
+    if (fanAudio.volume === 0) fanAudio.volume = 0.4;
+    try {
+      await fanAudio.play();
+      needsUserGestureToPlayRef.current = false;
+    } catch {
+      needsUserGestureToPlayRef.current = true;
+    }
+  }, []);
+
+  const scheduleFootsteps = useCallback(() => {
+    if (footstepsTimerRef.current) {
+      window.clearTimeout(footstepsTimerRef.current);
+    }
+    const delay = computeFootstepsIntervalMs(curseRef.current);
+    footstepsTimerRef.current = window.setTimeout(() => {
+      if (needsUserGestureToPlayRef.current) {
+        scheduleFootsteps();
+        return;
+      }
+      const footstepsAudio = footstepsAudioRef.current;
+      if (!footstepsAudio) {
+        scheduleFootsteps();
+        return;
+      }
+      footstepsAudio.currentTime = 0;
+      footstepsAudio.muted = false;
+      void footstepsAudio.play().catch(() => {
+        needsUserGestureToPlayRef.current = true;
+      }).finally(() => {
+        scheduleFootsteps();
+      });
+    }, delay);
+  }, [computeFootstepsIntervalMs]);
+
+  const scheduleGhost = useCallback(() => {
+    if (ghostTimerRef.current) {
+      window.clearTimeout(ghostTimerRef.current);
+    }
+    const delay = computeGhostIntervalMs(curseRef.current);
+    ghostTimerRef.current = window.setTimeout(() => {
+      if (needsUserGestureToPlayRef.current) {
+        scheduleGhost();
+        return;
+      }
+      const ghostAudio = ghostAudioRef.current;
+      if (!ghostAudio) {
+        scheduleGhost();
+        return;
+      }
+      ghostAudio.currentTime = 0;
+      ghostAudio.muted = false;
+      void ghostAudio.play().catch(() => {
+        needsUserGestureToPlayRef.current = true;
+      }).finally(() => {
+        scheduleGhost();
+      });
+    }, delay);
+  }, [computeGhostIntervalMs]);
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
@@ -382,7 +488,14 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     void switchTo(MAIN_LOOP).then(() => {
       scheduleNextJump();
     });
-  }, [scheduleNextJump, switchTo]);
+
+    if (!isAudioStartedRef.current) {
+      isAudioStartedRef.current = true;
+      void startFanLoop();
+      scheduleFootsteps();
+      scheduleGhost();
+    }
+  }, [scheduleFootsteps, scheduleGhost, scheduleNextJump, startFanLoop, switchTo]);
 
   const stopOldhouseCalmMode = useCallback(() => {
     setAutoNextEnabled(false);
@@ -391,6 +504,16 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
     }
+
+    if (footstepsTimerRef.current) {
+      window.clearTimeout(footstepsTimerRef.current);
+      footstepsTimerRef.current = null;
+    }
+    if (ghostTimerRef.current) {
+      window.clearTimeout(ghostTimerRef.current);
+      ghostTimerRef.current = null;
+    }
+    isAudioStartedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -427,9 +550,33 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, [bindEnded]);
 
   useEffect(() => {
+    fanAudioRef.current = new Audio(FAN_LOOP_PATH);
+    fanAudioRef.current.preload = 'auto';
+    fanAudioRef.current.loop = true;
+    fanAudioRef.current.volume = 0.4;
+    fanAudioRef.current.muted = false;
+
+    footstepsAudioRef.current = new Audio(FOOTSTEPS_PATH);
+    footstepsAudioRef.current.preload = 'auto';
+    footstepsAudioRef.current.loop = false;
+    footstepsAudioRef.current.volume = 0.85;
+    footstepsAudioRef.current.muted = false;
+
+    ghostAudioRef.current = new Audio(GHOST_FEMALE_PATH);
+    ghostAudioRef.current.preload = 'auto';
+    ghostAudioRef.current.loop = false;
+    ghostAudioRef.current.volume = 0.75;
+    ghostAudioRef.current.muted = false;
+
     return () => {
       stopAmbient();
       stopOldhouseCalmMode();
+      fanAudioRef.current?.pause();
+      footstepsAudioRef.current?.pause();
+      ghostAudioRef.current?.pause();
+      fanAudioRef.current = null;
+      footstepsAudioRef.current = null;
+      ghostAudioRef.current = null;
     };
   }, [stopAmbient, stopOldhouseCalmMode]);
 
@@ -485,13 +632,16 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const unlockPlayback = () => {
       if (!needsUserGestureToPlayRef.current) return;
       void tryPlayMedia();
+      void startFanLoop();
+      scheduleFootsteps();
+      scheduleGhost();
     };
 
     layer.addEventListener('click', unlockPlayback, { passive: true });
     return () => {
       layer.removeEventListener('click', unlockPlayback);
     };
-  }, [tryPlayMedia]);
+  }, [scheduleFootsteps, scheduleGhost, startFanLoop, tryPlayMedia]);
 
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
