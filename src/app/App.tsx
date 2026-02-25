@@ -14,7 +14,7 @@ import {
   createPlayerSpeechResponses,
   getAudienceIntervalMs
 } from '../core/systems/chatSystem';
-import { createVipAiReply, createVipHintMessage, createVipPassMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
+import { createVipPassMessage, handleVipPlayerMessage, isVipHintCommand } from '../core/systems/vipSystem';
 import { getMemoryNode, markReview } from '../core/adaptive/memoryScheduler';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
@@ -70,11 +70,6 @@ function randomDelayMs(min = 1000, max = 5000) {
 }
 
 
-function isHintCommand(raw: string) {
-  const normalized = raw.trim().toLowerCase();
-  return normalized === '提示' || normalized === 'hint' || normalized === 'h';
-}
-
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
@@ -100,6 +95,7 @@ export default function App() {
   const postedInitMessages = useRef(false);
   const postedOptionalAssetWarningMessage = useRef(false);
   const soundUnlocked = useRef(false);
+  const nonVipMessagesSinceLastVip = useRef(2);
 
   const scheduleBotResponse = (callback: () => void) => {
     window.setTimeout(callback, randomDelayMs());
@@ -167,7 +163,7 @@ export default function App() {
 
     timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, input, isReady, chatAutoPaused]);
+  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, isReady, chatAutoPaused]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -377,11 +373,33 @@ export default function App() {
       scheduleBotResponse(() => {
         dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipPassMessage(playableConsonant, entry.lapseCount) });
       });
+      nonVipMessagesSinceLastVip.current = 0;
       setInput('');
     };
 
     if (isPassCommand(raw)) {
       handlePass();
+      return;
+    }
+
+    const isHintInput = isVipHintCommand(raw);
+    const vipReply = handleVipPlayerMessage({
+      rawInput: raw,
+      currentConsonant: playableConsonant.letter,
+      currentAnchor: state.currentAnchor,
+      state: { nonVipMessagesSinceLastVip: nonVipMessagesSinceLastVip.current },
+      recentHistory: state.messages.map((message) => message.translation ?? message.text)
+    });
+
+    if (vipReply) {
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipReply });
+      nonVipMessagesSinceLastVip.current = 0;
+    } else {
+      nonVipMessagesSinceLastVip.current += 1;
+    }
+
+    if (isHintInput) {
+      setInput('');
       return;
     }
 
