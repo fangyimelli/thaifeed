@@ -218,6 +218,8 @@ type VideoDebugState = {
   lastSwitchTo: OldhouseLoopKey | null;
   lastError: string | null;
   lastEndedKey: OldhouseLoopKey | null;
+  activeVideoId: 'videoA' | 'videoB' | null;
+  activeVideoSrc: string | null;
   timers: { jumpTimer: number | null };
 };
 
@@ -289,6 +291,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       lastSwitchTo: null,
       lastError: null,
       lastEndedKey: null,
+      activeVideoId: null,
+      activeVideoSrc: null,
       timers: { jumpTimer: null }
     };
 
@@ -312,8 +316,16 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const inactive = currentVideoRef.current === 'A' ? videoB : videoA;
     active.classList.add('is-active');
     inactive.classList.remove('is-active');
+    active.style.opacity = '1';
+    inactive.style.opacity = '0';
     active.style.zIndex = '2';
     inactive.style.zIndex = '1';
+    console.log('[VIDEO]', 'markActiveVideo', {
+      activeId: active.id,
+      activeSrc: active.currentSrc || active.src,
+      inactiveId: inactive.id,
+      inactiveSrc: inactive.currentSrc || inactive.src
+    });
   }, []);
 
   const applyAudibleDefaults = useCallback(() => {
@@ -490,10 +502,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     const c = Math.min(Math.max(curseValue, 0), 100);
 
-    const minBase = 40000;
-    const maxBase = 90000;
-    const minFast = 15000;
-    const maxFast = 35000;
+    const minBase = 120000;
+    const maxBase = 300000;
+    const minFast = 45000;
+    const maxFast = 120000;
 
     const factor = c / 100;
 
@@ -685,19 +697,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         return;
       }
 
-      try {
-        if (hasConfirmedPlayback) {
-          await nextAmbient.play();
-        }
-      } catch (e: unknown) {
-        needsUserGestureToPlayRef.current = true;
-        updateVideoDebug({ lastError: `ambient play blocked for ${nextKey}` });
-        console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
-        return;
-      }
-
-      needsUserGestureToPlayRef.current = false;
-
       updateAudioDebug({
         switchId,
         phase: 'crossfadeStart',
@@ -720,6 +719,15 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       currentEl.style.zIndex = '1';
       bufferEl.classList.add('is-active');
       currentEl.classList.remove('is-active');
+      bufferEl.style.opacity = '1';
+      currentEl.style.opacity = '0';
+
+      console.log('[VIDEO]', 'classes', {
+        currentId: currentEl.id,
+        bufferId: bufferEl.id,
+        currentActive: currentEl.classList.contains('is-active'),
+        bufferActive: bufferEl.classList.contains('is-active')
+      });
 
       console.log('[VIDEO]', 'classes', {
         currentId: currentEl.id,
@@ -736,6 +744,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         current: { muted: currentEl.muted, vol: currentEl.volume },
         buffer: { muted: bufferEl.muted, vol: bufferEl.volume }
       });
+
+      try {
+        if (hasConfirmedPlayback) {
+          await nextAmbient.play();
+        }
+      } catch (e: unknown) {
+        needsUserGestureToPlayRef.current = true;
+        updateVideoDebug({ lastError: `ambient play blocked for ${nextKey}` });
+        console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
+      }
+
+      needsUserGestureToPlayRef.current = false;
 
       const pauseOldVideoAtMs = Math.floor(CROSSFADE_MS * PAUSE_OLD_VIDEO_AT_RATIO);
       await wait(pauseOldVideoAtMs);
@@ -774,7 +794,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         lastSwitchAt: Date.now(),
         lastSwitchFrom: fromKey,
         lastSwitchTo: nextKey,
-        lastError: null
+        lastError: null,
+        activeVideoId: currentVideoRef.current === 'A' ? 'videoA' : 'videoB',
+        activeVideoSrc: getCurrentVideoEl()?.currentSrc ?? getCurrentVideoEl()?.src ?? null
       });
 
       updateAudioDebug({
@@ -1002,6 +1024,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       lastSwitchTo: null,
       lastError: null,
       lastEndedKey: null,
+      activeVideoId: null,
+      activeVideoSrc: null,
       timers: { jumpTimer: null }
     };
 
