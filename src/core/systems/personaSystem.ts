@@ -76,6 +76,8 @@ const personaNames: PersonaName[] = [
 const userPersonaMap = new Map<string, PersonaName>();
 const personaSentenceCache = new Map<string, string[]>();
 const globalMessageSet = new Set<string>();
+const sensoryPhrases = ['陰影黏著', '聲音貼耳', '背後發冷', '空氣變重', '地板在抖'];
+const shortQuestionPhrases = ['你有看到嗎', '這秒有嗎', '是不是又來了', '要不要重播'];
 
 function sanitizeText(text: string): string {
   return text.replace(/[。．｡]/g, '').replace(/\s+/g, ' ').trim();
@@ -652,8 +654,32 @@ function forceUnique(line: string, pool: PersonalityPool): string {
   return `${line} ${Date.now().toString().slice(-4)}`;
 }
 
+function buildSeedText(input: { anchorKeyword: string; anchorBaseText: string }, base: string, pool: PersonalityPool): string {
+  const anchorSource = `${input.anchorKeyword} ${input.anchorBaseText}`.trim();
+  const anchorRate = pool.frequentTag ? 0.7 : pool.sensoryBias ? 0.6 : 0.45;
+  if (Math.random() < anchorRate) {
+    return `${anchorSource} ${base}`.trim();
+  }
+  return base;
+}
+
+function applyTraitBias(line: string, pool: PersonalityPool): string {
+  let next = line;
+
+  if (pool.sensoryBias && Math.random() < 0.35) {
+    next = `${next} ${pickOne(sensoryPhrases)}`;
+  }
+
+  if (pool.preferQuestion && !next.includes('?') && Math.random() < 0.6) {
+    next = `${next} ${pickOne(shortQuestionPhrases)}`;
+  }
+
+  return next.trim();
+}
+
 function stylizeSentence(raw: string, pool: PersonalityPool): string {
-  const compact = compactSentence(raw, pool.shortSentenceBias);
+  const traitBiased = applyTraitBias(raw, pool);
+  const compact = compactSentence(traitBiased, pool.shortSentenceBias);
   const punctuation = applyPunctuationStyle(compact, pool);
   const particle = applyParticleStyle(punctuation, pool);
   const tagged = applyTagStyle(particle, pool);
@@ -672,7 +698,7 @@ export function buildPersonaMessage(input: { username: string; anchorKeyword: st
 
   for (let i = 0; i < 24; i += 1) {
     const base = cached.length > 0 ? cached.splice(Math.floor(Math.random() * cached.length), 1)[0] : pickOne(pool.messages);
-    const seeded = base.includes('anchorKeyword') ? base.split('anchorKeyword').join(input.anchorKeyword) : `${input.anchorBaseText} ${base}`;
+    const seeded = buildSeedText(input, base, pool);
     const candidate = stylizeSentence(seeded, pool);
     if (!globalMessageSet.has(candidate)) {
       globalMessageSet.add(candidate);
@@ -680,7 +706,8 @@ export function buildPersonaMessage(input: { username: string; anchorKeyword: st
     }
   }
 
-  const fallback = forceUnique(stylizeSentence(`${input.anchorBaseText} ${pickOne(pool.messages)}`, pool), pool);
+  const fallbackBase = buildSeedText(input, pickOne(pool.messages), pool);
+  const fallback = forceUnique(stylizeSentence(fallbackBase, pool), pool);
   globalMessageSet.add(fallback);
   return fallback;
 }
