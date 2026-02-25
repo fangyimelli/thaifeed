@@ -516,6 +516,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
   const triggerJumpOnce = useCallback(async () => {
     if (isSwitchingRef.current || isInJumpRef.current) return;
+    if (currentLoopKeyRef.current !== MAIN_LOOP) {
+      scheduleNextJump();
+      return;
+    }
 
     isInJumpRef.current = true;
     const nextKey = randomPick(JUMP_LOOPS);
