@@ -68,6 +68,7 @@ body { margin: 0; }
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 0;
+  position: relative;
 }
 
 .chat-container {
@@ -108,7 +109,36 @@ body { margin: 0; }
   inset: 0;
 }
 .overlay { pointer-events: none; }
-.overlay.noise { opacity: .12; mix-blend-mode: screen; }
+
+.video-audio-controls {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(15, 15, 15, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.audio-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.overlay.noise { opacity: .12; mix-blend-mode: screen; z-index: 12; }
 .overlay.smoke { opacity: .25; }
 .overlay.crack { opacity: .12; }
 .overlay.vignette { opacity: .7; }
@@ -127,8 +157,11 @@ body { margin: 0; }
 }
 
 .live-header {
-  position: relative;
-  z-index: 1000;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -137,7 +170,7 @@ body { margin: 0; }
   background: rgba(0, 0, 0, .35);
   backdrop-filter: blur(4px);
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 10px 10px 0 0;
 }
 .live-header h1 {
   margin: 0;
@@ -437,7 +470,7 @@ body { margin: 0; }
 
   .scene-view,
   .chat-panel {
-    border-radius: 10px;
+    border-radius: 10px 10px 0 0;
   }
 
   .glyph-blink {

@@ -66,6 +66,8 @@ function preloadAudio(src: string): Promise<HTMLAudioElement> {
   return new Promise((resolve, reject) => {
     const audio = new Audio();
     audio.preload = 'auto';
+    audio.muted = false;
+    audio.volume = 1;
     audio.src = src;
     audio.onloadeddata = () => {
       assetCache.set(src, audio);
@@ -83,7 +85,9 @@ function preloadVideo(src: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'auto';
-    video.muted = true;
+    video.defaultMuted = false;
+    video.muted = false;
+    video.volume = 1;
     video.playsInline = true;
     video.src = src;
     video.oncanplaythrough = () => {

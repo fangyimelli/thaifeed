@@ -56,9 +56,37 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>('oldhouse_room_loop');
   const [randomMode, setRandomMode] = useState(false);
+  const [volume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const randomTimerRef = useRef(0);
+
+  const applyAudioState = useCallback((nextVolume: number, muted: boolean) => {
+    const video = videoRef.current;
+    if (video) {
+      video.defaultMuted = false;
+      video.muted = muted;
+      video.volume = muted ? 0 : Math.max(0.01, nextVolume);
+    }
+    const ambient = ambientRef.current;
+    if (ambient) {
+      ambient.muted = muted;
+      ambient.volume = muted ? 0 : Math.max(0.01, nextVolume);
+    }
+  }, []);
+
+  const tryPlayMedia = useCallback(async () => {
+    const video = videoRef.current;
+    const ambient = ambientRef.current;
+    if (!video) return;
+
+    try {
+      await video.play();
+      if (ambient) await ambient.play();
+    } catch {
+    }
+  }, []);
 
   const stopRandomTimer = useCallback(() => {
     if (randomTimerRef.current !== 0) {
@@ -80,10 +108,11 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const ambient = cachedAmbient instanceof HTMLAudioElement ? cachedAmbient : new Audio(ambientSrc);
     ambient.preload = 'auto';
     ambient.loop = true;
-    ambientRef.current = ambient;
     ambient.currentTime = 0;
-    void ambient.play().catch(() => undefined);
-  }, [stopAmbient]);
+    ambient.muted = isMuted;
+    ambient.volume = isMuted ? 0 : Math.max(0.01, volume);
+    ambientRef.current = ambient;
+  }, [isMuted, stopAmbient, volume]);
 
   const scheduleNextRandomLoop = useCallback(() => {
     stopRandomTimer();
@@ -120,15 +149,22 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const video = videoRef.current;
     if (video) {
       video.currentTime = 0;
-      void video.play().catch(() => undefined);
+      video.defaultMuted = false;
+      video.muted = isMuted;
+      video.volume = isMuted ? 0 : Math.max(0.01, volume);
     }
+    void tryPlayMedia();
 
     if (randomMode) {
       scheduleNextRandomLoop();
     } else {
       stopRandomTimer();
     }
-  }, [currentLoopKey, playAmbient, randomMode, scheduleNextRandomLoop, stopRandomTimer]);
+  }, [currentLoopKey, isMuted, playAmbient, randomMode, scheduleNextRandomLoop, stopRandomTimer, tryPlayMedia, volume]);
+
+  useEffect(() => {
+    applyAudioState(volume, isMuted);
+  }, [applyAudioState, isMuted, volume]);
 
   useEffect(() => {
     return () => {
@@ -173,13 +209,14 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             ref={videoRef}
             src={videoSrc}
             preload="auto"
-            muted
             loop
             playsInline
             autoPlay
             onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
             onLoadedMetadata={() => {
+              applyAudioState(volume, isMuted);
               if (randomMode) scheduleNextRandomLoop();
+              void tryPlayMedia();
             }}
           />
 
@@ -222,7 +259,20 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
           >
             {targetConsonant}
           </span>
+        </div>
 
+        <div className="video-audio-controls" role="group" aria-label="聲音控制">
+          <button
+            type="button"
+            className="audio-toggle"
+            onClick={() => {
+              const nextMuted = !isMuted;
+              setIsMuted(nextMuted);
+              void tryPlayMedia();
+            }}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
         </div>
 
         {assets.noiseOk && (

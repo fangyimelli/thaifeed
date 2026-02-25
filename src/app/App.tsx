@@ -374,7 +374,7 @@ export default function App() {
       dispatch({
         type: 'ANSWER_CORRECT',
         payload: {
-          message: createSuccessMessage(),
+          message: createSuccessMessage(state.currentAnchor),
           donateMessage: createDonateChatMessage(donate)
         }
       });
@@ -388,7 +388,10 @@ export default function App() {
     const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
     if (canTriggerSpeech) {
       speechCooldownUntil.current = now + 10_000;
-      const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
+      const speechResponses = createPlayerSpeechResponses(
+        state.currentAnchor,
+        state.messages.slice(-20).map((message) => message.translation ?? message.text)
+      );
       speechResponses.forEach((message) => {
         dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
       });
@@ -415,7 +418,7 @@ export default function App() {
       return;
     }
 
-    const wrongMessage = createWrongMessage(state.curse);
+    const wrongMessage = createWrongMessage(state.curse, state.currentAnchor);
     dispatch({
       type: 'ANSWER_WRONG',
       payload: {
@@ -430,7 +433,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <LoadingOverlay visible={isLoading} />
-      <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
       <main className="app-layout">
         <div className="video-container">
           <SceneView
@@ -438,6 +440,7 @@ export default function App() {
             curse={state.curse}
             anchor={state.currentAnchor}
           />
+          <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
         </div>
         <div className="chat-container">
           <ChatPanel
