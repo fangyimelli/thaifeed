@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../core/state/types';
+import { collectActiveUsers, getActiveUserSet, sanitizeMentions } from '../../core/systems/mentionV2';
 import ChatMessage from './ChatMessage';
 
 type Props = {
@@ -29,6 +30,12 @@ export default function ChatPanel({
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
   const [viewportMaxHeight, setViewportMaxHeight] = useState<number | undefined>(undefined);
+  const activeSet = getActiveUserSet(collectActiveUsers(messages));
+  const sanitizedMessages = messages.map((message) => ({
+    ...message,
+    text: sanitizeMentions(message.text, activeSet),
+    translation: message.translation ? sanitizeMentions(message.translation, activeSet) : message.translation
+  }));
 
   const forceScrollToBottom = () => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -115,7 +122,7 @@ export default function ChatPanel({
         }}
       >
         <div className="chat-items">
-          {messages.slice(-MAX_RENDER_COUNT).map((message) => (
+          {sanitizedMessages.slice(-MAX_RENDER_COUNT).map((message) => (
             <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
           ))}
           <div ref={messageEndRef} />
