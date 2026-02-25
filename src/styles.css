@@ -110,33 +110,6 @@ body { margin: 0; }
 }
 .overlay { pointer-events: none; }
 
-.video-audio-controls {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  z-index: 35;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(15, 15, 15, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.audio-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  border-radius: 999px;
-  width: 28px;
-  height: 28px;
-  font-size: 14px;
-  cursor: pointer;
-}
 
 .overlay.noise { opacity: .12; mix-blend-mode: screen; z-index: 12; }
 .overlay.smoke { opacity: .25; }
@@ -492,4 +465,49 @@ body { margin: 0; }
   .chat-input button {
     padding: 0 12px;
   }
+}
+
+.content-warning-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.content-warning-card {
+  width: min(92%, 420px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(10, 12, 18, 0.95);
+  padding: 16px;
+  text-align: center;
+}
+
+.content-warning-card p {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.content-warning-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.content-warning-actions button {
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 8px;
+  min-width: 72px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.content-warning-card small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.75);
 }

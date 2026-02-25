@@ -19,8 +19,7 @@ type SceneAssetState = {
 
 type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2';
 
-const OLDHOUSE_LOOP_KEYS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2'];
-const AMBIENT_DURATION_FALLBACK_MS = 15_000;
+const OLDHOUSE_PLAYLIST: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2'];
 
 const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
@@ -47,53 +46,50 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
   corner: { top: 20, left: 16 }
 };
 
-function getRandomOldhouseLoopKey() {
-  const index = Math.floor(Math.random() * OLDHOUSE_LOOP_KEYS.length);
-  return OLDHOUSE_LOOP_KEYS[index];
-}
-
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>('oldhouse_room_loop');
-  const [randomMode, setRandomMode] = useState(false);
-  const [volume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [shuffleMode, setShuffleMode] = useState(true);
+  const [autoNextEnabled, setAutoNextEnabled] = useState(true);
+  const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
+  const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const ambientRef = useRef<HTMLAudioElement | null>(null);
-  const randomTimerRef = useRef(0);
+  const currentLoopKeyRef = useRef<OldhouseLoopKey>('oldhouse_room_loop');
+  const playlistIndexRef = useRef(0);
+  const shuffleModeRef = useRef(true);
+  const autoNextEnabledRef = useRef(true);
 
-  const applyAudioState = useCallback((nextVolume: number, muted: boolean) => {
+  const applyAudibleDefaults = useCallback(() => {
     const video = videoRef.current;
     if (video) {
       video.defaultMuted = false;
-      video.muted = muted;
-      video.volume = muted ? 0 : Math.max(0.01, nextVolume);
+      video.muted = false;
+      video.volume = 1;
     }
+
     const ambient = ambientRef.current;
     if (ambient) {
-      ambient.muted = muted;
-      ambient.volume = muted ? 0 : Math.max(0.01, nextVolume);
+      ambient.muted = false;
+      ambient.volume = 1;
     }
   }, []);
 
   const tryPlayMedia = useCallback(async () => {
     const video = videoRef.current;
     const ambient = ambientRef.current;
-    if (!video) return;
+    if (!video || !hasConfirmedPlayback) return false;
+
+    applyAudibleDefaults();
 
     try {
       await video.play();
       if (ambient) await ambient.play();
+      return true;
     } catch {
+      return false;
     }
-  }, []);
-
-  const stopRandomTimer = useCallback(() => {
-    if (randomTimerRef.current !== 0) {
-      window.clearTimeout(randomTimerRef.current);
-      randomTimerRef.current = 0;
-    }
-  }, []);
+  }, [applyAudibleDefaults, hasConfirmedPlayback]);
 
   const stopAmbient = useCallback(() => {
     if (!ambientRef.current) return;
@@ -109,79 +105,98 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     ambient.preload = 'auto';
     ambient.loop = true;
     ambient.currentTime = 0;
-    ambient.muted = isMuted;
-    ambient.volume = isMuted ? 0 : Math.max(0.01, volume);
+    ambient.muted = false;
+    ambient.volume = 1;
     ambientRef.current = ambient;
-  }, [isMuted, stopAmbient, volume]);
+  }, [stopAmbient]);
 
-  const scheduleNextRandomLoop = useCallback(() => {
-    stopRandomTimer();
-    const video = videoRef.current;
-    const durationMs = video && Number.isFinite(video.duration) && video.duration > 0
-      ? video.duration * 1000
-      : AMBIENT_DURATION_FALLBACK_MS;
+  const getNextOldhouseKey = useCallback((): OldhouseLoopKey => {
+    if (shuffleModeRef.current) {
+      const index = Math.floor(Math.random() * OLDHOUSE_PLAYLIST.length);
+      return OLDHOUSE_PLAYLIST[index];
+    }
 
-    randomTimerRef.current = window.setTimeout(() => {
-      setCurrentLoopKey(getRandomOldhouseLoopKey());
-    }, durationMs);
-  }, [stopRandomTimer]);
-
-  const playOldhouseLoop = useCallback((key: OldhouseLoopKey) => {
-    setCurrentLoopKey(key);
+    const currentIndex = OLDHOUSE_PLAYLIST.indexOf(currentLoopKeyRef.current);
+    const baseIndex = currentIndex >= 0 ? currentIndex : playlistIndexRef.current;
+    const nextIndex = (baseIndex + 1) % OLDHOUSE_PLAYLIST.length;
+    playlistIndexRef.current = nextIndex;
+    return OLDHOUSE_PLAYLIST[nextIndex];
   }, []);
 
-  const startOldhouseRandomLoop = useCallback(() => {
-    setRandomMode(true);
-    playOldhouseLoop(getRandomOldhouseLoopKey());
-  }, [playOldhouseLoop]);
+  const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
+    if (!hasConfirmedPlayback) return;
 
-  const stopOldhouseRandomLoop = useCallback(() => {
-    setRandomMode(false);
-    stopRandomTimer();
-  }, [stopRandomTimer]);
+    currentLoopKeyRef.current = key;
+    playlistIndexRef.current = OLDHOUSE_PLAYLIST.indexOf(key);
+    setCurrentLoopKey(key);
+    playAmbient(key);
 
-  const currentVideoPath = VIDEO_PATH_BY_KEY[currentLoopKey];
-  const videoAsset = getCachedAsset(currentVideoPath);
-  const videoSrc = videoAsset instanceof HTMLVideoElement ? videoAsset.src : currentVideoPath;
-
-  useEffect(() => {
-    playAmbient(currentLoopKey);
     const video = videoRef.current;
-    if (video) {
-      video.currentTime = 0;
-      video.defaultMuted = false;
-      video.muted = isMuted;
-      video.volume = isMuted ? 0 : Math.max(0.01, volume);
-    }
-    void tryPlayMedia();
+    if (!video) return;
 
-    if (randomMode) {
-      scheduleNextRandomLoop();
-    } else {
-      stopRandomTimer();
+    const nextVideoPath = VIDEO_PATH_BY_KEY[key];
+    const cachedVideo = getCachedAsset(nextVideoPath);
+    const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
+
+    if (video.src !== resolvedVideoSrc) {
+      video.src = resolvedVideoSrc;
+      video.load();
     }
-  }, [currentLoopKey, isMuted, playAmbient, randomMode, scheduleNextRandomLoop, stopRandomTimer, tryPlayMedia, volume]);
+
+    video.loop = false;
+    video.currentTime = 0;
+    video.defaultMuted = false;
+    video.muted = false;
+    video.volume = 1;
+    applyAudibleDefaults();
+    await tryPlayMedia();
+  }, [applyAudibleDefaults, hasConfirmedPlayback, playAmbient, tryPlayMedia]);
+
+  const startOldhouseAutoShuffle = useCallback(() => {
+    setAutoNextEnabled(true);
+    setShuffleMode(true);
+    autoNextEnabledRef.current = true;
+    shuffleModeRef.current = true;
+    void playOldhouseLoop(getNextOldhouseKey());
+  }, [getNextOldhouseKey, playOldhouseLoop]);
+
+  const stopOldhouseAutoShuffle = useCallback(() => {
+    setAutoNextEnabled(false);
+    autoNextEnabledRef.current = false;
+  }, []);
 
   useEffect(() => {
-    applyAudioState(volume, isMuted);
-  }, [applyAudioState, isMuted, volume]);
+    currentLoopKeyRef.current = currentLoopKey;
+  }, [currentLoopKey]);
+
+  useEffect(() => {
+    shuffleModeRef.current = shuffleMode;
+  }, [shuffleMode]);
+
+  useEffect(() => {
+    autoNextEnabledRef.current = autoNextEnabled;
+  }, [autoNextEnabled]);
+
+  useEffect(() => {
+    if (!hasConfirmedPlayback) return;
+    void playOldhouseLoop(currentLoopKeyRef.current);
+  }, [hasConfirmedPlayback, playOldhouseLoop]);
 
   useEffect(() => {
     return () => {
-      stopRandomTimer();
       stopAmbient();
     };
-  }, [stopAmbient, stopRandomTimer]);
+  }, [stopAmbient]);
 
   useEffect(() => {
-    const onStartRandom = () => startOldhouseRandomLoop();
-    const onStopRandom = () => stopOldhouseRandomLoop();
+    const onStartRandom = () => startOldhouseAutoShuffle();
+    const onStopRandom = () => stopOldhouseAutoShuffle();
     const onPlayLoop = (event: Event) => {
       const customEvent = event as CustomEvent<OldhouseLoopKey>;
       const key = customEvent.detail;
       if (key === 'oldhouse_room_loop' || key === 'oldhouse_room_loop2') {
-        stopOldhouseRandomLoop();
-        playOldhouseLoop(key);
+        stopOldhouseAutoShuffle();
+        void playOldhouseLoop(key);
       }
     };
 
@@ -194,7 +209,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       window.removeEventListener('oldhouse:random:stop', onStopRandom);
       window.removeEventListener('oldhouse:play', onPlayLoop as EventListener);
     };
-  }, [playOldhouseLoop, startOldhouseRandomLoop, stopOldhouseRandomLoop]);
+  }, [playOldhouseLoop, startOldhouseAutoShuffle, stopOldhouseAutoShuffle]);
 
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
@@ -207,15 +222,17 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
           <video
             className="scene-video"
             ref={videoRef}
-            src={videoSrc}
             preload="auto"
-            loop
             playsInline
             autoPlay
+            onEnded={() => {
+              if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+              void playOldhouseLoop(getNextOldhouseKey());
+            }}
             onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
             onLoadedMetadata={() => {
-              applyAudioState(volume, isMuted);
-              if (randomMode) scheduleNextRandomLoop();
+              if (!hasConfirmedPlayback) return;
+              applyAudibleDefaults();
               void tryPlayMedia();
             }}
           />
@@ -261,20 +278,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
           </span>
         </div>
 
-        <div className="video-audio-controls" role="group" aria-label="聲音控制">
-          <button
-            type="button"
-            className="audio-toggle"
-            onClick={() => {
-              const nextMuted = !isMuted;
-              setIsMuted(nextMuted);
-              void tryPlayMedia();
-            }}
-          >
-            {isMuted ? '🔇' : '🔊'}
-          </button>
-        </div>
-
         {assets.noiseOk && (
           <img
             className={`overlay noise distortion-overlay ${curseVisualClass(curse)}`}
@@ -282,6 +285,38 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             alt="noise"
             onError={() => setAssets((prev) => ({ ...prev, noiseOk: false }))}
           />
+        )}
+
+        {!hasConfirmedPlayback && (
+          <div className="content-warning-overlay" role="dialog" aria-modal="true" aria-label="內容警告">
+            <div className="content-warning-card">
+              <p>本影片含有驚悚內容，是否確認觀賞？</p>
+              <div className="content-warning-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasDeclinedPlayback(false);
+                    setHasConfirmedPlayback(true);
+                  }}
+                >
+                  是
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasDeclinedPlayback(true);
+                    setHasConfirmedPlayback(false);
+                    const video = videoRef.current;
+                    if (video) video.pause();
+                    stopAmbient();
+                  }}
+                >
+                  否
+                </button>
+              </div>
+              {hasDeclinedPlayback && <small>你可以稍後按「是」開始播放。</small>}
+            </div>
+          </div>
         )}
       </div>
 
