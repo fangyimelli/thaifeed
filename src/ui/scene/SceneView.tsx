@@ -316,9 +316,11 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const inactive = currentVideoRef.current === 'A' ? videoB : videoA;
     active.classList.add('is-active');
     inactive.classList.remove('is-active');
+    active.style.display = 'block';
+    inactive.style.display = 'none';
     active.style.opacity = '1';
     inactive.style.opacity = '0';
-    active.style.zIndex = '2';
+    active.style.zIndex = '1';
     inactive.style.zIndex = '1';
     console.log('[VIDEO]', 'markActiveVideo', {
       activeId: active.id,
@@ -715,7 +717,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       await waitFirstFrame(bufferEl);
 
-      bufferEl.style.zIndex = '2';
+      bufferEl.style.display = 'block';
+      currentEl.style.display = 'block';
+      bufferEl.style.zIndex = '1';
       currentEl.style.zIndex = '1';
       bufferEl.classList.add('is-active');
       currentEl.classList.remove('is-active');
