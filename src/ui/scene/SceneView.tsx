@@ -31,7 +31,7 @@ const LOOP_KEY_ALIASES: Record<string, OldhouseLoopKey> = {
 };
 
 const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
-const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2'];
+const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'];
 
 const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
@@ -209,9 +209,24 @@ type AudioDebugState = {
   phase: string;
 };
 
+type VideoDebugState = {
+  currentKey: OldhouseLoopKey | null;
+  bufferKey: OldhouseLoopKey | null;
+  isSwitching: boolean;
+  lastSwitchAt: number;
+  lastSwitchFrom: OldhouseLoopKey | null;
+  lastSwitchTo: OldhouseLoopKey | null;
+  lastError: string | null;
+  lastEndedKey: OldhouseLoopKey | null;
+  activeVideoId: 'videoA' | 'videoB' | null;
+  activeVideoSrc: string | null;
+  timers: { jumpTimer: number | null };
+};
+
 declare global {
   interface Window {
     __AUDIO_DEBUG__?: AudioDebugState;
+    __VIDEO_DEBUG__?: VideoDebugState;
   }
 }
 
@@ -266,6 +281,32 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     return currentVideoRef.current === 'A' ? videoBRef.current : videoARef.current;
   }, []);
 
+  const updateVideoDebug = useCallback((patch: Partial<VideoDebugState>) => {
+    const prev: VideoDebugState = window.__VIDEO_DEBUG__ ?? {
+      currentKey: null,
+      bufferKey: null,
+      isSwitching: false,
+      lastSwitchAt: 0,
+      lastSwitchFrom: null,
+      lastSwitchTo: null,
+      lastError: null,
+      lastEndedKey: null,
+      activeVideoId: null,
+      activeVideoSrc: null,
+      timers: { jumpTimer: null }
+    };
+
+    window.__VIDEO_DEBUG__ = {
+      ...prev,
+      ...patch,
+      timers: { ...prev.timers, ...(patch.timers ?? {}) }
+    };
+  }, []);
+
+  const getVideoUrlForKey = useCallback((key: OldhouseLoopKey) => {
+    return VIDEO_PATH_BY_KEY[key];
+  }, []);
+
   const markActiveVideo = useCallback(() => {
     const videoA = videoARef.current;
     const videoB = videoBRef.current;
@@ -275,6 +316,16 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const inactive = currentVideoRef.current === 'A' ? videoB : videoA;
     active.classList.add('is-active');
     inactive.classList.remove('is-active');
+    active.style.opacity = '1';
+    inactive.style.opacity = '0';
+    active.style.zIndex = '2';
+    inactive.style.zIndex = '1';
+    console.log('[VIDEO]', 'markActiveVideo', {
+      activeId: active.id,
+      activeSrc: active.currentSrc || active.src,
+      inactiveId: inactive.id,
+      inactiveSrc: inactive.currentSrc || inactive.src
+    });
   }, []);
 
   const applyAudibleDefaults = useCallback(() => {
@@ -451,10 +502,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     const c = Math.min(Math.max(curseValue, 0), 100);
 
-    const minBase = 40000;
-    const maxBase = 90000;
-    const minFast = 15000;
-    const maxFast = 35000;
+    const minBase = 120000;
+    const maxBase = 300000;
+    const minFast = 45000;
+    const maxFast = 120000;
 
     const factor = c / 100;
 
@@ -469,43 +520,58 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     if (!bufferEl) return Promise.reject(new Error('Buffer video missing'));
 
     return new Promise<void>((resolve, reject) => {
-      const nextVideoPath = VIDEO_PATH_BY_KEY[nextKey];
+      const nextVideoPath = getVideoUrlForKey(nextKey);
       const cachedVideo = getCachedAsset(nextVideoPath);
       const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
 
       let fallbackTimer: number | null = null;
-      let pollHandle: number | null = null;
+      let done = false;
 
-      const resolveReady = () => {
+      const resolveReady = (reason: string) => {
+        if (done) return;
+        done = true;
         cleanup();
+        console.log('[VIDEO]', 'preloadIntoBuffer resolved', {
+          nextKey,
+          reason,
+          id: bufferEl.id,
+          readyState: bufferEl.readyState,
+          src: bufferEl.currentSrc || bufferEl.src
+        });
         resolve();
       };
-      const onCanPlayThrough = () => {
-        resolveReady();
+      const rejectReady = (error: Error) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        setAssets((prev) => ({ ...prev, videoOk: false }));
+        reject(error);
       };
-      const onCanPlay = () => {
-        if (bufferEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-          resolveReady();
+
+      const onMaybeReady = (eventName: string) => {
+        if (bufferEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          resolveReady(eventName);
         }
       };
       const onError = () => {
-        cleanup();
-        setAssets((prev) => ({ ...prev, videoOk: false }));
-        reject(new Error(`Failed to preload ${nextKey}`));
+        rejectReady(new Error(`Failed to preload ${nextKey}`));
       };
       const cleanup = () => {
         if (fallbackTimer) {
           window.clearTimeout(fallbackTimer);
           fallbackTimer = null;
         }
-        if (pollHandle) {
-          window.cancelAnimationFrame(pollHandle);
-          pollHandle = null;
-        }
-        bufferEl.removeEventListener('canplaythrough', onCanPlayThrough);
+        bufferEl.removeEventListener('loadedmetadata', onLoadedMetadata);
+        bufferEl.removeEventListener('loadeddata', onLoadedData);
         bufferEl.removeEventListener('canplay', onCanPlay);
+        bufferEl.removeEventListener('canplaythrough', onCanPlayThrough);
         bufferEl.removeEventListener('error', onError);
       };
+
+      const onLoadedMetadata = () => onMaybeReady('loadedmetadata');
+      const onLoadedData = () => onMaybeReady('loadeddata');
+      const onCanPlay = () => onMaybeReady('canplay');
+      const onCanPlayThrough = () => onMaybeReady('canplaythrough');
 
       bufferEl.preload = 'auto';
       bufferEl.playsInline = true;
@@ -516,42 +582,63 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       bufferEl.loop = false;
       bufferEl.currentTime = 0;
 
-      if (bufferEl.src !== resolvedVideoSrc) {
-        bufferEl.src = resolvedVideoSrc;
-      }
+      bufferEl.pause();
+      bufferEl.removeAttribute('src');
+      bufferEl.load();
 
-      if (bufferEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-        resolveReady();
+      console.log('[VIDEO]', 'set buffer src', { id: bufferEl.id, nextKey, nextUrl: resolvedVideoSrc });
+      bufferEl.src = resolvedVideoSrc;
+      bufferEl.load();
+
+      if (bufferEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        resolveReady('readyState-immediate');
         return;
       }
 
-      const pollReadyState = () => {
-        if (bufferEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-          resolveReady();
-          return;
-        }
-        pollHandle = window.requestAnimationFrame(pollReadyState);
-      };
-
       fallbackTimer = window.setTimeout(() => {
-        pollReadyState();
-      }, PRELOAD_READY_FALLBACK_TIMEOUT_MS);
+        console.warn('[VIDEO]', 'preloadIntoBuffer timeout fallback', {
+          nextKey,
+          id: bufferEl.id,
+          readyState: bufferEl.readyState,
+          src: bufferEl.currentSrc || bufferEl.src
+        });
+        resolveReady('timeout');
+      }, Math.max(2500, PRELOAD_READY_FALLBACK_TIMEOUT_MS));
 
-      bufferEl.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
+      bufferEl.addEventListener('loadedmetadata', onLoadedMetadata);
+      bufferEl.addEventListener('loadeddata', onLoadedData);
       bufferEl.addEventListener('canplay', onCanPlay);
+      bufferEl.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
       bufferEl.addEventListener('error', onError, { once: true });
-      bufferEl.load();
     });
-  }, [getBufferVideoEl]);
+  }, [getBufferVideoEl, getVideoUrlForKey]);
 
   const switchTo = useCallback(async (nextKey: OldhouseLoopKey) => {
-    if (!hasConfirmedPlayback || isSwitchingRef.current) return;
+    console.log('[VIDEO]', 'switchTo requested', {
+      nextKey,
+      hasConfirmedPlayback,
+      isSwitching: isSwitchingRef.current,
+      needsUserGestureToPlay: needsUserGestureToPlayRef.current,
+      currentKey: currentLoopKeyRef.current
+    });
+    if (!hasConfirmedPlayback) {
+      updateVideoDebug({ lastError: `switchTo skipped(no-confirm) -> ${nextKey}` });
+      console.warn('[VIDEO]', 'switchTo skipped: no playback confirmation', { nextKey });
+      return;
+    }
+    if (isSwitchingRef.current) {
+      updateVideoDebug({ lastError: `switchTo skipped(isSwitching) -> ${nextKey}` });
+      console.warn('[VIDEO]', 'switchTo skipped: already switching', { nextKey });
+      return;
+    }
     isSwitchingRef.current = true;
+    updateVideoDebug({ isSwitching: true, bufferKey: nextKey });
 
     const currentEl = getCurrentVideoEl();
     const bufferEl = getBufferVideoEl();
     if (!currentEl || !bufferEl) {
       isSwitchingRef.current = false;
+      updateVideoDebug({ isSwitching: false, lastError: 'Missing video elements' });
       return;
     }
 
@@ -560,15 +647,28 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const nextAmbient = createAmbient(nextKey);
     const prevAmbient = ambientRef.current;
     ambientBufferRef.current = nextAmbient;
+    const fromKey = currentLoopKeyRef.current;
+    const nextUrl = getVideoUrlForKey(nextKey);
+    const currentSrc = currentEl.currentSrc || currentEl.src;
 
     try {
+      console.log('[VIDEO]', 'switchTo start', {
+        fromKey,
+        toKey: nextKey,
+        fromSrc: currentSrc,
+        toSrc: nextUrl,
+        currentReadyState: currentEl.readyState,
+        currentPaused: currentEl.paused,
+        currentTime: currentEl.currentTime
+      });
+      if (nextUrl === currentSrc) {
+        console.warn('[VIDEO]', 'nextUrl equals current src', { fromKey, toKey: nextKey, src: nextUrl });
+      }
       updateAudioDebug({ switchId, phase: 'preloadStart' });
-      console.log('[SYNC] switchTo:preloadStart', { switchId, videoKey: nextKey, ambientKey: nextKey, curse: curseRef.current });
+      console.log('[VIDEO]', 'switchTo preload start', { switchId, nextKey, curse: curseRef.current });
 
       await preloadIntoBuffer(nextKey);
 
-      currentLoopKeyRef.current = nextKey;
-      setCurrentLoopKey(nextKey);
 
       bufferEl.defaultMuted = false;
       bufferEl.muted = false;
@@ -579,29 +679,23 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       nextAmbient.volume = 1;
 
       updateAudioDebug({ switchId, phase: 'bufferPlayStart' });
-      console.log('[SYNC] switchTo:bufferPlayStart', { switchId, videoKey: nextKey, ambientKey: nextKey, curse: curseRef.current });
+      console.log('[VIDEO]', 'switchTo buffer play start', {
+        switchId,
+        nextKey,
+        bufferId: bufferEl.id,
+        bufferReadyState: bufferEl.readyState,
+        bufferPaused: bufferEl.paused,
+        bufferCurrentTime: bufferEl.currentTime
+      });
 
       try {
         await bufferEl.play();
       } catch (e: unknown) {
         needsUserGestureToPlayRef.current = true;
+        updateVideoDebug({ lastError: `video play blocked for ${nextKey}` });
         console.warn('[AUDIO] play blocked/failed', { key: `video_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
-        isSwitchingRef.current = false;
         return;
       }
-
-      try {
-        if (hasConfirmedPlayback) {
-          await nextAmbient.play();
-        }
-      } catch (e: unknown) {
-        needsUserGestureToPlayRef.current = true;
-        console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
-        isSwitchingRef.current = false;
-        return;
-      }
-
-      needsUserGestureToPlayRef.current = false;
 
       updateAudioDebug({
         switchId,
@@ -610,7 +704,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         activeAmbientKey: nextKey,
         activeVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A'
       });
-      console.log('[SYNC] switchTo:crossfadeStart', {
+      console.log('[VIDEO]', 'switchTo crossfade start', {
         switchId,
         videoKey: nextKey,
         ambientKey: nextKey,
@@ -621,15 +715,44 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       await waitFirstFrame(bufferEl);
 
+      bufferEl.style.zIndex = '2';
+      currentEl.style.zIndex = '1';
       bufferEl.classList.add('is-active');
       currentEl.classList.remove('is-active');
+      bufferEl.style.opacity = '1';
+      currentEl.style.opacity = '0';
+
+      console.log('[VIDEO]', 'classes', {
+        currentId: currentEl.id,
+        bufferId: bufferEl.id,
+        currentActive: currentEl.classList.contains('is-active'),
+        bufferActive: bufferEl.classList.contains('is-active')
+      });
 
       currentEl.volume = 0;
       currentEl.muted = true;
-      currentEl.pause();
+      bufferEl.muted = false;
+      bufferEl.volume = 1;
+      console.log('[VIDEO]', 'audio lanes', {
+        current: { muted: currentEl.muted, vol: currentEl.volume },
+        buffer: { muted: bufferEl.muted, vol: bufferEl.volume }
+      });
+
+      try {
+        if (hasConfirmedPlayback) {
+          await nextAmbient.play();
+        }
+      } catch (e: unknown) {
+        needsUserGestureToPlayRef.current = true;
+        updateVideoDebug({ lastError: `ambient play blocked for ${nextKey}` });
+        console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
+      }
+
+      needsUserGestureToPlayRef.current = false;
 
       const pauseOldVideoAtMs = Math.floor(CROSSFADE_MS * PAUSE_OLD_VIDEO_AT_RATIO);
       await wait(pauseOldVideoAtMs);
+      currentEl.pause();
 
       if (prevAmbient) {
         prevAmbient.volume = 0;
@@ -656,6 +779,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
       markActiveVideo();
+      currentLoopKeyRef.current = nextKey;
+      setCurrentLoopKey(nextKey);
+      updateVideoDebug({
+        currentKey: nextKey,
+        bufferKey: null,
+        lastSwitchAt: Date.now(),
+        lastSwitchFrom: fromKey,
+        lastSwitchTo: nextKey,
+        lastError: null,
+        activeVideoId: currentVideoRef.current === 'A' ? 'videoA' : 'videoB',
+        activeVideoSrc: getCurrentVideoEl()?.currentSrc ?? getCurrentVideoEl()?.src ?? null
+      });
 
       updateAudioDebug({
         switchId,
@@ -664,7 +799,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         activeAmbientKey: nextKey,
         activeVideoEl: currentVideoRef.current
       });
-      console.log('[SYNC] switchTo:switchDone', {
+      console.log('[VIDEO]', 'switchTo done', {
         switchId,
         videoKey: nextKey,
         ambientKey: nextKey,
@@ -676,50 +811,92 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         const warmupKey = randomPick(JUMP_LOOPS);
         void preloadIntoBuffer(warmupKey);
       }
-    } catch {
+    } catch (error) {
+      updateVideoDebug({ lastError: String(error instanceof Error ? error.message : error) });
+      console.error('[VIDEO]', 'switchTo failed', error);
       setAssets((prev) => ({ ...prev, videoOk: false }));
     } finally {
       isSwitchingRef.current = false;
+      updateVideoDebug({ isSwitching: false });
+      console.log('[VIDEO]', 'switchTo settled', {
+        nextKey,
+        isSwitching: isSwitchingRef.current,
+        currentKey: currentLoopKeyRef.current
+      });
     }
-  }, [createAmbient, getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer, updateAudioDebug]);
+  }, [createAmbient, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer, updateAudioDebug, updateVideoDebug]);
 
   const scheduleNextJump = useCallback(() => {
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
+      updateVideoDebug({ timers: { jumpTimer: null } });
     }
 
     const interval = computeJumpIntervalMs(curseRef.current);
+    console.log('[VIDEO]', 'scheduleNextJump set timer', { delay: interval, curse: curseRef.current });
     jumpTimerRef.current = window.setTimeout(() => {
       void triggerJumpOnce();
     }, interval);
-  }, [computeJumpIntervalMs]);
+    updateVideoDebug({ timers: { jumpTimer: jumpTimerRef.current } });
+  }, [computeJumpIntervalMs, updateVideoDebug]);
 
   const triggerJumpOnce = useCallback(async () => {
-    if (isSwitchingRef.current || isInJumpRef.current) return;
+    console.log('[VIDEO]', 'triggerJumpOnce enter', {
+      isSwitching: isSwitchingRef.current,
+      isInJump: isInJumpRef.current,
+      currentKey: currentLoopKeyRef.current
+    });
+    if (isSwitchingRef.current || isInJumpRef.current) {
+      const reason = isSwitchingRef.current ? 'isSwitching' : 'isInJump';
+      console.warn('[VIDEO]', 'triggerJumpOnce skipped', { reason });
+      if (reason === 'isSwitching') {
+        scheduleNextJump();
+      }
+      return;
+    }
     if (currentLoopKeyRef.current !== MAIN_LOOP) {
+      console.warn('[VIDEO]', 'triggerJumpOnce skipped: not on MAIN_LOOP', {
+        currentKey: currentLoopKeyRef.current,
+        mainLoop: MAIN_LOOP
+      });
       scheduleNextJump();
       return;
     }
 
     isInJumpRef.current = true;
     const nextKey = randomPick(JUMP_LOOPS);
+    console.log('[VIDEO]', 'triggerJumpOnce picked nextKey', { nextKey, fromKey: currentLoopKeyRef.current });
 
     await switchTo(nextKey);
 
     if (currentLoopKeyRef.current !== nextKey) {
       isInJumpRef.current = false;
+      console.warn('[VIDEO]', 'triggerJumpOnce switch mismatch; reschedule', {
+        expected: nextKey,
+        actual: currentLoopKeyRef.current
+      });
       scheduleNextJump();
       return;
     }
 
     currentLoopKeyRef.current = nextKey;
+    console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current });
   }, [scheduleNextJump, switchTo]);
 
-  const handleEnded = useCallback(() => {
+  const handleEnded = useCallback((event?: Event) => {
+    const activeKey = currentLoopKeyRef.current;
+    const activeVideo = getCurrentVideoEl();
+    const endedEl = event?.currentTarget instanceof HTMLVideoElement ? event.currentTarget : null;
+    console.log('[VIDEO]', 'ended handler fired', {
+      key: activeKey,
+      videoId: endedEl?.id ?? activeVideo?.id ?? 'unknown'
+    });
+    updateVideoDebug({ lastEndedKey: activeKey });
     if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
 
     if (isInJumpRef.current) {
       isInJumpRef.current = false;
+      console.log('[VIDEO]', 'ended while in jump; switching back to MAIN_LOOP', { mainLoop: MAIN_LOOP });
       void switchTo(MAIN_LOOP).then(() => {
         currentLoopKeyRef.current = MAIN_LOOP;
         scheduleNextJump();
@@ -727,10 +904,11 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       return;
     }
 
+    console.log('[VIDEO]', 'ended on main/non-jump; enforce MAIN_LOOP', { mainLoop: MAIN_LOOP });
     void switchTo(MAIN_LOOP).then(() => {
       currentLoopKeyRef.current = MAIN_LOOP;
     });
-  }, [hasConfirmedPlayback, scheduleNextJump, switchTo]);
+  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
 
   const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
     if (!hasConfirmedPlayback) return;
@@ -738,6 +916,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, [hasConfirmedPlayback, switchTo]);
 
   const startOldhouseCalmMode = useCallback(async () => {
+    console.log('[VIDEO]', 'startOldhouseCalmMode', { mainLoop: MAIN_LOOP, jumpLoops: JUMP_LOOPS });
     setAutoNextEnabled(true);
     autoNextEnabledRef.current = true;
     isInJumpRef.current = false;
@@ -778,6 +957,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
+      updateVideoDebug({ timers: { jumpTimer: null } });
     }
 
     if (footstepsTimerRef.current) {
@@ -789,7 +969,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       ghostTimerRef.current = null;
     }
     isAudioStartedRef.current = false;
-  }, []);
+  }, [updateVideoDebug]);
 
   useEffect(() => {
     currentLoopKeyRef.current = currentLoopKey;
@@ -818,7 +998,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const bindEnded = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return;
     el.loop = false;
-    el.onended = handleEnded;
+    el.onended = (event) => handleEnded(event);
+    console.log('[VIDEO]', 'bind ended', { id: el.id, loop: el.loop });
   }, [handleEnded]);
 
   useEffect(() => {
@@ -827,6 +1008,20 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, [bindEnded]);
 
   useEffect(() => {
+    window.__VIDEO_DEBUG__ = {
+      currentKey: null,
+      bufferKey: null,
+      isSwitching: false,
+      lastSwitchAt: 0,
+      lastSwitchFrom: null,
+      lastSwitchTo: null,
+      lastError: null,
+      lastEndedKey: null,
+      activeVideoId: null,
+      activeVideoSrc: null,
+      timers: { jumpTimer: null }
+    };
+
     window.__AUDIO_DEBUG__ = {
       started: false,
       lastFanAt: 0,
@@ -841,6 +1036,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
     return () => {
       window.__AUDIO_DEBUG__ = undefined;
+      window.__VIDEO_DEBUG__ = undefined;
     };
   }, []);
 
@@ -922,6 +1118,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       videoB.controls = false;
       videoB.loop = false;
     }
+    console.log('[VIDEO]', 'loop flags', { A: videoA?.loop, B: videoB?.loop });
   }, [markActiveVideo]);
 
   useEffect(() => {

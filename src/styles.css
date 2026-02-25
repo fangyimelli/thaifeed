@@ -150,6 +150,7 @@ body {
 
 .glyph-blink {
   position: absolute;
+  z-index: 20;
   color: rgba(182, 236, 255, 0.98);
   text-shadow: 0 0 22px rgba(134, 217, 255, 0.95), 0 0 54px rgba(88, 162, 255, 0.75);
   font-size: clamp(64px, 6.6vw, 92px);
