@@ -17,18 +17,23 @@ type SceneAssetState = {
   vignetteOk: boolean;
 };
 
-type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2';
+type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
 
-const OLDHOUSE_PLAYLIST: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2'];
+const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
+const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'];
 
 const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
-  oldhouse_room_loop2: '/assets/scenes/oldhouse_room_loop2.mp4'
+  oldhouse_room_loop2: '/assets/scenes/oldhouse_room_loop2.mp4',
+  oldhouse_room_loop3: '/assets/scenes/oldhouse_room_loop3.mp4',
+  oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop4.mp4'
 };
 
 const AMBIENT_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: '/assets/sfx/oldhouse_room_loop.wav',
-  oldhouse_room_loop2: '/assets/sfx/oldhouse_room_loop2.wav'
+  oldhouse_room_loop2: '/assets/sfx/oldhouse_room_loop2.wav',
+  oldhouse_room_loop3: '/assets/sfx/oldhouse_room_loop.wav',
+  oldhouse_room_loop4: '/assets/sfx/oldhouse_room_loop2.wav'
 };
 
 const initialAssets: SceneAssetState = {
@@ -52,10 +57,20 @@ const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
 });
 
+const randomMs = (min: number, max: number) => {
+  const low = Math.floor(Math.min(min, max));
+  const high = Math.floor(Math.max(min, max));
+  return Math.floor(Math.random() * (high - low + 1)) + low;
+};
+
+const randomPick = <T,>(items: T[]): T => {
+  const index = Math.floor(Math.random() * items.length);
+  return items[index];
+};
+
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
-  const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>('oldhouse_room_loop');
-  const [shuffleMode, setShuffleMode] = useState(true);
+  const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
   const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
@@ -65,9 +80,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const currentVideoRef = useRef<'A' | 'B'>('A');
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const ambientBufferRef = useRef<HTMLAudioElement | null>(null);
-  const currentLoopKeyRef = useRef<OldhouseLoopKey>('oldhouse_room_loop');
-  const playlistIndexRef = useRef(0);
-  const shuffleModeRef = useRef(true);
+  const currentLoopKeyRef = useRef<OldhouseLoopKey>(MAIN_LOOP);
+  const isInJumpRef = useRef(false);
+  const jumpTimerRef = useRef<number | null>(null);
+  const curseRef = useRef(curse);
   const autoNextEnabledRef = useRef(true);
   const isSwitchingRef = useRef(false);
   const needsUserGestureToPlayRef = useRef(false);
@@ -185,17 +201,20 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     ambientBufferRef.current = null;
   }, [createAmbient, hasConfirmedPlayback]);
 
-  const getNextOldhouseKey = useCallback((): OldhouseLoopKey => {
-    if (shuffleModeRef.current) {
-      const index = Math.floor(Math.random() * OLDHOUSE_PLAYLIST.length);
-      return OLDHOUSE_PLAYLIST[index];
-    }
+  const computeJumpIntervalMs = useCallback((curseValue: number) => {
+    const c = Math.min(Math.max(curseValue, 0), 100);
 
-    const currentIndex = OLDHOUSE_PLAYLIST.indexOf(currentLoopKeyRef.current);
-    const baseIndex = currentIndex >= 0 ? currentIndex : playlistIndexRef.current;
-    const nextIndex = (baseIndex + 1) % OLDHOUSE_PLAYLIST.length;
-    playlistIndexRef.current = nextIndex;
-    return OLDHOUSE_PLAYLIST[nextIndex];
+    const minBase = 120000;
+    const maxBase = 300000;
+    const minFast = 10000;
+    const maxFast = 25000;
+
+    const factor = c / 100;
+
+    const min = minBase - (minBase - minFast) * factor;
+    const max = maxBase - (maxBase - maxFast) * factor;
+
+    return randomMs(min, max);
   }, []);
 
   const preloadIntoBuffer = useCallback((nextKey: OldhouseLoopKey) => {
@@ -254,7 +273,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     try {
       await preloadIntoBuffer(nextKey);
       currentLoopKeyRef.current = nextKey;
-      playlistIndexRef.current = OLDHOUSE_PLAYLIST.indexOf(nextKey);
       setCurrentLoopKey(nextKey);
 
       bufferEl.defaultMuted = false;
@@ -290,22 +308,74 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     }
   }, [crossfadeAmbient, getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer]);
 
+  const scheduleNextJump = useCallback(() => {
+    if (jumpTimerRef.current) {
+      window.clearTimeout(jumpTimerRef.current);
+    }
+
+    const interval = computeJumpIntervalMs(curseRef.current);
+    jumpTimerRef.current = window.setTimeout(() => {
+      void triggerJumpOnce();
+    }, interval);
+  }, [computeJumpIntervalMs]);
+
+  const triggerJumpOnce = useCallback(async () => {
+    if (isSwitchingRef.current || isInJumpRef.current) return;
+
+    isInJumpRef.current = true;
+    const nextKey = randomPick(JUMP_LOOPS);
+
+    await switchTo(nextKey);
+
+    if (currentLoopKeyRef.current !== nextKey) {
+      isInJumpRef.current = false;
+      scheduleNextJump();
+      return;
+    }
+
+    currentLoopKeyRef.current = nextKey;
+  }, [scheduleNextJump, switchTo]);
+
+  const handleEnded = useCallback(() => {
+    if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+
+    if (isInJumpRef.current) {
+      isInJumpRef.current = false;
+      void switchTo(MAIN_LOOP).then(() => {
+        currentLoopKeyRef.current = MAIN_LOOP;
+        scheduleNextJump();
+      });
+      return;
+    }
+
+    void switchTo(MAIN_LOOP).then(() => {
+      currentLoopKeyRef.current = MAIN_LOOP;
+    });
+  }, [hasConfirmedPlayback, scheduleNextJump, switchTo]);
+
   const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
     if (!hasConfirmedPlayback) return;
     await switchTo(key);
   }, [hasConfirmedPlayback, switchTo]);
 
-  const startOldhouseAutoShuffle = useCallback(() => {
+  const startOldhouseCalmMode = useCallback(() => {
     setAutoNextEnabled(true);
-    setShuffleMode(true);
     autoNextEnabledRef.current = true;
-    shuffleModeRef.current = true;
-    void switchTo(getNextOldhouseKey());
-  }, [getNextOldhouseKey, switchTo]);
+    isInJumpRef.current = false;
+    currentLoopKeyRef.current = MAIN_LOOP;
 
-  const stopOldhouseAutoShuffle = useCallback(() => {
+    void switchTo(MAIN_LOOP).then(() => {
+      scheduleNextJump();
+    });
+  }, [scheduleNextJump, switchTo]);
+
+  const stopOldhouseCalmMode = useCallback(() => {
     setAutoNextEnabled(false);
     autoNextEnabledRef.current = false;
+    if (jumpTimerRef.current) {
+      window.clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -313,27 +383,28 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, [currentLoopKey]);
 
   useEffect(() => {
-    shuffleModeRef.current = shuffleMode;
-  }, [shuffleMode]);
-
-  useEffect(() => {
     autoNextEnabledRef.current = autoNextEnabled;
   }, [autoNextEnabled]);
 
   useEffect(() => {
+    curseRef.current = curse;
+  }, [curse]);
+
+  useEffect(() => {
     if (!hasConfirmedPlayback) return;
-    void switchTo(currentLoopKeyRef.current);
-  }, [hasConfirmedPlayback, switchTo]);
+    void startOldhouseCalmMode();
+  }, [hasConfirmedPlayback, startOldhouseCalmMode]);
+
+  useEffect(() => {
+    if (!hasConfirmedPlayback || !autoNextEnabledRef.current || isInJumpRef.current) return;
+    scheduleNextJump();
+  }, [curse, hasConfirmedPlayback, scheduleNextJump]);
 
   const bindEnded = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return;
     el.loop = false;
-    el.onended = () => {
-      if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
-      const nextKey = getNextOldhouseKey();
-      void switchTo(nextKey);
-    };
-  }, [getNextOldhouseKey, hasConfirmedPlayback, switchTo]);
+    el.onended = handleEnded;
+  }, [handleEnded]);
 
   useEffect(() => {
     bindEnded(videoARef.current);
@@ -343,17 +414,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   useEffect(() => {
     return () => {
       stopAmbient();
+      stopOldhouseCalmMode();
     };
-  }, [stopAmbient]);
+  }, [stopAmbient, stopOldhouseCalmMode]);
 
   useEffect(() => {
-    const onStartRandom = () => startOldhouseAutoShuffle();
-    const onStopRandom = () => stopOldhouseAutoShuffle();
+    const onStartRandom = () => startOldhouseCalmMode();
+    const onStopRandom = () => stopOldhouseCalmMode();
     const onPlayLoop = (event: Event) => {
       const customEvent = event as CustomEvent<OldhouseLoopKey>;
       const key = customEvent.detail;
-      if (key === 'oldhouse_room_loop' || key === 'oldhouse_room_loop2') {
-        stopOldhouseAutoShuffle();
+      if (VIDEO_PATH_BY_KEY[key]) {
+        stopOldhouseCalmMode();
         void playOldhouseLoop(key);
       }
     };
@@ -367,7 +439,15 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       window.removeEventListener('oldhouse:random:stop', onStopRandom);
       window.removeEventListener('oldhouse:play', onPlayLoop as EventListener);
     };
-  }, [playOldhouseLoop, startOldhouseAutoShuffle, stopOldhouseAutoShuffle]);
+  }, [playOldhouseLoop, startOldhouseCalmMode, stopOldhouseCalmMode]);
+
+  useEffect(() => {
+    return () => {
+      if (jumpTimerRef.current) {
+        window.clearTimeout(jumpTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     markActiveVideo();
