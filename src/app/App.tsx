@@ -432,13 +432,17 @@ export default function App() {
       <LoadingOverlay visible={isLoading} />
       <main className="app-layout">
         <div className="live-top">
-          <div className="video-container">
-            <SceneView
-              targetConsonant={state.currentConsonant.letter}
-              curse={state.curse}
-              anchor={state.currentAnchor}
-            />
+          <div className="mobile-frame">
             <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+            <div className="video-stage">
+              <div className="video-container">
+                <SceneView
+                  targetConsonant={state.currentConsonant.letter}
+                  curse={state.curse}
+                  anchor={state.currentAnchor}
+                />
+              </div>
+            </div>
           </div>
         </div>
         <div className="chat-container">

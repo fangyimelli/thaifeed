@@ -40,11 +40,18 @@ const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop4.mp4'
 };
 
+const VIDEO_KEYS: OldhouseLoopKey[] = [
+  'oldhouse_room_loop',
+  'oldhouse_room_loop2',
+  'oldhouse_room_loop3',
+  'oldhouse_room_loop4'
+];
+
 const FAN_LOOP_PATH = '/assets/sfx/fan_loop.wav';
 const FOOTSTEPS_PATH = '/assets/sfx/footsteps.wav';
 const GHOST_FEMALE_PATH = '/assets/sfx/ghost_female.wav';
 
-const AMBIENT_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
+const AMBIENT_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: FAN_LOOP_PATH,
   oldhouse_room_loop2: FAN_LOOP_PATH,
   oldhouse_room_loop3: FAN_LOOP_PATH,
@@ -59,7 +66,10 @@ type RequiredAudioAsset = {
 const REQUIRED_AUDIO_ASSETS: RequiredAudioAsset[] = [
   { name: 'fan_loop', src: FAN_LOOP_PATH },
   { name: 'footsteps', src: FOOTSTEPS_PATH },
-  { name: 'ghost_female', src: GHOST_FEMALE_PATH }
+  { name: 'ghost_female', src: GHOST_FEMALE_PATH },
+  ...VIDEO_KEYS.map((key) => ({ name: `ambient_${key}`, src: AMBIENT_BY_KEY[key] })).filter(
+    (asset, index, list) => list.findIndex((candidate) => candidate.src === asset.src) === index
+  )
 ];
 
 const AUDIO_VERIFY_TIMEOUT_MS = 12_000;
@@ -187,6 +197,24 @@ const verifyRequiredAudioAssets = async () => {
   return true;
 };
 
+type AudioDebugState = {
+  started: boolean;
+  lastFanAt: number;
+  lastFootstepsAt: number;
+  lastGhostAt: number;
+  activeVideoKey: OldhouseLoopKey | null;
+  activeAmbientKey: OldhouseLoopKey | null;
+  activeVideoEl: 'A' | 'B';
+  switchId: number;
+  phase: string;
+};
+
+declare global {
+  interface Window {
+    __AUDIO_DEBUG__?: AudioDebugState;
+  }
+}
+
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
@@ -213,6 +241,22 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const footstepsTimerRef = useRef<number | null>(null);
   const ghostTimerRef = useRef<number | null>(null);
   const isAudioStartedRef = useRef(false);
+  const switchCounterRef = useRef(0);
+
+  const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
+    const prev: AudioDebugState = window.__AUDIO_DEBUG__ ?? {
+      started: false,
+      lastFanAt: 0,
+      lastFootstepsAt: 0,
+      lastGhostAt: 0,
+      activeVideoKey: null,
+      activeAmbientKey: null,
+      activeVideoEl: currentVideoRef.current,
+      switchId: 0,
+      phase: 'idle'
+    };
+    window.__AUDIO_DEBUG__ = { ...prev, ...patch };
+  }, []);
 
   const getCurrentVideoEl = useCallback(() => {
     return currentVideoRef.current === 'A' ? videoARef.current : videoBRef.current;
@@ -293,11 +337,15 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     try {
       await fanAudio.play();
       needsUserGestureToPlayRef.current = false;
+      const t = Date.now();
+      updateAudioDebug({ started: true, lastFanAt: t });
+      console.log('[AUDIO] fan loop started', { t, curse: curseRef.current });
     } catch {
       needsUserGestureToPlayRef.current = true;
+      console.warn('[AUDIO] play blocked/failed', { key: 'fan_loop', errName: 'unknown' });
       throw new Error('Fan loop autoplay blocked until user gesture');
     }
-  }, []);
+  }, [updateAudioDebug]);
 
   const scheduleFootsteps = useCallback(() => {
     if (footstepsTimerRef.current) {
@@ -316,13 +364,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       }
       footstepsAudio.currentTime = 0;
       footstepsAudio.muted = false;
-      void footstepsAudio.play().catch(() => {
+      void footstepsAudio.play().then(() => {
+        const t = Date.now();
+        updateAudioDebug({ started: true, lastFootstepsAt: t });
+        console.log('[AUDIO] footsteps played', { t, curse: curseRef.current });
+      }).catch((e: unknown) => {
         needsUserGestureToPlayRef.current = true;
+        console.warn('[AUDIO] play blocked/failed', { key: 'footsteps', errName: e instanceof Error ? e.name : 'unknown' });
       }).finally(() => {
         scheduleFootsteps();
       });
     }, delay);
-  }, [computeFootstepsIntervalMs]);
+  }, [computeFootstepsIntervalMs, updateAudioDebug]);
 
   const scheduleGhost = useCallback(() => {
     if (ghostTimerRef.current) {
@@ -341,13 +394,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       }
       ghostAudio.currentTime = 0;
       ghostAudio.muted = false;
-      void ghostAudio.play().catch(() => {
+      void ghostAudio.play().then(() => {
+        const t = Date.now();
+        updateAudioDebug({ started: true, lastGhostAt: t });
+        console.log('[AUDIO] ghost played', { t, curse: curseRef.current });
+      }).catch((e: unknown) => {
         needsUserGestureToPlayRef.current = true;
+        console.warn('[AUDIO] play blocked/failed', { key: 'ghost_female', errName: e instanceof Error ? e.name : 'unknown' });
       }).finally(() => {
         scheduleGhost();
       });
     }, delay);
-  }, [computeGhostIntervalMs]);
+  }, [computeGhostIntervalMs, updateAudioDebug]);
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
@@ -361,8 +419,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       if (ambient) await ambient.play();
       needsUserGestureToPlayRef.current = false;
       return true;
-    } catch {
+    } catch (e: unknown) {
       needsUserGestureToPlayRef.current = true;
+      console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
   }, [applyAudibleDefaults, getCurrentVideoEl, hasConfirmedPlayback]);
@@ -378,51 +437,16 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, []);
 
   const createAmbient = useCallback((key: OldhouseLoopKey) => {
-    const ambientSrc = AMBIENT_PATH_BY_KEY[key];
+    const ambientSrc = AMBIENT_BY_KEY[key];
     const cachedAmbient = getCachedAsset(ambientSrc);
     const ambient = cachedAmbient instanceof HTMLAudioElement ? cachedAmbient : new Audio(ambientSrc);
     ambient.preload = 'auto';
     ambient.loop = true;
     ambient.currentTime = 0;
     ambient.muted = false;
+    ambient.volume = 1;
     return ambient;
   }, []);
-
-  const crossfadeAmbient = useCallback(async (nextKey: OldhouseLoopKey) => {
-    const nextAmbient = createAmbient(nextKey);
-    const prevAmbient = ambientRef.current;
-
-    nextAmbient.volume = 0;
-    ambientBufferRef.current = nextAmbient;
-
-    try {
-      if (hasConfirmedPlayback) {
-        await nextAmbient.play();
-      }
-    } catch {
-      needsUserGestureToPlayRef.current = true;
-      ambientBufferRef.current = null;
-      return;
-    }
-
-    const steps = 8;
-    const stepDelay = Math.max(16, Math.floor(CROSSFADE_MS / steps));
-    for (let index = 1; index <= steps; index += 1) {
-      const ratio = index / steps;
-      nextAmbient.volume = ratio;
-      if (prevAmbient) prevAmbient.volume = 1 - ratio;
-      await wait(stepDelay);
-    }
-
-    if (prevAmbient) {
-      prevAmbient.pause();
-      prevAmbient.currentTime = 0;
-    }
-
-    nextAmbient.volume = 1;
-    ambientRef.current = nextAmbient;
-    ambientBufferRef.current = null;
-  }, [createAmbient, hasConfirmedPlayback]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     const c = Math.min(Math.max(curseValue, 0), 100);
@@ -531,8 +555,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       return;
     }
 
+    const switchId = switchCounterRef.current + 1;
+    switchCounterRef.current = switchId;
+    const nextAmbient = createAmbient(nextKey);
+    const prevAmbient = ambientRef.current;
+    ambientBufferRef.current = nextAmbient;
+
     try {
+      updateAudioDebug({ switchId, phase: 'preloadStart' });
+      console.log('[SYNC] switchTo:preloadStart', { switchId, videoKey: nextKey, ambientKey: nextKey, curse: curseRef.current });
+
       await preloadIntoBuffer(nextKey);
+
       currentLoopKeyRef.current = nextKey;
       setCurrentLoopKey(nextKey);
 
@@ -541,33 +575,102 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       bufferEl.volume = 1;
       bufferEl.controls = false;
 
+      nextAmbient.muted = false;
+      nextAmbient.volume = 1;
+
+      updateAudioDebug({ switchId, phase: 'bufferPlayStart' });
+      console.log('[SYNC] switchTo:bufferPlayStart', { switchId, videoKey: nextKey, ambientKey: nextKey, curse: curseRef.current });
+
       try {
         await bufferEl.play();
-      } catch {
+      } catch (e: unknown) {
         needsUserGestureToPlayRef.current = true;
+        console.warn('[AUDIO] play blocked/failed', { key: `video_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
+        isSwitchingRef.current = false;
+        return;
+      }
+
+      try {
+        if (hasConfirmedPlayback) {
+          await nextAmbient.play();
+        }
+      } catch (e: unknown) {
+        needsUserGestureToPlayRef.current = true;
+        console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
         isSwitchingRef.current = false;
         return;
       }
 
       needsUserGestureToPlayRef.current = false;
-      void crossfadeAmbient(nextKey);
+
+      updateAudioDebug({
+        switchId,
+        phase: 'crossfadeStart',
+        activeVideoKey: nextKey,
+        activeAmbientKey: nextKey,
+        activeVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A'
+      });
+      console.log('[SYNC] switchTo:crossfadeStart', {
+        switchId,
+        videoKey: nextKey,
+        ambientKey: nextKey,
+        outgoingVideoEl: currentVideoRef.current,
+        incomingVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A',
+        curse: curseRef.current
+      });
+
       await waitFirstFrame(bufferEl);
 
       bufferEl.classList.add('is-active');
       currentEl.classList.remove('is-active');
 
+      currentEl.volume = 0;
+      currentEl.muted = true;
+      currentEl.pause();
+
       const pauseOldVideoAtMs = Math.floor(CROSSFADE_MS * PAUSE_OLD_VIDEO_AT_RATIO);
       await wait(pauseOldVideoAtMs);
 
-      currentEl.pause();
+      if (prevAmbient) {
+        prevAmbient.volume = 0;
+        prevAmbient.muted = true;
+        prevAmbient.pause();
+        prevAmbient.currentTime = 0;
+      }
 
       const restMs = Math.max(0, CROSSFADE_MS - pauseOldVideoAtMs);
       if (restMs > 0) {
         await wait(restMs);
       }
 
+      currentEl.currentTime = 0;
+      currentEl.removeAttribute('src');
+      currentEl.load();
+      currentEl.muted = true;
+      currentEl.volume = 0;
+
+      nextAmbient.muted = false;
+      nextAmbient.volume = 1;
+      ambientRef.current = nextAmbient;
+      ambientBufferRef.current = null;
+
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
       markActiveVideo();
+
+      updateAudioDebug({
+        switchId,
+        phase: 'switchDone',
+        activeVideoKey: nextKey,
+        activeAmbientKey: nextKey,
+        activeVideoEl: currentVideoRef.current
+      });
+      console.log('[SYNC] switchTo:switchDone', {
+        switchId,
+        videoKey: nextKey,
+        ambientKey: nextKey,
+        activeVideoEl: currentVideoRef.current,
+        curse: curseRef.current
+      });
 
       if (nextKey === MAIN_LOOP) {
         const warmupKey = randomPick(JUMP_LOOPS);
@@ -578,7 +681,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     } finally {
       isSwitchingRef.current = false;
     }
-  }, [crossfadeAmbient, getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer]);
+  }, [createAmbient, getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer, updateAudioDebug]);
 
   const scheduleNextJump = useCallback(() => {
     if (jumpTimerRef.current) {
@@ -722,6 +825,24 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     bindEnded(videoARef.current);
     bindEnded(videoBRef.current);
   }, [bindEnded]);
+
+  useEffect(() => {
+    window.__AUDIO_DEBUG__ = {
+      started: false,
+      lastFanAt: 0,
+      lastFootstepsAt: 0,
+      lastGhostAt: 0,
+      activeVideoKey: null,
+      activeAmbientKey: null,
+      activeVideoEl: currentVideoRef.current,
+      switchId: 0,
+      phase: 'init'
+    };
+
+    return () => {
+      window.__AUDIO_DEBUG__ = undefined;
+    };
+  }, []);
 
   useEffect(() => {
     fanAudioRef.current = new Audio(FAN_LOOP_PATH);
@@ -958,12 +1079,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       {requiredAudioError && (
         <div className="asset-warning">
           必要音效載入失敗：<code>{requiredAudioError}</code>
-        </div>
-      )}
-
-      {hasConfirmedPlayback && needsUserGestureToPlayRef.current && !requiredAudioError && (
-        <div className="asset-warning">
-          需要點一下畫面以啟用必要音效後才能開始直播。
         </div>
       )}
     </section>
