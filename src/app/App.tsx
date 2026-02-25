@@ -65,6 +65,10 @@ function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
 }
 
+function randomDelayMs(min = 1000, max = 5000) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
 
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
@@ -82,6 +86,7 @@ export default function App() {
   const [isRendererReady, setIsRendererReady] = useState(false);
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
@@ -91,6 +96,10 @@ export default function App() {
   const postedOptionalAssetWarningMessage = useRef(false);
   const soundUnlocked = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
+
+  const scheduleBotResponse = (callback: () => void) => {
+    window.setTimeout(callback, randomDelayMs());
+  };
 
   useEffect(() => {
     let isCancelled = false;
@@ -136,11 +145,19 @@ export default function App() {
 
     let timer = 0;
     const tick = () => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(
-        state.curse,
-        state.currentAnchor,
-        state.messages.slice(-12).map((message) => message.translation ?? message.text)
-      ) });
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(
+          state.curse,
+          state.currentAnchor,
+          state.messages.slice(-12).map((message) => message.translation ?? message.text)
+        ) });
+      });
+      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.currentConsonant.letter);
+      if (vipNormal) {
+        scheduleBotResponse(() => {
+          dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
+        });
+      }
       timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     };
 
@@ -174,16 +191,18 @@ export default function App() {
             const delayMs = i * randomInt(100, 200);
             const burstTimer = window.setTimeout(() => {
               const username = pickOne(usernames);
-              dispatch({
-                type: 'AUDIENCE_MESSAGE',
-                payload: {
-                  id: crypto.randomUUID(),
-                  type: 'system',
-                  subtype: 'join',
-                  username: 'system',
-                  text: `${username} 加入聊天室`,
-                  language: 'zh'
-                }
+              scheduleBotResponse(() => {
+                dispatch({
+                  type: 'AUDIENCE_MESSAGE',
+                  payload: {
+                    id: crypto.randomUUID(),
+                    type: 'system',
+                    subtype: 'join',
+                    username: 'system',
+                    text: `${username} 加入聊天室`,
+                    language: 'zh'
+                  }
+                });
               });
             }, delayMs);
             burstTimers.push(burstTimer);
@@ -193,16 +212,18 @@ export default function App() {
           const normalJoinBoost = randomInt(1, 3);
 
           setViewerCount((value) => Math.min(99_999, value + normalJoinBoost));
-          dispatch({
-            type: 'AUDIENCE_MESSAGE',
-            payload: {
-              id: crypto.randomUUID(),
-              type: 'system',
-              subtype: 'join',
-              username: 'system',
-              text: `${username} 加入聊天室`,
-              language: 'zh'
-            }
+          scheduleBotResponse(() => {
+            dispatch({
+              type: 'AUDIENCE_MESSAGE',
+              payload: {
+                id: crypto.randomUUID(),
+                type: 'system',
+                subtype: 'join',
+                username: 'system',
+                text: `${username} 加入聊天室`,
+                language: 'zh'
+              }
+            });
           });
         }
       }
@@ -256,40 +277,46 @@ export default function App() {
   useEffect(() => {
     if (!isReady || postedInitMessages.current) return;
     postedInitMessages.current = true;
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: {
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '畫面已準備完成',
-        language: 'zh'
-      }
+    scheduleBotResponse(() => {
+      dispatch({
+        type: 'AUDIENCE_MESSAGE',
+        payload: {
+          id: crypto.randomUUID(),
+          type: 'system',
+          username: 'system',
+          text: '畫面已準備完成',
+          language: 'zh'
+        }
+      });
     });
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: {
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '系統初始化完成',
-        language: 'zh'
-      }
+    scheduleBotResponse(() => {
+      dispatch({
+        type: 'AUDIENCE_MESSAGE',
+        payload: {
+          id: crypto.randomUUID(),
+          type: 'system',
+          username: 'system',
+          text: '系統初始化完成',
+          language: 'zh'
+        }
+      });
     });
   }, [isReady]);
 
   useEffect(() => {
     if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
     postedOptionalAssetWarningMessage.current = true;
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: {
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '部分非必要素材載入失敗，遊戲可正常進行。',
-        language: 'zh'
-      }
+    scheduleBotResponse(() => {
+      dispatch({
+        type: 'AUDIENCE_MESSAGE',
+        payload: {
+          id: crypto.randomUUID(),
+          type: 'system',
+          username: 'system',
+          text: '部分非必要素材載入失敗，遊戲可正常進行。',
+          language: 'zh'
+        }
+      });
     });
   }, [hasOptionalAssetWarning, isReady]);
 
@@ -298,22 +325,31 @@ export default function App() {
 
   const submit = () => {
     if (!isReady) return;
+    if (isSending) return;
+
     const raw = input.trim();
     if (!raw || chatAutoPaused) return;
+    setIsSending(true);
+    window.setTimeout(() => {
+      setIsSending(false);
+    }, randomInt(300, 500));
+
     lastInputTimestamp.current = Date.now();
     lastIdleCurseAt.current = 0;
 
     if (!soundUnlocked.current) {
       soundUnlocked.current = true;
-      dispatch({
-        type: 'AUDIENCE_MESSAGE',
-        payload: {
-          id: crypto.randomUUID(),
-          type: 'system',
-          username: 'system',
-          text: '聲音已啟用',
-          language: 'zh'
-        }
+      scheduleBotResponse(() => {
+        dispatch({
+          type: 'AUDIENCE_MESSAGE',
+          payload: {
+            id: crypto.randomUUID(),
+            type: 'system',
+            username: 'system',
+            text: '聲音已啟用',
+            language: 'zh'
+          }
+        });
       });
     }
 
@@ -322,14 +358,20 @@ export default function App() {
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
+    if (isHintCommand(raw)) {
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipHintMessage(playableConsonant.letter) });
+      });
+      setInput('');
+      return;
+    }
+
     const handlePass = () => {
       markReview(playableConsonant.letter, 'pass', state.curse);
       const entry = getMemoryNode(playableConsonant.letter);
-      dispatch({
-        type: 'ANSWER_PASS',
-        payload: {
-          message: createVipPassMessage(playableConsonant, entry.lapseCount)
-        }
+      dispatch({ type: 'ANSWER_PASS' });
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipPassMessage(playableConsonant, entry.lapseCount) });
       });
       nonVipMessagesSinceLastVip.current = 0;
       setInput('');
@@ -372,11 +414,23 @@ export default function App() {
       };
 
       dispatch({
-        type: 'ANSWER_CORRECT',
-        payload: {
-          message: createSuccessMessage(),
-          donateMessage: createDonateChatMessage(donate)
-        }
+        type: 'ANSWER_CORRECT'
+      });
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: createSuccessMessage() });
+      });
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: createDonateChatMessage(donate) });
+      });
+      const aiVip = createVipAiReply({
+        input: raw,
+        curse: state.curse,
+        isCorrect: true,
+        target: playableConsonant.letter,
+        vipType: 'VIP_NORMAL'
+      });
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
       });
       playSound(SFX_SRC.success);
       setInput('');
@@ -390,7 +444,9 @@ export default function App() {
       speechCooldownUntil.current = now + 10_000;
       const speechResponses = createPlayerSpeechResponses(state.currentAnchor);
       speechResponses.forEach((message) => {
-        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+        scheduleBotResponse(() => {
+          dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+        });
       });
       setInput('');
       return;
@@ -405,7 +461,9 @@ export default function App() {
     });
 
     fakeAiBatch.messages.forEach((message) => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+      scheduleBotResponse(() => {
+        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+      });
     });
 
     if (fakeAiBatch.pauseMs) {
@@ -416,12 +474,25 @@ export default function App() {
     }
 
     const wrongMessage = createWrongMessage(state.curse);
-    dispatch({
-      type: 'ANSWER_WRONG',
-      payload: {
-        message: wrongMessage
-      }
+    const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
+    dispatch({ type: 'ANSWER_WRONG', payload: { includeVipStillHere: shouldForceVip } });
+    scheduleBotResponse(() => {
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: wrongMessage });
     });
+    if (shouldForceVip) {
+      scheduleBotResponse(() => {
+        dispatch({
+          type: 'AUDIENCE_MESSAGE',
+          payload: createVipAiReply({
+            input: raw,
+            curse: state.curse,
+            isCorrect: false,
+            target: playableConsonant.letter,
+            vipType: 'VIP_STILL_HERE'
+          })
+        });
+      });
+    }
     playSound(SFX_SRC.error);
 
     setInput('');
@@ -443,6 +514,7 @@ export default function App() {
           <ChatPanel
             messages={state.messages}
             input={input}
+            isSending={isSending}
             onChange={(value) => {
               setInput(value);
               if (isReady) playSound(SFX_SRC.typing);
