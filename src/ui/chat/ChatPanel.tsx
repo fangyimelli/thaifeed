@@ -26,10 +26,10 @@ export default function ChatPanel({
   const panelRef = useRef<HTMLElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const inputBarRef = useRef<HTMLDivElement>(null);
   const idleTimer = useRef<number>(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
-  const [viewportMaxHeight, setViewportMaxHeight] = useState<number | undefined>(undefined);
   const activeSet = getActiveUserSet(collectActiveUsers(messages));
   const sanitizedMessages = messages.map((message) => ({
     ...message,
@@ -90,24 +90,30 @@ export default function ChatPanel({
   useEffect(() => {
     if (!window.visualViewport) return;
 
-    const syncViewport = () => {
-      const panelTop = panelRef.current?.getBoundingClientRect().top ?? 0;
-      const visibleHeight = Math.max(220, window.visualViewport!.height - panelTop);
-      setViewportMaxHeight(visibleHeight);
+    const syncInputWithViewport = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) return;
+
+      const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      const inputBar = inputBarRef.current;
+      if (!inputBar) return;
+      inputBar.style.transform = keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : 'translateY(0)';
     };
 
-    syncViewport();
-    window.visualViewport.addEventListener('resize', syncViewport);
-    window.visualViewport.addEventListener('scroll', syncViewport);
+    syncInputWithViewport();
+    window.visualViewport.addEventListener('resize', syncInputWithViewport);
+    window.visualViewport.addEventListener('scroll', syncInputWithViewport);
 
     return () => {
-      window.visualViewport?.removeEventListener('resize', syncViewport);
-      window.visualViewport?.removeEventListener('scroll', syncViewport);
+      const inputBar = inputBarRef.current;
+      if (inputBar) inputBar.style.transform = 'translateY(0)';
+      window.visualViewport?.removeEventListener('resize', syncInputWithViewport);
+      window.visualViewport?.removeEventListener('scroll', syncInputWithViewport);
     };
   }, []);
 
   return (
-    <aside className="chat-panel" ref={panelRef} style={viewportMaxHeight ? { maxHeight: `${viewportMaxHeight}px` } : undefined}>
+    <aside className="chat-panel" ref={panelRef}>
       <header className="chat-header">
         <strong>聊天室</strong>
       </header>
@@ -142,7 +148,7 @@ export default function ChatPanel({
         </button>
       )}
 
-      <div className="chat-input">
+      <div className="chat-input chat-input-bar" ref={inputBarRef}>
         <input
           value={input}
           onChange={(event) => onChange(event.target.value)}

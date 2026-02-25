@@ -431,13 +431,15 @@ export default function App() {
     <div className="app-shell">
       <LoadingOverlay visible={isLoading} />
       <main className="app-layout">
-        <div className="video-container">
-          <SceneView
-            targetConsonant={state.currentConsonant.letter}
-            curse={state.curse}
-            anchor={state.currentAnchor}
-          />
-          <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+        <div className="live-top">
+          <div className="video-container">
+            <SceneView
+              targetConsonant={state.currentConsonant.letter}
+              curse={state.curse}
+              anchor={state.currentAnchor}
+            />
+            <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+          </div>
         </div>
         <div className="chat-container">
           <ChatPanel

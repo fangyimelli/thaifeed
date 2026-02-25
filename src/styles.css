@@ -5,14 +5,24 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; }
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
 
 #root {
   min-height: 100dvh;
+  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  overflow: hidden;
 }
 
 .app-shell {
   height: 100dvh;
+  height: 100svh;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -221,6 +231,7 @@ body { margin: 0; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 10px 12px 8px;
   display: flex;
   flex-direction: column;
@@ -363,6 +374,10 @@ body { margin: 0; }
   border-top: 1px solid #2b2d33;
   background: #111;
 }
+
+.chat-input-bar {
+  will-change: transform;
+}
 .chat-input input {
   flex: 1;
   background: #0c0e12;
@@ -447,6 +462,12 @@ body { margin: 0; }
 
 @media (max-width: 899px) {
   .app-shell {
+    height: 100dvh;
+    height: 100svh;
+    overflow: hidden;
+  }
+
+  .app-shell {
     padding: 8px;
     gap: 8px;
   }
@@ -478,6 +499,43 @@ body { margin: 0; }
 
   .chat-input button {
     padding: 0 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-layout {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .live-top {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #000;
+    flex: 0 0 auto;
+  }
+
+  .chat-container {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .chat-panel {
+    height: 100%;
+    border-radius: 10px;
+  }
+
+  .chat-list {
+    overscroll-behavior: contain;
+  }
+
+  .chat-input {
+    position: sticky;
+    bottom: 0;
+    z-index: 60;
+    background: #000;
   }
 }
 
