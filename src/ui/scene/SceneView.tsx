@@ -729,6 +729,13 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         bufferActive: bufferEl.classList.contains('is-active')
       });
 
+      console.log('[VIDEO]', 'classes', {
+        currentId: currentEl.id,
+        bufferId: bufferEl.id,
+        currentActive: currentEl.classList.contains('is-active'),
+        bufferActive: bufferEl.classList.contains('is-active')
+      });
+
       currentEl.volume = 0;
       currentEl.muted = true;
       bufferEl.muted = false;
