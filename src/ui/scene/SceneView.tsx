@@ -610,10 +610,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       currentKey: currentLoopKeyRef.current
     });
     if (!hasConfirmedPlayback) {
+      updateVideoDebug({ lastError: `switchTo skipped(no-confirm) -> ${nextKey}` });
       console.warn('[VIDEO]', 'switchTo skipped: no playback confirmation', { nextKey });
       return;
     }
     if (isSwitchingRef.current) {
+      updateVideoDebug({ lastError: `switchTo skipped(isSwitching) -> ${nextKey}` });
       console.warn('[VIDEO]', 'switchTo skipped: already switching', { nextKey });
       return;
     }
@@ -655,8 +657,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       await preloadIntoBuffer(nextKey);
 
-      currentLoopKeyRef.current = nextKey;
-      setCurrentLoopKey(nextKey);
 
       bufferEl.defaultMuted = false;
       bufferEl.muted = false;
@@ -680,6 +680,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         await bufferEl.play();
       } catch (e: unknown) {
         needsUserGestureToPlayRef.current = true;
+        updateVideoDebug({ lastError: `video play blocked for ${nextKey}` });
         console.warn('[AUDIO] play blocked/failed', { key: `video_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
         return;
       }
@@ -690,6 +691,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         }
       } catch (e: unknown) {
         needsUserGestureToPlayRef.current = true;
+        updateVideoDebug({ lastError: `ambient play blocked for ${nextKey}` });
         console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
         return;
       }
@@ -764,6 +766,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
       markActiveVideo();
+      currentLoopKeyRef.current = nextKey;
+      setCurrentLoopKey(nextKey);
       updateVideoDebug({
         currentKey: nextKey,
         bufferKey: null,
@@ -810,6 +814,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const scheduleNextJump = useCallback(() => {
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
+      updateVideoDebug({ timers: { jumpTimer: null } });
     }
 
     const interval = computeJumpIntervalMs(curseRef.current);
@@ -827,9 +832,11 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       currentKey: currentLoopKeyRef.current
     });
     if (isSwitchingRef.current || isInJumpRef.current) {
-      console.warn('[VIDEO]', 'triggerJumpOnce skipped', {
-        reason: isSwitchingRef.current ? 'isSwitching' : 'isInJump'
-      });
+      const reason = isSwitchingRef.current ? 'isSwitching' : 'isInJump';
+      console.warn('[VIDEO]', 'triggerJumpOnce skipped', { reason });
+      if (reason === 'isSwitching') {
+        scheduleNextJump();
+      }
       return;
     }
     if (currentLoopKeyRef.current !== MAIN_LOOP) {
@@ -858,14 +865,16 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     }
 
     currentLoopKeyRef.current = nextKey;
+    console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current });
   }, [scheduleNextJump, switchTo]);
 
-  const handleEnded = useCallback(() => {
+  const handleEnded = useCallback((event?: Event) => {
     const activeKey = currentLoopKeyRef.current;
     const activeVideo = getCurrentVideoEl();
+    const endedEl = event?.currentTarget instanceof HTMLVideoElement ? event.currentTarget : null;
     console.log('[VIDEO]', 'ended handler fired', {
       key: activeKey,
-      videoId: activeVideo?.id ?? 'unknown'
+      videoId: endedEl?.id ?? activeVideo?.id ?? 'unknown'
     });
     updateVideoDebug({ lastEndedKey: activeKey });
     if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
@@ -933,6 +942,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
+      updateVideoDebug({ timers: { jumpTimer: null } });
     }
 
     if (footstepsTimerRef.current) {
@@ -944,7 +954,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       ghostTimerRef.current = null;
     }
     isAudioStartedRef.current = false;
-  }, []);
+  }, [updateVideoDebug]);
 
   useEffect(() => {
     currentLoopKeyRef.current = currentLoopKey;
@@ -973,7 +983,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const bindEnded = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return;
     el.loop = false;
-    el.onended = handleEnded;
+    el.onended = (event) => handleEnded(event);
     console.log('[VIDEO]', 'bind ended', { id: el.id, loop: el.loop });
   }, [handleEnded]);
 
