@@ -894,6 +894,14 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     const activeKey = currentLoopKeyRef.current;
     const activeVideo = getCurrentVideoEl();
     const endedEl = event?.currentTarget instanceof HTMLVideoElement ? event.currentTarget : null;
+    if (endedEl && activeVideo && endedEl !== activeVideo) {
+      console.log('[VIDEO]', 'ended ignored: inactive layer', {
+        endedId: endedEl.id,
+        activeId: activeVideo.id,
+        activeKey
+      });
+      return;
+    }
     console.log('[VIDEO]', 'ended handler fired', {
       key: activeKey,
       videoId: endedEl?.id ?? activeVideo?.id ?? 'unknown'
