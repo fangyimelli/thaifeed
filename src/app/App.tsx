@@ -82,7 +82,7 @@ export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [input, setInput] = useState('');
   const [isReady, setIsReady] = useState(false);
-  const [showOptionalWarning, setShowOptionalWarning] = useState(false);
+  const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
@@ -90,6 +90,7 @@ export default function App() {
   const lastInputTimestamp = useRef(Date.now());
   const lastIdleCurseAt = useRef(0);
   const postedInitMessages = useRef(false);
+  const postedOptionalAssetWarningMessage = useRef(false);
   const soundUnlocked = useRef(false);
 
   useEffect(() => {
@@ -105,7 +106,7 @@ export default function App() {
       if (isCancelled) return;
 
       if (result.requiredErrors.length === 0) {
-        setShowOptionalWarning(result.optionalErrors.length > 0);
+        setHasOptionalAssetWarning(result.optionalErrors.length > 0);
         setIsReady(true);
       }
     };
@@ -266,6 +267,21 @@ export default function App() {
     });
   }, [isReady]);
 
+  useEffect(() => {
+    if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
+    postedOptionalAssetWarningMessage.current = true;
+    dispatch({
+      type: 'AUDIENCE_MESSAGE',
+      payload: {
+        id: crypto.randomUUID(),
+        type: 'system',
+        username: 'system',
+        text: '部分非必要素材載入失敗，遊戲可正常進行。',
+        language: 'zh'
+      }
+    });
+  }, [hasOptionalAssetWarning, isReady]);
+
   const submit = () => {
     if (!isReady) return;
     const raw = input.trim();
@@ -401,14 +417,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {showOptionalWarning && (
-        <div className="optional-asset-warning" role="status">
-          部分非必要素材載入失敗，遊戲可正常進行。
-          <button type="button" onClick={() => setShowOptionalWarning(false)}>
-            關閉
-          </button>
-        </div>
-      )}
       <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
       <main className="app-layout">
         <div className="video-container">
