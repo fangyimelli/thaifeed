@@ -31,7 +31,7 @@ const LOOP_KEY_ALIASES: Record<string, OldhouseLoopKey> = {
 };
 
 const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
-const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'];
+const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2'];
 
 const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
@@ -62,11 +62,36 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
   corner: { top: 20, left: 16 }
 };
 
-const CROSSFADE_MS = 260;
+const CROSSFADE_MS = 420;
+const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 1600;
+const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
 });
+
+const waitFirstFrame = async (videoEl: HTMLVideoElement) => {
+  return new Promise<void>((resolve) => {
+    if (typeof videoEl.requestVideoFrameCallback === 'function') {
+      videoEl.requestVideoFrameCallback(() => resolve());
+      return;
+    }
+
+    const t0 = performance.now();
+    const tick = () => {
+      if (videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        resolve();
+        return;
+      }
+      if (performance.now() - t0 > 300) {
+        resolve();
+        return;
+      }
+      window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+  });
+};
 
 const randomMs = (min: number, max: number) => {
   const low = Math.floor(Math.min(min, max));
@@ -219,10 +244,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     const c = Math.min(Math.max(curseValue, 0), 100);
 
-    const minBase = 120000;
-    const maxBase = 300000;
-    const minFast = 10000;
-    const maxFast = 25000;
+    const minBase = 40000;
+    const maxBase = 90000;
+    const minFast = 15000;
+    const maxFast = 35000;
 
     const factor = c / 100;
 
@@ -241,9 +266,20 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       const cachedVideo = getCachedAsset(nextVideoPath);
       const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
 
-      const onCanPlay = () => {
+      let fallbackTimer: number | null = null;
+      let pollHandle: number | null = null;
+
+      const resolveReady = () => {
         cleanup();
         resolve();
+      };
+      const onCanPlayThrough = () => {
+        resolveReady();
+      };
+      const onCanPlay = () => {
+        if (bufferEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+          resolveReady();
+        }
       };
       const onError = () => {
         cleanup();
@@ -251,6 +287,15 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         reject(new Error(`Failed to preload ${nextKey}`));
       };
       const cleanup = () => {
+        if (fallbackTimer) {
+          window.clearTimeout(fallbackTimer);
+          fallbackTimer = null;
+        }
+        if (pollHandle) {
+          window.cancelAnimationFrame(pollHandle);
+          pollHandle = null;
+        }
+        bufferEl.removeEventListener('canplaythrough', onCanPlayThrough);
         bufferEl.removeEventListener('canplay', onCanPlay);
         bufferEl.removeEventListener('error', onError);
       };
@@ -268,7 +313,25 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         bufferEl.src = resolvedVideoSrc;
       }
 
-      bufferEl.addEventListener('canplay', onCanPlay, { once: true });
+      if (bufferEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        resolveReady();
+        return;
+      }
+
+      const pollReadyState = () => {
+        if (bufferEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+          resolveReady();
+          return;
+        }
+        pollHandle = window.requestAnimationFrame(pollReadyState);
+      };
+
+      fallbackTimer = window.setTimeout(() => {
+        pollReadyState();
+      }, PRELOAD_READY_FALLBACK_TIMEOUT_MS);
+
+      bufferEl.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
+      bufferEl.addEventListener('canplay', onCanPlay);
       bufferEl.addEventListener('error', onError, { once: true });
       bufferEl.load();
     });
@@ -305,17 +368,28 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       needsUserGestureToPlayRef.current = false;
       void crossfadeAmbient(nextKey);
+      await waitFirstFrame(bufferEl);
 
       bufferEl.classList.add('is-active');
       currentEl.classList.remove('is-active');
-      await wait(CROSSFADE_MS);
+
+      const pauseOldVideoAtMs = Math.floor(CROSSFADE_MS * PAUSE_OLD_VIDEO_AT_RATIO);
+      await wait(pauseOldVideoAtMs);
 
       currentEl.pause();
-      currentEl.removeAttribute('src');
-      currentEl.load();
+
+      const restMs = Math.max(0, CROSSFADE_MS - pauseOldVideoAtMs);
+      if (restMs > 0) {
+        await wait(restMs);
+      }
 
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
       markActiveVideo();
+
+      if (nextKey === MAIN_LOOP) {
+        const warmupKey = randomPick(JUMP_LOOPS);
+        void preloadIntoBuffer(warmupKey);
+      }
     } catch {
       setAssets((prev) => ({ ...prev, videoOk: false }));
     } finally {
@@ -336,6 +410,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
   const triggerJumpOnce = useCallback(async () => {
     if (isSwitchingRef.current || isInJumpRef.current) return;
+    if (currentLoopKeyRef.current !== MAIN_LOOP) {
+      scheduleNextJump();
+      return;
+    }
 
     isInJumpRef.current = true;
     const nextKey = randomPick(JUMP_LOOPS);
