@@ -110,33 +110,6 @@ body { margin: 0; }
 }
 .overlay { pointer-events: none; }
 
-.video-audio-controls {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  z-index: 35;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(15, 15, 15, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.audio-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  border-radius: 999px;
-  width: 28px;
-  height: 28px;
-  font-size: 14px;
-  cursor: pointer;
-}
 
 .overlay.noise { opacity: .12; mix-blend-mode: screen; z-index: 12; }
 .overlay.smoke { opacity: .25; }
