@@ -22,7 +22,9 @@ import usernames from '../content/pools/usernames.json';
 import ChatPanel from '../ui/chat/ChatPanel';
 import SceneView from '../ui/scene/SceneView';
 import LiveHeader from '../ui/hud/LiveHeader';
+import LoadingOverlay from '../ui/hud/LoadingOverlay';
 import { getCachedAsset, preloadAssets } from '../utils/preload';
+import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
 
 const SFX_SRC = {
@@ -82,6 +84,7 @@ export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [input, setInput] = useState('');
   const [isReady, setIsReady] = useState(false);
+  const [isRendererReady, setIsRendererReady] = useState(false);
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
@@ -96,12 +99,26 @@ export default function App() {
   useEffect(() => {
     let isCancelled = false;
 
-    const runPreload = async () => {
+    const runSetup = async () => {
       setIsReady(false);
+      setIsRendererReady(false);
 
+      const loadingStart = performance.now();
       const result = await preloadAssets(ASSET_MANIFEST, {
         onProgress: () => undefined
       });
+
+      if (isCancelled) return;
+
+      const renderer = new Renderer2D();
+      renderer.mount();
+      setIsRendererReady(true);
+
+      const elapsed = performance.now() - loadingStart;
+      const minimumLoadingMs = 800;
+      if (elapsed < minimumLoadingMs) {
+        await new Promise((resolve) => window.setTimeout(resolve, minimumLoadingMs - elapsed));
+      }
 
       if (isCancelled) return;
 
@@ -111,7 +128,7 @@ export default function App() {
       }
     };
 
-    void runPreload();
+    void runSetup();
 
     return () => {
       isCancelled = true;
@@ -282,6 +299,9 @@ export default function App() {
     });
   }, [hasOptionalAssetWarning, isReady]);
 
+
+  const isLoading = !isReady || !isRendererReady;
+
   const submit = () => {
     if (!isReady) return;
     const raw = input.trim();
@@ -417,6 +437,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <LoadingOverlay visible={isLoading} />
       <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
       <main className="app-layout">
         <div className="video-container">

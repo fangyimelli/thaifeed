@@ -28,6 +28,41 @@ body { margin: 0; }
   gap: 12px;
 }
 
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  background: #090b10;
+}
+
+.loading-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-align: center;
+}
+
+.loading-overlay-content p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-top-color: #fff;
+  animation: loadingSpin 0.9s linear infinite;
+}
+
 .video-container {
   flex: 0 0 auto;
   width: 100%;
@@ -342,6 +377,10 @@ body { margin: 0; }
 .asset-warning code {
   color: #fff;
 }
+@keyframes loadingSpin {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes fadein { from { opacity: 0; transform: translateY(-4px);} to { opacity: 1; transform: translateY(0);} }
 @keyframes shake {
   0%,100% { transform: translate(0,0); }

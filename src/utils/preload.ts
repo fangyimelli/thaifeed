@@ -86,7 +86,7 @@ function preloadVideo(src: string): Promise<HTMLVideoElement> {
     video.muted = true;
     video.playsInline = true;
     video.src = src;
-    video.onloadeddata = () => {
+    video.oncanplaythrough = () => {
       assetCache.set(src, video);
       resolve(video);
     };
