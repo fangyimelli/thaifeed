@@ -40,16 +40,29 @@ const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop4.mp4'
 };
 
+const FAN_LOOP_PATH = '/assets/sfx/fan_loop.wav';
+const FOOTSTEPS_PATH = '/assets/sfx/footsteps.wav';
+const GHOST_FEMALE_PATH = '/assets/sfx/ghost_female.wav';
+
 const AMBIENT_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
-  oldhouse_room_loop: '/assets/sfx/oldhouse_room_loop.wav',
-  oldhouse_room_loop2: '/assets/sfx/oldhouse_room_loop2.wav',
-  oldhouse_room_loop3: '/assets/sfx/oldhouse_room_loop.wav',
-  oldhouse_room_loop4: '/assets/sfx/oldhouse_room_loop2.wav'
+  oldhouse_room_loop: FAN_LOOP_PATH,
+  oldhouse_room_loop2: FAN_LOOP_PATH,
+  oldhouse_room_loop3: FAN_LOOP_PATH,
+  oldhouse_room_loop4: FAN_LOOP_PATH
 };
 
-const FAN_LOOP_PATH = '/assets/sfx/oldhouse_room_loop.wav';
-const FOOTSTEPS_PATH = '/assets/sfx/sfx_glitch.wav';
-const GHOST_FEMALE_PATH = '/assets/sfx/sfx_error.wav';
+type RequiredAudioAsset = {
+  name: string;
+  src: string;
+};
+
+const REQUIRED_AUDIO_ASSETS: RequiredAudioAsset[] = [
+  { name: 'fan_loop', src: FAN_LOOP_PATH },
+  { name: 'footsteps', src: FOOTSTEPS_PATH },
+  { name: 'ghost_female', src: GHOST_FEMALE_PATH }
+];
+
+const AUDIO_VERIFY_TIMEOUT_MS = 12_000;
 
 const initialAssets: SceneAssetState = {
   videoOk: true,
@@ -114,12 +127,73 @@ const resolveLoopKey = (key: string): OldhouseLoopKey | null => {
   return LOOP_KEY_ALIASES[key] ?? null;
 };
 
+const verifyAudioAsset = (asset: RequiredAudioAsset) => {
+  return new Promise<void>((resolve, reject) => {
+    const audio = new Audio(asset.src);
+    audio.preload = 'auto';
+    audio.muted = false;
+    audio.volume = 1;
+
+    let done = false;
+    const onLoaded = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      reject(new Error(`Failed to load required audio asset ${asset.name}: ${asset.src}`));
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      if (done) return;
+      done = true;
+      cleanup();
+      reject(new Error(`Timed out while loading required audio asset ${asset.name}: ${asset.src}`));
+    }, AUDIO_VERIFY_TIMEOUT_MS);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      audio.removeEventListener('loadeddata', onLoaded);
+      audio.removeEventListener('canplaythrough', onLoaded);
+      audio.removeEventListener('error', onError);
+      audio.pause();
+      audio.src = '';
+    };
+
+    audio.addEventListener('loadeddata', onLoaded, { once: true });
+    audio.addEventListener('canplaythrough', onLoaded, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    audio.load();
+  });
+};
+
+const verifyRequiredAudioAssets = async () => {
+  await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
+    try {
+      await verifyAudioAsset(asset);
+    } catch (error) {
+      console.error('[audio-required] 缺失或載入失敗', {
+        asset: asset.name,
+        url: asset.src,
+        error
+      });
+      throw error;
+    }
+  }));
+  return true;
+};
+
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
   const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
+  const [requiredAudioError, setRequiredAudioError] = useState<string | null>(null);
   const videoLayerRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
@@ -210,7 +284,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
   const startFanLoop = useCallback(async () => {
     const fanAudio = fanAudioRef.current;
-    if (!fanAudio) return;
+    if (!fanAudio) {
+      throw new Error('Missing fan audio instance');
+    }
     fanAudio.loop = true;
     fanAudio.muted = false;
     if (fanAudio.volume === 0) fanAudio.volume = 0.4;
@@ -219,6 +295,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       needsUserGestureToPlayRef.current = false;
     } catch {
       needsUserGestureToPlayRef.current = true;
+      throw new Error('Fan loop autoplay blocked until user gesture');
     }
   }, []);
 
@@ -553,22 +630,39 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     await switchTo(key);
   }, [hasConfirmedPlayback, switchTo]);
 
-  const startOldhouseCalmMode = useCallback(() => {
+  const startOldhouseCalmMode = useCallback(async () => {
     setAutoNextEnabled(true);
     autoNextEnabledRef.current = true;
     isInJumpRef.current = false;
     currentLoopKeyRef.current = MAIN_LOOP;
 
-    void switchTo(MAIN_LOOP).then(() => {
-      scheduleNextJump();
-    });
+    setRequiredAudioError(null);
+
+    try {
+      await verifyRequiredAudioAssets();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown required audio error';
+      setRequiredAudioError(message);
+      setHasConfirmedPlayback(false);
+      throw error;
+    }
 
     if (!isAudioStartedRef.current) {
       isAudioStartedRef.current = true;
-      void startFanLoop();
+      try {
+        await startFanLoop();
+      } catch {
+        needsUserGestureToPlayRef.current = true;
+        isAudioStartedRef.current = false;
+        return;
+      }
       scheduleFootsteps();
       scheduleGhost();
     }
+
+    void switchTo(MAIN_LOOP).then(() => {
+      scheduleNextJump();
+    });
   }, [scheduleFootsteps, scheduleGhost, scheduleNextJump, startFanLoop, switchTo]);
 
   const stopOldhouseCalmMode = useCallback(() => {
@@ -604,7 +698,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
   useEffect(() => {
     if (!hasConfirmedPlayback) return;
-    void startOldhouseCalmMode();
+    void startOldhouseCalmMode().catch((error) => {
+      console.error('[audio-required] 啟動失敗，已阻止進入直播開始狀態', error);
+    });
   }, [hasConfirmedPlayback, startOldhouseCalmMode]);
 
   useEffect(() => {
@@ -655,7 +751,11 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, [stopAmbient, stopOldhouseCalmMode]);
 
   useEffect(() => {
-    const onStartRandom = () => startOldhouseCalmMode();
+    const onStartRandom = () => {
+      void startOldhouseCalmMode().catch((error) => {
+        console.error('[audio-required] oldhouse:random:start 啟動失敗', error);
+      });
+    };
     const onStopRandom = () => stopOldhouseCalmMode();
     const onPlayLoop = (event: Event) => {
       const customEvent = event as CustomEvent<string>;
@@ -705,10 +805,22 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
     const unlockPlayback = () => {
       if (!needsUserGestureToPlayRef.current) return;
-      void tryPlayMedia();
-      void startFanLoop();
-      scheduleFootsteps();
-      scheduleGhost();
+      void (async () => {
+        try {
+          await startFanLoop();
+          const started = await tryPlayMedia();
+          if (!started) {
+            return;
+          }
+          if (!isAudioStartedRef.current) {
+            isAudioStartedRef.current = true;
+            scheduleFootsteps();
+            scheduleGhost();
+          }
+        } catch {
+          needsUserGestureToPlayRef.current = true;
+        }
+      })();
     };
 
     layer.addEventListener('click', unlockPlayback, { passive: true });
@@ -836,6 +948,18 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       {!assets.videoOk && (
         <div className="asset-warning">
           找不到影片：<code>/public/assets/scenes/{currentLoopKey}.mp4</code>
+        </div>
+      )}
+
+      {requiredAudioError && (
+        <div className="asset-warning">
+          必要音效載入失敗：<code>{requiredAudioError}</code>
+        </div>
+      )}
+
+      {hasConfirmedPlayback && needsUserGestureToPlayRef.current && !requiredAudioError && (
+        <div className="asset-warning">
+          需要點一下畫面以啟用必要音效後才能開始直播。
         </div>
       )}
     </section>
