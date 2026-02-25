@@ -100,6 +100,7 @@ body {
 
 .scene-view {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid #2b3140;
@@ -574,10 +575,11 @@ body {
 .content-warning-overlay {
   position: absolute;
   inset: 0;
-  z-index: 60;
+  z-index: 200;
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.62);
+  pointer-events: auto;
 }
 
 .content-warning-card {

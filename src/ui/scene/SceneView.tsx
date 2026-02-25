@@ -947,10 +947,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       } catch {
         needsUserGestureToPlayRef.current = true;
         isAudioStartedRef.current = false;
-        return;
       }
-      scheduleFootsteps();
-      scheduleGhost();
+
+      if (isAudioStartedRef.current) {
+        scheduleFootsteps();
+        scheduleGhost();
+      }
     }
 
     void switchTo(MAIN_LOOP).then(() => {
