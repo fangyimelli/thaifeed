@@ -73,6 +73,14 @@ body {
   animation: loadingSpin 0.9s linear infinite;
 }
 
+.mobile-frame {
+  width: 100%;
+}
+
+.video-stage {
+  width: 100%;
+}
+
 .video-container {
   flex: 0 0 auto;
   width: 100%;
@@ -154,10 +162,6 @@ body {
 }
 
 .live-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   z-index: 40;
   pointer-events: none;
   display: flex;
@@ -503,17 +507,44 @@ body {
 }
 
 @media (max-width: 768px) {
+  :root {
+    --liveHeaderH: 52px;
+  }
+
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   .app-layout {
     height: 100%;
     overflow: hidden;
   }
 
   .live-top {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: #000;
     flex: 0 0 auto;
+  }
+
+  .mobile-frame {
+    position: relative;
+  }
+
+  .live-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--liveHeaderH);
+    z-index: 100;
+    background: #0b0b0b;
+    border-radius: 0;
+  }
+
+  .video-stage {
+    position: relative;
+    width: 100%;
+    transform: translateY(var(--liveHeaderH));
+    transform-origin: top;
   }
 
   .chat-container {
