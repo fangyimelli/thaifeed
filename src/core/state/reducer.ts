@@ -69,7 +69,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         curse: nextCurse,
         currentAnchor: pickOne(anchors),
         wrongStreak: 0,
-        messages: [...safeState.messages, action.payload.message, action.payload.donateMessage]
+        messages: safeState.messages
       };
     }
     case 'ANSWER_PASS': {
@@ -82,22 +82,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...safeState,
         currentConsonant: nextConsonant,
         previousConsonant: safeState.currentConsonant,
-        messages: [...safeState.messages, action.payload.message]
+        messages: safeState.messages
       };
     }
     case 'ANSWER_WRONG': {
       const nextCurse = Math.min(100, safeState.curse + 10);
       markReview(safeState.currentConsonant.letter, 'wrong', nextCurse);
       const nextWrongStreak = safeState.wrongStreak + 1;
-      const list = [...safeState.messages, action.payload.message];
-      if (action.payload.vipMessage) list.push(action.payload.vipMessage);
       return {
         ...safeState,
         curse: nextCurse,
         currentAnchor: anchorFromCurse(nextCurse),
         wrongStreak: nextWrongStreak,
-        vipStillHereTriggered: safeState.vipStillHereTriggered || Boolean(action.payload.vipMessage),
-        messages: list
+        vipStillHereTriggered: safeState.vipStillHereTriggered || action.payload.includeVipStillHere,
+        messages: safeState.messages
       };
     }
     case 'AUDIENCE_MESSAGE':
