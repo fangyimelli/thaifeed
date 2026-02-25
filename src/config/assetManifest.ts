@@ -9,6 +9,9 @@ export type AssetManifestItem = {
 export const ASSET_MANIFEST: AssetManifestItem[] = [
   // Required: Scene
   { type: 'video', src: '/assets/scenes/oldhouse_room_loop.mp4', required: true },
+  { type: 'video', src: '/assets/scenes/oldhouse_room_loop2.mp4', required: false },
+  { type: 'audio', src: '/assets/sfx/oldhouse_room_loop.wav', required: false },
+  { type: 'audio', src: '/assets/sfx/oldhouse_room_loop2.wav', required: false },
 
   // Required: Overlays
   { type: 'image', src: '/assets/overlays/overlay_smoke_room.png', required: true },
