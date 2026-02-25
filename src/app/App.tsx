@@ -6,6 +6,7 @@ import { resolvePlayableConsonant } from '../core/systems/consonantSelector';
 import { parsePlayerSpeech } from '../core/systems/playerSpeechParser';
 import {
   createAudienceMessage,
+  createDonateChatMessage,
   createFakeAiAudienceMessage,
   createPlayerMessage,
   createSuccessMessage,
@@ -18,9 +19,7 @@ import { getMemoryNode, markReview } from '../core/adaptive/memoryScheduler';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
-import LoadingScreen from '../ui/loading/LoadingScreen';
 import ChatPanel from '../ui/chat/ChatPanel';
-import DonateToast from '../ui/donate/DonateToast';
 import SceneView from '../ui/scene/SceneView';
 import LiveHeader from '../ui/hud/LiveHeader';
 import { getCachedAsset, preloadAssets } from '../utils/preload';
@@ -83,38 +82,28 @@ export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [input, setInput] = useState('');
   const [isReady, setIsReady] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [requiredErrors, setRequiredErrors] = useState<string[]>([]);
-  const [optionalErrors, setOptionalErrors] = useState<string[]>([]);
-  const [retryToken, setRetryToken] = useState(0);
   const [showOptionalWarning, setShowOptionalWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
+  const lastInputTimestamp = useRef(Date.now());
+  const lastIdleCurseAt = useRef(0);
+  const postedInitMessages = useRef(false);
+  const soundUnlocked = useRef(false);
 
   useEffect(() => {
     let isCancelled = false;
 
     const runPreload = async () => {
       setIsReady(false);
-      setProgress(0);
-      setRequiredErrors([]);
-      setOptionalErrors([]);
 
       const result = await preloadAssets(ASSET_MANIFEST, {
-        onProgress: (snapshot) => {
-          if (isCancelled) return;
-          setProgress(snapshot.progress);
-          setRequiredErrors(snapshot.requiredErrors);
-          setOptionalErrors(snapshot.optionalErrors);
-        }
+        onProgress: () => undefined
       });
 
       if (isCancelled) return;
 
-      setRequiredErrors(result.requiredErrors);
-      setOptionalErrors(result.optionalErrors);
       if (result.requiredErrors.length === 0) {
         setShowOptionalWarning(result.optionalErrors.length > 0);
         setIsReady(true);
@@ -126,7 +115,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [retryToken]);
+  }, []);
 
   useEffect(() => {
     if (!isReady || chatAutoPaused) return;
@@ -239,9 +228,64 @@ export default function App() {
     if (state.curse > 80) playSound(SFX_SRC.glitch);
   }, [state.curse, isReady]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!isReady) return;
+      const now = Date.now();
+      if (now - lastInputTimestamp.current <= 15_000) return;
+      if (now - lastIdleCurseAt.current < 10_000) return;
+      lastIdleCurseAt.current = now;
+      dispatch({ type: 'INCREASE_CURSE_IDLE', payload: { amount: 2 } });
+    }, 5_000);
+
+    return () => window.clearInterval(timer);
+  }, [isReady]);
+
+  useEffect(() => {
+    if (!isReady || postedInitMessages.current) return;
+    postedInitMessages.current = true;
+    dispatch({
+      type: 'AUDIENCE_MESSAGE',
+      payload: {
+        id: crypto.randomUUID(),
+        type: 'system',
+        username: 'system',
+        text: '畫面已準備完成',
+        language: 'zh'
+      }
+    });
+    dispatch({
+      type: 'AUDIENCE_MESSAGE',
+      payload: {
+        id: crypto.randomUUID(),
+        type: 'system',
+        username: 'system',
+        text: '系統初始化完成',
+        language: 'zh'
+      }
+    });
+  }, [isReady]);
+
   const submit = () => {
+    if (!isReady) return;
     const raw = input.trim();
     if (!raw || chatAutoPaused) return;
+    lastInputTimestamp.current = Date.now();
+    lastIdleCurseAt.current = 0;
+
+    if (!soundUnlocked.current) {
+      soundUnlocked.current = true;
+      dispatch({
+        type: 'AUDIENCE_MESSAGE',
+        payload: {
+          id: crypto.randomUUID(),
+          type: 'system',
+          username: 'system',
+          text: '聲音已啟用',
+          language: 'zh'
+        }
+      });
+    }
 
     const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
 
@@ -285,7 +329,7 @@ export default function App() {
         type: 'ANSWER_CORRECT',
         payload: {
           message: createSuccessMessage(),
-          donate
+          donateMessage: createDonateChatMessage(donate)
         }
       });
       const aiVip = createVipAiReply({
@@ -355,17 +399,6 @@ export default function App() {
     setInput('');
   };
 
-  if (!isReady) {
-    return (
-      <LoadingScreen
-        progress={progress}
-        requiredErrors={requiredErrors}
-        optionalErrors={optionalErrors}
-        onRetry={() => setRetryToken((value) => value + 1)}
-      />
-    );
-  }
-
   return (
     <div className="app-shell">
       {showOptionalWarning && (
@@ -391,7 +424,7 @@ export default function App() {
             input={input}
             onChange={(value) => {
               setInput(value);
-              playSound(SFX_SRC.typing);
+              if (isReady) playSound(SFX_SRC.typing);
             }}
             onSubmit={submit}
             onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
@@ -399,11 +432,6 @@ export default function App() {
           />
         </div>
       </main>
-      <DonateToast
-        toasts={state.donateToasts}
-        onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_DONATE_TRANSLATION', payload: { id } })}
-        onDismiss={(id) => dispatch({ type: 'DISMISS_DONATE', payload: { id } })}
-      />
     </div>
   );
 }

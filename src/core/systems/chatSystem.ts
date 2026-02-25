@@ -212,6 +212,23 @@ export function createSuccessMessage(): ChatMessage {
   };
 }
 
+export function createDonateChatMessage(input: {
+  username: string;
+  amount: number;
+  message_th: string;
+  message_zh: string;
+}): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    username: input.username,
+    text: input.message_th,
+    language: 'th',
+    type: 'donate',
+    translation: input.message_zh,
+    donateAmount: input.amount
+  };
+}
+
 export function createWrongMessage(curse: number): ChatMessage {
   const tier = curseTier(curse);
   const zhTier = {

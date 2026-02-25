@@ -39,8 +39,7 @@ export const initialState: GameState = {
       language: 'th',
       translation: '試著把你看到的內容打出來，先感受房間的變化。'
     }
-  ],
-  donateToasts: []
+  ]
 };
 
 function ensurePlayableState(state: GameState): GameState {
@@ -70,8 +69,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         curse: nextCurse,
         currentAnchor: pickOne(anchors),
         wrongStreak: 0,
-        messages: [...safeState.messages, action.payload.message],
-        donateToasts: [...safeState.donateToasts, action.payload.donate].slice(-2)
+        messages: [...safeState.messages, action.payload.message, action.payload.donateMessage]
       };
     }
     case 'ANSWER_PASS': {
@@ -113,20 +111,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             : message
         )
       };
-    case 'TOGGLE_DONATE_TRANSLATION':
+    case 'INCREASE_CURSE_IDLE': {
+      const nextCurse = Math.min(100, safeState.curse + action.payload.amount);
       return {
         ...safeState,
-        donateToasts: safeState.donateToasts.map((toast) =>
-          toast.id === action.payload.id
-            ? { ...toast, showTranslation: !toast.showTranslation }
-            : toast
-        )
+        curse: nextCurse,
+        currentAnchor: anchorFromCurse(nextCurse)
       };
-    case 'DISMISS_DONATE':
-      return {
-        ...safeState,
-        donateToasts: safeState.donateToasts.filter((toast) => toast.id !== action.payload.id)
-      };
+    }
     default:
       return safeState;
   }
