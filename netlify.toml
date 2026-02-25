@@ -1,3 +1,7 @@
+[build]
+  command = "./node_modules/.bin/tsc -b && ./node_modules/.bin/vite build"
+  publish = "dist"
+
 [build.environment]
-  NODE_ENV = "development"
+  NODE_VERSION = "20"
   NPM_FLAGS = "--include=dev"

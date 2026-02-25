@@ -1,110 +1,134 @@
-import type { ChatMessage } from '../state/types';
+import type { AnchorType, ChatMessage } from '../state/types';
 import thaiConsonantMemory from '../../content/memory/thaiConsonantMemory.json';
 import type { ThaiConsonant } from './consonantSelector';
-
-type VipAiParams = {
-  input: string;
-  curse: number;
-  isCorrect: boolean;
-  target: string;
-  vipType: 'VIP_NORMAL' | 'VIP_STILL_HERE';
-};
 
 type ConsonantMemoryEntry = {
   classTone: '高音' | '中音' | '低音' | '先不學';
   ipa: string;
   aspirated: '是' | '否' | '—';
   reference: string;
-  imageHint: string;
+  imageHint?: string;
+};
+
+type VipTriggerKind = 'hint' | 'fear' | 'location' | 'uncertain';
+
+type VipResponderState = {
+  nonVipMessagesSinceLastVip: number;
+};
+
+type VipResponderInput = {
+  rawInput: string;
+  currentConsonant: string;
+  currentAnchor: AnchorType;
+  state: VipResponderState;
+  recentHistory: string[];
 };
 
 const consonantMemoryMap = thaiConsonantMemory as Record<string, ConsonantMemoryEntry>;
 
-function createVipHintText(letter: string) {
+const VIP_USERNAME = 'vipVIP_GoldenLotus 👑';
+
+const hintKeywordsExact = new Set(['不知道', '不會', '提示', "don't know"]);
+const fearKeywords = ['好可怕', '好毛', '雞皮疙瘩', '背後發涼', '不舒服', '我怕', '我不敢看'];
+const locationKeywords = ['哪裡', '在哪', '哪邊', '什麼位置'];
+const uncertainKeywords = ['是不是', '我猜', '應該', '好像'];
+
+const emojiRegex = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
+
+function normalizeText(text: string): string {
+  return text.trim().replace(emojiRegex, '').replace(/\s+/g, ' ').toLowerCase();
+}
+
+function hasRecentDuplicate(text: string, recentHistory: string[]) {
+  const normalizedTarget = normalizeText(text);
+  return recentHistory.slice(-12).some((item) => normalizeText(item) === normalizedTarget);
+}
+
+function shouldThrottleVip(state: VipResponderState) {
+  return state.nonVipMessagesSinceLastVip < 2;
+}
+
+function isHintRequest(rawInput: string) {
+  const trimmed = rawInput.trim().toLowerCase();
+  return hintKeywordsExact.has(trimmed);
+}
+
+function includesAny(rawInput: string, keywords: string[]) {
+  return keywords.some((keyword) => rawInput.includes(keyword));
+}
+
+function detectTriggerKind(rawInput: string): VipTriggerKind | null {
+  if (isHintRequest(rawInput)) return 'hint';
+  if (includesAny(rawInput, fearKeywords)) return 'fear';
+  if (includesAny(rawInput, locationKeywords)) return 'location';
+  if (includesAny(rawInput, uncertainKeywords)) return 'uncertain';
+  return null;
+}
+
+function triggerChance(kind: VipTriggerKind | null): number {
+  if (kind === 'hint') return 1;
+  if (kind === 'fear') return 0.45;
+  if (kind === 'location') return 0.35;
+  return 0.18;
+}
+
+function anchorHint(anchor: AnchorType): string {
+  if (anchor === 'door') return '門縫跟門把附近';
+  if (anchor === 'window') return '窗簾邊跟窗框旁';
+  if (anchor === 'under_table') return '桌腳跟桌面下緣';
+  return '角落邊跟地板交界';
+}
+
+function derivePronunciation(ipa: string): string {
+  const normalized = ipa.replace(/（/g, '(').replace(/）/g, ')');
+  const match = normalized.match(/\(([^)]+)\)/);
+  if (match && match[1].trim()) return match[1].trim();
+  return `讀作 ${ipa}`;
+}
+
+function createHintText(letter: string): string {
   const memory = consonantMemoryMap[letter];
   if (!memory) {
-    return '這個字我還沒建圖像記憶 先用字母名記住也可以';
+    return [
+      `這題是：${letter}`,
+      'IPA：目前無資料',
+      '發音：先用字母名記住',
+      '送氣：目前無資料',
+      '參考詞：目前無資料'
+    ].join('\n');
   }
 
-  return [
-    '提示來了 👑',
-    `字母: ${letter}`,
-    `分類: ${memory.classTone}`,
-    `發音: ${memory.ipa}`,
-    `送氣: ${memory.aspirated}`,
-    `字母名: ${memory.reference}`,
-    `圖像: ${memory.imageHint}`
-  ].join('\n');
-}
-
-function mirrorInput(input: string) {
-  const normalized = input.trim();
-  if (!normalized) {
-    return `先盯著那個位置看一下 直覺先不要亂掉`;
-  }
-
-  return `你剛剛輸入「${normalized}」 我建議再對照那個位置看一次`;
-}
-
-export function maybeCreateVipNormalMessage(input: string, curse: number, target: string): ChatMessage | null {
-  if (Math.random() > 0.2) return null;
-
-  const tips = [
-    `我也在看「${target}」附近的那塊 你再穩一點看一次`,
-    '我覺得那個位置有在回穩 你先別急'
+  const lines = [
+    `這題是：${letter}`,
+    `IPA：${memory.ipa}`,
+    `發音：${derivePronunciation(memory.ipa)}`,
+    `送氣：${memory.aspirated}`,
+    `參考詞：${memory.reference}`
   ];
 
-  const mirrored = mirrorInput(input);
-  const chosen = curse > 60 ? mirrored : (Math.random() < 0.5 ? tips[0] : tips[1]);
-
-  return {
-    id: crypto.randomUUID(),
-    username: 'VIP_GoldenLotus',
-    isVip: 'VIP_NORMAL',
-    text: chosen,
-    language: 'zh',
-    translation: chosen
-  };
-}
-
-export function createVipAiReply(params: VipAiParams): ChatMessage {
-  const { input, curse, isCorrect, vipType } = params;
-
-  if (vipType === 'VIP_STILL_HERE') {
-    const mirrored = mirrorInput(input);
-    const extra = curse > 70 ? '我還在這裡 角落又開始晃了 先把呼吸穩住' : '我還在這裡 你慢慢來 先看清楚那邊';
-    const message = `${mirrored} ${extra}`;
-
-    return {
-      id: crypto.randomUUID(),
-      username: '_still_here',
-      isVip: 'VIP_STILL_HERE',
-      text: message,
-      language: 'zh',
-      translation: message
-    };
+  if (memory.imageHint && memory.imageHint !== '—') {
+    lines.push(`圖像：${memory.imageHint}`);
   }
 
-  const normal = isCorrect
-    ? '等一下 現在真的比較穩 剛剛那個位置亮了一下'
-    : mirrorInput(input);
-
-  return {
-    id: crypto.randomUUID(),
-    username: 'VIP_GoldenLotus',
-    isVip: 'VIP_NORMAL',
-    text: normal,
-    language: 'zh',
-    translation: normal
-  };
+  return lines.join('\n');
 }
 
-export function createVipHintMessage(letter: string): ChatMessage {
-  const text = createVipHintText(letter);
+function createFearText() {
+  return '先看別處三秒再回來 你可以先打pass或提示 我會陪你慢慢來';
+}
 
+function createLocationText(anchor: AnchorType) {
+  return `先看${anchorHint(anchor)} 先盯住交界線那一小塊 通常會在那邊`;
+}
+
+function createUncertainText() {
+  return '你先用兩個候選比對看看 例如送氣跟不送氣 也可以用注音拼音或泰文字母回答';
+}
+
+function createVipMessage(text: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
-    username: 'vipVIP_GoldenLotus',
+    username: VIP_USERNAME,
     isVip: 'VIP_NORMAL',
     text,
     language: 'zh',
@@ -114,25 +138,46 @@ export function createVipHintMessage(letter: string): ChatMessage {
 
 export function createVipPassMessage(consonant: ThaiConsonant, passCount: number): ChatMessage {
   const base = [
-    '好 這題先放過你 👑',
+    '這題先跳過',
     `答案是 ${consonant.letter}`,
     `拼音 ${consonant.pinyin.join('/')}`,
     `注音 ${consonant.bopomofo.join('/')}`,
-    '記得這個字 下次還會再遇到'
+    '先記住字形 下一題再回來'
   ];
 
   if (passCount > 0) {
-    base.push(`你已經跳過這個字 ${passCount} 次了`);
+    base.push(`你已經跳過這個字 ${passCount} 次`);
   }
 
-  const text = base.join('\n');
+  return createVipMessage(base.join('\n'));
+}
 
-  return {
-    id: crypto.randomUUID(),
-    username: 'vipVIP_GoldenLotus 👑',
-    isVip: 'VIP_NORMAL',
-    text,
-    language: 'zh',
-    translation: text
-  };
+export function handleVipPlayerMessage(input: VipResponderInput): ChatMessage | null {
+  const { rawInput, currentConsonant, currentAnchor, state, recentHistory } = input;
+
+  const triggerKind = detectTriggerKind(rawInput);
+  if (triggerKind !== 'hint' && shouldThrottleVip(state)) return null;
+
+  const chance = triggerChance(triggerKind);
+  if (Math.random() >= chance) return null;
+
+  let text: string;
+  if (triggerKind === 'hint') {
+    text = createHintText(currentConsonant);
+  } else if (triggerKind === 'fear') {
+    text = createFearText();
+  } else if (triggerKind === 'location') {
+    text = createLocationText(currentAnchor);
+  } else if (triggerKind === 'uncertain') {
+    text = createUncertainText();
+  } else {
+    text = '你可以先用提示 或是用注音拼音試一個答案';
+  }
+
+  if (triggerKind !== 'hint' && hasRecentDuplicate(text, recentHistory)) return null;
+  return createVipMessage(text);
+}
+
+export function isVipHintCommand(raw: string) {
+  return isHintRequest(raw);
 }

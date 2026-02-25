@@ -14,7 +14,7 @@ import {
   createPlayerSpeechResponses,
   getAudienceIntervalMs
 } from '../core/systems/chatSystem';
-import { createVipAiReply, createVipHintMessage, createVipPassMessage, maybeCreateVipNormalMessage } from '../core/systems/vipSystem';
+import { createVipPassMessage, handleVipPlayerMessage, isVipHintCommand } from '../core/systems/vipSystem';
 import { getMemoryNode, markReview } from '../core/adaptive/memoryScheduler';
 import type { DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
@@ -66,11 +66,6 @@ function nextJoinDelayMs() {
 }
 
 
-function isHintCommand(raw: string) {
-  const normalized = raw.trim().toLowerCase();
-  return normalized === '提示' || normalized === 'hint' || normalized === 'h';
-}
-
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
@@ -95,6 +90,7 @@ export default function App() {
   const postedInitMessages = useRef(false);
   const postedOptionalAssetWarningMessage = useRef(false);
   const soundUnlocked = useRef(false);
+  const nonVipMessagesSinceLastVip = useRef(2);
 
   useEffect(() => {
     let isCancelled = false;
@@ -145,14 +141,12 @@ export default function App() {
         state.currentAnchor,
         state.messages.slice(-12).map((message) => message.translation ?? message.text)
       ) });
-      const vipNormal = maybeCreateVipNormalMessage(input, state.curse, state.currentConsonant.letter);
-      if (vipNormal) dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipNormal });
       timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     };
 
     timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, input, isReady, chatAutoPaused]);
+  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, isReady, chatAutoPaused]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -328,12 +322,6 @@ export default function App() {
     playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
-    if (isHintCommand(raw)) {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createVipHintMessage(playableConsonant.letter) });
-      setInput('');
-      return;
-    }
-
     const handlePass = () => {
       markReview(playableConsonant.letter, 'pass', state.curse);
       const entry = getMemoryNode(playableConsonant.letter);
@@ -343,11 +331,33 @@ export default function App() {
           message: createVipPassMessage(playableConsonant, entry.lapseCount)
         }
       });
+      nonVipMessagesSinceLastVip.current = 0;
       setInput('');
     };
 
     if (isPassCommand(raw)) {
       handlePass();
+      return;
+    }
+
+    const isHintInput = isVipHintCommand(raw);
+    const vipReply = handleVipPlayerMessage({
+      rawInput: raw,
+      currentConsonant: playableConsonant.letter,
+      currentAnchor: state.currentAnchor,
+      state: { nonVipMessagesSinceLastVip: nonVipMessagesSinceLastVip.current },
+      recentHistory: state.messages.map((message) => message.translation ?? message.text)
+    });
+
+    if (vipReply) {
+      dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipReply });
+      nonVipMessagesSinceLastVip.current = 0;
+    } else {
+      nonVipMessagesSinceLastVip.current += 1;
+    }
+
+    if (isHintInput) {
+      setInput('');
       return;
     }
 
@@ -368,14 +378,6 @@ export default function App() {
           donateMessage: createDonateChatMessage(donate)
         }
       });
-      const aiVip = createVipAiReply({
-        input: raw,
-        curse: state.curse,
-        isCorrect: true,
-        target: playableConsonant.letter,
-        vipType: 'VIP_NORMAL'
-      });
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: aiVip });
       playSound(SFX_SRC.success);
       setInput('');
       return;
@@ -414,20 +416,10 @@ export default function App() {
     }
 
     const wrongMessage = createWrongMessage(state.curse);
-    const shouldForceVip = state.wrongStreak + 1 >= 3 && !state.vipStillHereTriggered;
     dispatch({
       type: 'ANSWER_WRONG',
       payload: {
-        message: wrongMessage,
-        vipMessage: shouldForceVip
-          ? createVipAiReply({
-              input: raw,
-              curse: state.curse,
-              isCorrect: false,
-              target: playableConsonant.letter,
-              vipType: 'VIP_STILL_HERE'
-            })
-          : undefined
+        message: wrongMessage
       }
     });
     playSound(SFX_SRC.error);
