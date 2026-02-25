@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
@@ -17,6 +17,21 @@ type SceneAssetState = {
   vignetteOk: boolean;
 };
 
+type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2';
+
+const OLDHOUSE_LOOP_KEYS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2'];
+const AMBIENT_DURATION_FALLBACK_MS = 15_000;
+
+const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
+  oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
+  oldhouse_room_loop2: '/assets/scenes/oldhouse_room_loop2.mp4'
+};
+
+const AMBIENT_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
+  oldhouse_room_loop: '/assets/sfx/oldhouse_room_loop.wav',
+  oldhouse_room_loop2: '/assets/sfx/oldhouse_room_loop2.wav'
+};
+
 const initialAssets: SceneAssetState = {
   videoOk: true,
   smokeOk: true,
@@ -32,15 +47,118 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
   corner: { top: 20, left: 16 }
 };
 
+function getRandomOldhouseLoopKey() {
+  const index = Math.floor(Math.random() * OLDHOUSE_LOOP_KEYS.length);
+  return OLDHOUSE_LOOP_KEYS[index];
+}
+
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
+  const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>('oldhouse_room_loop');
+  const [randomMode, setRandomMode] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const videoAsset = getCachedAsset('/assets/scenes/oldhouse_room_loop.mp4');
-  const videoSrc = videoAsset instanceof HTMLVideoElement ? videoAsset.src : '/assets/scenes/oldhouse_room_loop.mp4';
+  const ambientRef = useRef<HTMLAudioElement | null>(null);
+  const randomTimerRef = useRef(0);
+
+  const stopRandomTimer = useCallback(() => {
+    if (randomTimerRef.current !== 0) {
+      window.clearTimeout(randomTimerRef.current);
+      randomTimerRef.current = 0;
+    }
+  }, []);
+
+  const stopAmbient = useCallback(() => {
+    if (!ambientRef.current) return;
+    ambientRef.current.pause();
+    ambientRef.current.currentTime = 0;
+  }, []);
+
+  const playAmbient = useCallback((key: OldhouseLoopKey) => {
+    stopAmbient();
+    const ambientSrc = AMBIENT_PATH_BY_KEY[key];
+    const cachedAmbient = getCachedAsset(ambientSrc);
+    const ambient = cachedAmbient instanceof HTMLAudioElement ? cachedAmbient : new Audio(ambientSrc);
+    ambient.preload = 'auto';
+    ambient.loop = true;
+    ambientRef.current = ambient;
+    ambient.currentTime = 0;
+    void ambient.play().catch(() => undefined);
+  }, [stopAmbient]);
+
+  const scheduleNextRandomLoop = useCallback(() => {
+    stopRandomTimer();
+    const video = videoRef.current;
+    const durationMs = video && Number.isFinite(video.duration) && video.duration > 0
+      ? video.duration * 1000
+      : AMBIENT_DURATION_FALLBACK_MS;
+
+    randomTimerRef.current = window.setTimeout(() => {
+      setCurrentLoopKey(getRandomOldhouseLoopKey());
+    }, durationMs);
+  }, [stopRandomTimer]);
+
+  const playOldhouseLoop = useCallback((key: OldhouseLoopKey) => {
+    setCurrentLoopKey(key);
+  }, []);
+
+  const startOldhouseRandomLoop = useCallback(() => {
+    setRandomMode(true);
+    playOldhouseLoop(getRandomOldhouseLoopKey());
+  }, [playOldhouseLoop]);
+
+  const stopOldhouseRandomLoop = useCallback(() => {
+    setRandomMode(false);
+    stopRandomTimer();
+  }, [stopRandomTimer]);
+
+  const currentVideoPath = VIDEO_PATH_BY_KEY[currentLoopKey];
+  const videoAsset = getCachedAsset(currentVideoPath);
+  const videoSrc = videoAsset instanceof HTMLVideoElement ? videoAsset.src : currentVideoPath;
 
   useEffect(() => {
-    void videoRef.current?.play().catch(() => undefined);
-  }, []);
+    playAmbient(currentLoopKey);
+    const video = videoRef.current;
+    if (video) {
+      video.currentTime = 0;
+      void video.play().catch(() => undefined);
+    }
+
+    if (randomMode) {
+      scheduleNextRandomLoop();
+    } else {
+      stopRandomTimer();
+    }
+  }, [currentLoopKey, playAmbient, randomMode, scheduleNextRandomLoop, stopRandomTimer]);
+
+  useEffect(() => {
+    return () => {
+      stopRandomTimer();
+      stopAmbient();
+    };
+  }, [stopAmbient, stopRandomTimer]);
+
+  useEffect(() => {
+    const onStartRandom = () => startOldhouseRandomLoop();
+    const onStopRandom = () => stopOldhouseRandomLoop();
+    const onPlayLoop = (event: Event) => {
+      const customEvent = event as CustomEvent<OldhouseLoopKey>;
+      const key = customEvent.detail;
+      if (key === 'oldhouse_room_loop' || key === 'oldhouse_room_loop2') {
+        stopOldhouseRandomLoop();
+        playOldhouseLoop(key);
+      }
+    };
+
+    window.addEventListener('oldhouse:random:start', onStartRandom);
+    window.addEventListener('oldhouse:random:stop', onStopRandom);
+    window.addEventListener('oldhouse:play', onPlayLoop as EventListener);
+
+    return () => {
+      window.removeEventListener('oldhouse:random:start', onStartRandom);
+      window.removeEventListener('oldhouse:random:stop', onStopRandom);
+      window.removeEventListener('oldhouse:play', onPlayLoop as EventListener);
+    };
+  }, [playOldhouseLoop, startOldhouseRandomLoop, stopOldhouseRandomLoop]);
 
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
@@ -60,6 +178,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             playsInline
             autoPlay
             onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
+            onLoadedMetadata={() => {
+              if (randomMode) scheduleNextRandomLoop();
+            }}
           />
 
           {assets.smokeOk && (
@@ -116,7 +237,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       {!assets.videoOk && (
         <div className="asset-warning">
-          找不到影片：<code>/public/assets/scenes/oldhouse_room_loop.mp4</code>
+          找不到影片：<code>/public/assets/scenes/{currentLoopKey}.mp4</code>
         </div>
       )}
     </section>
