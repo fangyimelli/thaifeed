@@ -46,6 +46,12 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
   corner: { top: 20, left: 16 }
 };
 
+const CROSSFADE_MS = 260;
+
+const wait = (ms: number) => new Promise<void>((resolve) => {
+  window.setTimeout(resolve, ms);
+});
+
 export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>('oldhouse_room_loop');
@@ -53,30 +59,59 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
   const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoLayerRef = useRef<HTMLDivElement>(null);
+  const videoARef = useRef<HTMLVideoElement>(null);
+  const videoBRef = useRef<HTMLVideoElement>(null);
+  const currentVideoRef = useRef<'A' | 'B'>('A');
   const ambientRef = useRef<HTMLAudioElement | null>(null);
+  const ambientBufferRef = useRef<HTMLAudioElement | null>(null);
   const currentLoopKeyRef = useRef<OldhouseLoopKey>('oldhouse_room_loop');
   const playlistIndexRef = useRef(0);
   const shuffleModeRef = useRef(true);
   const autoNextEnabledRef = useRef(true);
+  const isSwitchingRef = useRef(false);
+  const needsUserGestureToPlayRef = useRef(false);
+
+  const getCurrentVideoEl = useCallback(() => {
+    return currentVideoRef.current === 'A' ? videoARef.current : videoBRef.current;
+  }, []);
+
+  const getBufferVideoEl = useCallback(() => {
+    return currentVideoRef.current === 'A' ? videoBRef.current : videoARef.current;
+  }, []);
+
+  const markActiveVideo = useCallback(() => {
+    const videoA = videoARef.current;
+    const videoB = videoBRef.current;
+    if (!videoA || !videoB) return;
+
+    const active = currentVideoRef.current === 'A' ? videoA : videoB;
+    const inactive = currentVideoRef.current === 'A' ? videoB : videoA;
+    active.classList.add('is-active');
+    inactive.classList.remove('is-active');
+  }, []);
 
   const applyAudibleDefaults = useCallback(() => {
-    const video = videoRef.current;
-    if (video) {
+    const currentVideo = getCurrentVideoEl();
+    const bufferVideo = getBufferVideoEl();
+    [currentVideo, bufferVideo].forEach((video) => {
+      if (!video) return;
       video.defaultMuted = false;
       video.muted = false;
       video.volume = 1;
-    }
+      video.controls = false;
+      video.loop = false;
+    });
 
-    const ambient = ambientRef.current;
-    if (ambient) {
+    [ambientRef.current, ambientBufferRef.current].forEach((ambient) => {
+      if (!ambient) return;
       ambient.muted = false;
-      ambient.volume = 1;
-    }
-  }, []);
+      ambient.volume = Math.max(ambient.volume, 0);
+    });
+  }, [getBufferVideoEl, getCurrentVideoEl]);
 
   const tryPlayMedia = useCallback(async () => {
-    const video = videoRef.current;
+    const video = getCurrentVideoEl();
     const ambient = ambientRef.current;
     if (!video || !hasConfirmedPlayback) return false;
 
@@ -85,20 +120,25 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     try {
       await video.play();
       if (ambient) await ambient.play();
+      needsUserGestureToPlayRef.current = false;
       return true;
     } catch {
+      needsUserGestureToPlayRef.current = true;
       return false;
     }
-  }, [applyAudibleDefaults, hasConfirmedPlayback]);
+  }, [applyAudibleDefaults, getCurrentVideoEl, hasConfirmedPlayback]);
 
   const stopAmbient = useCallback(() => {
-    if (!ambientRef.current) return;
-    ambientRef.current.pause();
-    ambientRef.current.currentTime = 0;
+    [ambientRef.current, ambientBufferRef.current].forEach((ambient) => {
+      if (!ambient) return;
+      ambient.pause();
+      ambient.currentTime = 0;
+    });
+    ambientRef.current = null;
+    ambientBufferRef.current = null;
   }, []);
 
-  const playAmbient = useCallback((key: OldhouseLoopKey) => {
-    stopAmbient();
+  const createAmbient = useCallback((key: OldhouseLoopKey) => {
     const ambientSrc = AMBIENT_PATH_BY_KEY[key];
     const cachedAmbient = getCachedAsset(ambientSrc);
     const ambient = cachedAmbient instanceof HTMLAudioElement ? cachedAmbient : new Audio(ambientSrc);
@@ -106,9 +146,44 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     ambient.loop = true;
     ambient.currentTime = 0;
     ambient.muted = false;
-    ambient.volume = 1;
-    ambientRef.current = ambient;
-  }, [stopAmbient]);
+    return ambient;
+  }, []);
+
+  const crossfadeAmbient = useCallback(async (nextKey: OldhouseLoopKey) => {
+    const nextAmbient = createAmbient(nextKey);
+    const prevAmbient = ambientRef.current;
+
+    nextAmbient.volume = 0;
+    ambientBufferRef.current = nextAmbient;
+
+    try {
+      if (hasConfirmedPlayback) {
+        await nextAmbient.play();
+      }
+    } catch {
+      needsUserGestureToPlayRef.current = true;
+      ambientBufferRef.current = null;
+      return;
+    }
+
+    const steps = 8;
+    const stepDelay = Math.max(16, Math.floor(CROSSFADE_MS / steps));
+    for (let index = 1; index <= steps; index += 1) {
+      const ratio = index / steps;
+      nextAmbient.volume = ratio;
+      if (prevAmbient) prevAmbient.volume = 1 - ratio;
+      await wait(stepDelay);
+    }
+
+    if (prevAmbient) {
+      prevAmbient.pause();
+      prevAmbient.currentTime = 0;
+    }
+
+    nextAmbient.volume = 1;
+    ambientRef.current = nextAmbient;
+    ambientBufferRef.current = null;
+  }, [createAmbient, hasConfirmedPlayback]);
 
   const getNextOldhouseKey = useCallback((): OldhouseLoopKey => {
     if (shuffleModeRef.current) {
@@ -123,42 +198,110 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     return OLDHOUSE_PLAYLIST[nextIndex];
   }, []);
 
-  const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
-    if (!hasConfirmedPlayback) return;
+  const preloadIntoBuffer = useCallback((nextKey: OldhouseLoopKey) => {
+    const bufferEl = getBufferVideoEl();
+    if (!bufferEl) return Promise.reject(new Error('Buffer video missing'));
 
-    currentLoopKeyRef.current = key;
-    playlistIndexRef.current = OLDHOUSE_PLAYLIST.indexOf(key);
-    setCurrentLoopKey(key);
-    playAmbient(key);
+    return new Promise<void>((resolve, reject) => {
+      const nextVideoPath = VIDEO_PATH_BY_KEY[nextKey];
+      const cachedVideo = getCachedAsset(nextVideoPath);
+      const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
 
-    const video = videoRef.current;
-    if (!video) return;
+      const onCanPlay = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        setAssets((prev) => ({ ...prev, videoOk: false }));
+        reject(new Error(`Failed to preload ${nextKey}`));
+      };
+      const cleanup = () => {
+        bufferEl.removeEventListener('canplay', onCanPlay);
+        bufferEl.removeEventListener('error', onError);
+      };
 
-    const nextVideoPath = VIDEO_PATH_BY_KEY[key];
-    const cachedVideo = getCachedAsset(nextVideoPath);
-    const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
+      bufferEl.preload = 'auto';
+      bufferEl.playsInline = true;
+      bufferEl.controls = false;
+      bufferEl.defaultMuted = false;
+      bufferEl.muted = false;
+      bufferEl.volume = 1;
+      bufferEl.loop = false;
+      bufferEl.currentTime = 0;
 
-    if (video.src !== resolvedVideoSrc) {
-      video.src = resolvedVideoSrc;
-      video.load();
+      if (bufferEl.src !== resolvedVideoSrc) {
+        bufferEl.src = resolvedVideoSrc;
+      }
+
+      bufferEl.addEventListener('canplay', onCanPlay, { once: true });
+      bufferEl.addEventListener('error', onError, { once: true });
+      bufferEl.load();
+    });
+  }, [getBufferVideoEl]);
+
+  const switchTo = useCallback(async (nextKey: OldhouseLoopKey) => {
+    if (!hasConfirmedPlayback || isSwitchingRef.current) return;
+    isSwitchingRef.current = true;
+
+    const currentEl = getCurrentVideoEl();
+    const bufferEl = getBufferVideoEl();
+    if (!currentEl || !bufferEl) {
+      isSwitchingRef.current = false;
+      return;
     }
 
-    video.loop = false;
-    video.currentTime = 0;
-    video.defaultMuted = false;
-    video.muted = false;
-    video.volume = 1;
-    applyAudibleDefaults();
-    await tryPlayMedia();
-  }, [applyAudibleDefaults, hasConfirmedPlayback, playAmbient, tryPlayMedia]);
+    try {
+      await preloadIntoBuffer(nextKey);
+      currentLoopKeyRef.current = nextKey;
+      playlistIndexRef.current = OLDHOUSE_PLAYLIST.indexOf(nextKey);
+      setCurrentLoopKey(nextKey);
+
+      bufferEl.defaultMuted = false;
+      bufferEl.muted = false;
+      bufferEl.volume = 1;
+      bufferEl.controls = false;
+
+      try {
+        await bufferEl.play();
+      } catch {
+        needsUserGestureToPlayRef.current = true;
+        isSwitchingRef.current = false;
+        return;
+      }
+
+      needsUserGestureToPlayRef.current = false;
+      void crossfadeAmbient(nextKey);
+
+      bufferEl.classList.add('is-active');
+      currentEl.classList.remove('is-active');
+      await wait(CROSSFADE_MS);
+
+      currentEl.pause();
+      currentEl.removeAttribute('src');
+      currentEl.load();
+
+      currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
+      markActiveVideo();
+    } catch {
+      setAssets((prev) => ({ ...prev, videoOk: false }));
+    } finally {
+      isSwitchingRef.current = false;
+    }
+  }, [crossfadeAmbient, getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer]);
+
+  const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
+    if (!hasConfirmedPlayback) return;
+    await switchTo(key);
+  }, [hasConfirmedPlayback, switchTo]);
 
   const startOldhouseAutoShuffle = useCallback(() => {
     setAutoNextEnabled(true);
     setShuffleMode(true);
     autoNextEnabledRef.current = true;
     shuffleModeRef.current = true;
-    void playOldhouseLoop(getNextOldhouseKey());
-  }, [getNextOldhouseKey, playOldhouseLoop]);
+    void switchTo(getNextOldhouseKey());
+  }, [getNextOldhouseKey, switchTo]);
 
   const stopOldhouseAutoShuffle = useCallback(() => {
     setAutoNextEnabled(false);
@@ -179,8 +322,23 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
   useEffect(() => {
     if (!hasConfirmedPlayback) return;
-    void playOldhouseLoop(currentLoopKeyRef.current);
-  }, [hasConfirmedPlayback, playOldhouseLoop]);
+    void switchTo(currentLoopKeyRef.current);
+  }, [hasConfirmedPlayback, switchTo]);
+
+  const bindEnded = useCallback((el: HTMLVideoElement | null) => {
+    if (!el) return;
+    el.loop = false;
+    el.onended = () => {
+      if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+      const nextKey = getNextOldhouseKey();
+      void switchTo(nextKey);
+    };
+  }, [getNextOldhouseKey, hasConfirmedPlayback, switchTo]);
+
+  useEffect(() => {
+    bindEnded(videoARef.current);
+    bindEnded(videoBRef.current);
+  }, [bindEnded]);
 
   useEffect(() => {
     return () => {
@@ -211,6 +369,35 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     };
   }, [playOldhouseLoop, startOldhouseAutoShuffle, stopOldhouseAutoShuffle]);
 
+  useEffect(() => {
+    markActiveVideo();
+    const videoA = videoARef.current;
+    const videoB = videoBRef.current;
+    if (videoA) {
+      videoA.controls = false;
+      videoA.loop = false;
+    }
+    if (videoB) {
+      videoB.controls = false;
+      videoB.loop = false;
+    }
+  }, [markActiveVideo]);
+
+  useEffect(() => {
+    const layer = videoLayerRef.current;
+    if (!layer) return;
+
+    const unlockPlayback = () => {
+      if (!needsUserGestureToPlayRef.current) return;
+      void tryPlayMedia();
+    };
+
+    layer.addEventListener('click', unlockPlayback, { passive: true });
+    return () => {
+      layer.removeEventListener('click', unlockPlayback);
+    };
+  }, [tryPlayMedia]);
+
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
@@ -218,23 +405,28 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   return (
     <section className="scene-view">
       <div className="video-layer-wrapper">
-        <div className={`scene-video-layer filter-layer ${curseVisualClass(curse)}`}>
+        <div
+          ref={videoLayerRef}
+          className={`scene-video-layer filter-layer ${curseVisualClass(curse)}`}
+        >
           <video
+            id="videoA"
             className="scene-video"
-            ref={videoRef}
+            ref={videoARef}
             preload="auto"
             playsInline
             autoPlay
-            onEnded={() => {
-              if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
-              void playOldhouseLoop(getNextOldhouseKey());
-            }}
             onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
-            onLoadedMetadata={() => {
-              if (!hasConfirmedPlayback) return;
-              applyAudibleDefaults();
-              void tryPlayMedia();
-            }}
+          />
+
+          <video
+            id="videoB"
+            className="scene-video"
+            ref={videoBRef}
+            preload="auto"
+            playsInline
+            autoPlay
+            onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
           />
 
           {assets.smokeOk && (
@@ -306,8 +498,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
                   onClick={() => {
                     setHasDeclinedPlayback(true);
                     setHasConfirmedPlayback(false);
-                    const video = videoRef.current;
-                    if (video) video.pause();
+                    const videoA = videoARef.current;
+                    const videoB = videoBRef.current;
+                    if (videoA) videoA.pause();
+                    if (videoB) videoB.pause();
                     stopAmbient();
                   }}
                 >

@@ -105,8 +105,21 @@ body { margin: 0; }
   position: absolute;
   width: 100%;
   height: 100%;
-  object-fit: cover;
   inset: 0;
+}
+.scene-video {
+  object-fit: contain;
+  display: block;
+  transition: opacity 220ms ease;
+  opacity: 0;
+  pointer-events: none;
+}
+#videoA.is-active,
+#videoB.is-active {
+  opacity: 1;
+}
+.overlay {
+  object-fit: cover;
 }
 .overlay { pointer-events: none; }
 
