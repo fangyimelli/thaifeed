@@ -624,11 +624,11 @@ body {
 
 
 .video-debug-overlay {
-  position: absolute;
+  position: fixed;
   left: 8px;
   right: 8px;
-  bottom: 8px;
-  z-index: 250;
+  top: 8px;
+  z-index: 1200;
   padding: 8px 10px;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.74);
