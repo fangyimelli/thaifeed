@@ -40,9 +40,9 @@ export type GameState = {
 
 export type GameAction =
   | { type: 'PLAYER_MESSAGE'; payload: ChatMessage }
-  | { type: 'ANSWER_CORRECT'; payload: { message: ChatMessage; donateMessage: ChatMessage } }
-  | { type: 'ANSWER_WRONG'; payload: { message: ChatMessage; vipMessage?: ChatMessage } }
-  | { type: 'ANSWER_PASS'; payload: { message: ChatMessage } }
+  | { type: 'ANSWER_CORRECT' }
+  | { type: 'ANSWER_WRONG'; payload: { includeVipStillHere: boolean } }
+  | { type: 'ANSWER_PASS' }
   | { type: 'AUDIENCE_MESSAGE'; payload: ChatMessage }
   | { type: 'TOGGLE_CHAT_TRANSLATION'; payload: { id: string } }
   | { type: 'INCREASE_CURSE_IDLE'; payload: { amount: number } };

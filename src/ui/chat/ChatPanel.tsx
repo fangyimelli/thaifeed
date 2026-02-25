@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../core/state/types';
 import ChatMessage from './ChatMessage';
 
 type Props = {
   messages: ChatMessageType[];
   input: string;
+  isSending: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onToggleTranslation: (id: string) => void;
@@ -17,6 +18,7 @@ const MAX_RENDER_COUNT = 100;
 export default function ChatPanel({
   messages,
   input,
+  isSending,
   onChange,
   onSubmit,
   onToggleTranslation,
@@ -25,6 +27,7 @@ export default function ChatPanel({
   const panelRef = useRef<HTMLElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const idleTimer = useRef<number>(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
@@ -99,6 +102,15 @@ export default function ChatPanel({
     };
   }, []);
 
+  const handleSend = (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    onSubmit();
+    window.setTimeout(() => {
+      forceScrollToBottom();
+      inputRef.current?.focus();
+    }, 0);
+  };
+
   return (
     <aside className="chat-panel" ref={panelRef} style={viewportMaxHeight ? { maxHeight: `${viewportMaxHeight}px` } : undefined}>
       <header className="chat-header">
@@ -135,28 +147,17 @@ export default function ChatPanel({
         </button>
       )}
 
-      <div className="chat-input">
+      <form className="chat-input" onSubmit={handleSend}>
         <input
+          ref={inputRef}
           value={input}
           onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              onSubmit();
-              window.setTimeout(forceScrollToBottom, 0);
-            }
-          }}
           placeholder="傳送訊息"
         />
-        <button
-          type="button"
-          onClick={() => {
-            onSubmit();
-            window.setTimeout(forceScrollToBottom, 0);
-          }}
-        >
+        <button type="submit" disabled={isSending}>
           送出
         </button>
-      </div>
+      </form>
     </aside>
   );
 }
