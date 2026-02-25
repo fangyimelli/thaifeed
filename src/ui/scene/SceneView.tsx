@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
@@ -213,6 +213,8 @@ type VideoDebugState = {
   currentKey: OldhouseLoopKey | null;
   bufferKey: OldhouseLoopKey | null;
   isSwitching: boolean;
+  isInJump: boolean;
+  nextJumpAt: number | null;
   lastSwitchAt: number;
   lastSwitchFrom: OldhouseLoopKey | null;
   lastSwitchTo: OldhouseLoopKey | null;
@@ -220,6 +222,12 @@ type VideoDebugState = {
   lastEndedKey: OldhouseLoopKey | null;
   activeVideoId: 'videoA' | 'videoB' | null;
   activeVideoSrc: string | null;
+  bufferVideoId: 'videoA' | 'videoB' | null;
+  bufferVideoSrc: string | null;
+  currentActive: boolean;
+  bufferActive: boolean;
+  currentReadyState: number | null;
+  currentPaused: boolean | null;
   timers: { jumpTimer: number | null };
 };
 
@@ -257,6 +265,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const ghostTimerRef = useRef<number | null>(null);
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
+  const nextJumpAtRef = useRef<number | null>(null);
+  const debugEnabled = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('debug') === '1';
+  }, []);
+  const [debugTick, setDebugTick] = useState(() => Date.now());
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
     const prev: AudioDebugState = window.__AUDIO_DEBUG__ ?? {
@@ -286,6 +300,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       currentKey: null,
       bufferKey: null,
       isSwitching: false,
+      isInJump: false,
+      nextJumpAt: null,
       lastSwitchAt: 0,
       lastSwitchFrom: null,
       lastSwitchTo: null,
@@ -293,6 +309,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       lastEndedKey: null,
       activeVideoId: null,
       activeVideoSrc: null,
+      bufferVideoId: null,
+      bufferVideoSrc: null,
+      currentActive: false,
+      bufferActive: false,
+      currentReadyState: null,
+      currentPaused: null,
       timers: { jumpTimer: null }
     };
 
@@ -328,7 +350,17 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       inactiveId: inactive.id,
       inactiveSrc: inactive.currentSrc || inactive.src
     });
-  }, []);
+    updateVideoDebug({
+      activeVideoId: active.id === 'videoA' ? 'videoA' : 'videoB',
+      activeVideoSrc: active.currentSrc || active.src || null,
+      bufferVideoId: inactive.id === 'videoA' ? 'videoA' : 'videoB',
+      bufferVideoSrc: inactive.currentSrc || inactive.src || null,
+      currentActive: active.classList.contains('is-active'),
+      bufferActive: inactive.classList.contains('is-active'),
+      currentReadyState: active.readyState,
+      currentPaused: active.paused
+    });
+  }, [updateVideoDebug]);
 
   const applyAudibleDefaults = useCallback(() => {
     const currentVideo = getCurrentVideoEl();
@@ -795,12 +827,19 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       updateVideoDebug({
         currentKey: nextKey,
         bufferKey: null,
+        isInJump: isInJumpRef.current,
         lastSwitchAt: Date.now(),
         lastSwitchFrom: fromKey,
         lastSwitchTo: nextKey,
         lastError: null,
         activeVideoId: currentVideoRef.current === 'A' ? 'videoA' : 'videoB',
-        activeVideoSrc: getCurrentVideoEl()?.currentSrc ?? getCurrentVideoEl()?.src ?? null
+        activeVideoSrc: getCurrentVideoEl()?.currentSrc ?? getCurrentVideoEl()?.src ?? null,
+        bufferVideoId: getBufferVideoEl()?.id === 'videoA' ? 'videoA' : getBufferVideoEl()?.id === 'videoB' ? 'videoB' : null,
+        bufferVideoSrc: getBufferVideoEl()?.currentSrc ?? getBufferVideoEl()?.src ?? null,
+        currentActive: getCurrentVideoEl()?.classList.contains('is-active') ?? false,
+        bufferActive: getBufferVideoEl()?.classList.contains('is-active') ?? false,
+        currentReadyState: getCurrentVideoEl()?.readyState ?? null,
+        currentPaused: getCurrentVideoEl()?.paused ?? null
       });
 
       updateAudioDebug({
@@ -840,15 +879,20 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const scheduleNextJump = useCallback(() => {
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
-      updateVideoDebug({ timers: { jumpTimer: null } });
+      nextJumpAtRef.current = null;
+      updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
     }
 
     const interval = computeJumpIntervalMs(curseRef.current);
+    const dueAt = Date.now() + interval;
+    nextJumpAtRef.current = dueAt;
     console.log('[VIDEO]', 'scheduleNextJump set timer', { delay: interval, curse: curseRef.current });
     jumpTimerRef.current = window.setTimeout(() => {
+      nextJumpAtRef.current = null;
+      updateVideoDebug({ nextJumpAt: null });
       void triggerJumpOnce();
     }, interval);
-    updateVideoDebug({ timers: { jumpTimer: jumpTimerRef.current } });
+    updateVideoDebug({ timers: { jumpTimer: jumpTimerRef.current }, nextJumpAt: dueAt });
   }, [computeJumpIntervalMs, updateVideoDebug]);
 
   const triggerJumpOnce = useCallback(async () => {
@@ -875,6 +919,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     }
 
     isInJumpRef.current = true;
+    updateVideoDebug({ isInJump: true });
     const nextKey = randomPick(JUMP_LOOPS);
     console.log('[VIDEO]', 'triggerJumpOnce picked nextKey', { nextKey, fromKey: currentLoopKeyRef.current });
 
@@ -882,6 +927,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
     if (currentLoopKeyRef.current !== nextKey) {
       isInJumpRef.current = false;
+      updateVideoDebug({ isInJump: false });
       console.warn('[VIDEO]', 'triggerJumpOnce switch mismatch; reschedule', {
         expected: nextKey,
         actual: currentLoopKeyRef.current
@@ -915,6 +961,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
     if (isInJumpRef.current) {
       isInJumpRef.current = false;
+      updateVideoDebug({ isInJump: false });
       console.log('[VIDEO]', 'ended while in jump; switching back to MAIN_LOOP', { mainLoop: MAIN_LOOP });
       void switchTo(MAIN_LOOP).then(() => {
         currentLoopKeyRef.current = MAIN_LOOP;
@@ -978,7 +1025,8 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
-      updateVideoDebug({ timers: { jumpTimer: null } });
+      nextJumpAtRef.current = null;
+      updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
     }
 
     if (footstepsTimerRef.current) {
@@ -1034,12 +1082,20 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       bufferKey: null,
       isSwitching: false,
       lastSwitchAt: 0,
+      isInJump: false,
+      nextJumpAt: null,
       lastSwitchFrom: null,
       lastSwitchTo: null,
       lastError: null,
       lastEndedKey: null,
       activeVideoId: null,
       activeVideoSrc: null,
+      bufferVideoId: null,
+      bufferVideoSrc: null,
+      currentActive: false,
+      bufferActive: false,
+      currentReadyState: null,
+      currentPaused: null,
       timers: { jumpTimer: null }
     };
 
@@ -1124,8 +1180,44 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       if (jumpTimerRef.current) {
         window.clearTimeout(jumpTimerRef.current);
       }
+      nextJumpAtRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!debugEnabled) return;
+    const timer = window.setInterval(() => {
+      setDebugTick(Date.now());
+      const currentEl = getCurrentVideoEl();
+      const bufferEl = getBufferVideoEl();
+      updateVideoDebug({
+        currentKey: currentLoopKeyRef.current,
+        isSwitching: isSwitchingRef.current,
+        isInJump: isInJumpRef.current,
+        nextJumpAt: nextJumpAtRef.current,
+        activeVideoId: currentEl?.id === 'videoA' ? 'videoA' : currentEl?.id === 'videoB' ? 'videoB' : null,
+        activeVideoSrc: currentEl?.currentSrc ?? currentEl?.src ?? null,
+        bufferVideoId: bufferEl?.id === 'videoA' ? 'videoA' : bufferEl?.id === 'videoB' ? 'videoB' : null,
+        bufferVideoSrc: bufferEl?.currentSrc ?? bufferEl?.src ?? null,
+        currentActive: currentEl?.classList.contains('is-active') ?? false,
+        bufferActive: bufferEl?.classList.contains('is-active') ?? false,
+        currentReadyState: currentEl?.readyState ?? null,
+        currentPaused: currentEl?.paused ?? null
+      });
+    }, 200);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [debugEnabled, getBufferVideoEl, getCurrentVideoEl, updateVideoDebug]);
+
+  const videoDebug = window.__VIDEO_DEBUG__;
+  const trimSrc = (src: string | null | undefined) => {
+    if (!src) return '-';
+    return src.length > 72 ? `...${src.slice(-72)}` : src;
+  };
+  const nextJumpDueInSec = videoDebug?.nextJumpAt ? Math.max(0, (videoDebug.nextJumpAt - debugTick) / 1000).toFixed(1) : '-';
+  const lastSwitchAgoMs = videoDebug?.lastSwitchAt ? Math.max(0, debugTick - videoDebug.lastSwitchAt) : null;
 
   useEffect(() => {
     markActiveVideo();
@@ -1297,6 +1389,21 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       {requiredAudioError && (
         <div className="asset-warning">
           必要音效載入失敗：<code>{requiredAudioError}</code>
+        </div>
+      )}
+
+      {debugEnabled && (
+        <div className="video-debug-overlay" aria-live="polite">
+          <div>currentKey: {videoDebug?.currentKey ?? '-'}</div>
+          <div>currentEl: {videoDebug?.activeVideoId ?? '-'} | src: {trimSrc(videoDebug?.activeVideoSrc)}</div>
+          <div>bufferEl: {videoDebug?.bufferVideoId ?? '-'} | src: {trimSrc(videoDebug?.bufferVideoSrc)}</div>
+          <div>currentActive/bufferActive: {String(videoDebug?.currentActive ?? false)} / {String(videoDebug?.bufferActive ?? false)}</div>
+          <div>isSwitching / isInJump: {String(videoDebug?.isSwitching ?? false)} / {String(videoDebug?.isInJump ?? false)}</div>
+          <div>nextJumpDueIn: {nextJumpDueInSec}s</div>
+          <div>
+            lastSwitch: {(videoDebug?.lastSwitchFrom ?? '-')} -&gt; {(videoDebug?.lastSwitchTo ?? '-')} | {lastSwitchAgoMs == null ? '-' : `${lastSwitchAgoMs}ms ago`}
+          </div>
+          <div>currentEl readyState/paused: {videoDebug?.currentReadyState ?? '-'} / {String(videoDebug?.currentPaused ?? false)}</div>
         </div>
       )}
     </section>
