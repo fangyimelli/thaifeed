@@ -1,6 +1,7 @@
 import usernames from '../../content/pools/usernames.json';
 import { pickOne } from '../../utils/random';
 import type { AnchorType, ChatMessage } from '../state/types';
+import { applyMentionV2, sanitizeTemplateMentions } from './mentionV2';
 
 type PersonaId =
   | 'chill'
@@ -30,8 +31,6 @@ type StyleProfile = {
   punctuation: '' | '!' | '?' | '!?';
   particleRate: number;
   particles: string[];
-  tagRate: number;
-  tags: string[];
   slangRate: number;
 };
 
@@ -47,6 +46,7 @@ type GenerateInput = {
   curse: number;
   username?: string;
   recentHistory: string[];
+  activeUsers: string[];
   anchorMentionAllowed?: boolean;
 };
 
@@ -97,15 +97,13 @@ const PERSONA_PROFILES: Record<PersonaId, PersonaProfile> = {
 function makeProfile(id: PersonaId, corpus: string[]): PersonaProfile {
   return {
     id,
-    corpus,
+    corpus: corpus.map((line) => sanitizeTemplateMentions(line)).filter(Boolean),
     style: {
       minLen: id === 'minimalist' ? 1 : 5,
       maxLen: id === 'minimalist' ? 6 : 22,
       punctuation: id === 'skeptical' || id === 'observer' ? '?' : id === 'hype' || id === 'nervous' ? '!' : '',
       particleRate: id === 'quiet' ? 0.05 : 0.2,
       particles: ['啦', '欸', '啊'],
-      tagRate: id === 'hype' ? 0.2 : 0.08,
-      tags: ['@全場', '@有人在嗎', '@聊天室'],
       slangRate: id === 'troll' || id === 'chaotic' ? 0.35 : 0.08
     }
   };
@@ -195,9 +193,9 @@ function rememberMessage(text: string): void {
   if (recentNormalized.length > recentWindowSize) recentNormalized.shift();
 }
 
-function styleLine(base: string, profile: PersonaProfile): string {
+function styleLine(base: string, profile: PersonaProfile, activeUsers: string[]): string {
   let line = base;
-  if (Math.random() < profile.style.tagRate) line = `${pickOne(profile.style.tags)} ${line}`;
+  line = applyMentionV2(line, activeUsers);
   if (Math.random() < profile.style.particleRate) line = `${line}${pickOne(profile.style.particles)}`;
   if (profile.style.punctuation) line = `${line}${profile.style.punctuation}`;
   const words = line.split(' ');
@@ -214,7 +212,7 @@ function composeCandidate(input: GenerateInput): { text: string; username: strin
   const anchorWord = anchorWords[input.anchor];
   const mentionAnchor = input.anchorMentionAllowed && shouldAllowAnchorMention(input.anchor) && Math.random() < 0.25;
   const joined = mentionAnchor ? `${anchorWord}那邊 ${base}` : base;
-  const text = styleLine(joined, profile);
+  const text = styleLine(joined, profile, input.activeUsers);
 
   if (mentionAnchor) rememberAnchorMention(input.anchor);
 
@@ -267,7 +265,7 @@ export function generateChatMessageV2(input: GenerateInput): ChatMessage {
   };
 }
 
-export function createSpeechWaveV2(anchor: AnchorType, recentHistory: string[]): ChatMessage[] {
+export function createSpeechWaveV2(anchor: AnchorType, recentHistory: string[], activeUsers: string[]): ChatMessage[] {
   const size = 2 + Math.floor(Math.random() * 4);
   const messages: ChatMessage[] = [];
   for (let i = 0; i < size; i += 1) {
@@ -276,6 +274,7 @@ export function createSpeechWaveV2(anchor: AnchorType, recentHistory: string[]):
       anchor,
       curse: 50,
       recentHistory,
+      activeUsers,
       anchorMentionAllowed: i === 0
     }));
   }

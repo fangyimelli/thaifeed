@@ -12,11 +12,12 @@ import {
   createSuccessMessage,
   createWrongMessage,
   createPlayerSpeechResponses,
-  getAudienceIntervalMs
+  getAudienceIntervalMs,
+  hardenMentionsBeforeRender
 } from '../core/systems/chatSystem';
 import { createVipPassMessage, handleVipPlayerMessage, isVipHintCommand } from '../core/systems/vipSystem';
 import { getMemoryNode, markReview } from '../core/adaptive/memoryScheduler';
-import type { DonateMessage } from '../core/state/types';
+import type { ChatMessage, DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import ChatPanel from '../ui/chat/ChatPanel';
@@ -26,6 +27,7 @@ import LoadingOverlay from '../ui/hud/LoadingOverlay';
 import { getCachedAsset, preloadAssets } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
+import { collectActiveUsers } from '../core/systems/mentionV2';
 
 const SFX_SRC = {
   typing: '/assets/sfx/sfx_typing.wav',
@@ -92,6 +94,13 @@ export default function App() {
   const soundUnlocked = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
 
+  const getActiveUsersSnapshot = () => collectActiveUsers(state.messages);
+
+  const dispatchAudienceMessage = (message: ChatMessage) => {
+    const activeUsers = getActiveUsersSnapshot();
+    dispatch({ type: 'AUDIENCE_MESSAGE', payload: hardenMentionsBeforeRender(message, activeUsers) });
+  };
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -136,11 +145,13 @@ export default function App() {
 
     let timer = 0;
     const tick = () => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: createAudienceMessage(
+      const activeUsers = getActiveUsersSnapshot();
+      dispatchAudienceMessage(createAudienceMessage(
         state.curse,
         state.currentAnchor,
-        state.messages.slice(-12).map((message) => message.translation ?? message.text)
-      ) });
+        state.messages.slice(-12).map((message) => message.translation ?? message.text),
+        activeUsers
+      ));
       timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
     };
 
@@ -174,16 +185,13 @@ export default function App() {
             const delayMs = i * randomInt(100, 200);
             const burstTimer = window.setTimeout(() => {
               const username = pickOne(usernames);
-              dispatch({
-                type: 'AUDIENCE_MESSAGE',
-                payload: {
-                  id: crypto.randomUUID(),
-                  type: 'system',
-                  subtype: 'join',
-                  username: 'system',
-                  text: `${username} 加入聊天室`,
-                  language: 'zh'
-                }
+              dispatchAudienceMessage({
+                id: crypto.randomUUID(),
+                type: 'system',
+                subtype: 'join',
+                username: 'system',
+                text: `${username} 加入聊天室`,
+                language: 'zh'
               });
             }, delayMs);
             burstTimers.push(burstTimer);
@@ -193,16 +201,13 @@ export default function App() {
           const normalJoinBoost = randomInt(1, 3);
 
           setViewerCount((value) => Math.min(99_999, value + normalJoinBoost));
-          dispatch({
-            type: 'AUDIENCE_MESSAGE',
-            payload: {
-              id: crypto.randomUUID(),
-              type: 'system',
-              subtype: 'join',
-              username: 'system',
-              text: `${username} 加入聊天室`,
-              language: 'zh'
-            }
+          dispatchAudienceMessage({
+            id: crypto.randomUUID(),
+            type: 'system',
+            subtype: 'join',
+            username: 'system',
+            text: `${username} 加入聊天室`,
+            language: 'zh'
           });
         }
       }
@@ -256,40 +261,31 @@ export default function App() {
   useEffect(() => {
     if (!isReady || postedInitMessages.current) return;
     postedInitMessages.current = true;
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: {
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '畫面已準備完成',
-        language: 'zh'
-      }
+    dispatchAudienceMessage({
+      id: crypto.randomUUID(),
+      type: 'system',
+      username: 'system',
+      text: '畫面已準備完成',
+      language: 'zh'
     });
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: {
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '系統初始化完成',
-        language: 'zh'
-      }
+    dispatchAudienceMessage({
+      id: crypto.randomUUID(),
+      type: 'system',
+      username: 'system',
+      text: '系統初始化完成',
+      language: 'zh'
     });
   }, [isReady]);
 
   useEffect(() => {
     if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
     postedOptionalAssetWarningMessage.current = true;
-    dispatch({
-      type: 'AUDIENCE_MESSAGE',
-      payload: {
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '部分非必要素材載入失敗，遊戲可正常進行。',
-        language: 'zh'
-      }
+    dispatchAudienceMessage({
+      id: crypto.randomUUID(),
+      type: 'system',
+      username: 'system',
+      text: '部分非必要素材載入失敗，遊戲可正常進行。',
+      language: 'zh'
     });
   }, [hasOptionalAssetWarning, isReady]);
 
@@ -305,15 +301,12 @@ export default function App() {
 
     if (!soundUnlocked.current) {
       soundUnlocked.current = true;
-      dispatch({
-        type: 'AUDIENCE_MESSAGE',
-        payload: {
-          id: crypto.randomUUID(),
-          type: 'system',
-          username: 'system',
-          text: '聲音已啟用',
-          language: 'zh'
-        }
+      dispatchAudienceMessage({
+        id: crypto.randomUUID(),
+        type: 'system',
+        username: 'system',
+        text: '聲音已啟用',
+        language: 'zh'
       });
     }
 
@@ -350,7 +343,7 @@ export default function App() {
     });
 
     if (vipReply) {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: vipReply });
+      dispatchAudienceMessage(vipReply);
       nonVipMessagesSinceLastVip.current = 0;
     } else {
       nonVipMessagesSinceLastVip.current += 1;
@@ -374,7 +367,7 @@ export default function App() {
       dispatch({
         type: 'ANSWER_CORRECT',
         payload: {
-          message: createSuccessMessage(state.currentAnchor),
+          message: createSuccessMessage(state.currentAnchor, getActiveUsersSnapshot()),
           donateMessage: createDonateChatMessage(donate)
         }
       });
@@ -388,27 +381,31 @@ export default function App() {
     const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
     if (canTriggerSpeech) {
       speechCooldownUntil.current = now + 10_000;
+      const activeUsers = getActiveUsersSnapshot();
       const speechResponses = createPlayerSpeechResponses(
         state.currentAnchor,
-        state.messages.slice(-20).map((message) => message.translation ?? message.text)
+        state.messages.slice(-20).map((message) => message.translation ?? message.text),
+        activeUsers
       );
       speechResponses.forEach((message) => {
-        dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+        dispatchAudienceMessage(message);
       });
       setInput('');
       return;
     }
 
+    const activeUsers = getActiveUsersSnapshot();
     const fakeAiBatch = createFakeAiAudienceMessage({
       playerInput: raw,
       targetConsonant: playableConsonant.letter,
       curse: state.curse,
       anchor: state.currentAnchor,
-      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text)
+      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text),
+      activeUsers
     });
 
     fakeAiBatch.messages.forEach((message) => {
-      dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+      dispatchAudienceMessage(message);
     });
 
     if (fakeAiBatch.pauseMs) {
@@ -418,7 +415,7 @@ export default function App() {
       return;
     }
 
-    const wrongMessage = createWrongMessage(state.curse, state.currentAnchor);
+    const wrongMessage = createWrongMessage(state.curse, state.currentAnchor, getActiveUsersSnapshot());
     dispatch({
       type: 'ANSWER_WRONG',
       payload: {
