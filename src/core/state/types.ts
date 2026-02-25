@@ -5,12 +5,13 @@ export type ChatMessage = {
   username: string;
   text: string;
   language: 'zh' | 'th';
-  type?: 'chat' | 'system';
+  type?: 'chat' | 'system' | 'donate';
   subtype?: 'join';
   translation?: string;
   isVip?: 'VIP_NORMAL' | 'VIP_STILL_HERE';
   isSelf?: boolean;
   showTranslation?: boolean;
+  donateAmount?: number;
 };
 
 export type AnchorType = 'under_table' | 'door' | 'window' | 'corner';
@@ -35,15 +36,13 @@ export type GameState = {
   vipStillHereTriggered: boolean;
   currentAnchor: AnchorType;
   messages: ChatMessage[];
-  donateToasts: DonateMessage[];
 };
 
 export type GameAction =
   | { type: 'PLAYER_MESSAGE'; payload: ChatMessage }
-  | { type: 'ANSWER_CORRECT'; payload: { message: ChatMessage; donate: DonateMessage } }
+  | { type: 'ANSWER_CORRECT'; payload: { message: ChatMessage; donateMessage: ChatMessage } }
   | { type: 'ANSWER_WRONG'; payload: { message: ChatMessage; vipMessage?: ChatMessage } }
   | { type: 'ANSWER_PASS'; payload: { message: ChatMessage } }
   | { type: 'AUDIENCE_MESSAGE'; payload: ChatMessage }
   | { type: 'TOGGLE_CHAT_TRANSLATION'; payload: { id: string } }
-  | { type: 'TOGGLE_DONATE_TRANSLATION'; payload: { id: string } }
-  | { type: 'DISMISS_DONATE'; payload: { id: string } };
+  | { type: 'INCREASE_CURSE_IDLE'; payload: { amount: number } };
