@@ -69,6 +69,7 @@ body { margin: 0; }
   aspect-ratio: 16 / 9;
   min-height: 0;
   position: relative;
+  contain: layout paint;
 }
 
 .chat-container {
@@ -110,7 +111,7 @@ body { margin: 0; }
 .scene-video {
   object-fit: contain;
   display: block;
-  transition: opacity 220ms ease;
+  transition: opacity 420ms ease-in-out;
   opacity: 0;
   pointer-events: none;
 }
