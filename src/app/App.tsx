@@ -87,29 +87,6 @@ export default function App() {
   const lightFearTimerRef = useRef<number | null>(null);
   const fearEndTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const updateAppVh = () => {
-      const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      document.documentElement.style.setProperty('--app-vh', `${h}px`);
-      document.documentElement.style.setProperty('--vv-offset-top', `${vv ? vv.offsetTop : 0}px`);
-      document.documentElement.style.setProperty('--vv-offset-left', `${vv ? vv.offsetLeft : 0}px`);
-    };
-
-    updateAppVh();
-    window.addEventListener('resize', updateAppVh);
-    window.addEventListener('orientationchange', updateAppVh);
-    window.visualViewport?.addEventListener('resize', updateAppVh);
-    window.visualViewport?.addEventListener('scroll', updateAppVh);
-
-    return () => {
-      window.removeEventListener('resize', updateAppVh);
-      window.removeEventListener('orientationchange', updateAppVh);
-      window.visualViewport?.removeEventListener('resize', updateAppVh);
-      window.visualViewport?.removeEventListener('scroll', updateAppVh);
-    };
-  }, []);
-
   const clearLightFearTimer = useCallback(() => {
     if (lightFearTimerRef.current) {
       window.clearTimeout(lightFearTimerRef.current);
@@ -410,9 +387,9 @@ export default function App() {
   }, [hasOptionalAssetWarning, isReady]);
 
 
+  const isLoading = !isReady || !isRendererReady || requiredAssetErrors.length > 0;
   const hasFatalInitError = requiredAssetErrors.length > 0;
-  const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
-  const shouldShowMainContent = true;
+  const shouldShowMainContent = isRendererReady || hasFatalInitError;
 
   const loadingErrorTitle = useMemo(() => {
     if (!hasFatalInitError) return undefined;
@@ -569,7 +546,7 @@ export default function App() {
   }, [input, submitChat]);
 
   return (
-    <div className="app-shell app-root-layout">
+    <div className="app-shell">
       <LoadingOverlay
         visible={isLoading}
         progress={loadingProgress}
@@ -579,23 +556,27 @@ export default function App() {
       />
       {shouldShowMainContent && (
       <main className="app-layout">
-        <div className="top-dock">
-          <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
-          <div className="video-container">
-            {!hasFatalInitError ? (
-              <SceneView
-                targetConsonant={state.currentConsonant.letter}
-                curse={state.curse}
-                anchor={state.currentAnchor}
-              />
-            ) : (
-              <div className="asset-warning scene-placeholder">
-                初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
+        <div className="live-top">
+          <div className="mobile-frame">
+            <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+            <div className="video-stage">
+              <div className="video-container">
+                {!hasFatalInitError ? (
+                  <SceneView
+                    targetConsonant={state.currentConsonant.letter}
+                    curse={state.curse}
+                    anchor={state.currentAnchor}
+                  />
+                ) : (
+                  <div className="asset-warning scene-placeholder">
+                    初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
-        <div className="chat-container input-surface">
+        <div className="chat-container">
           <ChatPanel
             messages={state.messages}
             input={input}

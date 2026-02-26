@@ -115,7 +115,7 @@ npm run dev
   - `form onSubmit`：`preventDefault()` 後呼叫 `onSubmit`。
   - `button onClick` / `onTouchEnd`：呼叫同一個 `onSubmit`。
   - `onKeyDown Enter`：排除 IME 組字（`isComposing`/`keyCode===229`）才送出。
-- 鍵盤與視窗高度變動：改為全平台 `--app-vh` 佈局（iOS / Android / Desktop 同套），不再依賴輸入列 `translateY` 位移。
+- iOS 鍵盤：仍用 `visualViewport` 修正輸入列位置，並提高輸入列 `z-index` 與 `pointer-events`，避免透明層或覆蓋層吞點擊。
 
 ## 聊天室主題與影片狀態連動
 
@@ -137,50 +137,6 @@ npm run dev
 ## 其他
 
 - 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
-
-## 跨裝置鍵盤/viewport 佈局策略
-
-### 1) `--app-vh`（動態視覺高度）
-
-- 入口在 `App.tsx` 以 `updateAppVh()` 寫入 CSS 變數：
-  - `--app-vh`: `visualViewport.height`（fallback `window.innerHeight`）
-  - `--vv-offset-top` / `--vv-offset-left`
-- 監聽來源：
-  - `window.resize`
-  - `window.orientationchange`
-  - `visualViewport.resize`（可用時）
-  - `visualViewport.scroll`（可用時）
-- 初始掛載會先呼叫一次，確保第一次 render 就採正確 viewport 高度。
-
-### 2) 三區塊固定架構（SSOT）
-
-- `TopDock`：`LiveHeader + VideoContainer`，固定在最上緣，`top=0`、無額外上方 margin/padding。
-- `ChatScroll`：僅聊天訊息清單可捲動（`overflow-y:auto`）。
-- `InputDock`：輸入列固定在底部，搭配 `env(safe-area-inset-bottom)`。
-
-整體規則：
-
-- `html/body/#root/.app-shell` 全部 `overflow:hidden`，禁止整頁滾動。
-- 主容器高度使用 `var(--app-vh)`，不以 `100vh` 當主高度來源。
-- 已移除舊式 `visualViewport + translateY(input)` 共存邏輯，避免 viewport/鍵盤事件下位移抖動。
-
-### 3) visualViewport 支援與 fallback
-
-- 支援 `visualViewport` 時，用其高度驅動版面，鍵盤彈出時 InputDock 可維持可見。
-- 不支援時 fallback `window.innerHeight`，桌機 resize 與一般瀏覽器仍可正確重算。
-
-### 4) 常見問題排查
-
-- **症狀：鍵盤彈出後輸入列被遮住**
-  - 檢查 `--app-vh` 是否有隨 `visualViewport.height` 更新。
-  - 檢查是否仍有舊的 `transform: translateY(...)` 套在輸入列。
-- **症狀：焦點時整頁亂捲**
-  - 檢查 `html/body` 是否意外變成可捲動。
-  - 確認程式未呼叫 `window.scrollTo` 或 `scrollIntoView` 去捲動整頁。
-- **症狀：頂部出現黑邊縫**
-  - 檢查 `TopDock` / `videoContainer` 是否被套用 `margin-top/padding-top`。
-- **症狀：子路徑部署資產 404**
-  - 檢查 HTML preload / icon / script 與程式資產 URL 是否都走 `BASE_URL` 或 `resolveAssetUrl`。
 
 ## 本次衝突點調整（專案級）
 
