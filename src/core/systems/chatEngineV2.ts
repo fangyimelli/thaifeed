@@ -44,6 +44,8 @@ type GenerateInput = {
   kind: 'audience' | 'speech' | 'fakeAiNormal' | 'success' | 'wrong';
   anchor: AnchorType;
   curse: number;
+  currentVideoKey?: string;
+  topicMode?: 'CALM_PARANOIA' | 'LIGHT_FLICKER_FEAR' | 'NORMAL';
   username?: string;
   recentHistory: string[];
   activeUsers: string[];
@@ -69,6 +71,33 @@ const anchorWords: Record<AnchorType, string> = {
   door: '門邊',
   window: '窗邊',
   corner: '角落'
+};
+
+const topicCorpus: Record<'CALM_PARANOIA' | 'LIGHT_FLICKER_FEAR', string[]> = {
+  CALM_PARANOIA: [
+    '太安靜了我反而不敢移開視線',
+    '畫面越平靜我越覺得有事',
+    '現在這種沒事感最毛',
+    '我開始懷疑是不是我自己腦補',
+    '角落那塊越盯越像有東西',
+    '什麼都沒發生才讓人不舒服',
+    '氣氛像在等下一秒出事',
+    '我明知沒證據還是覺得背後有人',
+    '這種安靜真的不正常',
+    '腦袋一直補畫面越想越可怕'
+  ],
+  LIGHT_FLICKER_FEAR: [
+    '剛剛燈是不是閃了一下',
+    '那盞燈看起來在晃',
+    '亮度剛剛像跳了一拍',
+    '我怎麼覺得有人在碰開關',
+    '這個忽明忽暗不像鏡頭問題',
+    '燈光節奏怪到像有人在弄',
+    '我盯著燈看它又抖一下',
+    '房間亮度忽高忽低很不對',
+    '那個開關感覺被動過',
+    '不是錯覺吧燈真的在動'
+  ]
 };
 
 const PERSONA_PROFILES: Record<PersonaId, PersonaProfile> = {
@@ -207,7 +236,11 @@ function styleLine(base: string, profile: PersonaProfile, activeUsers: string[])
 function composeCandidate(input: GenerateInput): { text: string; username: string; language: 'zh' | 'th'; translation?: string } {
   const username = input.username ?? pickOne(usernames);
   const profile = getPersona(username);
-  const base = pickOne(profile.corpus);
+  const shouldUseTopicCorpus = input.kind === 'audience' || input.kind === 'fakeAiNormal';
+  const baseCorpus = shouldUseTopicCorpus && input.topicMode && input.topicMode !== 'NORMAL'
+    ? topicCorpus[input.topicMode]
+    : profile.corpus;
+  const base = pickOne(baseCorpus);
 
   const anchorWord = anchorWords[input.anchor];
   const mentionAnchor = input.anchorMentionAllowed && shouldAllowAnchorMention(input.anchor) && Math.random() < 0.25;

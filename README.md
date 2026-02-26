@@ -88,13 +88,21 @@ npm run dev
 
 ## 插播排查（timer / ended / lock / timeout）
 
+- 播放策略 SSOT（`src/config/oldhousePlayback.ts`）：
+  - `MAIN_LOOP = oldhouse_room_loop3`（主畫面常駐）
+  - `JUMP_LOOPS = [oldhouse_room_loop, oldhouse_room_loop2]`（插播僅兩支，暫停 loop4）
+- 插播間隔（`computeJumpIntervalMs(curse)`）：
+  - `CURSE=0`：`90,000 ~ 120,000 ms`（1.5~2 分鐘）
+  - `CURSE=100`：`30,000 ~ 60,000 ms`
+  - 下限保護：不會低於 `30,000 ms`（30 秒）
+- 插播影片播放到自然 `ended` 後回 `MAIN_LOOP`，並立刻重排下一次插播。
 - `scheduleNextJump()` 每次都先清掉舊 timer 再重排，避免重複或遺失。
 - `triggerJumpOnce()` 會檢查 `isSwitching` / `isInJump` / `currentKey===MAIN_LOOP`，並輸出 debug log。
 - `switchTo()` 使用 `try/finally` 強制釋放 `isSwitching` lock，任何失敗都不會卡死。
 - `preloadIntoBuffer()` 有 timeout fallback：
   - 3.2 秒內若 `readyState >= HAVE_CURRENT_DATA` 視為可播。
   - 超時且仍不可播則進 ERROR UI（不黑畫面，保留錯誤資訊）。
-- 插播影片若 `ended` 未回主循環，另有 fallback timer 強制切回 `MAIN_LOOP` 並重排下一次插播。
+- 插播影片若 `ended` 未回主循環，另有 fallback timer（至少 45 秒，且會參考素材時長再延長）強制切回 `MAIN_LOOP` 並重排下一次插播。
 
 ## 聊天室送出穩定性
 
@@ -108,6 +116,23 @@ npm run dev
   - `button onClick` / `onTouchEnd`：呼叫同一個 `onSubmit`。
   - `onKeyDown Enter`：排除 IME 組字（`isComposing`/`keyCode===229`）才送出。
 - iOS 鍵盤：仍用 `visualViewport` 修正輸入列位置，並提高輸入列 `z-index` 與 `pointer-events`，避免透明層或覆蓋層吞點擊。
+
+## 聊天室主題與影片狀態連動
+
+- 影片切換成功後，`switchTo()` 在 `currentKey` 更新完成時會發出 `emitSceneEvent({ type: "VIDEO_ACTIVE", key, startedAt })`。
+  - `startedAt` 以 `play()` 成功且第一幀可用後時間點為準。
+  - `loop3`、`loop`、`loop2` 都會發送，作為聊天室 topic state 的單一來源。
+- 聊天室 topicMode：
+  - `oldhouse_room_loop3`（主循環）→ `CALM_PARANOIA`。
+  - `oldhouse_room_loop` / `oldhouse_room_loop2`（插播）→ 先維持 `NORMAL`，播放滿 5 秒後進入 `LIGHT_FLICKER_FEAR`。
+  - `LIGHT_FLICKER_FEAR` 持續時間為隨機 10~12 秒，結束後回到正常節奏。
+- 取消條件：
+  - 若插播 5 秒內切回 `loop3`，會清除 `lightFearTimer`，不會誤觸發燈光恐懼討論。
+  - 回到 `loop3` 時也會清除 fear duration timer，立即恢復 `CALM_PARANOIA`。
+- 與人格 / TagV2 / 節奏模型關係：
+  - 沿用既有 20 人格風格（標點、語助詞、網路語感）只替換 topic 語料池。
+  - `TagV2` 規則不變：只 tag activeUsers、activeUsers < 3 禁止 tag、輸出前仍經 `sanitizeMentions`。
+  - 同一套 chat scheduler 會依 topicMode 調整頻率：`CALM_PARANOIA` 偏慢、`LIGHT_FLICKER_FEAR` 較密但不刷版，未新增第二套 interval。
 
 ## 其他
 
