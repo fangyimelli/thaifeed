@@ -607,12 +607,13 @@ export default function App() {
       <main className="app-layout">
         <div className="top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
-          <div className="video-container">
+          <div className={`video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
             {!hasFatalInitError ? (
               <SceneView
                 targetConsonant={state.currentConsonant.letter}
                 curse={state.curse}
                 anchor={state.currentAnchor}
+                isDesktopLayout={isDesktopLayout}
               />
             ) : (
               <div className="asset-warning scene-placeholder">

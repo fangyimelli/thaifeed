@@ -29,6 +29,7 @@ type Props = {
   targetConsonant: string;
   curse: number;
   anchor: AnchorType;
+  isDesktopLayout: boolean;
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
@@ -155,6 +156,7 @@ export default function SceneView({
   targetConsonant,
   curse,
   anchor,
+  isDesktopLayout,
   onNeedUserGestureChange,
   onSceneRunning,
   onSceneError
@@ -1277,8 +1279,8 @@ export default function SceneView({
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
 
   return (
-    <section className="scene-view">
-      <div className="video-layer-wrapper">
+    <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
+      <div className={`video-layer-wrapper ${isDesktopLayout ? 'video-layer-wrapper-desktop' : 'video-layer-wrapper-mobile'}`}>
         <div
           ref={videoLayerRef}
           className={`scene-video-layer filter-layer ${curseVisualClass(curse)}`}
