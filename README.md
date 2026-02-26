@@ -17,12 +17,11 @@ npm run dev
 
 > 程式以相對路徑 `assets/...` 做檢查，部署時會自動套用 base path；請勿把素材路徑硬寫成 `/assets/...`。
 
-### 必要影片（4 支）
+### 必要影片（3 支）
 
 - `assets/scenes/oldhouse_room_loop.mp4`
 - `assets/scenes/oldhouse_room_loop2.mp4`
 - `assets/scenes/oldhouse_room_loop3.mp4`
-- `assets/scenes/oldhouse_room_loop4.mp4`
 
 ### 必要音效（3 支）
 
@@ -33,7 +32,7 @@ npm run dev
 ### 放置位置
 
 - 開發時請放在 `public/assets/...`，例如：
-  - `public/assets/scenes/oldhouse_room_loop4.mp4`
+  - `public/assets/scenes/oldhouse_room_loop3.mp4`
   - `public/assets/sfx/fan_loop.wav`
 
 ## Base path / 部署路徑說明
@@ -56,7 +55,7 @@ npm run dev
 若任一必要素材不存在或 URL 解析錯誤，初始化會停在 ERROR，且畫面與 Console 會顯示同一份 missing 清單，每筆包含：
 
 - 素材類型與名稱（video/audio + name）
-- 相對路徑（例如 `assets/scenes/oldhouse_room_loop4.mp4`）
+- 相對路徑（例如 `assets/scenes/oldhouse_room_loop3.mp4`）
 - 實際檢查 URL（已套用 base path）
 - 檢查失敗原因（HEAD/GET status 或其他 fetch error）
 
@@ -74,4 +73,4 @@ npm run dev
 
 ## 其他
 
-- 若你目前 repo 尚未放入 `oldhouse_room_loop4.mp4`，啟動會被正確阻擋並提示該檔案缺失；補上後即可進入 RUNNING。
+- 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
