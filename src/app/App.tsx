@@ -21,10 +21,10 @@ import type { ChatMessage, DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import ChatPanel from '../ui/chat/ChatPanel';
-import SceneView, { type SceneInitError } from '../ui/scene/SceneView';
+import SceneView from '../ui/scene/SceneView';
 import LiveHeader from '../ui/hud/LiveHeader';
 import LoadingOverlay, { type LoadingState } from '../ui/hud/LoadingOverlay';
-import { preloadAssets } from '../utils/preload';
+import { preloadAssets, verifyRequiredAssets, type MissingRequiredAsset } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
 import { collectActiveUsers } from '../core/systems/mentionV2';
@@ -44,6 +44,11 @@ function nextJoinDelayMs() {
 }
 
 
+
+function formatMissingAsset(asset: MissingRequiredAsset) {
+  return `[${asset.type}] ${asset.name} | ${asset.relativePath} | ${asset.url} | ${asset.reason}`;
+}
+
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
@@ -59,12 +64,10 @@ export default function App() {
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
   const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
-  const [loadingStageText, setLoadingStageText] = useState('正在準備直播畫面');
-  const [loadingError, setLoadingError] = useState<SceneInitError | null>(null);
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [initStatusText, setInitStatusText] = useState('初始化中');
-  const [requiredAssetErrors, setRequiredAssetErrors] = useState<string[]>([]);
+  const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
@@ -89,16 +92,25 @@ export default function App() {
     const runSetup = async () => {
       setIsReady(false);
       setIsRendererReady(false);
-      setLoadingError(null);
       setLoadingState('BOOT_START');
-      setLoadingStageText('正在準備直播畫面');
 
       const loadingStart = performance.now();
-      setInitStatusText('正在檢查素材');
+      setInitStatusText('正在檢查必要素材');
+      const missingRequired = await verifyRequiredAssets();
+      if (isCancelled) return;
+
+      if (missingRequired.length > 0) {
+        setRequiredAssetErrors(missingRequired);
+        console.error('[asset-required] 素材未加入專案或 base path 解析錯誤', missingRequired);
+        setInitStatusText('必要素材缺失（素材未加入專案或 base path 設定錯誤）');
+        return;
+      }
+
+      setInitStatusText('正在預載素材');
       const result = await preloadAssets(ASSET_MANIFEST, {
         onProgress: (progressState) => {
           setLoadingProgress(progressState.progress);
-          setInitStatusText(`正在檢查素材 (${progressState.loaded}/${progressState.total})`);
+          setInitStatusText(`正在預載素材 (${progressState.loaded}/${progressState.total})`);
         }
       });
 
@@ -108,7 +120,6 @@ export default function App() {
       renderer.mount();
       setIsRendererReady(true);
       setLoadingState('ASSETS_READY');
-      setLoadingStageText('正在建立聊天室');
 
       const elapsed = performance.now() - loadingStart;
       const minimumLoadingMs = 800;
@@ -120,11 +131,16 @@ export default function App() {
 
       setHasOptionalAssetWarning(result.optionalErrors.length > 0);
       if (result.requiredErrors.length > 0) {
-        setRequiredAssetErrors(result.requiredErrors);
-        result.requiredErrors.forEach((asset) => {
-          console.error('[asset-required] 缺少必要素材', { asset, url: asset });
-        });
-        setInitStatusText('必要素材缺失，請檢查路徑');
+        const preloadMissing = result.requiredErrors.map((url) => ({
+          name: 'preload_failure',
+          type: 'video' as const,
+          relativePath: 'unknown',
+          url,
+          reason: 'preload failed after required-asset verification'
+        }));
+        setRequiredAssetErrors(preloadMissing);
+        console.error('[asset-required] 預載失敗', preloadMissing);
+        setInitStatusText('必要素材預載失敗，請檢查 Console');
         return;
       }
 
@@ -257,7 +273,6 @@ export default function App() {
     if (loadingState === 'ERROR') return;
     if (isReady && isRendererReady && loadingState === 'ASSETS_CHECKING') {
       setLoadingState('ASSETS_READY');
-      setLoadingStageText('正在建立聊天室');
     }
   }, [isReady, isRendererReady, loadingState]);
 
@@ -299,7 +314,7 @@ export default function App() {
 
   const loadingErrorTitle = useMemo(() => {
     if (!hasFatalInitError) return undefined;
-    return '初始化失敗：缺少必要素材';
+    return '初始化失敗：素材未加入專案或 base path 設定錯誤';
   }, [hasFatalInitError]);
 
   const submit = () => {
@@ -440,7 +455,7 @@ export default function App() {
         progress={loadingProgress}
         statusText={initStatusText}
         errorTitle={loadingErrorTitle}
-        errors={requiredAssetErrors}
+        errors={requiredAssetErrors.map(formatMissingAsset)}
       />
       {shouldShowMainContent && (
       <main className="app-layout">
@@ -457,7 +472,7 @@ export default function App() {
                   />
                 ) : (
                   <div className="asset-warning scene-placeholder">
-                    初始化失敗：必要素材缺失，請開啟 Console 確認缺檔清單。
+                    初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
                   </div>
                 )}
               </div>

@@ -1,5 +1,3 @@
-import type { SceneInitError } from '../scene/SceneView';
-
 export type LoadingState =
   | 'BOOT_START'
   | 'ASSETS_CHECKING'
@@ -35,8 +33,8 @@ export default function LoadingOverlay({
         {!hasErrors && <p>載入直播畫面中{typeof progress === 'number' ? ` (${progress}%)` : ''}</p>}
         {hasErrors && (
           <div className="loading-error-block" role="alert">
-            <p>{errorTitle ?? '必要素材缺失，無法完成初始化。'}</p>
-            <p>請確認以下檔案路徑：</p>
+            <p>{errorTitle ?? '必要素材缺失（素材未加入專案或 base path 設定錯誤），無法完成初始化。'}</p>
+            <p>請確認以下 missing 清單（名稱 / 相對路徑 / 實際檢查 URL / 原因）：</p>
             <ul>
               {errors.map((item) => (
                 <li key={item}>
