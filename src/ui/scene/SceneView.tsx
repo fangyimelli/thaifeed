@@ -66,6 +66,8 @@ const CROSSFADE_MS = 420;
 const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
 const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
 const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 45000;
+const FIRST_JUMP_DELAY_MIN_MS = 3000;
+const FIRST_JUMP_DELAY_MAX_MS = 9000;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
