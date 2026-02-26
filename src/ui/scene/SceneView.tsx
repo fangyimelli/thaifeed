@@ -245,6 +245,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
   const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
   const [requiredAudioError, setRequiredAudioError] = useState<string | null>(null);
+  const [videoErrorDetail, setVideoErrorDetail] = useState<string | null>(null);
   const videoLayerRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
@@ -266,10 +267,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
-  const debugEnabled = useMemo(() => {
+  const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('debug') === '1';
-  }, []);
+    const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+    const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
+    return searchEnabled || hashEnabled;
+  });
   const [debugTick, setDebugTick] = useState(() => Date.now());
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
@@ -579,6 +582,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         done = true;
         cleanup();
         setAssets((prev) => ({ ...prev, videoOk: false }));
+        setVideoErrorDetail(error.message);
         reject(error);
       };
 
@@ -588,7 +592,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         }
       };
       const onError = () => {
-        rejectReady(new Error(`Failed to preload ${nextKey}`));
+        rejectReady(new Error(`Failed to preload ${nextKey} (${resolvedVideoSrc})`));
       };
       const cleanup = () => {
         if (fallbackTimer) {
@@ -989,6 +993,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     currentLoopKeyRef.current = MAIN_LOOP;
 
     setRequiredAudioError(null);
+    setVideoErrorDetail(null);
 
     try {
       await verifyRequiredAudioAssets();
@@ -1051,6 +1056,23 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   useEffect(() => {
     curseRef.current = curse;
   }, [curse]);
+
+
+  useEffect(() => {
+    const syncDebugEnabled = () => {
+      const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+      const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
+      setDebugEnabled(searchEnabled || hashEnabled);
+    };
+
+    syncDebugEnabled();
+    window.addEventListener('popstate', syncDebugEnabled);
+    window.addEventListener('hashchange', syncDebugEnabled);
+    return () => {
+      window.removeEventListener('popstate', syncDebugEnabled);
+      window.removeEventListener('hashchange', syncDebugEnabled);
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasConfirmedPlayback) return;
@@ -1282,7 +1304,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             preload="auto"
             playsInline
             autoPlay
-            onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
+            onError={() => {
+              setAssets((prev) => ({ ...prev, videoOk: false }));
+              setVideoErrorDetail('videoA element error');
+            }}
           />
 
           <video
@@ -1292,7 +1317,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             preload="auto"
             playsInline
             autoPlay
-            onError={() => setAssets((prev) => ({ ...prev, videoOk: false }))}
+            onError={() => {
+              setAssets((prev) => ({ ...prev, videoOk: false }));
+              setVideoErrorDetail('videoB element error');
+            }}
           />
 
           {assets.smokeOk && (
@@ -1382,7 +1410,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
 
       {!assets.videoOk && (
         <div className="asset-warning">
-          找不到影片：<code>/public/assets/scenes/{currentLoopKey}.mp4</code>
+          影片載入失敗：<code>{videoErrorDetail ?? `active=${currentLoopKey}`}</code>
         </div>
       )}
 

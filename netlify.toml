@@ -1,5 +1,5 @@
 [build]
-  command = "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build"
+  command = "node -e \"const fs=require('fs');const src=fs.readFileSync('src/ui/scene/SceneView.tsx','utf8');if(/\\buseMemo\\b/.test(src)){console.error('Unexpected useMemo token in SceneView.tsx');process.exit(1)};console.log('SceneView import OK (no useMemo)')\" && node ./node_modules/typescript/bin/tsc -b --force && node ./node_modules/vite/bin/vite.js build"
   publish = "dist"
 
 [build.environment]
