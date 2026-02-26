@@ -5,10 +5,8 @@
   --app-vh: 100vh;
   --vv-offset-top: 0px;
   --vv-offset-left: 0px;
-  --shell-padding: 0px;
+  --shell-padding: 12px;
   --shell-gap: 12px;
-  --top-dock-height: 0px;
-  --input-dock-height: 72px;
 }
 
 * { box-sizing: border-box; }
@@ -16,38 +14,33 @@ html,
 body {
   margin: 0;
   height: 100%;
-  overflow: hidden;
 }
 
 #root {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
 }
 
 .app-shell {
-  height: var(--app-vh);
-  overflow: hidden;
+  min-height: 100%;
   position: relative;
-}
-
-.app-root-layout {
   padding: var(--shell-padding);
 }
 
 .app-layout {
-  height: 100%;
-  min-height: 0;
+  min-height: calc(100vh - (var(--shell-padding) * 2));
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: 2fr 1fr;
   gap: var(--shell-gap);
-  overflow: hidden;
+}
+
+.top-dock,
+.chat-container {
+  min-height: 0;
 }
 
 .top-dock {
-  position: relative;
-  top: 0;
-  margin: 0;
-  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading-overlay {
@@ -70,7 +63,7 @@ body {
 .video-container {
   width: 100%;
   aspect-ratio: 16 / 9;
-  min-height: 240px;
+  min-height: 360px;
   position: relative;
   margin: 0;
   padding: 0;
@@ -80,32 +73,26 @@ body {
 }
 
 .chat-container {
-  min-height: 0;
   overflow: hidden;
 }
 
 .chat-panel {
   height: 100%;
-  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
-}
-
-.input-surface {
   background: #111316;
-  border-left: 1px solid #2b2d31;
-  border-right: 1px solid #2b2d31;
+  border: 1px solid #2b2d31;
+  border-radius: 12px;
 }
 
 .chat-header {
   display: flex;
   align-items: center;
   padding: 10px 12px;
-  border-top: 1px solid #2b2d31;
   border-bottom: 1px solid #2b2d33;
-  border-radius: 12px 12px 0 0;
   font-size: 13px;
+  background: #1a1c21;
 }
 
 .chat-list {
@@ -119,8 +106,6 @@ body {
   flex-direction: column;
   scrollbar-width: thin;
   background: #111316;
-  border-left: 1px solid #2b2d31;
-  border-right: 1px solid #2b2d31;
 }
 
 .chat-items { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
@@ -151,14 +136,14 @@ body {
 .jump-bottom { position: absolute; right: 14px; bottom: 72px; border: none; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: #2f6eff; color: #fff; cursor: pointer; z-index: 2; }
 
 .chat-input {
-  position: relative;
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px);
-  border: 1px solid #2b2d33;
   border-top: 1px solid #2b2d33;
-  border-radius: 0 0 12px 12px;
+  background: #111;
   z-index: 20;
 }
 
@@ -220,9 +205,54 @@ body {
 .filter-layer.curse-critical { filter: blur(2px) hue-rotate(8deg); transform: scale(1.02); }
 .scene-view .curse-critical.distortion-overlay { animation: shake .12s infinite, glitch .45s infinite; }
 
-@media (max-width: 899px) {
+@media (max-width: 1023px) {
   :root {
+    --shell-padding: 0px;
     --shell-gap: 0px;
+  }
+
+  html,
+  body {
+    height: var(--app-vh);
+    overflow: hidden;
+  }
+
+  #root,
+  .app-shell {
+    height: var(--app-vh);
+    overflow: hidden;
+  }
+
+  .app-layout {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .top-dock {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: #0f1117;
+  }
+
+  .video-container {
+    min-height: 240px;
+  }
+
+  .chat-container {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .chat-panel {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
   }
 
   .live-header,
@@ -234,6 +264,15 @@ body {
 
   .chat-header {
     border-top: none;
+  }
+
+  .chat-input {
+    position: sticky;
+    bottom: 0;
+  }
+
+  .glyph-blink {
+    font-size: clamp(52px, 13vw, 84px);
   }
 }
 
