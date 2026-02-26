@@ -65,8 +65,6 @@ const CROSSFADE_MS = 420;
 const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
 const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
 const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 2200;
-const FIRST_JUMP_DELAY_MIN_MS = 9000;
-const FIRST_JUMP_DELAY_MAX_MS = 14000;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
@@ -828,18 +826,6 @@ export default function SceneView({
     }
   }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
-  const scheduleNextJump = useCallback((opts?: { force?: boolean; delayMs?: number }) => {
-    const force = opts?.force ?? false;
-    const explicitDelay = opts?.delayMs;
-
-    if (!force && jumpTimerRef.current) {
-      console.log('[VIDEO]', 'scheduleNextJump keep existing timer', {
-        nextJumpAt: nextJumpAtRef.current,
-        dueInMs: nextJumpAtRef.current ? Math.max(0, nextJumpAtRef.current - Date.now()) : null
-      });
-      return;
-    }
-
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
@@ -898,7 +884,7 @@ export default function SceneView({
     } catch (error) {
       isInJumpRef.current = false;
       updateVideoDebug({ isInJump: false, lastError: String(error instanceof Error ? error.message : error) });
-      scheduleNextJump({ force: true });
+      scheduleNextJump();
       return;
     }
 
@@ -922,7 +908,7 @@ export default function SceneView({
         updateVideoDebug({ isInJump: false, lastError: 'jump-return-timeout-fallback' });
         void switchTo(MAIN_LOOP).then(() => {
           currentLoopKeyRef.current = MAIN_LOOP;
-          scheduleNextJump({ force: true });
+          scheduleNextJump();
         });
       }
     }, JUMP_RETURN_SCHEDULE_FALLBACK_MS);

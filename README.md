@@ -88,9 +88,7 @@ npm run dev
 
 ## 插播排查（timer / ended / lock / timeout）
 
-- `scheduleNextJump()` 改為「預設保留既有 timer」，避免在 curse/state 變動時被反覆重排、導致永遠到不了觸發時間。
-  - 只有 `force=true` 才會清舊 timer 並重排。
-  - 支援 `delayMs` 指定首跳時間，降低「長時間只看到 loop3」體感。
+- `scheduleNextJump()` 每次都先清掉舊 timer 再重排，避免重複或遺失。
 - `triggerJumpOnce()` 會檢查 `isSwitching` / `isInJump` / `currentKey===MAIN_LOOP`，並輸出 debug log。
 - `switchTo()` 使用 `try/finally` 強制釋放 `isSwitching` lock，任何失敗都不會卡死。
 - `preloadIntoBuffer()` 有 timeout fallback：
