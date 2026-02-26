@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AMBIENT_BY_KEY,
   FAN_LOOP_PATH,
   FOOTSTEPS_PATH,
   GHOST_FEMALE_PATH,
@@ -106,10 +105,11 @@ type AudioDebugState = {
   lastFootstepsAt: number;
   lastGhostAt: number;
   activeVideoKey: OldhouseLoopKey | null;
-  activeAmbientKey: OldhouseLoopKey | null;
   activeVideoEl: 'A' | 'B';
   switchId: number;
   phase: string;
+  videoStates: Array<{ id: 'videoA' | 'videoB'; paused: boolean; muted: boolean; volume: number; currentTime: number }>;
+  playingAudios: Array<{ label: string; muted: boolean; volume: number; currentTime: number }>;
 };
 
 type VideoDebugState = {
@@ -159,8 +159,6 @@ export default function SceneView({
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
   const currentVideoRef = useRef<'A' | 'B'>('A');
-  const ambientRef = useRef<HTMLAudioElement | null>(null);
-  const ambientBufferRef = useRef<HTMLAudioElement | null>(null);
   const fanAudioRef = useRef<HTMLAudioElement | null>(null);
   const footstepsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ghostAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -190,12 +188,33 @@ export default function SceneView({
       lastFootstepsAt: 0,
       lastGhostAt: 0,
       activeVideoKey: null,
-      activeAmbientKey: null,
       activeVideoEl: currentVideoRef.current,
       switchId: 0,
-      phase: 'idle'
+      phase: 'idle',
+      videoStates: [],
+      playingAudios: []
     };
     window.__AUDIO_DEBUG__ = { ...prev, ...patch };
+  }, []);
+
+  const setActiveVideoAudio = useCallback((activeEl: HTMLVideoElement, inactiveEl: HTMLVideoElement) => {
+    activeEl.defaultMuted = false;
+    activeEl.muted = false;
+    if (activeEl.volume === 0) {
+      activeEl.volume = 1;
+    }
+
+    inactiveEl.muted = true;
+    inactiveEl.defaultMuted = true;
+    inactiveEl.volume = 0;
+  }, []);
+
+  const stopAllNonPersistentSfx = useCallback(() => {
+    [footstepsAudioRef.current, ghostAudioRef.current].forEach((audio) => {
+      if (!audio) return;
+      audio.pause();
+      audio.currentTime = 0;
+    });
   }, []);
 
   const getCurrentVideoEl = useCallback(() => {
@@ -245,6 +264,26 @@ export default function SceneView({
     onNeedUserGestureChange?.(value);
   }, [onNeedUserGestureChange]);
 
+  const playAmbientForKey = useCallback(async (key: OldhouseLoopKey) => {
+    if (key === MAIN_LOOP) {
+      stopAllNonPersistentSfx();
+    }
+    const fanAudio = fanAudioRef.current;
+    if (!fanAudio || needsUserGestureToPlayRef.current) return;
+    if (!fanAudio.paused) return;
+    fanAudio.currentTime = 0;
+    fanAudio.loop = true;
+    fanAudio.muted = false;
+    if (fanAudio.volume === 0) {
+      fanAudio.volume = 0.4;
+    }
+    try {
+      await fanAudio.play();
+    } catch {
+      setNeedsGestureState(true);
+    }
+  }, [setNeedsGestureState, stopAllNonPersistentSfx]);
+
   const announceRunning = useCallback(() => {
     if (runningAnnouncedRef.current) return;
     runningAnnouncedRef.current = true;
@@ -284,32 +323,36 @@ export default function SceneView({
     });
   }, [updateVideoDebug]);
 
-  const applyAudibleDefaults = useCallback(() => {
+  const collectAudioDebugSnapshot = useCallback(() => {
     const currentVideo = getCurrentVideoEl();
     const bufferVideo = getBufferVideoEl();
-    [currentVideo, bufferVideo].forEach((video) => {
-      if (!video) return;
-      video.defaultMuted = false;
-      video.muted = false;
-      video.volume = 1;
-      video.controls = false;
-      video.loop = false;
+    const videoStates = [videoARef.current, videoBRef.current]
+      .filter((video): video is HTMLVideoElement => Boolean(video))
+      .map((video) => ({
+        id: video.id as 'videoA' | 'videoB',
+        paused: video.paused,
+        muted: video.muted,
+        volume: Number(video.volume.toFixed(2)),
+        currentTime: Number(video.currentTime.toFixed(2))
+      }));
+    const audios = [
+      { label: 'fan_loop', el: fanAudioRef.current },
+      { label: 'footsteps', el: footstepsAudioRef.current },
+      { label: 'ghost_female', el: ghostAudioRef.current }
+    ].filter((item) => item.el && !item.el.paused)
+      .map((item) => ({
+        label: item.label,
+        muted: item.el?.muted ?? true,
+        volume: Number((item.el?.volume ?? 0).toFixed(2)),
+        currentTime: Number((item.el?.currentTime ?? 0).toFixed(2))
+      }));
+    updateAudioDebug({
+      activeVideoEl: currentVideo?.id === 'videoB' ? 'B' : 'A',
+      videoStates,
+      playingAudios: audios
     });
-
-    [ambientRef.current, ambientBufferRef.current].forEach((ambient) => {
-      if (!ambient) return;
-      ambient.muted = false;
-      ambient.volume = Math.max(ambient.volume, 0);
-    });
-
-    [fanAudioRef.current, footstepsAudioRef.current, ghostAudioRef.current].forEach((audio) => {
-      if (!audio) return;
-      audio.muted = false;
-      if (audio.volume <= 0) {
-        audio.volume = 0.4;
-      }
-    });
-  }, [getBufferVideoEl, getCurrentVideoEl]);
+    return { videoStates, audios, bufferVideo };
+  }, [getBufferVideoEl, getCurrentVideoEl, updateAudioDebug]);
 
   const computeFootstepsIntervalMs = useCallback((curseValue: number) => {
     const c = clampCurse(curseValue) / 100;
@@ -416,14 +459,16 @@ export default function SceneView({
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
-    const ambient = ambientRef.current;
     if (!video || !hasConfirmedPlayback) return false;
 
-    applyAudibleDefaults();
+    const bufferVideo = getBufferVideoEl();
+    if (bufferVideo) {
+      setActiveVideoAudio(video, bufferVideo);
+    }
 
     try {
       await video.play();
-      if (ambient) await ambient.play();
+      await playAmbientForKey(currentLoopKeyRef.current);
       setNeedsGestureState(false);
       return true;
     } catch (e: unknown) {
@@ -431,29 +476,7 @@ export default function SceneView({
       console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
-  }, [applyAudibleDefaults, getCurrentVideoEl, hasConfirmedPlayback]);
-
-  const stopAmbient = useCallback(() => {
-    [ambientRef.current, ambientBufferRef.current].forEach((ambient) => {
-      if (!ambient) return;
-      ambient.pause();
-      ambient.currentTime = 0;
-    });
-    ambientRef.current = null;
-    ambientBufferRef.current = null;
-  }, []);
-
-  const createAmbient = useCallback((key: OldhouseLoopKey) => {
-    const ambientSrc = AMBIENT_BY_KEY[key];
-    const cachedAmbient = getCachedAsset(ambientSrc);
-    const ambient = cachedAmbient instanceof HTMLAudioElement ? cachedAmbient : new Audio(ambientSrc);
-    ambient.preload = 'auto';
-    ambient.loop = true;
-    ambient.currentTime = 0;
-    ambient.muted = false;
-    ambient.volume = 1;
-    return ambient;
-  }, []);
+  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, playAmbientForKey, setActiveVideoAudio]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     const c = Math.min(Math.max(curseValue, 0), 100);
@@ -608,9 +631,6 @@ export default function SceneView({
 
     const switchId = switchCounterRef.current + 1;
     switchCounterRef.current = switchId;
-    const nextAmbient = createAmbient(nextKey);
-    const prevAmbient = ambientRef.current;
-    ambientBufferRef.current = nextAmbient;
     const fromKey = currentLoopKeyRef.current;
     const nextUrl = getVideoUrlForKey(nextKey);
     const currentSrc = currentEl.currentSrc || currentEl.src;
@@ -635,12 +655,9 @@ export default function SceneView({
 
 
       bufferEl.defaultMuted = false;
-      bufferEl.muted = false;
-      bufferEl.volume = 1;
+      bufferEl.muted = true;
+      bufferEl.volume = 0;
       bufferEl.controls = false;
-
-      nextAmbient.muted = false;
-      nextAmbient.volume = 1;
 
       updateAudioDebug({ switchId, phase: 'bufferPlayStart' });
       console.log('[VIDEO]', 'switchTo buffer play start', {
@@ -654,6 +671,7 @@ export default function SceneView({
 
       try {
         await bufferEl.play();
+        setActiveVideoAudio(bufferEl, currentEl);
       } catch (e: unknown) {
         setNeedsGestureState(true);
         updateVideoDebug({ lastError: `video play blocked for ${nextKey}` });
@@ -665,13 +683,11 @@ export default function SceneView({
         switchId,
         phase: 'crossfadeStart',
         activeVideoKey: nextKey,
-        activeAmbientKey: nextKey,
         activeVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A'
       });
       console.log('[VIDEO]', 'switchTo crossfade start', {
         switchId,
         videoKey: nextKey,
-        ambientKey: nextKey,
         outgoingVideoEl: currentVideoRef.current,
         incomingVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A',
         curse: curseRef.current
@@ -702,24 +718,13 @@ export default function SceneView({
         bufferActive: bufferEl.classList.contains('is-active')
       });
 
-      currentEl.volume = 0;
-      currentEl.muted = true;
-      bufferEl.muted = false;
-      bufferEl.volume = 1;
+      setActiveVideoAudio(bufferEl, currentEl);
       console.log('[VIDEO]', 'audio lanes', {
         current: { muted: currentEl.muted, vol: currentEl.volume },
         buffer: { muted: bufferEl.muted, vol: bufferEl.volume }
       });
 
-      try {
-        if (hasConfirmedPlayback) {
-          await nextAmbient.play();
-        }
-      } catch (e: unknown) {
-        setNeedsGestureState(true);
-        updateVideoDebug({ lastError: `ambient play blocked for ${nextKey}` });
-        console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
-      }
+      await playAmbientForKey(nextKey);
 
       setNeedsGestureState(false);
 
@@ -727,12 +732,9 @@ export default function SceneView({
       await wait(pauseOldVideoAtMs);
       currentEl.pause();
 
-      if (prevAmbient) {
-        prevAmbient.volume = 0;
-        prevAmbient.muted = true;
-        prevAmbient.pause();
-        prevAmbient.currentTime = 0;
-      }
+      currentEl.muted = true;
+      currentEl.defaultMuted = true;
+      currentEl.volume = 0;
 
       const restMs = Math.max(0, CROSSFADE_MS - pauseOldVideoAtMs);
       if (restMs > 0) {
@@ -741,12 +743,8 @@ export default function SceneView({
 
       currentEl.currentTime = 0;
       currentEl.muted = true;
+      currentEl.defaultMuted = true;
       currentEl.volume = 0;
-
-      nextAmbient.muted = false;
-      nextAmbient.volume = 1;
-      ambientRef.current = nextAmbient;
-      ambientBufferRef.current = null;
 
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
       markActiveVideo();
@@ -774,16 +772,23 @@ export default function SceneView({
         switchId,
         phase: 'switchDone',
         activeVideoKey: nextKey,
-        activeAmbientKey: nextKey,
         activeVideoEl: currentVideoRef.current
       });
       console.log('[VIDEO]', 'switchTo done', {
         switchId,
         videoKey: nextKey,
-        ambientKey: nextKey,
         activeVideoEl: currentVideoRef.current,
         curse: curseRef.current
       });
+
+      const { videoStates, audios } = collectAudioDebugSnapshot();
+      if (debugEnabled) {
+        console.log('[AUDIO-DEBUG] switch snapshot', {
+          activeKey: nextKey,
+          videoStates,
+          playingAudios: audios
+        });
+      }
 
       if (nextKey === MAIN_LOOP) {
         const warmupKey = randomPick(JUMP_LOOPS);
@@ -806,7 +811,7 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current
       });
     }
-  }, [createAmbient, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, preloadIntoBuffer, updateAudioDebug, updateVideoDebug]);
+  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, updateAudioDebug, updateVideoDebug]);
 
   const scheduleNextJump = useCallback(() => {
     if (jumpTimerRef.current) {
@@ -1046,10 +1051,11 @@ export default function SceneView({
       lastFootstepsAt: 0,
       lastGhostAt: 0,
       activeVideoKey: null,
-      activeAmbientKey: null,
       activeVideoEl: currentVideoRef.current,
       switchId: 0,
-      phase: 'init'
+      phase: 'init',
+      videoStates: [],
+      playingAudios: []
     };
 
     return () => {
@@ -1078,7 +1084,7 @@ export default function SceneView({
     ghostAudioRef.current.muted = false;
 
     return () => {
-      stopAmbient();
+      stopAllNonPersistentSfx();
       stopOldhouseCalmMode();
       fanAudioRef.current?.pause();
       footstepsAudioRef.current?.pause();
@@ -1087,7 +1093,7 @@ export default function SceneView({
       footstepsAudioRef.current = null;
       ghostAudioRef.current = null;
     };
-  }, [stopAmbient, stopOldhouseCalmMode]);
+  }, [stopAllNonPersistentSfx, stopOldhouseCalmMode]);
 
   useEffect(() => {
     return () => {
@@ -1104,6 +1110,7 @@ export default function SceneView({
       setDebugTick(Date.now());
       const currentEl = getCurrentVideoEl();
       const bufferEl = getBufferVideoEl();
+      const { videoStates, audios } = collectAudioDebugSnapshot();
       updateVideoDebug({
         currentKey: currentLoopKeyRef.current,
         isSwitching: isSwitchingRef.current,
@@ -1118,12 +1125,19 @@ export default function SceneView({
         currentReadyState: currentEl?.readyState ?? null,
         currentPaused: currentEl?.paused ?? null
       });
+      if (Date.now() % 2000 < 220) {
+        console.log('[AUDIO-DEBUG] tick', {
+          activeKey: currentLoopKeyRef.current,
+          videoStates,
+          playingAudios: audios
+        });
+      }
     }, 200);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [debugEnabled, getBufferVideoEl, getCurrentVideoEl, updateVideoDebug]);
+  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, updateVideoDebug]);
 
   const videoDebug = window.__VIDEO_DEBUG__;
   const trimSrc = (src: string | null | undefined) => {
@@ -1289,7 +1303,8 @@ export default function SceneView({
                     const videoB = videoBRef.current;
                     if (videoA) videoA.pause();
                     if (videoB) videoB.pause();
-                    stopAmbient();
+                    stopAllNonPersistentSfx();
+                    fanAudioRef.current?.pause();
                   }}
                 >
                   否
@@ -1319,6 +1334,9 @@ export default function SceneView({
             lastSwitch: {(videoDebug?.lastSwitchFrom ?? '-')} -&gt; {(videoDebug?.lastSwitchTo ?? '-')} | {lastSwitchAgoMs == null ? '-' : `${lastSwitchAgoMs}ms ago`}
           </div>
           <div>currentEl readyState/paused: {videoDebug?.currentReadyState ?? '-'} / {String(videoDebug?.currentPaused ?? false)}</div>
+          <div>activeKey(audio): {window.__AUDIO_DEBUG__?.activeVideoKey ?? '-'}</div>
+          <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
+          <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'}</div>
         </div>
       )}
     </section>

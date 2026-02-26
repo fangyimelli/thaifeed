@@ -40,12 +40,6 @@ export const FAN_LOOP_PATH = resolveAssetUrl(FAN_LOOP_RELATIVE_PATH);
 export const FOOTSTEPS_PATH = resolveAssetUrl(FOOTSTEPS_RELATIVE_PATH);
 export const GHOST_FEMALE_PATH = resolveAssetUrl(GHOST_FEMALE_RELATIVE_PATH);
 
-export const AMBIENT_BY_KEY: Record<OldhouseLoopKey, string> = {
-  oldhouse_room_loop: FAN_LOOP_PATH,
-  oldhouse_room_loop2: FAN_LOOP_PATH,
-  oldhouse_room_loop3: FAN_LOOP_PATH
-};
-
 export type RequiredAudioAsset = {
   name: string;
   relativePath: string;
