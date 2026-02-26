@@ -8,6 +8,7 @@ import {
   type OldhouseLoopKey,
   VIDEO_PATH_BY_KEY
 } from '../../config/oldhousePlayback';
+import { resolveAssetUrl } from '../../config/assetUrls';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
@@ -47,6 +48,11 @@ const initialAssets: SceneAssetState = {
   noiseOk: true,
   vignetteOk: true
 };
+
+const OVERLAY_SMOKE_SRC = resolveAssetUrl('assets/overlays/overlay_smoke_room.png');
+const OVERLAY_CRACK_SRC = resolveAssetUrl('assets/overlays/overlay_crack_glass.png');
+const OVERLAY_VIGNETTE_SRC = resolveAssetUrl('assets/overlays/overlay_vignette.png');
+const OVERLAY_NOISE_SRC = resolveAssetUrl('assets/overlays/overlay_noise_film.png');
 
 const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
   under_table: { top: 74, left: 46 },
@@ -1233,7 +1239,7 @@ export default function SceneView({
           {assets.smokeOk && (
             <img
               className="overlay smoke"
-              src="/assets/overlays/overlay_smoke_room.png"
+              src={OVERLAY_SMOKE_SRC}
               alt="smoke"
               onError={() => setAssets((prev) => ({ ...prev, smokeOk: false }))}
             />
@@ -1241,7 +1247,7 @@ export default function SceneView({
           {assets.crackOk && (
             <img
               className="overlay crack"
-              src="/assets/overlays/overlay_crack_glass.png"
+              src={OVERLAY_CRACK_SRC}
               alt="crack"
               onError={() => setAssets((prev) => ({ ...prev, crackOk: false }))}
             />
@@ -1249,7 +1255,7 @@ export default function SceneView({
           {assets.vignetteOk && (
             <img
               className="overlay vignette"
-              src="/assets/overlays/overlay_vignette.png"
+              src={OVERLAY_VIGNETTE_SRC}
               alt="vignette"
               onError={() => setAssets((prev) => ({ ...prev, vignetteOk: false }))}
             />
@@ -1274,7 +1280,7 @@ export default function SceneView({
         {assets.noiseOk && (
           <img
             className={`overlay noise distortion-overlay ${curseVisualClass(curse)}`}
-            src="/assets/overlays/overlay_noise_film.png"
+            src={OVERLAY_NOISE_SRC}
             alt="noise"
             onError={() => setAssets((prev) => ({ ...prev, noiseOk: false }))}
           />
