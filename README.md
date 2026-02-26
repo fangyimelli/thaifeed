@@ -156,7 +156,7 @@ ThaiFeed 是一個**偽直播（Pseudo-live）**的互動 Demo，主題是**老�
 
 ### 5) 手機版 UI
 - 直播區與聊天室為行動優先排版（`mobile-frame` + `chat-container` 佈局）。
-- 有 loading overlay、直播 header、可切換翻譯顯示。
+- 有 Loading 狀態機 overlay、直播 header、可切換翻譯顯示。
 
 ---
 
@@ -239,8 +239,8 @@ npm run preview
 3. **快取導致舊素材**
    - 建議 hard refresh（Chrome: `Cmd/Ctrl + Shift + R`）或清除站點快取。
 
-4. **loop4 缺檔**
-   - 程式已納入 loop4 路徑與排程；若實體檔案不存在，會被視為 optional preload 失敗並降級運行（仍可使用 loop1/loop2/loop3）。
+4. **loop4 或必要影片缺檔**
+   - 目前為必要素材 gate，缺失時會進入 ERROR 狀態並列出缺檔 URL，不會進入 RUNNING。
 
 ---
 
@@ -259,3 +259,40 @@ npm run preview
 - 已將老屋播放策略常數（loop key、主循環、插播池、路徑、必要音效）收斂到 `src/config/oldhousePlayback.ts`。
 - `SceneView` 與 `assetManifest` 共同引用該設定，避免舊常數與新常數並存。
 - 已移除舊版聊天室打字/送出/對錯音效流程，保留目前實際在場景中使用的必要音效系統。
+
+
+## Loading 狀態機（Core Canon）
+
+### 狀態定義（SSOT）
+- `BOOT_START`：啟動畫面框架。
+- `ASSETS_CHECKING`：預載必要素材（影片、必要音效、必要圖層）。
+- `ASSETS_READY`：素材已可用，等待場景完成啟播前最後階段。
+- `NEED_USER_GESTURE`：瀏覽器阻擋有聲 autoplay，提示使用者點一下畫面。
+- `RUNNING`：直播正式開始。
+- `ERROR`：初始化失敗，不進入 RUNNING。
+
+### 規則
+- 任一狀態都會顯示可見 UI，不會黑畫面。
+- Loading 提示為直播口吻，且不含 emoji。
+- 狀態提示顯示於專用 loading 區塊，不會把系統提示直接畫在影片內容上。
+- 進入 `RUNNING` 後，聊天室會送出訊息：`初始化完成`。
+
+### 必要素材缺失（fail fast but visible）
+- fail fast 的意義是「不進入 `RUNNING`」，不是整個畫面中止。
+- 進入 `ERROR` 時會顯示：
+  - 錯誤摘要
+  - 缺失資產清單（檔名 + URL）
+  - 重試指示（重新整理或補齊檔案）
+- `console.error` 會同步列出缺檔資訊。
+
+### autoplay 解鎖流程
+- 有聲播放維持 `muted=false`、`volume>0`。
+- 若播放被政策阻擋，進入 `NEED_USER_GESTURE`。
+- 使用者點擊畫面後再次嘗試播放，成功才轉入 `RUNNING`。
+- 不使用靜音 fallback 來繞過限制。
+
+### 影片 preload timeout 與 fallback
+- 影片 preload 設有 timeout（3200ms）。
+- timeout 時先檢查 `readyState >= HAVE_CURRENT_DATA`：
+  - 成立：允許繼續。
+  - 不成立：進入 `ERROR`，顯示「影片載入失敗」與對應 URL。

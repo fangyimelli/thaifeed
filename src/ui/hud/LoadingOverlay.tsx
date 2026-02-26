@@ -1,3 +1,13 @@
+import type { SceneInitError } from '../scene/SceneView';
+
+export type LoadingState =
+  | 'BOOT_START'
+  | 'ASSETS_CHECKING'
+  | 'ASSETS_READY'
+  | 'NEED_USER_GESTURE'
+  | 'RUNNING'
+  | 'ERROR';
+
 type Props = {
   visible: boolean;
   progress?: number;

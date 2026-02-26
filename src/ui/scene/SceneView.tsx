@@ -5,7 +5,6 @@ import {
   FOOTSTEPS_PATH,
   GHOST_FEMALE_PATH,
   JUMP_LOOPS,
-  LOOP_KEY_ALIASES,
   MAIN_LOOP,
   REQUIRED_AUDIO_ASSETS,
   type OldhouseLoopKey,
@@ -13,23 +12,27 @@ import {
   VIDEO_PATH_BY_KEY
 } from '../../config/oldhousePlayback';
 import { curseVisualClass } from '../../core/systems/curseSystem';
-import {
-  AMBIENT_BY_KEY,
-  AUDIO_SOURCES,
-  JUMP_LOOPS,
-  MAIN_LOOP,
-  REQUIRED_AUDIO_ASSETS,
-  type OldhouseLoopKey,
-  type RequiredAudioAsset,
-  VIDEO_SOURCES
-} from '../../config/media';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
+
+export type SceneMissingAsset = {
+  name: string;
+  url: string;
+  reason: string;
+};
+
+export type SceneInitError = {
+  summary: string;
+  missingAssets: SceneMissingAsset[];
+};
 
 type Props = {
   targetConsonant: string;
   curse: number;
   anchor: AnchorType;
+  onNeedUserGestureChange?: (value: boolean) => void;
+  onSceneRunning?: () => void;
+  onSceneError?: (error: SceneInitError) => void;
 };
 
 type SceneAssetState = {
@@ -58,7 +61,7 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
 };
 
 const CROSSFADE_MS = 420;
-const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 1600;
+const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
 const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
@@ -210,7 +213,14 @@ declare global {
   }
 }
 
-export default function SceneView({ targetConsonant, curse, anchor }: Props) {
+export default function SceneView({
+  targetConsonant,
+  curse,
+  anchor,
+  onNeedUserGestureChange,
+  onSceneRunning,
+  onSceneError
+}: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
@@ -234,6 +244,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const autoNextEnabledRef = useRef(true);
   const isSwitchingRef = useRef(false);
   const needsUserGestureToPlayRef = useRef(false);
+  const runningAnnouncedRef = useRef(false);
   const footstepsTimerRef = useRef<number | null>(null);
   const ghostTimerRef = useRef<number | null>(null);
   const isAudioStartedRef = useRef(false);
@@ -299,8 +310,19 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, []);
 
   const getVideoUrlForKey = useCallback((key: OldhouseLoopKey) => {
-    return VIDEO_SOURCES[key];
+    return VIDEO_PATH_BY_KEY[key];
   }, []);
+
+  const setNeedsGestureState = useCallback((value: boolean) => {
+    needsUserGestureToPlayRef.current = value;
+    onNeedUserGestureChange?.(value);
+  }, [onNeedUserGestureChange]);
+
+  const announceRunning = useCallback(() => {
+    if (runningAnnouncedRef.current) return;
+    runningAnnouncedRef.current = true;
+    onSceneRunning?.();
+  }, [onSceneRunning]);
 
   const markActiveVideo = useCallback(() => {
     const videoA = videoARef.current;
@@ -394,12 +416,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     if (fanAudio.volume === 0) fanAudio.volume = 0.4;
     try {
       await fanAudio.play();
-      needsUserGestureToPlayRef.current = false;
+      setNeedsGestureState(false);
       const t = Date.now();
       updateAudioDebug({ started: true, lastFanAt: t });
       console.log('[AUDIO] fan loop started', { t, curse: curseRef.current });
     } catch {
-      needsUserGestureToPlayRef.current = true;
+      setNeedsGestureState(true);
       console.warn('[AUDIO] play blocked/failed', { key: 'fan_loop', errName: 'unknown' });
       throw new Error('Fan loop autoplay blocked until user gesture');
     }
@@ -427,7 +449,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         updateAudioDebug({ started: true, lastFootstepsAt: t });
         console.log('[AUDIO] footsteps played', { t, curse: curseRef.current });
       }).catch((e: unknown) => {
-        needsUserGestureToPlayRef.current = true;
+        setNeedsGestureState(true);
         console.warn('[AUDIO] play blocked/failed', { key: 'footsteps', errName: e instanceof Error ? e.name : 'unknown' });
       }).finally(() => {
         scheduleFootsteps();
@@ -457,7 +479,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         updateAudioDebug({ started: true, lastGhostAt: t });
         console.log('[AUDIO] ghost played', { t, curse: curseRef.current });
       }).catch((e: unknown) => {
-        needsUserGestureToPlayRef.current = true;
+        setNeedsGestureState(true);
         console.warn('[AUDIO] play blocked/failed', { key: 'ghost_female', errName: e instanceof Error ? e.name : 'unknown' });
       }).finally(() => {
         scheduleGhost();
@@ -475,10 +497,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     try {
       await video.play();
       if (ambient) await ambient.play();
-      needsUserGestureToPlayRef.current = false;
+      setNeedsGestureState(false);
       return true;
     } catch (e: unknown) {
-      needsUserGestureToPlayRef.current = true;
+      setNeedsGestureState(true);
       console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
@@ -553,6 +575,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
         cleanup();
         setAssets((prev) => ({ ...prev, videoOk: false }));
         setVideoErrorDetail(error.message);
+        onSceneError?.({
+          summary: '影片載入失敗，直播尚未開始。',
+          missingAssets: [{ name: nextKey, url: resolvedVideoSrc, reason: error.message }]
+        });
         reject(error);
       };
 
@@ -609,8 +635,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
           readyState: bufferEl.readyState,
           src: bufferEl.currentSrc || bufferEl.src
         });
-        resolveReady('timeout');
-      }, Math.max(2500, PRELOAD_READY_FALLBACK_TIMEOUT_MS));
+        if (bufferEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          resolveReady('timeout-readyState');
+          return;
+        }
+        rejectReady(new Error(`影片載入失敗：${nextKey} (${resolvedVideoSrc})`));
+      }, PRELOAD_READY_FALLBACK_TIMEOUT_MS);
 
       bufferEl.addEventListener('loadedmetadata', onLoadedMetadata);
       bufferEl.addEventListener('loadeddata', onLoadedData);
@@ -698,7 +728,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       try {
         await bufferEl.play();
       } catch (e: unknown) {
-        needsUserGestureToPlayRef.current = true;
+        setNeedsGestureState(true);
         updateVideoDebug({ lastError: `video play blocked for ${nextKey}` });
         console.warn('[AUDIO] play blocked/failed', { key: `video_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
         return;
@@ -759,12 +789,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
           await nextAmbient.play();
         }
       } catch (e: unknown) {
-        needsUserGestureToPlayRef.current = true;
+        setNeedsGestureState(true);
         updateVideoDebug({ lastError: `ambient play blocked for ${nextKey}` });
         console.warn('[AUDIO] play blocked/failed', { key: `ambient_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
       }
 
-      needsUserGestureToPlayRef.current = false;
+      setNeedsGestureState(false);
 
       const pauseOldVideoAtMs = Math.floor(CROSSFADE_MS * PAUSE_OLD_VIDEO_AT_RATIO);
       await wait(pauseOldVideoAtMs);
@@ -836,6 +866,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       updateVideoDebug({ lastError: String(error instanceof Error ? error.message : error) });
       console.error('[VIDEO]', 'switchTo failed', error);
       setAssets((prev) => ({ ...prev, videoOk: false }));
+      onSceneError?.({
+        summary: '影片載入失敗，直播尚未開始。',
+        missingAssets: [{ name: nextKey, url: nextUrl, reason: error instanceof Error ? error.message : String(error) }]
+      });
     } finally {
       isSwitchingRef.current = false;
       updateVideoDebug({ isSwitching: false });
@@ -958,13 +992,13 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     setRequiredAudioError(null);
     setVideoErrorDetail(null);
 
-    try {
-      await verifyRequiredAudioAssets();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown required audio error';
+    const missingRequiredAudio = await verifyRequiredAudioAssets();
+    if (missingRequiredAudio.length > 0) {
+      const message = '必要音效素材載入失敗，無法開始直播。';
       setRequiredAudioError(message);
       setHasConfirmedPlayback(false);
-      throw error;
+      onSceneError?.({ summary: message, missingAssets: missingRequiredAudio });
+      throw new Error(message);
     }
 
     if (!isAudioStartedRef.current) {
@@ -972,7 +1006,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       try {
         await startFanLoop();
       } catch {
-        needsUserGestureToPlayRef.current = true;
+        setNeedsGestureState(true);
         isAudioStartedRef.current = false;
       }
 
@@ -982,10 +1016,15 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       }
     }
 
-    void switchTo(MAIN_LOOP).then(() => {
-      scheduleNextJump();
-    });
-  }, [scheduleFootsteps, scheduleGhost, scheduleNextJump, startFanLoop, switchTo]);
+    await switchTo(MAIN_LOOP);
+    const started = await tryPlayMedia();
+    if (!started) {
+      setNeedsGestureState(true);
+      return;
+    }
+    scheduleNextJump();
+    announceRunning();
+  }, [announceRunning, onSceneError, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
 
   const stopOldhouseCalmMode = useCallback(() => {
     setAutoNextEnabled(false);
@@ -1103,19 +1142,19 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, []);
 
   useEffect(() => {
-    fanAudioRef.current = new Audio(AUDIO_SOURCES.fan_loop);
+    fanAudioRef.current = new Audio(FAN_LOOP_PATH);
     fanAudioRef.current.preload = 'auto';
     fanAudioRef.current.loop = true;
     fanAudioRef.current.volume = 0.4;
     fanAudioRef.current.muted = false;
 
-    footstepsAudioRef.current = new Audio(AUDIO_SOURCES.footsteps);
+    footstepsAudioRef.current = new Audio(FOOTSTEPS_PATH);
     footstepsAudioRef.current.preload = 'auto';
     footstepsAudioRef.current.loop = false;
     footstepsAudioRef.current.volume = 0.85;
     footstepsAudioRef.current.muted = false;
 
-    ghostAudioRef.current = new Audio(AUDIO_SOURCES.female_ghost);
+    ghostAudioRef.current = new Audio(GHOST_FEMALE_PATH);
     ghostAudioRef.current.preload = 'auto';
     ghostAudioRef.current.loop = false;
     ghostAudioRef.current.volume = 0.75;
@@ -1210,8 +1249,9 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
             scheduleFootsteps();
             scheduleGhost();
           }
+          announceRunning();
         } catch {
-          needsUserGestureToPlayRef.current = true;
+          setNeedsGestureState(true);
         }
       })();
     };
@@ -1220,7 +1260,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     return () => {
       layer.removeEventListener('click', unlockPlayback);
     };
-  }, [scheduleFootsteps, scheduleGhost, startFanLoop, tryPlayMedia]);
+  }, [announceRunning, scheduleFootsteps, scheduleGhost, startFanLoop, tryPlayMedia]);
 
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);

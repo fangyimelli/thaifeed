@@ -21,9 +21,9 @@ import type { ChatMessage, DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import ChatPanel from '../ui/chat/ChatPanel';
-import SceneView from '../ui/scene/SceneView';
+import SceneView, { type SceneInitError } from '../ui/scene/SceneView';
 import LiveHeader from '../ui/hud/LiveHeader';
-import LoadingOverlay from '../ui/hud/LoadingOverlay';
+import LoadingOverlay, { type LoadingState } from '../ui/hud/LoadingOverlay';
 import { preloadAssets } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
@@ -58,6 +58,9 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
+  const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
+  const [loadingStageText, setLoadingStageText] = useState('正在準備直播畫面');
+  const [loadingError, setLoadingError] = useState<SceneInitError | null>(null);
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [initStatusText, setInitStatusText] = useState('初始化中');
@@ -86,6 +89,9 @@ export default function App() {
     const runSetup = async () => {
       setIsReady(false);
       setIsRendererReady(false);
+      setLoadingError(null);
+      setLoadingState('BOOT_START');
+      setLoadingStageText('正在準備直播畫面');
 
       const loadingStart = performance.now();
       setInitStatusText('正在檢查素材');
@@ -101,6 +107,8 @@ export default function App() {
       const renderer = new Renderer2D();
       renderer.mount();
       setIsRendererReady(true);
+      setLoadingState('ASSETS_READY');
+      setLoadingStageText('正在建立聊天室');
 
       const elapsed = performance.now() - loadingStart;
       const minimumLoadingMs = 800;
@@ -229,7 +237,7 @@ export default function App() {
 
     timer = window.setTimeout(tick, nextLeaveDelayMs());
     return () => window.clearTimeout(timer);
-  }, [isReady]);
+  }, [loadingState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -242,10 +250,19 @@ export default function App() {
     }, 5_000);
 
     return () => window.clearInterval(timer);
-  }, [isReady]);
+  }, [loadingState]);
+
 
   useEffect(() => {
-    if (!isReady || postedInitMessages.current) return;
+    if (loadingState === 'ERROR') return;
+    if (isReady && isRendererReady && loadingState === 'ASSETS_CHECKING') {
+      setLoadingState('ASSETS_READY');
+      setLoadingStageText('正在建立聊天室');
+    }
+  }, [isReady, isRendererReady, loadingState]);
+
+  useEffect(() => {
+    if (loadingState !== 'RUNNING' || postedInitMessages.current) return;
     postedInitMessages.current = true;
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
@@ -258,10 +275,10 @@ export default function App() {
       id: crypto.randomUUID(),
       type: 'system',
       username: 'system',
-      text: '系統初始化完成',
+      text: '初始化完成',
       language: 'zh'
     });
-  }, [isReady]);
+  }, [loadingState]);
 
   useEffect(() => {
     if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
