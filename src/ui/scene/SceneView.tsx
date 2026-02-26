@@ -1,4 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AMBIENT_BY_KEY,
+  FAN_LOOP_PATH,
+  FOOTSTEPS_PATH,
+  GHOST_FEMALE_PATH,
+  JUMP_LOOPS,
+  LOOP_KEY_ALIASES,
+  MAIN_LOOP,
+  REQUIRED_AUDIO_ASSETS,
+  type OldhouseLoopKey,
+  type RequiredAudioAsset,
+  VIDEO_PATH_BY_KEY
+} from '../../config/oldhousePlayback';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import {
   AMBIENT_BY_KEY,
@@ -218,10 +231,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
-  const debugEnabled = useMemo(() => {
+  const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('debug') === '1';
-  }, []);
+  });
   const [debugTick, setDebugTick] = useState(() => Date.now());
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
