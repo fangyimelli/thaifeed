@@ -1,4 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AMBIENT_BY_KEY,
+  FAN_LOOP_PATH,
+  FOOTSTEPS_PATH,
+  GHOST_FEMALE_PATH,
+  JUMP_LOOPS,
+  LOOP_KEY_ALIASES,
+  MAIN_LOOP,
+  REQUIRED_AUDIO_ASSETS,
+  type OldhouseLoopKey,
+  type RequiredAudioAsset,
+  VIDEO_PATH_BY_KEY
+} from '../../config/oldhousePlayback';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import {
   AMBIENT_BY_KEY,
@@ -228,9 +241,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const nextJumpAtRef = useRef<number | null>(null);
   const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
-    const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
-    return searchEnabled || hashEnabled;
+    return new URLSearchParams(window.location.search).get('debug') === '1';
   });
   const [debugTick, setDebugTick] = useState(() => Date.now());
 

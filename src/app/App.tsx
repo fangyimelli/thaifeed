@@ -24,34 +24,10 @@ import ChatPanel from '../ui/chat/ChatPanel';
 import SceneView from '../ui/scene/SceneView';
 import LiveHeader from '../ui/hud/LiveHeader';
 import LoadingOverlay from '../ui/hud/LoadingOverlay';
-import { getCachedAsset, preloadAssets } from '../utils/preload';
+import { preloadAssets } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
 import { collectActiveUsers } from '../core/systems/mentionV2';
-
-const SFX_SRC = {
-  typing: '/assets/sfx/sfx_typing.wav',
-  send: '/assets/sfx/sfx_send.wav',
-  success: '/assets/sfx/sfx_success.wav',
-  error: '/assets/sfx/sfx_error.wav',
-  glitch: '/assets/sfx/sfx_glitch.wav'
-} as const;
-
-function getSfxAudio(src: string) {
-  const cached = getCachedAsset(src);
-  if (cached instanceof HTMLAudioElement) return cached;
-
-  const audio = new Audio(src);
-  audio.preload = 'auto';
-  return audio;
-}
-
-function playSound(src: string) {
-  const sound = getSfxAudio(src);
-  sound.volume = 0.6;
-  sound.currentTime = 0;
-  void sound.play().catch(() => undefined);
-}
 
 function formatViewerCount(value: number) {
   if (value < 1000) return `${value}`;
@@ -256,11 +232,6 @@ export default function App() {
   }, [isReady]);
 
   useEffect(() => {
-    if (!isReady) return;
-    if (state.curse > 80) playSound(SFX_SRC.glitch);
-  }, [state.curse, isReady]);
-
-  useEffect(() => {
     const timer = window.setInterval(() => {
       if (!isReady) return;
       const now = Date.now();
@@ -334,7 +305,6 @@ export default function App() {
 
     const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
 
-    playSound(SFX_SRC.send);
     dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
     const handlePass = () => {
@@ -393,7 +363,6 @@ export default function App() {
           donateMessage: createDonateChatMessage(donate)
         }
       });
-      playSound(SFX_SRC.success);
       setInput('');
       return;
     }
@@ -444,8 +413,6 @@ export default function App() {
         message: wrongMessage
       }
     });
-    playSound(SFX_SRC.error);
-
     setInput('');
   };
 
@@ -481,23 +448,16 @@ export default function App() {
           </div>
         </div>
         <div className="chat-container">
-          {!hasFatalInitError ? (
-            <ChatPanel
-              messages={state.messages}
-              input={input}
-              onChange={(value) => {
-                setInput(value);
-                if (isReady) playSound(SFX_SRC.typing);
-              }}
-              onSubmit={submit}
-              onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
-              onAutoPauseChange={setChatAutoPaused}
-            />
-          ) : (
-            <div className="asset-warning chat-placeholder">
-              聊天室暫停：請補齊必要素材後重新整理。
-            </div>
-          )}
+          <ChatPanel
+            messages={state.messages}
+            input={input}
+            onChange={(value) => {
+              setInput(value);
+            }}
+            onSubmit={submit}
+            onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
+            onAutoPauseChange={setChatAutoPaused}
+          />
         </div>
       </main>
       )}

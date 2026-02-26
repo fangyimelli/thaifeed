@@ -8,6 +8,8 @@ export type AssetManifestItem = {
   required: boolean;
 };
 
+const REQUIRED_VIDEOS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop3'];
+
 export const ASSET_MANIFEST: AssetManifestItem[] = [
   // Required: Scene
   { type: 'video', src: VIDEO_SOURCES.oldhouse_room_loop, required: true },
@@ -20,19 +22,16 @@ export const ASSET_MANIFEST: AssetManifestItem[] = [
   { type: 'audio', src: AUDIO_SOURCES.footsteps, required: true },
   { type: 'audio', src: AUDIO_SOURCES.female_ghost, required: true },
 
-  // Required: Overlays
   { type: 'image', src: '/assets/overlays/overlay_smoke_room.png', required: true },
   { type: 'image', src: '/assets/overlays/overlay_crack_glass.png', required: true },
   { type: 'image', src: '/assets/overlays/overlay_noise_film.png', required: true },
   { type: 'image', src: '/assets/overlays/overlay_vignette.png', required: true },
 
-  // Optional: Icons
   { type: 'image', src: '/assets/icons/icon_crown.svg', required: false },
 
-  // Optional: SFX
-  { type: 'audio', src: '/assets/sfx/sfx_typing.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_send.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_success.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_error.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_glitch.wav', required: false }
+  ...REQUIRED_AUDIO_ASSETS.map((asset) => ({
+    type: 'audio' as const,
+    src: asset.src,
+    required: true
+  }))
 ];
