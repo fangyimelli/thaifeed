@@ -64,6 +64,9 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
 const CROSSFADE_MS = 420;
 const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
 const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
+const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 2200;
+const FIRST_JUMP_DELAY_MIN_MS = 9000;
+const FIRST_JUMP_DELAY_MAX_MS = 14000;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
@@ -311,6 +314,7 @@ export default function SceneView({
     inactive.style.opacity = '0';
     active.style.zIndex = '1';
     inactive.style.zIndex = '1';
+    setActiveVideoAudio(active, inactive);
     console.log('[VIDEO]', 'markActiveVideo', {
       activeId: active.id,
       activeSrc: active.currentSrc || active.src,
@@ -327,7 +331,7 @@ export default function SceneView({
       currentReadyState: active.readyState,
       currentPaused: active.paused
     });
-  }, [updateVideoDebug]);
+  }, [setActiveVideoAudio, updateVideoDebug]);
 
   const collectAudioDebugSnapshot = useCallback(() => {
     const currentVideo = getCurrentVideoEl();
@@ -660,10 +664,15 @@ export default function SceneView({
       await preloadIntoBuffer(nextKey);
 
 
+      stopAllNonPersistentSfx();
       bufferEl.defaultMuted = false;
-      bufferEl.muted = true;
-      bufferEl.volume = 0;
+      bufferEl.muted = false;
+      bufferEl.volume = 1;
       bufferEl.controls = false;
+
+      currentEl.muted = true;
+      currentEl.defaultMuted = true;
+      currentEl.volume = 0;
 
       updateAudioDebug({ switchId, phase: 'bufferPlayStart' });
       console.log('[VIDEO]', 'switchTo buffer play start', {
@@ -817,22 +826,40 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current
       });
     }
-  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, updateAudioDebug, updateVideoDebug]);
+  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
-  const scheduleNextJump = useCallback(() => {
+  const scheduleNextJump = useCallback((opts?: { force?: boolean; delayMs?: number }) => {
+    const force = opts?.force ?? false;
+    const explicitDelay = opts?.delayMs;
+
+    if (!force && jumpTimerRef.current) {
+      console.log('[VIDEO]', 'scheduleNextJump keep existing timer', {
+        nextJumpAt: nextJumpAtRef.current,
+        dueInMs: nextJumpAtRef.current ? Math.max(0, nextJumpAtRef.current - Date.now()) : null
+      });
+      return;
+    }
+
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = null;
       nextJumpAtRef.current = null;
       updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
     }
 
-    const interval = computeJumpIntervalMs(curseRef.current);
+    const interval = typeof explicitDelay === 'number' ? explicitDelay : computeJumpIntervalMs(curseRef.current);
     const dueAt = Date.now() + interval;
     nextJumpAtRef.current = dueAt;
-    console.log('[VIDEO]', 'scheduleNextJump set timer', { delay: interval, curse: curseRef.current });
+    console.log('[VIDEO]', 'scheduleNextJump set timer', {
+      delay: interval,
+      curse: curseRef.current,
+      force,
+      explicitDelay
+    });
     jumpTimerRef.current = window.setTimeout(() => {
+      jumpTimerRef.current = null;
       nextJumpAtRef.current = null;
-      updateVideoDebug({ nextJumpAt: null });
+      updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
       void triggerJumpOnce();
     }, interval);
     updateVideoDebug({ timers: { jumpTimer: jumpTimerRef.current }, nextJumpAt: dueAt });
@@ -848,7 +875,7 @@ export default function SceneView({
       const reason = isSwitchingRef.current ? 'isSwitching' : 'isInJump';
       console.warn('[VIDEO]', 'triggerJumpOnce skipped', { reason });
       if (reason === 'isSwitching') {
-        scheduleNextJump();
+        scheduleNextJump({ force: true });
       }
       return;
     }
@@ -857,7 +884,7 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current,
         mainLoop: MAIN_LOOP
       });
-      scheduleNextJump();
+      scheduleNextJump({ force: true });
       return;
     }
 
@@ -866,7 +893,14 @@ export default function SceneView({
     const nextKey = randomPick(JUMP_LOOPS);
     console.log('[VIDEO]', 'triggerJumpOnce picked nextKey', { nextKey, fromKey: currentLoopKeyRef.current });
 
-    await switchTo(nextKey);
+    try {
+      await switchTo(nextKey);
+    } catch (error) {
+      isInJumpRef.current = false;
+      updateVideoDebug({ isInJump: false, lastError: String(error instanceof Error ? error.message : error) });
+      scheduleNextJump({ force: true });
+      return;
+    }
 
     if (currentLoopKeyRef.current !== nextKey) {
       isInJumpRef.current = false;
@@ -875,13 +909,25 @@ export default function SceneView({
         expected: nextKey,
         actual: currentLoopKeyRef.current
       });
-      scheduleNextJump();
+      scheduleNextJump({ force: true });
       return;
     }
 
     currentLoopKeyRef.current = nextKey;
+    window.setTimeout(() => {
+      if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+      if (isInJumpRef.current && currentLoopKeyRef.current === nextKey) {
+        console.warn('[VIDEO]', 'jump fallback return to MAIN_LOOP', { fromKey: nextKey, mainLoop: MAIN_LOOP });
+        isInJumpRef.current = false;
+        updateVideoDebug({ isInJump: false, lastError: 'jump-return-timeout-fallback' });
+        void switchTo(MAIN_LOOP).then(() => {
+          currentLoopKeyRef.current = MAIN_LOOP;
+          scheduleNextJump({ force: true });
+        });
+      }
+    }, JUMP_RETURN_SCHEDULE_FALLBACK_MS);
     console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current });
-  }, [scheduleNextJump, switchTo]);
+  }, [hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
 
   const handleEnded = useCallback((event?: Event) => {
     const activeKey = currentLoopKeyRef.current;
@@ -908,7 +954,7 @@ export default function SceneView({
       console.log('[VIDEO]', 'ended while in jump; switching back to MAIN_LOOP', { mainLoop: MAIN_LOOP });
       void switchTo(MAIN_LOOP).then(() => {
         currentLoopKeyRef.current = MAIN_LOOP;
-        scheduleNextJump();
+        scheduleNextJump({ force: true });
       });
       return;
     }
@@ -950,7 +996,10 @@ export default function SceneView({
       setNeedsGestureState(true);
       return;
     }
-    scheduleNextJump();
+    scheduleNextJump({
+      force: true,
+      delayMs: randomMs(FIRST_JUMP_DELAY_MIN_MS, FIRST_JUMP_DELAY_MAX_MS)
+    });
     announceRunning();
   }, [announceRunning, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
 
@@ -1014,7 +1063,7 @@ export default function SceneView({
   useEffect(() => {
     if (!hasConfirmedPlayback || !autoNextEnabledRef.current || isInJumpRef.current) return;
     scheduleNextJump();
-  }, [curse, hasConfirmedPlayback, scheduleNextJump]);
+  }, [hasConfirmedPlayback, scheduleNextJump]);
 
   const bindEnded = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return;

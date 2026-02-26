@@ -86,6 +86,31 @@ npm run dev
   - overlay 會顯示目前正在播放的 audio elements（fan/footsteps/ghost）。
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
 
+## 插播排查（timer / ended / lock / timeout）
+
+- `scheduleNextJump()` 改為「預設保留既有 timer」，避免在 curse/state 變動時被反覆重排、導致永遠到不了觸發時間。
+  - 只有 `force=true` 才會清舊 timer 並重排。
+  - 支援 `delayMs` 指定首跳時間，降低「長時間只看到 loop3」體感。
+- `triggerJumpOnce()` 會檢查 `isSwitching` / `isInJump` / `currentKey===MAIN_LOOP`，並輸出 debug log。
+- `switchTo()` 使用 `try/finally` 強制釋放 `isSwitching` lock，任何失敗都不會卡死。
+- `preloadIntoBuffer()` 有 timeout fallback：
+  - 3.2 秒內若 `readyState >= HAVE_CURRENT_DATA` 視為可播。
+  - 超時且仍不可播則進 ERROR UI（不黑畫面，保留錯誤資訊）。
+- 插播影片若 `ended` 未回主循環，另有 fallback timer 強制切回 `MAIN_LOOP` 並重排下一次插播。
+
+## 聊天室送出穩定性
+
+- 單一路徑：`App.tsx` 的 `submitChat(text)` 是唯一送出入口。
+- 行為保證：
+  - 空字串不送。
+  - 送出時 `isSending=true`，延遲 1~5 秒後一定執行送出流程。
+  - `finally` 一律 `isSending=false`，避免按鈕/狀態卡住。
+- 事件綁定：
+  - `form onSubmit`：`preventDefault()` 後呼叫 `onSubmit`。
+  - `button onClick` / `onTouchEnd`：呼叫同一個 `onSubmit`。
+  - `onKeyDown Enter`：排除 IME 組字（`isComposing`/`keyCode===229`）才送出。
+- iOS 鍵盤：仍用 `visualViewport` 修正輸入列位置，並提高輸入列 `z-index` 與 `pointer-events`，避免透明層或覆蓋層吞點擊。
+
 ## 其他
 
 - 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
@@ -96,4 +121,3 @@ npm run dev
   - Scene overlays（smoke / crack / vignette / noise）
   - VIP crown icon
 - 以上調整可避免在子路徑部署（例如 GitHub Pages）時，載入層與聊天室圖示走舊邏輯導致 404，而與專案既有的 `ASSET_BASE_URL` / `joinUrl` 新邏輯衝突。
-

@@ -10,6 +10,7 @@ type Props = {
   onSubmit: () => void;
   onToggleTranslation: (id: string) => void;
   onAutoPauseChange: (paused: boolean) => void;
+  isSending: boolean;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -21,13 +22,15 @@ export default function ChatPanel({
   onChange,
   onSubmit,
   onToggleTranslation,
-  onAutoPauseChange
+  onAutoPauseChange,
+  isSending
 }: Props) {
   const panelRef = useRef<HTMLElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const inputBarRef = useRef<HTMLDivElement>(null);
+  const inputBarRef = useRef<HTMLFormElement>(null);
   const idleTimer = useRef<number>(0);
+  const isComposingRef = useRef(false);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
   const activeSet = getActiveUserSet(collectActiveUsers(messages));
@@ -148,12 +151,29 @@ export default function ChatPanel({
         </button>
       )}
 
-      <div className="chat-input chat-input-bar" ref={inputBarRef}>
+      <form
+        className="chat-input chat-input-bar"
+        ref={inputBarRef}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+          window.setTimeout(forceScrollToBottom, 0);
+        }}
+      >
         <input
           value={input}
           onChange={(event) => onChange(event.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            const nativeIsComposing = (event.nativeEvent as KeyboardEvent).isComposing;
+            const isImeEnter = event.keyCode === 229;
+            if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !nativeIsComposing && !isImeEnter) {
+              event.preventDefault();
               onSubmit();
               window.setTimeout(forceScrollToBottom, 0);
             }
@@ -162,14 +182,20 @@ export default function ChatPanel({
         />
         <button
           type="button"
+          disabled={isSending}
           onClick={() => {
             onSubmit();
             window.setTimeout(forceScrollToBottom, 0);
           }}
+          onTouchEnd={(event) => {
+            event.preventDefault();
+            onSubmit();
+            window.setTimeout(forceScrollToBottom, 0);
+          }}
         >
-          送出
+          {isSending ? '送出中…' : '送出'}
         </button>
-      </div>
+      </form>
     </aside>
   );
 }
