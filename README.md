@@ -89,3 +89,11 @@ npm run dev
 ## 其他
 
 - 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
+
+## 本次衝突點調整（專案級）
+
+- 已完成全域檢查並統一移除舊式絕對路徑（`/assets/...`）在執行期 UI 元件中的用法，改為 `resolveAssetUrl(...)`：
+  - Scene overlays（smoke / crack / vignette / noise）
+  - VIP crown icon
+- 以上調整可避免在子路徑部署（例如 GitHub Pages）時，載入層與聊天室圖示走舊邏輯導致 404，而與專案既有的 `ASSET_BASE_URL` / `joinUrl` 新邏輯衝突。
+

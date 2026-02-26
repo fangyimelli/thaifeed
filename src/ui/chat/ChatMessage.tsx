@@ -1,5 +1,6 @@
 import type { ChatMessage as ChatMessageType } from '../../core/state/types';
 import TranslationToggle from './TranslationToggle';
+import { resolveAssetUrl } from '../../config/assetUrls';
 
 type Props = {
   message: ChatMessageType;
@@ -18,7 +19,7 @@ export default function ChatMessage({ message, onToggleTranslation }: Props) {
       <div className="chat-line">
         {!isSystemJoin && !isSystemInfo && (
           <span className="name">
-            {message.isVip && <img src="/assets/icons/icon_crown.svg" alt="vip" className="crown" />}
+            {message.isVip && <img src={resolveAssetUrl('assets/icons/icon_crown.svg')} alt="vip" className="crown" />}
             {message.username}
           </span>
         )}
