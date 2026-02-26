@@ -158,13 +158,16 @@ export default function App() {
 
       setHasOptionalAssetWarning(result.optionalErrors.length > 0);
       if (result.requiredErrors.length > 0) {
-        const preloadMissing = result.requiredErrors.map((url) => ({
-          name: 'preload_failure',
-          type: 'video' as const,
-          relativePath: 'unknown',
-          url,
-          reason: 'preload failed after required-asset verification'
-        }));
+        const preloadMissing = result.requiredErrors.map((url) => {
+          const matchedAsset = ASSET_MANIFEST.find((asset) => asset.src === url);
+          return {
+            name: 'preload_failure',
+            type: matchedAsset?.type === 'audio' ? ('audio' as const) : ('video' as const),
+            relativePath: matchedAsset ? new URL(matchedAsset.src).pathname.replace(/^\//, '') : 'unknown',
+            url,
+            reason: 'preload failed after required-asset verification'
+          };
+        });
         setRequiredAssetErrors(preloadMissing);
         console.error('[asset-required] 預載失敗', preloadMissing);
         setInitStatusText('必要素材預載失敗，請檢查 Console');
