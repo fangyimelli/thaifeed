@@ -9,35 +9,42 @@ export type LoadingState =
   | 'ERROR';
 
 type Props = {
-  state: LoadingState;
-  stageText: string;
-  error: SceneInitError | null;
+  visible: boolean;
+  progress?: number;
+  statusText?: string;
+  errorTitle?: string;
+  errors?: string[];
 };
 
-export default function LoadingOverlay({ state, stageText, error }: Props) {
-  if (state === 'RUNNING') return null;
+export default function LoadingOverlay({
+  visible,
+  progress,
+  statusText,
+  errorTitle,
+  errors = []
+}: Props) {
+  if (!visible) return null;
+
+  const hasErrors = errors.length > 0;
 
   return (
     <div className="loading-overlay" role="status" aria-live="polite" aria-label="載入狀態">
       <div className="loading-overlay-content">
-        <div className="loading-label">直播準備中</div>
-        <p>{stageText}</p>
-        {state === 'NEED_USER_GESTURE' && <p>點一下畫面以開始</p>}
-
-        {state === 'ERROR' && error && (
-          <div className="loading-error-panel" role="alert" aria-live="assertive">
-            <p>{error.summary}</p>
-            {error.missingAssets.length > 0 && (
-              <ul>
-                {error.missingAssets.map((item) => (
-                  <li key={`${item.name}-${item.url}`}>
-                    <strong>{item.name}</strong>
-                    <div>{item.url}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p>請重新整理頁面，或修正缺失檔案後再試一次。</p>
+        {!hasErrors && <div className="loading-spinner" aria-hidden="true" />}
+        <p>{statusText ?? '正在連線'}</p>
+        {!hasErrors && <p>載入直播畫面中{typeof progress === 'number' ? ` (${progress}%)` : ''}</p>}
+        {hasErrors && (
+          <div className="loading-error-block" role="alert">
+            <p>{errorTitle ?? '必要素材缺失，無法完成初始化。'}</p>
+            <p>請確認以下檔案路徑：</p>
+            <ul>
+              {errors.map((item) => (
+                <li key={item}>
+                  <code>{item}</code>
+                </li>
+              ))}
+            </ul>
+            <p>請重新整理後重試。</p>
           </div>
         )}
       </div>

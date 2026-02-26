@@ -149,25 +149,27 @@ const verifyAudioAsset = (asset: RequiredAudioAsset) => {
 };
 
 const verifyRequiredAudioAssets = async () => {
-  const checks = await Promise.allSettled(REQUIRED_AUDIO_ASSETS.map((asset) => verifyAudioAsset(asset)));
-  const missingAssets: SceneMissingAsset[] = [];
+  const missing: string[] = [];
 
-  checks.forEach((result, index) => {
-    if (result.status === 'fulfilled') return;
-    const asset = REQUIRED_AUDIO_ASSETS[index];
-    const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
-    missingAssets.push({
-      name: asset.name,
-      url: asset.src,
-      reason
-    });
-  });
+  await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
+    try {
+      await verifyAudioAsset(asset);
+    } catch (error) {
+      const detail = `${asset.name}: ${asset.src}`;
+      missing.push(detail);
+      console.error('[audio-required] 缺失或載入失敗', {
+        asset: asset.name,
+        url: asset.src,
+        error
+      });
+    }
+  }));
 
-  if (missingAssets.length > 0) {
-    console.error('[audio-required] 缺失或載入失敗', { missingAssets });
+  if (missing.length > 0) {
+    throw new Error(`Missing required audio assets -> ${missing.join(', ')}`);
   }
 
-  return missingAssets;
+  return true;
 };
 
 type AudioDebugState = {

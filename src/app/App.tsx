@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
@@ -62,6 +62,9 @@ export default function App() {
   const [loadingStageText, setLoadingStageText] = useState('正在準備直播畫面');
   const [loadingError, setLoadingError] = useState<SceneInitError | null>(null);
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [initStatusText, setInitStatusText] = useState('初始化中');
+  const [requiredAssetErrors, setRequiredAssetErrors] = useState<string[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const burstCooldownUntil = useRef(0);
@@ -91,10 +94,12 @@ export default function App() {
       setLoadingStageText('正在準備直播畫面');
 
       const loadingStart = performance.now();
-      setLoadingState('ASSETS_CHECKING');
-      setLoadingStageText('正在載入必要素材');
+      setInitStatusText('正在檢查素材');
       const result = await preloadAssets(ASSET_MANIFEST, {
-        onProgress: () => undefined
+        onProgress: (progressState) => {
+          setLoadingProgress(progressState.progress);
+          setInitStatusText(`正在檢查素材 (${progressState.loaded}/${progressState.total})`);
+        }
       });
 
       if (isCancelled) return;
@@ -113,23 +118,18 @@ export default function App() {
 
       if (isCancelled) return;
 
-      if (result.requiredErrors.length === 0) {
-        setHasOptionalAssetWarning(result.optionalErrors.length > 0);
-        setIsReady(true);
-      } else {
-        const missingAssets = result.requiredErrors.map((url) => ({
-          name: 'required_asset',
-          url,
-          reason: 'preload failed'
-        }));
-        console.error('[loading] 必要素材載入失敗', { missingAssets });
-        setLoadingError({
-          summary: '必要素材載入失敗，直播尚未開始。',
-          missingAssets
+      setHasOptionalAssetWarning(result.optionalErrors.length > 0);
+      if (result.requiredErrors.length > 0) {
+        setRequiredAssetErrors(result.requiredErrors);
+        result.requiredErrors.forEach((asset) => {
+          console.error('[asset-required] 缺少必要素材', { asset, url: asset });
         });
-        setLoadingState('ERROR');
-        setLoadingStageText('素材載入失敗');
+        setInitStatusText('必要素材缺失，請檢查路徑');
+        return;
       }
+
+      setInitStatusText('初始化完成');
+      setIsReady(true);
     };
 
     void runSetup();
@@ -293,6 +293,15 @@ export default function App() {
   }, [hasOptionalAssetWarning, isReady]);
 
 
+  const isLoading = !isReady || !isRendererReady || requiredAssetErrors.length > 0;
+  const hasFatalInitError = requiredAssetErrors.length > 0;
+  const shouldShowMainContent = isRendererReady || hasFatalInitError;
+
+  const loadingErrorTitle = useMemo(() => {
+    if (!hasFatalInitError) return undefined;
+    return '初始化失敗：缺少必要素材';
+  }, [hasFatalInitError]);
+
   const submit = () => {
     if (!isReady) return;
     const raw = input.trim();
@@ -426,40 +435,31 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <LoadingOverlay state={loadingState} stageText={loadingStageText} error={loadingError} />
+      <LoadingOverlay
+        visible={isLoading}
+        progress={loadingProgress}
+        statusText={initStatusText}
+        errorTitle={loadingErrorTitle}
+        errors={requiredAssetErrors}
+      />
+      {shouldShowMainContent && (
       <main className="app-layout">
         <div className="live-top">
           <div className="mobile-frame">
             <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
             <div className="video-stage">
               <div className="video-container">
-                <SceneView
-                  targetConsonant={state.currentConsonant.letter}
-                  curse={state.curse}
-                  anchor={state.currentAnchor}
-                  onNeedUserGestureChange={(value) => {
-                    if (!isReady || loadingState === 'ERROR') return;
-                    if (value) {
-                      setLoadingState('NEED_USER_GESTURE');
-                      setLoadingStageText('等待播放授權');
-                      return;
-                    }
-                    if (loadingState === 'NEED_USER_GESTURE') {
-                      setLoadingState('ASSETS_READY');
-                      setLoadingStageText('正在建立聊天室');
-                    }
-                  }}
-                  onSceneRunning={() => {
-                    if (!isReady || !isRendererReady) return;
-                    setLoadingState('RUNNING');
-                    setLoadingStageText('直播進行中');
-                  }}
-                  onSceneError={(error) => {
-                    setLoadingError(error);
-                    setLoadingState('ERROR');
-                    setLoadingStageText('直播啟動失敗');
-                  }}
-                />
+                {!hasFatalInitError ? (
+                  <SceneView
+                    targetConsonant={state.currentConsonant.letter}
+                    curse={state.curse}
+                    anchor={state.currentAnchor}
+                  />
+                ) : (
+                  <div className="asset-warning scene-placeholder">
+                    初始化失敗：必要素材缺失，請開啟 Console 確認缺檔清單。
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -477,6 +477,7 @@ export default function App() {
           />
         </div>
       </main>
+      )}
     </div>
   );
 }
