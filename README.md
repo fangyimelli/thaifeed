@@ -88,13 +88,21 @@ npm run dev
 
 ## 插播排查（timer / ended / lock / timeout）
 
+- 播放策略 SSOT（`src/config/oldhousePlayback.ts`）：
+  - `MAIN_LOOP = oldhouse_room_loop3`（主畫面常駐）
+  - `JUMP_LOOPS = [oldhouse_room_loop, oldhouse_room_loop2]`（插播僅兩支，暫停 loop4）
+- 插播間隔（`computeJumpIntervalMs(curse)`）：
+  - `CURSE=0`：`90,000 ~ 120,000 ms`（1.5~2 分鐘）
+  - `CURSE=100`：`30,000 ~ 60,000 ms`
+  - 下限保護：不會低於 `30,000 ms`（30 秒）
+- 插播影片播放到自然 `ended` 後回 `MAIN_LOOP`，並立刻重排下一次插播。
 - `scheduleNextJump()` 每次都先清掉舊 timer 再重排，避免重複或遺失。
 - `triggerJumpOnce()` 會檢查 `isSwitching` / `isInJump` / `currentKey===MAIN_LOOP`，並輸出 debug log。
 - `switchTo()` 使用 `try/finally` 強制釋放 `isSwitching` lock，任何失敗都不會卡死。
 - `preloadIntoBuffer()` 有 timeout fallback：
   - 3.2 秒內若 `readyState >= HAVE_CURRENT_DATA` 視為可播。
   - 超時且仍不可播則進 ERROR UI（不黑畫面，保留錯誤資訊）。
-- 插播影片若 `ended` 未回主循環，另有 fallback timer 強制切回 `MAIN_LOOP` 並重排下一次插播。
+- 插播影片若 `ended` 未回主循環，另有 fallback timer（至少 45 秒，且會參考素材時長再延長）強制切回 `MAIN_LOOP` 並重排下一次插播。
 
 ## 聊天室送出穩定性
 
@@ -119,4 +127,3 @@ npm run dev
   - Scene overlays（smoke / crack / vignette / noise）
   - VIP crown icon
 - 以上調整可避免在子路徑部署（例如 GitHub Pages）時，載入層與聊天室圖示走舊邏輯導致 404，而與專案既有的 `ASSET_BASE_URL` / `joinUrl` 新邏輯衝突。
-

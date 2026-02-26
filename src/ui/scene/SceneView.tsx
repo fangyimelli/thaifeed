@@ -64,7 +64,7 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
 const CROSSFADE_MS = 420;
 const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
 const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
-const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 2200;
+const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 45000;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
@@ -172,6 +172,7 @@ export default function SceneView({
   const currentLoopKeyRef = useRef<OldhouseLoopKey>(MAIN_LOOP);
   const isInJumpRef = useRef(false);
   const jumpTimerRef = useRef<number | null>(null);
+  const jumpReturnTimerRef = useRef<number | null>(null);
   const curseRef = useRef(curse);
   const autoNextEnabledRef = useRef(true);
   const isSwitchingRef = useRef(false);
@@ -487,17 +488,15 @@ export default function SceneView({
   }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, playAmbientForKey, setActiveVideoAudio]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
-    const c = Math.min(Math.max(curseValue, 0), 100);
+    const c = clampCurse(curseValue) / 100;
 
-    const minBase = 120000;
-    const maxBase = 300000;
-    const minFast = 45000;
-    const maxFast = 120000;
+    const minBase = 90000;
+    const maxBase = 120000;
+    const minFast = 30000;
+    const maxFast = 60000;
 
-    const factor = c / 100;
-
-    const min = minBase - (minBase - minFast) * factor;
-    const max = maxBase - (maxBase - maxFast) * factor;
+    const min = minBase - (minBase - minFast) * c;
+    const max = maxBase - (maxBase - maxFast) * c;
 
     return randomMs(min, max);
   }, []);
@@ -832,6 +831,10 @@ export default function SceneView({
       nextJumpAtRef.current = null;
       updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
     }
+    if (jumpReturnTimerRef.current) {
+      window.clearTimeout(jumpReturnTimerRef.current);
+      jumpReturnTimerRef.current = null;
+    }
 
     const interval = computeJumpIntervalMs(curseRef.current);
     const dueAt = Date.now() + interval;
@@ -894,20 +897,31 @@ export default function SceneView({
     }
 
     currentLoopKeyRef.current = nextKey;
-    window.setTimeout(() => {
+    if (jumpReturnTimerRef.current) {
+      window.clearTimeout(jumpReturnTimerRef.current);
+      jumpReturnTimerRef.current = null;
+    }
+    const activeVideo = getCurrentVideoEl();
+    const hasKnownDuration = Boolean(activeVideo && Number.isFinite(activeVideo.duration) && activeVideo.duration > 0);
+    const fallbackDelay = hasKnownDuration
+      ? Math.max(JUMP_RETURN_SCHEDULE_FALLBACK_MS, Math.round((activeVideo?.duration ?? 0) * 1000) + 5000)
+      : JUMP_RETURN_SCHEDULE_FALLBACK_MS;
+
+    jumpReturnTimerRef.current = window.setTimeout(() => {
       if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
       if (isInJumpRef.current && currentLoopKeyRef.current === nextKey) {
         console.warn('[VIDEO]', 'jump fallback return to MAIN_LOOP', { fromKey: nextKey, mainLoop: MAIN_LOOP });
         isInJumpRef.current = false;
         updateVideoDebug({ isInJump: false, lastError: 'jump-return-timeout-fallback' });
+        jumpReturnTimerRef.current = null;
         void switchTo(MAIN_LOOP).then(() => {
           currentLoopKeyRef.current = MAIN_LOOP;
           scheduleNextJump();
         });
       }
-    }, JUMP_RETURN_SCHEDULE_FALLBACK_MS);
-    console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current });
-  }, [hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
+    }, fallbackDelay);
+    console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current, fallbackDelay });
+  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
 
   const handleEnded = useCallback((event?: Event) => {
     const activeKey = currentLoopKeyRef.current;
@@ -930,6 +944,10 @@ export default function SceneView({
 
     if (isInJumpRef.current) {
       isInJumpRef.current = false;
+      if (jumpReturnTimerRef.current) {
+        window.clearTimeout(jumpReturnTimerRef.current);
+        jumpReturnTimerRef.current = null;
+      }
       updateVideoDebug({ isInJump: false });
       console.log('[VIDEO]', 'ended while in jump; switching back to MAIN_LOOP', { mainLoop: MAIN_LOOP });
       void switchTo(MAIN_LOOP).then(() => {
@@ -988,6 +1006,10 @@ export default function SceneView({
       jumpTimerRef.current = null;
       nextJumpAtRef.current = null;
       updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
+    }
+    if (jumpReturnTimerRef.current) {
+      window.clearTimeout(jumpReturnTimerRef.current);
+      jumpReturnTimerRef.current = null;
     }
 
     if (footstepsTimerRef.current) {
@@ -1131,6 +1153,9 @@ export default function SceneView({
     return () => {
       if (jumpTimerRef.current) {
         window.clearTimeout(jumpTimerRef.current);
+      }
+      if (jumpReturnTimerRef.current) {
+        window.clearTimeout(jumpReturnTimerRef.current);
       }
       nextJumpAtRef.current = null;
     };
