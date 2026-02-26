@@ -119,4 +119,3 @@ npm run dev
   - Scene overlays（smoke / crack / vignette / noise）
   - VIP crown icon
 - 以上調整可避免在子路徑部署（例如 GitHub Pages）時，載入層與聊天室圖示走舊邏輯導致 404，而與專案既有的 `ASSET_BASE_URL` / `joinUrl` 新邏輯衝突。
-
