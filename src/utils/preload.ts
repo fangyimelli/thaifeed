@@ -1,3 +1,4 @@
+import { REQUIRED_AUDIO_ASSETS, REQUIRED_VIDEO_ASSETS } from '../config/oldhousePlayback';
 import type { AssetManifestItem } from '../config/assetManifest';
 
 type ProgressSnapshot = {
@@ -7,6 +8,14 @@ type ProgressSnapshot = {
   errors: string[];
   requiredErrors: string[];
   optionalErrors: string[];
+};
+
+export type MissingRequiredAsset = {
+  name: string;
+  type: 'video' | 'audio';
+  relativePath: string;
+  url: string;
+  reason: string;
 };
 
 type PreloadOptions = {
@@ -44,6 +53,76 @@ function emitProgress(
     requiredErrors: [...requiredErrors],
     optionalErrors: [...optionalErrors]
   });
+}
+
+async function verifyAssetByFetch(url: string): Promise<void> {
+  let headStatus: number | null = null;
+
+  try {
+    const headResponse = await fetch(url, { method: 'HEAD' });
+    if (headResponse.ok) return;
+    headStatus = headResponse.status;
+
+    if (headResponse.status !== 405 && headResponse.status !== 501) {
+      throw new Error(`HEAD ${headResponse.status}`);
+    }
+  } catch {
+    // fall through to GET verification
+  }
+
+  const getResponse = await fetch(url, { method: 'GET' });
+  if (getResponse.ok) return;
+
+  if (headStatus !== null) {
+    throw new Error(`HEAD ${headStatus}; GET ${getResponse.status}`);
+  }
+
+  throw new Error(`GET ${getResponse.status}`);
+}
+
+async function verifyVideos(): Promise<MissingRequiredAsset[]> {
+  const missing: MissingRequiredAsset[] = [];
+
+  await Promise.all(REQUIRED_VIDEO_ASSETS.map(async (asset) => {
+    try {
+      await verifyAssetByFetch(asset.src);
+    } catch (error) {
+      missing.push({
+        name: asset.name,
+        type: 'video',
+        relativePath: asset.relativePath,
+        url: asset.src,
+        reason: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }));
+
+  return missing;
+}
+
+async function verifyAudio(): Promise<MissingRequiredAsset[]> {
+  const missing: MissingRequiredAsset[] = [];
+
+  await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
+    try {
+      await verifyAssetByFetch(asset.src);
+    } catch (error) {
+      missing.push({
+        name: asset.name,
+        type: 'audio',
+        relativePath: asset.relativePath,
+        url: asset.src,
+        reason: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }));
+
+  return missing;
+}
+
+export async function verifyRequiredAssets(): Promise<MissingRequiredAsset[]> {
+  const [missingVideos, missingAudio] = await Promise.all([verifyVideos(), verifyAudio()]);
+  return [...missingVideos, ...missingAudio];
 }
 
 function preloadImage(src: string): Promise<HTMLImageElement> {

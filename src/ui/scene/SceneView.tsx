@@ -6,9 +6,7 @@ import {
   GHOST_FEMALE_PATH,
   JUMP_LOOPS,
   MAIN_LOOP,
-  REQUIRED_AUDIO_ASSETS,
   type OldhouseLoopKey,
-  type RequiredAudioAsset,
   VIDEO_PATH_BY_KEY
 } from '../../config/oldhousePlayback';
 import { curseVisualClass } from '../../core/systems/curseSystem';
@@ -42,8 +40,6 @@ type SceneAssetState = {
   noiseOk: boolean;
   vignetteOk: boolean;
 };
-
-const AUDIO_VERIFY_TIMEOUT_MS = 12_000;
 
 const initialAssets: SceneAssetState = {
   videoOk: true,
@@ -104,73 +100,6 @@ const randomPick = <T,>(items: T[]): T => {
   return items[index];
 };
 
-const verifyAudioAsset = (asset: RequiredAudioAsset) => {
-  return new Promise<void>((resolve, reject) => {
-    const audio = new Audio(asset.src);
-    audio.preload = 'auto';
-    audio.muted = false;
-    audio.volume = 1;
-
-    let done = false;
-    const onLoaded = () => {
-      if (done) return;
-      done = true;
-      cleanup();
-      resolve();
-    };
-    const onError = () => {
-      if (done) return;
-      done = true;
-      cleanup();
-      reject(new Error(`Failed to load required audio asset ${asset.name}: ${asset.src}`));
-    };
-
-    const timeoutId = window.setTimeout(() => {
-      if (done) return;
-      done = true;
-      cleanup();
-      reject(new Error(`Timed out while loading required audio asset ${asset.name}: ${asset.src}`));
-    }, AUDIO_VERIFY_TIMEOUT_MS);
-
-    const cleanup = () => {
-      window.clearTimeout(timeoutId);
-      audio.removeEventListener('loadeddata', onLoaded);
-      audio.removeEventListener('canplaythrough', onLoaded);
-      audio.removeEventListener('error', onError);
-      audio.pause();
-      audio.src = '';
-    };
-
-    audio.addEventListener('loadeddata', onLoaded, { once: true });
-    audio.addEventListener('canplaythrough', onLoaded, { once: true });
-    audio.addEventListener('error', onError, { once: true });
-    audio.load();
-  });
-};
-
-const verifyRequiredAudioAssets = async (): Promise<SceneMissingAsset[]> => {
-  const missing: SceneMissingAsset[] = [];
-
-  await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
-    try {
-      await verifyAudioAsset(asset);
-    } catch (error) {
-      missing.push({
-        name: asset.name,
-        url: asset.src,
-        reason: error instanceof Error ? error.message : 'Unknown audio verification failure'
-      });
-      console.error('[audio-required] 缺失或載入失敗', {
-        asset: asset.name,
-        url: asset.src,
-        error
-      });
-    }
-  }));
-
-  return missing;
-};
-
 type AudioDebugState = {
   started: boolean;
   lastFanAt: number;
@@ -225,7 +154,6 @@ export default function SceneView({
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
   const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
-  const [requiredAudioError, setRequiredAudioError] = useState<string | null>(null);
   const [videoErrorDetail, setVideoErrorDetail] = useState<string | null>(null);
   const videoLayerRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
@@ -988,17 +916,7 @@ export default function SceneView({
     isInJumpRef.current = false;
     currentLoopKeyRef.current = MAIN_LOOP;
 
-    setRequiredAudioError(null);
     setVideoErrorDetail(null);
-
-    const missingRequiredAudio = await verifyRequiredAudioAssets();
-    if (missingRequiredAudio.length > 0) {
-      const message = '必要音效素材載入失敗，無法開始直播。';
-      setRequiredAudioError(message);
-      setHasConfirmedPlayback(false);
-      onSceneError?.({ summary: message, missingAssets: missingRequiredAudio });
-      throw new Error(message);
-    }
 
     if (!isAudioStartedRef.current) {
       isAudioStartedRef.current = true;
@@ -1023,7 +941,7 @@ export default function SceneView({
     }
     scheduleNextJump();
     announceRunning();
-  }, [announceRunning, onSceneError, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
+  }, [announceRunning, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
 
   const stopOldhouseCalmMode = useCallback(() => {
     setAutoNextEnabled(false);
@@ -1386,12 +1304,6 @@ export default function SceneView({
       {!assets.videoOk && (
         <div className="asset-warning">
           影片載入失敗：<code>{videoErrorDetail ?? `active=${currentLoopKey}`}</code>
-        </div>
-      )}
-
-      {requiredAudioError && (
-        <div className="asset-warning">
-          必要音效載入失敗：<code>{requiredAudioError}</code>
         </div>
       )}
 

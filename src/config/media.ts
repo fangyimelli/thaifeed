@@ -7,8 +7,10 @@ export {
   LOOP_KEY_ALIASES,
   MAIN_LOOP,
   REQUIRED_AUDIO_ASSETS,
+  REQUIRED_VIDEO_ASSETS,
   VIDEO_KEYS,
   VIDEO_PATH_BY_KEY,
+  VIDEO_RELATIVE_PATH_BY_KEY,
   type OldhouseLoopKey,
   type RequiredAudioAsset
 } from './oldhousePlayback';
