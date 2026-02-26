@@ -161,6 +161,16 @@ npm run dev
 - 桌機通常沒有行動鍵盤遮擋問題，套用行動端高度重算會造成不必要的高度抖動與版面壓縮。
 - 因此桌機明確關閉 `--app-vh` 寫入與 `visualViewport` 監聽，保持原本穩定雙欄布局。
 
+
+### 手機影片不裁切修正（2026-02）
+
+- 新增 mobile 專用 viewport class：`videoViewportMobile` / `scene-view-mobile` / `video-layer-wrapper-mobile`，僅在 `<1024px` 生效。
+- mobile 影片層強制 `width:100%`、`max-width:100vw`、`margin/padding:0`，避免 `100vw + padding` 造成溢出裁切。
+- mobile 下 `scene-video` 明確 `object-fit: contain`，保證「完整顯示優先、不左右裁切」。
+- mobile 下移除 curse 濾鏡層的 `transform: scale(...)`（`curse-mid/high/critical`），避免 crossfade 疊層放大導致左右被吃。
+- Desktop (`>=1024px`) 保留原本桌機樣式與互動邏輯，未套用 mobile 修正。
+- 雙 video crossfade (`videoA/videoB`) 維持相同定位與尺寸（`absolute + inset:0 + width/height:100%`），僅以 opacity 切換，不用 `display:none`。
+
 ### 單一邏輯（SSOT）保證
 
 - 本次僅分流 **CSS / Layout**。
@@ -168,9 +178,20 @@ npm run dev
 
 ## 回歸檢查摘要
 
-- 已執行 `npm run build`（TypeScript + Vite）確認編譯與打包通過。
+- 已執行 TypeScript 編譯（`node ./node_modules/typescript/bin/tsc -b --pretty false`）確認型別與編譯通過。
 - 已手動檢查桌機/行動兩種 viewport 的版面分流：
   - 桌機恢復雙欄布局（影片 + 聊天室並排）。
   - 行動維持 TopDock + ChatScroll + InputDock 架構。
 - 聊天室送出與滾動、影片渲染、插播切換相關邏輯未改動（僅 layout 調整）。
+
+
+
+## 全功能回歸檢查（本次）
+
+- WARN：`npm run build` 在目前環境因 `vite` 執行權限/optional dependency 限制無法完整執行（非程式邏輯錯誤）。
+- PASS：Mobile 版面與影片完整顯示（390x844，已截圖存證）。
+- PASS：Desktop 版面維持雙欄（1366x768）。
+- PASS：聊天室輸入/送出流程（mobile + desktop 各執行一次送出）。
+- PASS：既有鍵盤安全高度邏輯（mobile 仍使用 `--app-vh` + `visualViewport`）。
+- PASS：未修改插播排程、crossfade 音訊同步核心邏輯。
 
