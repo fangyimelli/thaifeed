@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
@@ -61,6 +61,7 @@ function nextLeaveDelayMs() {
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
   const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
@@ -317,136 +318,153 @@ export default function App() {
     return '初始化失敗：素材未加入專案或 base path 設定錯誤';
   }, [hasFatalInitError]);
 
-  const submit = () => {
-    if (!isReady) return;
-    const raw = input.trim();
+  const submitChat = useCallback(async (rawText: string) => {
+    if (!isReady || isSending) return;
+
+    const raw = rawText.trim();
     if (!raw || chatAutoPaused) return;
-    lastInputTimestamp.current = Date.now();
-    lastIdleCurseAt.current = 0;
 
-    if (!soundUnlocked.current) {
-      soundUnlocked.current = true;
-      dispatchAudienceMessage({
-        id: crypto.randomUUID(),
-        type: 'system',
-        username: 'system',
-        text: '聲音已啟用',
-        language: 'zh'
+    setIsSending(true);
+    const submitDelayMs = randomInt(1000, 5000);
+
+    try {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, submitDelayMs);
       });
-    }
 
-    const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
+      lastInputTimestamp.current = Date.now();
+      lastIdleCurseAt.current = 0;
 
-    dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
+      if (!soundUnlocked.current) {
+        soundUnlocked.current = true;
+        dispatchAudienceMessage({
+          id: crypto.randomUUID(),
+          type: 'system',
+          username: 'system',
+          text: '聲音已啟用',
+          language: 'zh'
+        });
+      }
 
-    const handlePass = () => {
-      markReview(playableConsonant.letter, 'pass', state.curse);
-      const entry = getMemoryNode(playableConsonant.letter);
-      dispatch({
-        type: 'ANSWER_PASS',
-        payload: {
-          message: createVipPassMessage(playableConsonant, entry.lapseCount)
-        }
-      });
-      nonVipMessagesSinceLastVip.current = 0;
-      setInput('');
-    };
+      const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
 
-    if (isPassCommand(raw)) {
-      handlePass();
-      return;
-    }
+      dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
 
-    const isHintInput = isVipHintCommand(raw);
-    const vipReply = handleVipPlayerMessage({
-      rawInput: raw,
-      currentConsonant: playableConsonant.letter,
-      currentAnchor: state.currentAnchor,
-      state: { nonVipMessagesSinceLastVip: nonVipMessagesSinceLastVip.current },
-      recentHistory: state.messages.map((message) => message.translation ?? message.text)
-    });
-
-    if (vipReply) {
-      dispatchAudienceMessage(vipReply);
-      nonVipMessagesSinceLastVip.current = 0;
-    } else {
-      nonVipMessagesSinceLastVip.current += 1;
-    }
-
-    if (isHintInput) {
-      setInput('');
-      return;
-    }
-
-    if (isAnswerCorrect(raw, playableConsonant)) {
-      const donateSample = pickOne(donatePools.messages);
-      const donate: DonateMessage = {
-        id: crypto.randomUUID(),
-        username: pickOne(usernames),
-        amount: pickOne(donatePools.amounts),
-        message_th: donateSample.th,
-        message_zh: donateSample.zh
+      const handlePass = () => {
+        markReview(playableConsonant.letter, 'pass', state.curse);
+        const entry = getMemoryNode(playableConsonant.letter);
+        dispatch({
+          type: 'ANSWER_PASS',
+          payload: {
+            message: createVipPassMessage(playableConsonant, entry.lapseCount)
+          }
+        });
+        nonVipMessagesSinceLastVip.current = 0;
+        setInput('');
       };
 
+      if (isPassCommand(raw)) {
+        handlePass();
+        return;
+      }
+
+      const isHintInput = isVipHintCommand(raw);
+      const vipReply = handleVipPlayerMessage({
+        rawInput: raw,
+        currentConsonant: playableConsonant.letter,
+        currentAnchor: state.currentAnchor,
+        state: { nonVipMessagesSinceLastVip: nonVipMessagesSinceLastVip.current },
+        recentHistory: state.messages.map((message) => message.translation ?? message.text)
+      });
+
+      if (vipReply) {
+        dispatchAudienceMessage(vipReply);
+        nonVipMessagesSinceLastVip.current = 0;
+      } else {
+        nonVipMessagesSinceLastVip.current += 1;
+      }
+
+      if (isHintInput) {
+        setInput('');
+        return;
+      }
+
+      if (isAnswerCorrect(raw, playableConsonant)) {
+        const donateSample = pickOne(donatePools.messages);
+        const donate: DonateMessage = {
+          id: crypto.randomUUID(),
+          username: pickOne(usernames),
+          amount: pickOne(donatePools.amounts),
+          message_th: donateSample.th,
+          message_zh: donateSample.zh
+        };
+
+        dispatch({
+          type: 'ANSWER_CORRECT',
+          payload: {
+            message: createSuccessMessage(state.currentAnchor, getActiveUsersSnapshot()),
+            donateMessage: createDonateChatMessage(donate)
+          }
+        });
+        setInput('');
+        return;
+      }
+
+      const speechHit = parsePlayerSpeech(raw);
+      const now = Date.now();
+      const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
+      if (canTriggerSpeech) {
+        speechCooldownUntil.current = now + 10_000;
+        const activeUsers = getActiveUsersSnapshot();
+        const speechResponses = createPlayerSpeechResponses(
+          state.currentAnchor,
+          state.messages.slice(-20).map((message) => message.translation ?? message.text),
+          activeUsers
+        );
+        speechResponses.forEach((message) => {
+          dispatchAudienceMessage(message);
+        });
+        setInput('');
+        return;
+      }
+
+      const activeUsers = getActiveUsersSnapshot();
+      const fakeAiBatch = createFakeAiAudienceMessage({
+        playerInput: raw,
+        targetConsonant: playableConsonant.letter,
+        curse: state.curse,
+        anchor: state.currentAnchor,
+        recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text),
+        activeUsers
+      });
+
+      fakeAiBatch.messages.forEach((message) => {
+        dispatchAudienceMessage(message);
+      });
+
+      if (fakeAiBatch.pauseMs) {
+        setChatAutoPaused(true);
+        window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
+        setInput('');
+        return;
+      }
+
+      const wrongMessage = createWrongMessage(state.curse, state.currentAnchor, getActiveUsersSnapshot());
       dispatch({
-        type: 'ANSWER_CORRECT',
+        type: 'ANSWER_WRONG',
         payload: {
-          message: createSuccessMessage(state.currentAnchor, getActiveUsersSnapshot()),
-          donateMessage: createDonateChatMessage(donate)
+          message: wrongMessage
         }
       });
       setInput('');
-      return;
+    } finally {
+      setIsSending(false);
     }
+  }, [chatAutoPaused, isReady, isSending, state]);
 
-    const speechHit = parsePlayerSpeech(raw);
-    const now = Date.now();
-    const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
-    if (canTriggerSpeech) {
-      speechCooldownUntil.current = now + 10_000;
-      const activeUsers = getActiveUsersSnapshot();
-      const speechResponses = createPlayerSpeechResponses(
-        state.currentAnchor,
-        state.messages.slice(-20).map((message) => message.translation ?? message.text),
-        activeUsers
-      );
-      speechResponses.forEach((message) => {
-        dispatchAudienceMessage(message);
-      });
-      setInput('');
-      return;
-    }
-
-    const activeUsers = getActiveUsersSnapshot();
-    const fakeAiBatch = createFakeAiAudienceMessage({
-      playerInput: raw,
-      targetConsonant: playableConsonant.letter,
-      curse: state.curse,
-      anchor: state.currentAnchor,
-      recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text),
-      activeUsers
-    });
-
-    fakeAiBatch.messages.forEach((message) => {
-      dispatchAudienceMessage(message);
-    });
-
-    if (fakeAiBatch.pauseMs) {
-      setChatAutoPaused(true);
-      window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
-      setInput('');
-      return;
-    }
-
-    const wrongMessage = createWrongMessage(state.curse, state.currentAnchor, getActiveUsersSnapshot());
-    dispatch({
-      type: 'ANSWER_WRONG',
-      payload: {
-        message: wrongMessage
-      }
-    });
-    setInput('');
-  };
+  const submit = useCallback(() => {
+    void submitChat(input);
+  }, [input, submitChat]);
 
   return (
     <div className="app-shell">
@@ -489,6 +507,7 @@ export default function App() {
             onSubmit={submit}
             onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
             onAutoPauseChange={setChatAutoPaused}
+            isSending={isSending}
           />
         </div>
       </main>
