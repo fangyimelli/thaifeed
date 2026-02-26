@@ -138,53 +138,39 @@ npm run dev
 
 - 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
 
-## 跨裝置鍵盤/viewport 佈局策略
+## Responsive 版面策略
 
-### 1) `--app-vh`（動態視覺高度）
+### DesktopLayout / MobileLayout 分流（Breakpoint: `>=1024px` 為 Desktop）
 
-- 入口在 `App.tsx` 以 `updateAppVh()` 寫入 CSS 變數：
-  - `--app-vh`: `visualViewport.height`（fallback `window.innerHeight`）
-  - `--vv-offset-top` / `--vv-offset-left`
-- 監聽來源：
-  - `window.resize`
-  - `window.orientationchange`
-  - `visualViewport.resize`（可用時）
-  - `visualViewport.scroll`（可用時）
-- 初始掛載會先呼叫一次，確保第一次 render 就採正確 viewport 高度。
+- **DesktopLayout（>=1024px）**
+  - 回復桌機雙欄：左側影片區、右側聊天室。
+  - 使用一般頁面高度與可捲動行為，不套用 mobile 專用 `overflow:hidden`。
+  - 不啟用 `visualViewport` 監聽，也不做 `--app-vh` 高度重算。
+- **MobileLayout（<1024px）**
+  - 維持三區塊：`TopDock`（頂部固定）/ `ChatScroll`（可捲動）/ `InputDock`（底部固定）。
+  - 啟用 `--app-vh` + `visualViewport` 監聽，確保鍵盤彈出時輸入列可見。
+  - `html/body/#root/.app-shell` 在 mobile 下改為固定高度並禁止整頁滾動，避免鍵盤導致整頁亂跳。
 
-### 2) 三區塊固定架構（SSOT）
+### 為何 Mobile 需要 `--app-vh`
 
-- `TopDock`：`LiveHeader + VideoContainer`，固定在最上緣，`top=0`、無額外上方 margin/padding。
-- `ChatScroll`：僅聊天訊息清單可捲動（`overflow-y:auto`）。
-- `InputDock`：輸入列固定在底部，搭配 `env(safe-area-inset-bottom)`。
+- 手機鍵盤彈出時，瀏覽器可視區高度會變動，且 `100vh` 在不同瀏覽器不穩定。
+- 使用 `visualViewport.height` 寫入 `--app-vh` 後，版面高度可跟著真實可視區更新，InputDock 不會被鍵盤吃掉。
 
-整體規則：
+### 為何 Desktop 不使用 `visualViewport` 修正
 
-- `html/body/#root/.app-shell` 全部 `overflow:hidden`，禁止整頁滾動。
-- 主容器高度使用 `var(--app-vh)`，不以 `100vh` 當主高度來源。
-- 已移除舊式 `visualViewport + translateY(input)` 共存邏輯，避免 viewport/鍵盤事件下位移抖動。
+- 桌機通常沒有行動鍵盤遮擋問題，套用行動端高度重算會造成不必要的高度抖動與版面壓縮。
+- 因此桌機明確關閉 `--app-vh` 寫入與 `visualViewport` 監聽，保持原本穩定雙欄布局。
 
-### 3) visualViewport 支援與 fallback
+### 單一邏輯（SSOT）保證
 
-- 支援 `visualViewport` 時，用其高度驅動版面，鍵盤彈出時 InputDock 可維持可見。
-- 不支援時 fallback `window.innerHeight`，桌機 resize 與一般瀏覽器仍可正確重算。
+- 本次僅分流 **CSS / Layout**。
+- 播放器 crossfade、插播排程、ended handler、聊天室送出、防重複訊息 guard、Tag 規則、Loading 規則、必要素材 gate 仍維持同一套程式邏輯，未建立第二份邏輯分支。
 
-### 4) 常見問題排查
+## 回歸檢查摘要
 
-- **症狀：鍵盤彈出後輸入列被遮住**
-  - 檢查 `--app-vh` 是否有隨 `visualViewport.height` 更新。
-  - 檢查是否仍有舊的 `transform: translateY(...)` 套在輸入列。
-- **症狀：焦點時整頁亂捲**
-  - 檢查 `html/body` 是否意外變成可捲動。
-  - 確認程式未呼叫 `window.scrollTo` 或 `scrollIntoView` 去捲動整頁。
-- **症狀：頂部出現黑邊縫**
-  - 檢查 `TopDock` / `videoContainer` 是否被套用 `margin-top/padding-top`。
-- **症狀：子路徑部署資產 404**
-  - 檢查 HTML preload / icon / script 與程式資產 URL 是否都走 `BASE_URL` 或 `resolveAssetUrl`。
+- 已執行 `npm run build`（TypeScript + Vite）確認編譯與打包通過。
+- 已手動檢查桌機/行動兩種 viewport 的版面分流：
+  - 桌機恢復雙欄布局（影片 + 聊天室並排）。
+  - 行動維持 TopDock + ChatScroll + InputDock 架構。
+- 聊天室送出與滾動、影片渲染、插播切換相關邏輯未改動（僅 layout 調整）。
 
-## 本次衝突點調整（專案級）
-
-- 已完成全域檢查並統一移除舊式絕對路徑（`/assets/...`）在執行期 UI 元件中的用法，改為 `resolveAssetUrl(...)`：
-  - Scene overlays（smoke / crack / vignette / noise）
-  - VIP crown icon
-- 以上調整可避免在子路徑部署（例如 GitHub Pages）時，載入層與聊天室圖示走舊邏輯導致 404，而與專案既有的 `ASSET_BASE_URL` / `joinUrl` 新邏輯衝突。

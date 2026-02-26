@@ -61,6 +61,8 @@ function nextLeaveDelayMs() {
   return randomInt(30_000, 45_000);
 }
 
+const DESKTOP_BREAKPOINT = 1024;
+
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const [input, setInput] = useState('');
@@ -74,6 +76,7 @@ export default function App() {
   const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   const burstCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
   const lastInputTimestamp = useRef(Date.now());
@@ -88,6 +91,29 @@ export default function App() {
   const fearEndTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
+    const syncLayoutMode = () => {
+      setIsDesktopLayout(mediaQuery.matches);
+    };
+
+    syncLayoutMode();
+    mediaQuery.addEventListener('change', syncLayoutMode);
+    window.addEventListener('resize', syncLayoutMode);
+
+    return () => {
+      mediaQuery.removeEventListener('change', syncLayoutMode);
+      window.removeEventListener('resize', syncLayoutMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDesktopLayout) {
+      document.documentElement.style.removeProperty('--app-vh');
+      document.documentElement.style.removeProperty('--vv-offset-top');
+      document.documentElement.style.removeProperty('--vv-offset-left');
+      return;
+    }
+
     const updateAppVh = () => {
       const vv = window.visualViewport;
       const h = vv ? vv.height : window.innerHeight;
@@ -108,7 +134,7 @@ export default function App() {
       window.visualViewport?.removeEventListener('resize', updateAppVh);
       window.visualViewport?.removeEventListener('scroll', updateAppVh);
     };
-  }, []);
+  }, [isDesktopLayout]);
 
   const clearLightFearTimer = useCallback(() => {
     if (lightFearTimerRef.current) {
@@ -569,7 +595,7 @@ export default function App() {
   }, [input, submitChat]);
 
   return (
-    <div className="app-shell app-root-layout">
+    <div className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
         visible={isLoading}
         progress={loadingProgress}
