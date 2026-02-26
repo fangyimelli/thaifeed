@@ -146,18 +146,26 @@ const verifyAudioAsset = (asset: RequiredAudioAsset) => {
 };
 
 const verifyRequiredAudioAssets = async () => {
+  const missing: string[] = [];
+
   await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
     try {
       await verifyAudioAsset(asset);
     } catch (error) {
+      const detail = `${asset.name}: ${asset.src}`;
+      missing.push(detail);
       console.error('[audio-required] 缺失或載入失敗', {
         asset: asset.name,
         url: asset.src,
         error
       });
-      throw error;
     }
   }));
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required audio assets -> ${missing.join(', ')}`);
+  }
+
   return true;
 };
 
