@@ -13,6 +13,8 @@ type PreloadOptions = {
   onProgress?: (state: ProgressSnapshot) => void;
 };
 
+const MEDIA_PRELOAD_TIMEOUT_MS = 3000;
+
 type CachedAsset = HTMLImageElement | HTMLAudioElement | HTMLVideoElement;
 
 declare global {
@@ -69,11 +71,36 @@ function preloadAudio(src: string): Promise<HTMLAudioElement> {
     audio.muted = false;
     audio.volume = 1;
     audio.src = src;
-    audio.onloadeddata = () => {
-      assetCache.set(src, audio);
-      resolve(audio);
+    let done = false;
+    const finish = (fn: () => void) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timeoutId);
+      audio.onloadeddata = null;
+      audio.oncanplaythrough = null;
+      audio.onerror = null;
+      fn();
     };
-    audio.onerror = () => reject(new Error(src));
+
+    const timeoutId = window.setTimeout(() => {
+      if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        finish(() => {
+          assetCache.set(src, audio);
+          resolve(audio);
+        });
+        return;
+      }
+      finish(() => reject(new Error(src)));
+    }, MEDIA_PRELOAD_TIMEOUT_MS);
+
+    audio.onloadeddata = () => {
+      finish(() => {
+        assetCache.set(src, audio);
+        resolve(audio);
+      });
+    };
+    audio.oncanplaythrough = audio.onloadeddata;
+    audio.onerror = () => finish(() => reject(new Error(src)));
     audio.load();
   });
 }
@@ -90,11 +117,35 @@ function preloadVideo(src: string): Promise<HTMLVideoElement> {
     video.volume = 1;
     video.playsInline = true;
     video.src = src;
-    video.oncanplaythrough = () => {
-      assetCache.set(src, video);
-      resolve(video);
+    let done = false;
+    const finish = (fn: () => void) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timeoutId);
+      video.onloadeddata = null;
+      video.oncanplaythrough = null;
+      video.onerror = null;
+      fn();
     };
-    video.onerror = () => reject(new Error(src));
+
+    const onReady = () => {
+      finish(() => {
+        assetCache.set(src, video);
+        resolve(video);
+      });
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        onReady();
+        return;
+      }
+      finish(() => reject(new Error(src)));
+    }, MEDIA_PRELOAD_TIMEOUT_MS);
+
+    video.onloadeddata = onReady;
+    video.oncanplaythrough = onReady;
+    video.onerror = () => finish(() => reject(new Error(src)));
     video.load();
   });
 }

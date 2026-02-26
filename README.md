@@ -67,3 +67,27 @@ npm run dev
 - VIP 改成內建免費規則式小 AI（不需外部 API）：
   - 可依玩家輸入語言（泰文/拼音/注音）做鏡像回覆
   - `_still_here` 連錯觸發時會用 AI 句型回覆
+
+## 黑畫面排查
+
+若出現全黑畫面，請依序檢查：
+
+1. **JS runtime error 導致未 render**
+   - 左上角開發用 debug badge 會顯示 `BOOT OK` 或 `BOOT FAIL`。
+   - `BOOT FAIL` 時請先看 Console 的 `window.onerror` / `unhandledrejection` / `[boot] react render error` 訊息。
+2. **CSS 或版面遮蔽**
+   - 確認 `.loading-overlay` 是否一直存在。
+   - 檢查 `#root`、`.app-shell`、`.video-container` 是否有高度（`100dvh/100svh`、`aspect-ratio`）。
+3. **影片資源載入失敗**
+   - 到 Network 看 `public/assets/scenes/*.mp4` 是否 404。
+   - preload 已加入 timeout 與 `readyState >= HAVE_CURRENT_DATA` fallback，避免 `canplaythrough` 長時間 pending。
+4. **必要音效 gate 失敗**
+   - 必要素材缺失時，畫面會顯示錯誤 UI（缺檔清單 + 路徑），並提示重新整理重試。
+   - Console 會印出 `[asset-required]`、`[audio-required]` 詳細資訊與 URL。
+
+### 錯誤 UI 說明
+
+- 初始化失敗不再呈現全黑：
+  - 會顯示 loading/error overlay（缺檔清單）。
+  - 保留 live header、video 區、chat 區的 placeholder，方便定位問題。
+- 初始化成功後，聊天室會出現「系統初始化完成」。

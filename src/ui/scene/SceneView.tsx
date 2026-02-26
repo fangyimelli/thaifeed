@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import {
   AMBIENT_BY_KEY,
@@ -133,18 +133,26 @@ const verifyAudioAsset = (asset: RequiredAudioAsset) => {
 };
 
 const verifyRequiredAudioAssets = async () => {
+  const missing: string[] = [];
+
   await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
     try {
       await verifyAudioAsset(asset);
     } catch (error) {
+      const detail = `${asset.name}: ${asset.src}`;
+      missing.push(detail);
       console.error('[audio-required] 缺失或載入失敗', {
         asset: asset.name,
         url: asset.src,
         error
       });
-      throw error;
     }
   }));
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required audio assets -> ${missing.join(', ')}`);
+  }
+
   return true;
 };
 
@@ -218,10 +226,12 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
-  const debugEnabled = useMemo(() => {
+  const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('debug') === '1';
-  }, []);
+    const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+    const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
+    return searchEnabled || hashEnabled;
+  });
   const [debugTick, setDebugTick] = useState(() => Date.now());
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
