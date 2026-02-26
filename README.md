@@ -71,6 +71,21 @@ npm run dev
   - `verifyAudio()`：使用 fetch 檢查存在，不用 `canplaythrough` 當存在判斷
 - 缺失資料會整合為 `missing[]`，統一提供 UI 與 Console。
 
+## 音訊同步規則
+
+- 雙 video crossfade（videoA/videoB）採「單一真相」：**僅 active video 可出聲**。
+  - 切換時在 buffer video `play()` 成功後、淡入前，立即把 audio lane 切到 buffer。
+  - inactive video 一律 `muted=true`、`defaultMuted=true`、`volume=0`。
+  - crossfade 結束後，舊的 current video 會 `pause()` 並維持靜音/零音量，避免殘留聲音。
+- 獨立 audio 僅保留三套：
+  - 常駐：`fan_loop`
+  - 排程觸發：`footsteps`、`ghost_female`
+- 已移除 per-video ambient mapping 舊邏輯，避免「影片音軌 + per-video ambient」並存導致錯誤判讀。
+- Debug 排查（`?debug=1`）：
+  - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
+  - overlay 會顯示目前正在播放的 audio elements（fan/footsteps/ghost）。
+  - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
+
 ## 其他
 
 - 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
