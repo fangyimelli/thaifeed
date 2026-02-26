@@ -828,6 +828,14 @@ export default function SceneView({
     }
   }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
+  const scheduleNextJump = useCallback((options?: { force?: boolean; explicitDelay?: number }) => {
+    const force = options?.force ?? false;
+    const explicitDelay = options?.explicitDelay;
+
+    if (!force && !autoNextEnabledRef.current) {
+      return;
+    }
+
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
@@ -1005,7 +1013,7 @@ export default function SceneView({
     }
     scheduleNextJump({
       force: true,
-      delayMs: randomMs(FIRST_JUMP_DELAY_MIN_MS, FIRST_JUMP_DELAY_MAX_MS)
+      explicitDelay: randomMs(FIRST_JUMP_DELAY_MIN_MS, FIRST_JUMP_DELAY_MAX_MS)
     });
     announceRunning();
   }, [announceRunning, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
