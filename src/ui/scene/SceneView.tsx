@@ -65,6 +65,8 @@ const CROSSFADE_MS = 420;
 const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
 const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
 const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 2200;
+const FIRST_JUMP_DELAY_MIN_MS = 45000;
+const FIRST_JUMP_DELAY_MAX_MS = 120000;
 
 const wait = (ms: number) => new Promise<void>((resolve) => {
   window.setTimeout(resolve, ms);
@@ -826,6 +828,14 @@ export default function SceneView({
     }
   }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
+  const scheduleNextJump = useCallback((options?: { force?: boolean; explicitDelay?: number }) => {
+    const force = options?.force ?? false;
+    const explicitDelay = options?.explicitDelay;
+
+    if (!force && !autoNextEnabledRef.current) {
+      return;
+    }
+
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
@@ -984,7 +994,7 @@ export default function SceneView({
     }
     scheduleNextJump({
       force: true,
-      delayMs: randomMs(FIRST_JUMP_DELAY_MIN_MS, FIRST_JUMP_DELAY_MAX_MS)
+      explicitDelay: randomMs(FIRST_JUMP_DELAY_MIN_MS, FIRST_JUMP_DELAY_MAX_MS)
     });
     announceRunning();
   }, [announceRunning, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
