@@ -148,15 +148,18 @@ const verifyAudioAsset = (asset: RequiredAudioAsset) => {
   });
 };
 
-const verifyRequiredAudioAssets = async () => {
-  const missing: string[] = [];
+const verifyRequiredAudioAssets = async (): Promise<SceneMissingAsset[]> => {
+  const missing: SceneMissingAsset[] = [];
 
   await Promise.all(REQUIRED_AUDIO_ASSETS.map(async (asset) => {
     try {
       await verifyAudioAsset(asset);
     } catch (error) {
-      const detail = `${asset.name}: ${asset.src}`;
-      missing.push(detail);
+      missing.push({
+        name: asset.name,
+        url: asset.src,
+        reason: error instanceof Error ? error.message : 'Unknown audio verification failure'
+      });
       console.error('[audio-required] 缺失或載入失敗', {
         asset: asset.name,
         url: asset.src,
@@ -165,11 +168,7 @@ const verifyRequiredAudioAssets = async () => {
     }
   }));
 
-  if (missing.length > 0) {
-    throw new Error(`Missing required audio assets -> ${missing.join(', ')}`);
-  }
-
-  return true;
+  return missing;
 };
 
 type AudioDebugState = {
