@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
@@ -267,12 +267,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
-  const [debugEnabled, setDebugEnabled] = useState(() => {
+  const debugEnabled = useMemo(() => {
     if (typeof window === 'undefined') return false;
-    const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
-    const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
-    return searchEnabled || hashEnabled;
-  });
+    return new URLSearchParams(window.location.search).get('debug') === '1';
+  }, []);
   const [debugTick, setDebugTick] = useState(() => Date.now());
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
