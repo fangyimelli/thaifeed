@@ -25,10 +25,8 @@ export default function ChatPanel({
   onAutoPauseChange,
   isSending
 }: Props) {
-  const panelRef = useRef<HTMLElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const inputBarRef = useRef<HTMLFormElement>(null);
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
   const [stickBottom, setStickBottom] = useState(true);
@@ -90,34 +88,9 @@ export default function ChatPanel({
     };
   }, [autoPaused, onAutoPauseChange]);
 
-  useEffect(() => {
-    if (!window.visualViewport) return;
-
-    const syncInputWithViewport = () => {
-      const viewport = window.visualViewport;
-      if (!viewport) return;
-
-      const keyboardHeight = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-      const inputBar = inputBarRef.current;
-      if (!inputBar) return;
-      inputBar.style.transform = keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : 'translateY(0)';
-    };
-
-    syncInputWithViewport();
-    window.visualViewport.addEventListener('resize', syncInputWithViewport);
-    window.visualViewport.addEventListener('scroll', syncInputWithViewport);
-
-    return () => {
-      const inputBar = inputBarRef.current;
-      if (inputBar) inputBar.style.transform = 'translateY(0)';
-      window.visualViewport?.removeEventListener('resize', syncInputWithViewport);
-      window.visualViewport?.removeEventListener('scroll', syncInputWithViewport);
-    };
-  }, []);
-
   return (
-    <aside className="chat-panel" ref={panelRef}>
-      <header className="chat-header">
+    <section className="chat-panel">
+      <header className="chat-header input-surface">
         <strong>聊天室</strong>
       </header>
 
@@ -152,8 +125,7 @@ export default function ChatPanel({
       )}
 
       <form
-        className="chat-input chat-input-bar"
-        ref={inputBarRef}
+        className="chat-input input-surface"
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();
@@ -196,6 +168,6 @@ export default function ChatPanel({
           {isSending ? '送出中…' : '送出'}
         </button>
       </form>
-    </aside>
+    </section>
   );
 }
