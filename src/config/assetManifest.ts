@@ -1,3 +1,5 @@
+import { REQUIRED_AUDIO_ASSETS, VIDEO_KEYS, VIDEO_PATH_BY_KEY, type OldhouseLoopKey } from './oldhousePlayback';
+
 export type AssetType = 'video' | 'image' | 'audio';
 
 export type AssetManifestItem = {
@@ -6,28 +8,25 @@ export type AssetManifestItem = {
   required: boolean;
 };
 
-export const ASSET_MANIFEST: AssetManifestItem[] = [
-  // Required: Scene
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop.mp4', required: true },
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop2.mp4', required: false },
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop3.mp4', required: false },
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop4.mp4', required: false },
-  { type: 'audio', src: '/assets/sfx/oldhouse_room_loop.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/oldhouse_room_loop2.wav', required: false },
+const REQUIRED_VIDEOS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop3'];
 
-  // Required: Overlays
+export const ASSET_MANIFEST: AssetManifestItem[] = [
+  ...VIDEO_KEYS.map((key) => ({
+    type: 'video' as const,
+    src: VIDEO_PATH_BY_KEY[key],
+    required: REQUIRED_VIDEOS.includes(key)
+  })),
+
   { type: 'image', src: '/assets/overlays/overlay_smoke_room.png', required: true },
   { type: 'image', src: '/assets/overlays/overlay_crack_glass.png', required: true },
   { type: 'image', src: '/assets/overlays/overlay_noise_film.png', required: true },
   { type: 'image', src: '/assets/overlays/overlay_vignette.png', required: true },
 
-  // Optional: Icons
   { type: 'image', src: '/assets/icons/icon_crown.svg', required: false },
 
-  // Optional: SFX
-  { type: 'audio', src: '/assets/sfx/sfx_typing.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_send.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_success.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_error.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/sfx_glitch.wav', required: false }
+  ...REQUIRED_AUDIO_ASSETS.map((asset) => ({
+    type: 'audio' as const,
+    src: asset.src,
+    required: true
+  }))
 ];

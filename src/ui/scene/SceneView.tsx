@@ -1,4 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AMBIENT_BY_KEY,
+  FAN_LOOP_PATH,
+  FOOTSTEPS_PATH,
+  GHOST_FEMALE_PATH,
+  JUMP_LOOPS,
+  LOOP_KEY_ALIASES,
+  MAIN_LOOP,
+  REQUIRED_AUDIO_ASSETS,
+  type OldhouseLoopKey,
+  type RequiredAudioAsset,
+  VIDEO_PATH_BY_KEY
+} from '../../config/oldhousePlayback';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
@@ -16,61 +29,6 @@ type SceneAssetState = {
   noiseOk: boolean;
   vignetteOk: boolean;
 };
-
-type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
-
-const LOOP_KEY_ALIASES: Record<string, OldhouseLoopKey> = {
-  oldhouse_room_loop: 'oldhouse_room_loop',
-  oldhouse_room_loop2: 'oldhouse_room_loop2',
-  oldhouse_room_loop3: 'oldhouse_room_loop3',
-  oldhouse_room_loop4: 'oldhouse_room_loop4',
-  loop1: 'oldhouse_room_loop',
-  loop2: 'oldhouse_room_loop2',
-  loop3: 'oldhouse_room_loop3',
-  loop4: 'oldhouse_room_loop4'
-};
-
-const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
-const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'];
-
-const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
-  oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
-  oldhouse_room_loop2: '/assets/scenes/oldhouse_room_loop2.mp4',
-  oldhouse_room_loop3: '/assets/scenes/oldhouse_room_loop3.mp4',
-  oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop4.mp4'
-};
-
-const VIDEO_KEYS: OldhouseLoopKey[] = [
-  'oldhouse_room_loop',
-  'oldhouse_room_loop2',
-  'oldhouse_room_loop3',
-  'oldhouse_room_loop4'
-];
-
-const FAN_LOOP_PATH = '/assets/sfx/fan_loop.wav';
-const FOOTSTEPS_PATH = '/assets/sfx/footsteps.wav';
-const GHOST_FEMALE_PATH = '/assets/sfx/ghost_female.wav';
-
-const AMBIENT_BY_KEY: Record<OldhouseLoopKey, string> = {
-  oldhouse_room_loop: FAN_LOOP_PATH,
-  oldhouse_room_loop2: FAN_LOOP_PATH,
-  oldhouse_room_loop3: FAN_LOOP_PATH,
-  oldhouse_room_loop4: FAN_LOOP_PATH
-};
-
-type RequiredAudioAsset = {
-  name: string;
-  src: string;
-};
-
-const REQUIRED_AUDIO_ASSETS: RequiredAudioAsset[] = [
-  { name: 'fan_loop', src: FAN_LOOP_PATH },
-  { name: 'footsteps', src: FOOTSTEPS_PATH },
-  { name: 'ghost_female', src: GHOST_FEMALE_PATH },
-  ...VIDEO_KEYS.map((key) => ({ name: `ambient_${key}`, src: AMBIENT_BY_KEY[key] })).filter(
-    (asset, index, list) => list.findIndex((candidate) => candidate.src === asset.src) === index
-  )
-];
 
 const AUDIO_VERIFY_TIMEOUT_MS = 12_000;
 
@@ -267,10 +225,10 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
-  const debugEnabled = useMemo(() => {
+  const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('debug') === '1';
-  }, []);
+  });
   const [debugTick, setDebugTick] = useState(() => Date.now());
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
