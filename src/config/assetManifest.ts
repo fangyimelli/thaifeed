@@ -1,3 +1,5 @@
+import { AUDIO_SOURCES, VIDEO_SOURCES } from './media';
+
 export type AssetType = 'video' | 'image' | 'audio';
 
 export type AssetManifestItem = {
@@ -8,12 +10,15 @@ export type AssetManifestItem = {
 
 export const ASSET_MANIFEST: AssetManifestItem[] = [
   // Required: Scene
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop.mp4', required: true },
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop2.mp4', required: false },
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop3.mp4', required: false },
-  { type: 'video', src: '/assets/scenes/oldhouse_room_loop4.mp4', required: false },
-  { type: 'audio', src: '/assets/sfx/oldhouse_room_loop.wav', required: false },
-  { type: 'audio', src: '/assets/sfx/oldhouse_room_loop2.wav', required: false },
+  { type: 'video', src: VIDEO_SOURCES.oldhouse_room_loop, required: true },
+  { type: 'video', src: VIDEO_SOURCES.oldhouse_room_loop2, required: false },
+  { type: 'video', src: VIDEO_SOURCES.oldhouse_room_loop3, required: true },
+  { type: 'video', src: VIDEO_SOURCES.oldhouse_room_loop4, required: true },
+
+  // Required: Oldhouse SFX
+  { type: 'audio', src: AUDIO_SOURCES.fan_loop, required: true },
+  { type: 'audio', src: AUDIO_SOURCES.footsteps, required: true },
+  { type: 'audio', src: AUDIO_SOURCES.female_ghost, required: true },
 
   // Required: Overlays
   { type: 'image', src: '/assets/overlays/overlay_smoke_room.png', required: true },

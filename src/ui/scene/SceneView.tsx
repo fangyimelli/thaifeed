@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
+import {
+  AMBIENT_BY_KEY,
+  AUDIO_SOURCES,
+  JUMP_LOOPS,
+  MAIN_LOOP,
+  REQUIRED_AUDIO_ASSETS,
+  type OldhouseLoopKey,
+  type RequiredAudioAsset,
+  VIDEO_SOURCES
+} from '../../config/media';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
 
@@ -16,61 +26,6 @@ type SceneAssetState = {
   noiseOk: boolean;
   vignetteOk: boolean;
 };
-
-type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
-
-const LOOP_KEY_ALIASES: Record<string, OldhouseLoopKey> = {
-  oldhouse_room_loop: 'oldhouse_room_loop',
-  oldhouse_room_loop2: 'oldhouse_room_loop2',
-  oldhouse_room_loop3: 'oldhouse_room_loop3',
-  oldhouse_room_loop4: 'oldhouse_room_loop4',
-  loop1: 'oldhouse_room_loop',
-  loop2: 'oldhouse_room_loop2',
-  loop3: 'oldhouse_room_loop3',
-  loop4: 'oldhouse_room_loop4'
-};
-
-const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
-const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'];
-
-const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
-  oldhouse_room_loop: '/assets/scenes/oldhouse_room_loop.mp4',
-  oldhouse_room_loop2: '/assets/scenes/oldhouse_room_loop2.mp4',
-  oldhouse_room_loop3: '/assets/scenes/oldhouse_room_loop3.mp4',
-  oldhouse_room_loop4: '/assets/scenes/oldhouse_room_loop4.mp4'
-};
-
-const VIDEO_KEYS: OldhouseLoopKey[] = [
-  'oldhouse_room_loop',
-  'oldhouse_room_loop2',
-  'oldhouse_room_loop3',
-  'oldhouse_room_loop4'
-];
-
-const FAN_LOOP_PATH = '/assets/sfx/fan_loop.wav';
-const FOOTSTEPS_PATH = '/assets/sfx/footsteps.wav';
-const GHOST_FEMALE_PATH = '/assets/sfx/ghost_female.wav';
-
-const AMBIENT_BY_KEY: Record<OldhouseLoopKey, string> = {
-  oldhouse_room_loop: FAN_LOOP_PATH,
-  oldhouse_room_loop2: FAN_LOOP_PATH,
-  oldhouse_room_loop3: FAN_LOOP_PATH,
-  oldhouse_room_loop4: FAN_LOOP_PATH
-};
-
-type RequiredAudioAsset = {
-  name: string;
-  src: string;
-};
-
-const REQUIRED_AUDIO_ASSETS: RequiredAudioAsset[] = [
-  { name: 'fan_loop', src: FAN_LOOP_PATH },
-  { name: 'footsteps', src: FOOTSTEPS_PATH },
-  { name: 'ghost_female', src: GHOST_FEMALE_PATH },
-  ...VIDEO_KEYS.map((key) => ({ name: `ambient_${key}`, src: AMBIENT_BY_KEY[key] })).filter(
-    (asset, index, list) => list.findIndex((candidate) => candidate.src === asset.src) === index
-  )
-];
 
 const AUDIO_VERIFY_TIMEOUT_MS = 12_000;
 
@@ -131,10 +86,6 @@ const clampCurse = (c: number) => Math.min(Math.max(c, 0), 100);
 const randomPick = <T,>(items: T[]): T => {
   const index = Math.floor(Math.random() * items.length);
   return items[index];
-};
-
-const resolveLoopKey = (key: string): OldhouseLoopKey | null => {
-  return LOOP_KEY_ALIASES[key] ?? null;
 };
 
 const verifyAudioAsset = (asset: RequiredAudioAsset) => {
@@ -327,7 +278,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, []);
 
   const getVideoUrlForKey = useCallback((key: OldhouseLoopKey) => {
-    return VIDEO_PATH_BY_KEY[key];
+    return VIDEO_SOURCES[key];
   }, []);
 
   const markActiveVideo = useCallback(() => {
@@ -619,8 +570,7 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       bufferEl.currentTime = 0;
 
       bufferEl.pause();
-      bufferEl.removeAttribute('src');
-      bufferEl.load();
+      bufferEl.currentTime = 0;
 
       console.log('[VIDEO]', 'set buffer src', { id: bufferEl.id, nextKey, nextUrl: resolvedVideoSrc });
       bufferEl.src = resolvedVideoSrc;
@@ -812,8 +762,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       }
 
       currentEl.currentTime = 0;
-      currentEl.removeAttribute('src');
-      currentEl.load();
       currentEl.muted = true;
       currentEl.volume = 0;
 
@@ -978,10 +926,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
     });
   }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
 
-  const playOldhouseLoop = useCallback(async (key: OldhouseLoopKey) => {
-    if (!hasConfirmedPlayback) return;
-    await switchTo(key);
-  }, [hasConfirmedPlayback, switchTo]);
 
   const startOldhouseCalmMode = useCallback(async () => {
     console.log('[VIDEO]', 'startOldhouseCalmMode', { mainLoop: MAIN_LOOP, jumpLoops: JUMP_LOOPS });
@@ -1138,19 +1082,19 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
   }, []);
 
   useEffect(() => {
-    fanAudioRef.current = new Audio(FAN_LOOP_PATH);
+    fanAudioRef.current = new Audio(AUDIO_SOURCES.fan_loop);
     fanAudioRef.current.preload = 'auto';
     fanAudioRef.current.loop = true;
     fanAudioRef.current.volume = 0.4;
     fanAudioRef.current.muted = false;
 
-    footstepsAudioRef.current = new Audio(FOOTSTEPS_PATH);
+    footstepsAudioRef.current = new Audio(AUDIO_SOURCES.footsteps);
     footstepsAudioRef.current.preload = 'auto';
     footstepsAudioRef.current.loop = false;
     footstepsAudioRef.current.volume = 0.85;
     footstepsAudioRef.current.muted = false;
 
-    ghostAudioRef.current = new Audio(GHOST_FEMALE_PATH);
+    ghostAudioRef.current = new Audio(AUDIO_SOURCES.female_ghost);
     ghostAudioRef.current.preload = 'auto';
     ghostAudioRef.current.loop = false;
     ghostAudioRef.current.volume = 0.75;
@@ -1167,33 +1111,6 @@ export default function SceneView({ targetConsonant, curse, anchor }: Props) {
       ghostAudioRef.current = null;
     };
   }, [stopAmbient, stopOldhouseCalmMode]);
-
-  useEffect(() => {
-    const onStartRandom = () => {
-      void startOldhouseCalmMode().catch((error) => {
-        console.error('[audio-required] oldhouse:random:start 啟動失敗', error);
-      });
-    };
-    const onStopRandom = () => stopOldhouseCalmMode();
-    const onPlayLoop = (event: Event) => {
-      const customEvent = event as CustomEvent<string>;
-      const key = resolveLoopKey(customEvent.detail);
-      if (key) {
-        stopOldhouseCalmMode();
-        void playOldhouseLoop(key);
-      }
-    };
-
-    window.addEventListener('oldhouse:random:start', onStartRandom);
-    window.addEventListener('oldhouse:random:stop', onStopRandom);
-    window.addEventListener('oldhouse:play', onPlayLoop as EventListener);
-
-    return () => {
-      window.removeEventListener('oldhouse:random:start', onStartRandom);
-      window.removeEventListener('oldhouse:random:stop', onStopRandom);
-      window.removeEventListener('oldhouse:play', onPlayLoop as EventListener);
-    };
-  }, [playOldhouseLoop, startOldhouseCalmMode, stopOldhouseCalmMode]);
 
   useEffect(() => {
     return () => {
