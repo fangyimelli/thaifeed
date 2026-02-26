@@ -21,9 +21,9 @@ import type { ChatMessage, DonateMessage } from '../core/state/types';
 import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import ChatPanel from '../ui/chat/ChatPanel';
-import SceneView from '../ui/scene/SceneView';
+import SceneView, { type SceneInitError } from '../ui/scene/SceneView';
 import LiveHeader from '../ui/hud/LiveHeader';
-import LoadingOverlay from '../ui/hud/LoadingOverlay';
+import LoadingOverlay, { type LoadingState } from '../ui/hud/LoadingOverlay';
 import { preloadAssets } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
@@ -58,6 +58,9 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
+  const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
+  const [loadingStageText, setLoadingStageText] = useState('正在準備直播畫面');
+  const [loadingError, setLoadingError] = useState<SceneInitError | null>(null);
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
@@ -83,8 +86,13 @@ export default function App() {
     const runSetup = async () => {
       setIsReady(false);
       setIsRendererReady(false);
+      setLoadingError(null);
+      setLoadingState('BOOT_START');
+      setLoadingStageText('正在準備直播畫面');
 
       const loadingStart = performance.now();
+      setLoadingState('ASSETS_CHECKING');
+      setLoadingStageText('正在載入必要素材');
       const result = await preloadAssets(ASSET_MANIFEST, {
         onProgress: () => undefined
       });
@@ -94,6 +102,8 @@ export default function App() {
       const renderer = new Renderer2D();
       renderer.mount();
       setIsRendererReady(true);
+      setLoadingState('ASSETS_READY');
+      setLoadingStageText('正在建立聊天室');
 
       const elapsed = performance.now() - loadingStart;
       const minimumLoadingMs = 800;
@@ -106,6 +116,19 @@ export default function App() {
       if (result.requiredErrors.length === 0) {
         setHasOptionalAssetWarning(result.optionalErrors.length > 0);
         setIsReady(true);
+      } else {
+        const missingAssets = result.requiredErrors.map((url) => ({
+          name: 'required_asset',
+          url,
+          reason: 'preload failed'
+        }));
+        console.error('[loading] 必要素材載入失敗', { missingAssets });
+        setLoadingError({
+          summary: '必要素材載入失敗，直播尚未開始。',
+          missingAssets
+        });
+        setLoadingState('ERROR');
+        setLoadingStageText('素材載入失敗');
       }
     };
 
@@ -214,7 +237,7 @@ export default function App() {
 
     timer = window.setTimeout(tick, nextLeaveDelayMs());
     return () => window.clearTimeout(timer);
-  }, [isReady]);
+  }, [loadingState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -227,10 +250,19 @@ export default function App() {
     }, 5_000);
 
     return () => window.clearInterval(timer);
-  }, [isReady]);
+  }, [loadingState]);
+
 
   useEffect(() => {
-    if (!isReady || postedInitMessages.current) return;
+    if (loadingState === 'ERROR') return;
+    if (isReady && isRendererReady && loadingState === 'ASSETS_CHECKING') {
+      setLoadingState('ASSETS_READY');
+      setLoadingStageText('正在建立聊天室');
+    }
+  }, [isReady, isRendererReady, loadingState]);
+
+  useEffect(() => {
+    if (loadingState !== 'RUNNING' || postedInitMessages.current) return;
     postedInitMessages.current = true;
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
@@ -243,10 +275,10 @@ export default function App() {
       id: crypto.randomUUID(),
       type: 'system',
       username: 'system',
-      text: '系統初始化完成',
+      text: '初始化完成',
       language: 'zh'
     });
-  }, [isReady]);
+  }, [loadingState]);
 
   useEffect(() => {
     if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
@@ -260,8 +292,6 @@ export default function App() {
     });
   }, [hasOptionalAssetWarning, isReady]);
 
-
-  const isLoading = !isReady || !isRendererReady;
 
   const submit = () => {
     if (!isReady) return;
@@ -396,7 +426,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <LoadingOverlay visible={isLoading} />
+      <LoadingOverlay state={loadingState} stageText={loadingStageText} error={loadingError} />
       <main className="app-layout">
         <div className="live-top">
           <div className="mobile-frame">
@@ -407,6 +437,28 @@ export default function App() {
                   targetConsonant={state.currentConsonant.letter}
                   curse={state.curse}
                   anchor={state.currentAnchor}
+                  onNeedUserGestureChange={(value) => {
+                    if (!isReady || loadingState === 'ERROR') return;
+                    if (value) {
+                      setLoadingState('NEED_USER_GESTURE');
+                      setLoadingStageText('等待播放授權');
+                      return;
+                    }
+                    if (loadingState === 'NEED_USER_GESTURE') {
+                      setLoadingState('ASSETS_READY');
+                      setLoadingStageText('正在建立聊天室');
+                    }
+                  }}
+                  onSceneRunning={() => {
+                    if (!isReady || !isRendererReady) return;
+                    setLoadingState('RUNNING');
+                    setLoadingStageText('直播進行中');
+                  }}
+                  onSceneError={(error) => {
+                    setLoadingError(error);
+                    setLoadingState('ERROR');
+                    setLoadingStageText('直播啟動失敗');
+                  }}
                 />
               </div>
             </div>

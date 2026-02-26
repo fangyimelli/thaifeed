@@ -64,6 +64,32 @@ body {
   letter-spacing: 0;
 }
 
+.loading-label {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #9eb8ff;
+}
+
+.loading-error-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #4f2d2d;
+  background: #1f1313;
+  border-radius: 8px;
+  width: min(560px, 90vw);
+  text-align: left;
+}
+
+.loading-error-panel ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.loading-error-panel li {
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
 .loading-spinner {
   width: 28px;
   height: 28px;
