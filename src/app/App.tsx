@@ -28,6 +28,9 @@ import { preloadAssets, verifyRequiredAssets, type MissingRequiredAsset } from '
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
 import { collectActiveUsers } from '../core/systems/mentionV2';
+import { MAIN_LOOP } from '../config/oldhousePlayback';
+import { onSceneEvent } from '../core/systems/sceneEvents';
+import type { ChatTopicContext } from '../core/systems/chatSystem';
 
 function formatViewerCount(value: number) {
   if (value < 1000) return `${value}`;
@@ -79,6 +82,29 @@ export default function App() {
   const postedOptionalAssetWarningMessage = useRef(false);
   const soundUnlocked = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
+  const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
+  const topicModeRef = useRef<ChatTopicContext['topicMode']>('CALM_PARANOIA');
+  const lightFearTimerRef = useRef<number | null>(null);
+  const fearEndTimerRef = useRef<number | null>(null);
+
+  const clearLightFearTimer = useCallback(() => {
+    if (lightFearTimerRef.current) {
+      window.clearTimeout(lightFearTimerRef.current);
+      lightFearTimerRef.current = null;
+    }
+  }, []);
+
+  const clearFearEndTimer = useCallback(() => {
+    if (fearEndTimerRef.current) {
+      window.clearTimeout(fearEndTimerRef.current);
+      fearEndTimerRef.current = null;
+    }
+  }, []);
+
+  const getTopicContext = useCallback((): ChatTopicContext => ({
+    currentVideoKey: currentVideoKeyRef.current,
+    topicMode: topicModeRef.current
+  }), []);
 
   const getActiveUsersSnapshot = () => collectActiveUsers(state.messages);
 
@@ -166,14 +192,63 @@ export default function App() {
         state.curse,
         state.currentAnchor,
         state.messages.slice(-12).map((message) => message.translation ?? message.text),
-        activeUsers
+        activeUsers,
+        getTopicContext()
       ));
-      timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
+      timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse, topicModeRef.current));
     };
 
-    timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse));
+    timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse, topicModeRef.current));
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, isReady, chatAutoPaused]);
+  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, isReady, chatAutoPaused, getTopicContext]);
+
+  useEffect(() => {
+    const enterFearMode = () => {
+      topicModeRef.current = 'LIGHT_FLICKER_FEAR';
+      clearFearEndTimer();
+      const fearDurationMs = randomInt(10_000, 12_000);
+      fearEndTimerRef.current = window.setTimeout(() => {
+        const currentKey = currentVideoKeyRef.current;
+        topicModeRef.current = currentKey === MAIN_LOOP ? 'CALM_PARANOIA' : 'NORMAL';
+        fearEndTimerRef.current = null;
+      }, fearDurationMs);
+    };
+
+    const stopFearAndReset = () => {
+      clearLightFearTimer();
+      clearFearEndTimer();
+      topicModeRef.current = 'CALM_PARANOIA';
+    };
+
+    const unsubscribe = onSceneEvent((event) => {
+      if (event.type !== 'VIDEO_ACTIVE') return;
+      currentVideoKeyRef.current = event.key;
+
+      if (event.key === MAIN_LOOP) {
+        stopFearAndReset();
+        return;
+      }
+
+      if (event.key === 'oldhouse_room_loop' || event.key === 'oldhouse_room_loop2') {
+        clearLightFearTimer();
+        clearFearEndTimer();
+        topicModeRef.current = 'NORMAL';
+        lightFearTimerRef.current = window.setTimeout(() => {
+          const currentKey = currentVideoKeyRef.current;
+          const isInsertLoop = currentKey === 'oldhouse_room_loop' || currentKey === 'oldhouse_room_loop2';
+          if (!isInsertLoop) return;
+          enterFearMode();
+          lightFearTimerRef.current = null;
+        }, 5_000);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      clearLightFearTimer();
+      clearFearEndTimer();
+    };
+  }, [clearFearEndTimer, clearLightFearTimer]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -435,7 +510,8 @@ export default function App() {
         curse: state.curse,
         anchor: state.currentAnchor,
         recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text),
-        activeUsers
+        activeUsers,
+        topicContext: getTopicContext()
       });
 
       fakeAiBatch.messages.forEach((message) => {
@@ -460,7 +536,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [chatAutoPaused, isReady, isSending, state]);
+  }, [chatAutoPaused, isReady, isSending, state, getTopicContext]);
 
   const submit = useCallback(() => {
     void submitChat(input);

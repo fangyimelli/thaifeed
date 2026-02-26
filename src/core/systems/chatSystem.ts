@@ -4,6 +4,13 @@ import { createSpeechWaveV2, generateChatMessageV2 } from './chatEngineV2';
 import { getActiveUserSet, sanitizeMentions } from './mentionV2';
 import type { AnchorType, ChatMessage } from '../state/types';
 
+export type ChatTopicMode = 'CALM_PARANOIA' | 'LIGHT_FLICKER_FEAR' | 'NORMAL';
+
+export type ChatTopicContext = {
+  currentVideoKey: string;
+  topicMode: ChatTopicMode;
+};
+
 function finalizeMessageMentions(message: ChatMessage, activeUsers: string[]): ChatMessage {
   const activeSet = getActiveUserSet(activeUsers);
   return {
@@ -13,11 +20,19 @@ function finalizeMessageMentions(message: ChatMessage, activeUsers: string[]): C
   };
 }
 
-export function createAudienceMessage(curse: number, anchor: AnchorType, recentHistory: string[], activeUsers: string[]): ChatMessage {
+export function createAudienceMessage(
+  curse: number,
+  anchor: AnchorType,
+  recentHistory: string[],
+  activeUsers: string[],
+  topicContext: ChatTopicContext
+): ChatMessage {
   return finalizeMessageMentions(generateChatMessageV2({
     kind: 'audience',
     curse,
     anchor,
+    currentVideoKey: topicContext.currentVideoKey,
+    topicMode: topicContext.topicMode,
     recentHistory,
     activeUsers,
     anchorMentionAllowed: true
@@ -35,6 +50,7 @@ export function createFakeAiAudienceMessage(input: {
   anchor: AnchorType;
   recentHistory: string[];
   activeUsers: string[];
+  topicContext: ChatTopicContext;
 }): { messages: ChatMessage[]; pauseMs?: number } {
   const reply = generateReply(input);
 
@@ -68,6 +84,8 @@ export function createFakeAiAudienceMessage(input: {
       kind: 'fakeAiNormal',
       curse: input.curse,
       anchor: input.anchor,
+      currentVideoKey: input.topicContext.currentVideoKey,
+      topicMode: input.topicContext.topicMode,
       recentHistory: input.recentHistory,
       activeUsers: input.activeUsers,
       username: 'fake_ai',
@@ -76,12 +94,13 @@ export function createFakeAiAudienceMessage(input: {
   };
 }
 
-export function getAudienceIntervalMs(curse: number) {
+export function getAudienceIntervalMs(curse: number, topicMode: ChatTopicMode = 'NORMAL') {
   const minMs = 1200;
   const maxMs = 6000;
   const pressure = Math.min(0.45, curse / 220);
-  const low = Math.floor(minMs - minMs * pressure * 0.25);
-  const high = Math.floor(maxMs - maxMs * pressure);
+  const modeMultiplier = topicMode === 'LIGHT_FLICKER_FEAR' ? 0.78 : topicMode === 'CALM_PARANOIA' ? 1.22 : 1;
+  const low = Math.floor((minMs - minMs * pressure * 0.25) * modeMultiplier);
+  const high = Math.floor((maxMs - maxMs * pressure) * modeMultiplier);
   return Math.floor(Math.random() * (high - low + 1) + low);
 }
 

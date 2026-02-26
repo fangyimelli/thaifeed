@@ -10,6 +10,7 @@ import {
 } from '../../config/oldhousePlayback';
 import { resolveAssetUrl } from '../../config/assetUrls';
 import { curseVisualClass } from '../../core/systems/curseSystem';
+import { emitSceneEvent } from '../../core/systems/sceneEvents';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
 
@@ -706,6 +707,7 @@ export default function SceneView({
       });
 
       await waitFirstFrame(bufferEl);
+      const startedAt = Date.now();
 
       bufferEl.style.display = 'block';
       currentEl.style.display = 'block';
@@ -762,6 +764,7 @@ export default function SceneView({
       markActiveVideo();
       currentLoopKeyRef.current = nextKey;
       setCurrentLoopKey(nextKey);
+      emitSceneEvent({ type: 'VIDEO_ACTIVE', key: nextKey, startedAt });
       updateVideoDebug({
         currentKey: nextKey,
         bufferKey: null,

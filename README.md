@@ -117,6 +117,23 @@ npm run dev
   - `onKeyDown Enter`：排除 IME 組字（`isComposing`/`keyCode===229`）才送出。
 - iOS 鍵盤：仍用 `visualViewport` 修正輸入列位置，並提高輸入列 `z-index` 與 `pointer-events`，避免透明層或覆蓋層吞點擊。
 
+## 聊天室主題與影片狀態連動
+
+- 影片切換成功後，`switchTo()` 在 `currentKey` 更新完成時會發出 `emitSceneEvent({ type: "VIDEO_ACTIVE", key, startedAt })`。
+  - `startedAt` 以 `play()` 成功且第一幀可用後時間點為準。
+  - `loop3`、`loop`、`loop2` 都會發送，作為聊天室 topic state 的單一來源。
+- 聊天室 topicMode：
+  - `oldhouse_room_loop3`（主循環）→ `CALM_PARANOIA`。
+  - `oldhouse_room_loop` / `oldhouse_room_loop2`（插播）→ 先維持 `NORMAL`，播放滿 5 秒後進入 `LIGHT_FLICKER_FEAR`。
+  - `LIGHT_FLICKER_FEAR` 持續時間為隨機 10~12 秒，結束後回到正常節奏。
+- 取消條件：
+  - 若插播 5 秒內切回 `loop3`，會清除 `lightFearTimer`，不會誤觸發燈光恐懼討論。
+  - 回到 `loop3` 時也會清除 fear duration timer，立即恢復 `CALM_PARANOIA`。
+- 與人格 / TagV2 / 節奏模型關係：
+  - 沿用既有 20 人格風格（標點、語助詞、網路語感）只替換 topic 語料池。
+  - `TagV2` 規則不變：只 tag activeUsers、activeUsers < 3 禁止 tag、輸出前仍經 `sanitizeMentions`。
+  - 同一套 chat scheduler 會依 topicMode 調整頻率：`CALM_PARANOIA` 偏慢、`LIGHT_FLICKER_FEAR` 較密但不刷版，未新增第二套 interval。
+
 ## 其他
 
 - 目前不再要求 `oldhouse_room_loop4.mp4`；只要上述 3 支必要影片與 3 支必要音效存在，即可進入 RUNNING。
