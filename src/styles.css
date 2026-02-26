@@ -403,10 +403,13 @@ body {
   position: sticky;
   bottom: 0;
   display: flex;
+  align-items: center;
   gap: 8px;
   padding: 8px 12px calc(env(safe-area-inset-bottom) + 8px);
   border-top: 1px solid #2b2d33;
   background: #111;
+  z-index: 120;
+  pointer-events: auto;
 }
 
 .chat-input-bar {
@@ -422,6 +425,7 @@ body {
 }
 .chat-input button {
   border: none;
+  touch-action: manipulation;
   border-radius: 18px;
   padding: 0 14px;
   background: #3ea6ff;
