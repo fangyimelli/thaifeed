@@ -22,7 +22,7 @@ type PreloadOptions = {
   onProgress?: (state: ProgressSnapshot) => void;
 };
 
-const MEDIA_PRELOAD_TIMEOUT_MS = 3000;
+const MEDIA_PRELOAD_TIMEOUT_MS = 15000;
 
 type CachedAsset = HTMLImageElement | HTMLAudioElement | HTMLVideoElement;
 
