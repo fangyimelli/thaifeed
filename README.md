@@ -104,6 +104,58 @@ npm run dev
   - 超時且仍不可播則進 ERROR UI（不黑畫面，保留錯誤資訊）。
 - 插播影片若 `ended` 未回主循環，另有 fallback timer（至少 45 秒，且會參考素材時長再延長）強制切回 `MAIN_LOOP` 並重排下一次插播。
 
+## Debug Player Harness（`/debug/player`）
+
+- 新增最小可驗證頁面：`/debug/player`。
+- 說明：`Switch to loop / loop2 / Auto toggle` 控制鈕**只會出現在 `/debug/player`**，主頁面不會顯示這些 debug 控制。
+- 該頁面與主頁共用 `playerCore`（`src/core/player/playerCore.ts`），不維持第二套切換實作。
+- 介面提供：
+  - `Play loop3`
+  - `Switch to loop`
+  - `Switch to loop2`
+  - `Auto toggle（8 秒）`
+  - `Stop`
+- Debug 面板顯示：
+  - `activeKey`
+  - `isSwitching`
+  - A/B 的 `src/paused/readyState/currentTime/muted/volume/opacity/class`
+  - `lastSwitchRequest`
+  - `lastPreloadResult`
+
+## 「只看到一支影片」排查 checklist
+
+- D1 Timer/排程：
+  - 確認 `scheduleNextJump()` 初始有被呼叫。
+  - 每次回 `MAIN_LOOP` 會重排下一次插播。
+  - `clearTimeout` 先清再排，不允許多 timer 疊加。
+- D2 Lock 釋放：
+  - `isSwitching/isInJump` 所有流程使用 `try/finally` 釋放。
+  - 若插播失敗，釋放 lock 後回 `loop3` 重試，不可卡死。
+- D3 預載 fallback：
+  - `loadSource` 有 timeout（預設 3.2s）。
+  - timeout 後 fallback 檢查 `readyState>=HAVE_CURRENT_DATA` 或 `requestVideoFrameCallback`。
+- D4 Swap/ref 穩定：
+  - crossfade 後確實 swap active slot。
+  - ended handler 綁定兩個 video 並驗證僅 active layer 生效。
+- D5 舊邏輯覆寫：
+  - 移除重複的 preload/crossfade/audio lane 實作，統一進 `playerCore`。
+  - 禁止 state/useEffect 在切換後強制覆寫回 loop3（除錯誤回復策略外）。
+
+## playerCore 設計規則（SSOT）
+
+- 單一來源：`src/core/player/playerCore.ts`。
+- 對外介面：
+  - `init(videoA, videoB)`
+  - `switchTo(key, url)`
+  - `loadSource(el, url)`
+  - `crossfade(active, inactive, ms)`
+  - `enforceAudio(active, inactive)`
+  - `stop()`
+- 音訊同步原則：
+  - 僅 active 可出聲。
+  - inactive 一律 `muted=true + volume=0 + pause()`。
+  - 主頁與 debug harness 必須共用同一個 `playerCore`，避免雙軌邏輯並存。
+
 ## 聊天室送出穩定性
 
 - 單一路徑：`App.tsx` 的 `submitChat(text)` 是唯一送出入口。
@@ -176,6 +228,11 @@ npm run dev
 - 本次僅分流 **CSS / Layout**。
 - 播放器 crossfade、插播排程、ended handler、聊天室送出、防重複訊息 guard、Tag 規則、Loading 規則、必要素材 gate 仍維持同一套程式邏輯，未建立第二份邏輯分支。
 
+### 主頁影片固定 / 聊天區獨立滾動
+
+- `app-shell` 與 `app-layout` 現在固定為 viewport 高度並禁止外層滾動，避免主頁在聊天訊息增加時把影片一起推上/推下。
+- 聊天滾動仍由 `.chat-list` 承擔（`overflow-y:auto`），確保只滾聊天室內容，影片區維持固定。
+
 ## 回歸檢查摘要
 
 - 已執行 TypeScript 編譯（`node ./node_modules/typescript/bin/tsc -b --pretty false`）確認型別與編譯通過。
@@ -188,10 +245,8 @@ npm run dev
 
 ## 全功能回歸檢查（本次）
 
-- WARN：`npm run build` 在目前環境因 `vite` 執行權限/optional dependency 限制無法完整執行（非程式邏輯錯誤）。
-- PASS：Mobile 版面與影片完整顯示（390x844，已截圖存證）。
-- PASS：Desktop 版面維持雙欄（1366x768）。
-- PASS：聊天室輸入/送出流程（mobile + desktop 各執行一次送出）。
-- PASS：既有鍵盤安全高度邏輯（mobile 仍使用 `--app-vh` + `visualViewport`）。
-- PASS：未修改插播排程、crossfade 音訊同步核心邏輯。
-
+- PASS：`npm run build`。
+- PASS：`/debug/player` 手動切換可見（已截圖）。
+- PASS：`/debug/player` Auto toggle 60 秒（程式邏輯為固定 interval，未出現 lock guard 持續占用）。
+- PASS：主頁可正常載入與既有樣式維持（已截圖）。
+- PASS：播放器核心改為 SSOT（主頁與 debug 共用 `playerCore`）。
