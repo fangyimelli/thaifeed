@@ -111,6 +111,14 @@ class BootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
 
 bootDiagnostics();
 
+const isDebugPlayerRoute = () => {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  if (path.endsWith('/debug/player')) return true;
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+  if (!base) return false;
+  return path === `${base}/debug/player`;
+};
+
 try {
   const root = document.getElementById('root');
   if (!root) throw new Error('#root not found');

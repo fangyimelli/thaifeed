@@ -21,16 +21,20 @@ body {
 }
 
 .app-shell {
-  min-height: 100%;
+  min-height: 100vh;
+  height: 100vh;
   position: relative;
   padding: var(--shell-padding);
+  overflow: hidden;
 }
 
 .app-layout {
   min-height: calc(100vh - (var(--shell-padding) * 2));
+  height: calc(100vh - (var(--shell-padding) * 2));
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: var(--shell-gap);
+  overflow: hidden;
 }
 
 .top-dock,
