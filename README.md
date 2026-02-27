@@ -424,3 +424,59 @@ npm run dev
   - `chat.reactionWindow`
   - `chat.activeUsers`
   - `chat.recentDedupHashes`
+
+## Event Registry（資料驅動 SSOT）
+
+- 單一來源：`src/director/EventRegistry.ts`。
+- 新增/刪除事件原則：
+  1. 只在 `EVENT_REGISTRY` 新增或刪除 `EventSpec`。
+  2. 事件對應台詞只在 `src/chat/LineRegistry.ts` 新增或刪除同名 `lineKey`。
+  3. 若事件要播放音效，僅引用 `src/audio/SfxRegistry.ts` 內註冊 `key`。
+- 事件引擎 `src/director/EventEngine.ts` 只讀 registry 執行，不再散落 if/else 大樹。
+
+## SFX Registry（資料驅動 SSOT）
+
+- 單一來源：`src/audio/SfxRegistry.ts`。
+- 新增/刪除音效：僅修改 `SFX_REGISTRY`。
+- `playSfx` 僅接受已註冊 `SfxKey`（避免硬編字串與拼字錯誤）。
+- `fan_loop` 保持常駐；`footsteps` / `ghost_female` 已移除固定頻率排程，改由事件驅動 request 觸發。
+
+## 去重/語氣輪替規則
+
+- 單一來源：`src/chat/LineRegistry.ts` + `src/director/EventEngine.ts`。
+- 每個 `LineKey` 皆提供至少 12 個 `LineVariant`。
+- 引擎去重與輪替規則：
+  - `variantId`：最近 M（目前 6）次不重複。
+  - `tone`：最近 2 次不重複。
+  - `persona`：最近 N（目前 6）句不重複。
+- 事件新增/刪除時，不需改引擎邏輯。
+
+## Lock 事件化流程
+
+- 任一 tag 行為可觸發 `LOCK_START`。
+- `LOCK_START` 透過 `followUps` 自動排程：
+  - `LOCK_REMIND_20S`
+  - `LOCK_REMIND_40S`
+  - `LOCK_ESCALATE_60S`
+- 所有 lock 句子都由 `LineRegistry` 變體提供。
+- Lock 狀態、目標、經過時間、聊天室速度倍率在 debug 狀態中可見。
+
+## debug=1 驗證資料驅動事件/音效
+
+- 主畫面開 `?debug=1` 後，overlay 可檢查：
+  - `event.lastEvent/reason`
+  - `event.line/variant/tone/persona`
+  - `event.sfx/reason`
+  - `event.sfxCooldowns`
+  - `event.lock`
+  - `event.queue/blocked`
+- 事件若要求切 scene，會透過 request 流程給 Scene 層處理，不在事件中直接硬切。
+
+## 修正：聊天室顯示帳號來源（viewer -> 真實用戶）
+
+- `EventEngine` 現在不再把所有觀眾事件固定顯示為 `viewer`。
+- 規則：
+  1. 若 `actor='viewer'` 且 `LineVariant.persona` 可對應 `PERSONA_USERS`，使用對應帳號。
+  2. 若 persona 無對應，fallback 為 `usernames.json` 隨機帳號。
+  3. `user/ghost/system` 仍維持既定固定發言者名稱。
+- 這樣可恢復原本聊天室「看起來是不同觀眾在說話」的行為。
