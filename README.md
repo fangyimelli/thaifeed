@@ -501,3 +501,12 @@ npm run dev
   - `event.lock`
   - `event.queue/blocked`
 - 事件若要求切 scene，會透過 request 流程給 Scene 層處理，不在事件中直接硬切。
+
+## 修正：聊天室顯示帳號來源（viewer -> 真實用戶）
+
+- `EventEngine` 現在不再把所有觀眾事件固定顯示為 `viewer`。
+- 規則：
+  1. 若 `actor='viewer'` 且 `LineVariant.persona` 可對應 `PERSONA_USERS`，使用對應帳號。
+  2. 若 persona 無對應，fallback 為 `usernames.json` 隨機帳號。
+  3. `user/ghost/system` 仍維持既定固定發言者名稱。
+- 這樣可恢復原本聊天室「看起來是不同觀眾在說話」的行為。

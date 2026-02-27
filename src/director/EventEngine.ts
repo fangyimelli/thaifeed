@@ -1,5 +1,7 @@
 import { collectActiveUsers } from '../core/systems/mentionV2';
 import type { ChatMessage } from '../core/state/types';
+import usernames from '../content/pools/usernames.json';
+import { PERSONA_USERS } from '../chat/ChatPools';
 import { getSfxSpec, type SfxKey } from '../audio/SfxRegistry';
 import { EVENT_REGISTRY, type EventKey } from './EventRegistry';
 import { LINE_REGISTRY, type LineVariant } from '../chat/LineRegistry';
@@ -41,6 +43,19 @@ type EventEngineDeps = {
 const ACTOR_NAME: Record<string, string> = {
   user: 'you', ghost: 'ghost', viewer: 'viewer', system: 'system'
 };
+
+function pickRandomUsername(): string {
+  const pool = usernames as string[];
+  return pool[Math.floor(Math.random() * pool.length)] ?? 'viewer';
+}
+
+function resolveUsername(actor: 'user' | 'ghost' | 'viewer' | 'system', persona: string): string {
+  if (actor === 'viewer') {
+    const mapped = (PERSONA_USERS as Record<string, string>)[persona];
+    return mapped ?? pickRandomUsername();
+  }
+  return ACTOR_NAME[actor];
+}
 
 export class EventEngine {
   private cooldowns = new Map<string, number>();
@@ -98,7 +113,7 @@ export class EventEngine {
     const text = variant.lines.join(' ');
     const message: ChatMessage = {
       id: crypto.randomUUID(),
-      username: ACTOR_NAME[spec.actor],
+      username: resolveUsername(spec.actor, variant.persona),
       text: context.tagTarget ? text.replace(/@\{tag\}/g, `@${context.tagTarget}`) : text.replace(/@\{tag\}\s*/g, ''),
       language: spec.actor === 'ghost' ? 'th' : 'zh',
       translation: spec.actor === 'ghost' ? variant.lines[variant.lines.length - 1] : text,
