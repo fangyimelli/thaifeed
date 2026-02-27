@@ -70,6 +70,15 @@ export default function App() {
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
+  const [mobileInnerHeight, setMobileInnerHeight] = useState(() => window.innerHeight);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [chatInputHeight, setChatInputHeight] = useState(0);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLElement>(null);
+  const chatAreaRef = useRef<HTMLElement>(null);
+  const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const burstCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
   const lastInputTimestamp = useRef(Date.now());
@@ -101,6 +110,36 @@ export default function App() {
       window.removeEventListener('resize', syncLayoutMode);
     };
   }, []);
+
+  useEffect(() => {
+    if (isDesktopLayout) {
+      setMobileViewportHeight(null);
+      setIsKeyboardOpen(false);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    const updateViewport = () => {
+      const nextVh = vv?.height ?? window.innerHeight;
+      setMobileViewportHeight(nextVh);
+      setMobileInnerHeight(window.innerHeight);
+      setIsKeyboardOpen(Boolean(vv && window.innerHeight - vv.height > 120));
+      document.documentElement.style.setProperty('--vvh', `${nextVh}px`);
+      setLayoutMetricsTick((value) => value + 1);
+    };
+
+    updateViewport();
+    vv?.addEventListener('resize', updateViewport);
+    vv?.addEventListener('scroll', updateViewport);
+    window.addEventListener('resize', updateViewport);
+
+    return () => {
+      vv?.removeEventListener('resize', updateViewport);
+      vv?.removeEventListener('scroll', updateViewport);
+      window.removeEventListener('resize', updateViewport);
+      document.documentElement.style.removeProperty('--vvh');
+    };
+  }, [isDesktopLayout]);
 
   const dispatchAudienceMessage = (message: ChatMessage) => {
     dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
@@ -343,6 +382,12 @@ export default function App() {
   const hasFatalInitError = requiredAssetErrors.length > 0;
   const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
   const shouldShowMainContent = true;
+  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+
+  const containerHeight = shellRef.current?.getBoundingClientRect().height ?? null;
+  const headerHeight = headerRef.current?.getBoundingClientRect().height ?? null;
+  const videoHeight = videoRef.current?.getBoundingClientRect().height ?? null;
+  const chatHeight = chatAreaRef.current?.getBoundingClientRect().height ?? null;
 
   const loadingErrorTitle = useMemo(() => {
     if (!hasFatalInitError) return undefined;
@@ -471,7 +516,7 @@ export default function App() {
   }, [input, submitChat]);
 
   return (
-    <div className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
+    <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
         visible={isLoading}
         progress={loadingProgress}
@@ -481,10 +526,10 @@ export default function App() {
       />
       {shouldShowMainContent && (
       <main className="app-root app-layout">
-        <header className="app-header top-dock">
+        <header ref={headerRef} className="app-header top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
         </header>
-        <section className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
+        <section ref={videoRef} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
           {!hasFatalInitError ? (
             <SceneView
               targetConsonant={state.currentConsonant.letter}
@@ -498,7 +543,7 @@ export default function App() {
             </div>
           )}
         </section>
-        <section className="chat-area chat-container input-surface">
+        <section ref={chatAreaRef} className="chat-area chat-container input-surface">
           <ChatPanel
             messages={state.messages}
             input={input}
@@ -509,8 +554,23 @@ export default function App() {
             onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
             onAutoPauseChange={setChatAutoPaused}
             isSending={isSending}
+            isReady={isReady}
+            loadingStatusText={initStatusText}
+            onInputHeightChange={setChatInputHeight}
           />
         </section>
+        {!isDesktopLayout && debugEnabled && (
+          <aside className="mobile-layout-debug" data-tick={layoutMetricsTick}>
+            <div>visualViewport.height: {mobileViewportHeight ? Math.round(mobileViewportHeight) : 'n/a'}</div>
+            <div>window.innerHeight: {Math.round(mobileInnerHeight)}</div>
+            <div>container height: {containerHeight ? Math.round(containerHeight) : 'n/a'}</div>
+            <div>video height: {videoHeight ? Math.round(videoHeight) : 'n/a'}</div>
+            <div>chat height: {chatHeight ? Math.round(chatHeight) : 'n/a'}</div>
+            <div>header height: {headerHeight ? Math.round(headerHeight) : 'n/a'}</div>
+            <div>input height: {chatInputHeight ? Math.round(chatInputHeight) : 'n/a'}</div>
+            <div>keyboard open: {isKeyboardOpen ? 'true' : 'false'}</div>
+          </aside>
+        )}
       </main>
       )}
     </div>

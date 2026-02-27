@@ -12,6 +12,9 @@ type Props = {
   onToggleTranslation: (id: string) => void;
   onAutoPauseChange: (paused: boolean) => void;
   isSending: boolean;
+  isReady: boolean;
+  loadingStatusText: string;
+  onInputHeightChange?: (height: number) => void;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -26,17 +29,22 @@ export default function ChatPanel({
   onSubmit,
   onToggleTranslation,
   onAutoPauseChange,
-  isSending
+  isSending,
+  isReady,
+  loadingStatusText,
+  onInputHeightChange
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const keyboardSinkRef = useRef<HTMLButtonElement>(null);
+  const inputFormRef = useRef<HTMLFormElement>(null);
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
   const viewportSyncUntilRef = useRef(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
+  const [inputHeight, setInputHeight] = useState(64);
   const isMobile = isMobileDevice();
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const activeSet = getActiveUserSet(collectActiveUsers(messages));
@@ -154,6 +162,25 @@ export default function ChatPanel({
   }, [autoPaused, onAutoPauseChange]);
 
   useEffect(() => {
+    const form = inputFormRef.current;
+    if (!form) return;
+
+    const syncHeight = () => {
+      const nextHeight = form.getBoundingClientRect().height;
+      setInputHeight(nextHeight);
+      onInputHeightChange?.(nextHeight);
+    };
+
+    syncHeight();
+    const resizeObserver = new ResizeObserver(syncHeight);
+    resizeObserver.observe(form);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [onInputHeightChange]);
+
+  useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
 
@@ -177,6 +204,7 @@ export default function ChatPanel({
       <div
         ref={messageListRef}
         className="chat-messages chat-list"
+        style={{ paddingBottom: Math.max(8, inputHeight + 8) }}
         onScroll={(event) => {
           const el = event.currentTarget;
           const distanceBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -184,6 +212,7 @@ export default function ChatPanel({
         }}
       >
         <div className="chat-items">
+          {!isReady && <div className="chat-loading-banner">{loadingStatusText || '初始化中'}</div>}
           {sanitizedMessages.slice(-MAX_RENDER_COUNT).map((message) => (
             <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
           ))}
@@ -205,6 +234,7 @@ export default function ChatPanel({
       )}
 
       <form
+        ref={inputFormRef}
         className="chat-input input-surface"
         onSubmit={(event) => {
           event.preventDefault();
@@ -233,7 +263,7 @@ export default function ChatPanel({
         />
         <button
           type="button"
-          disabled={isSending}
+          disabled={isSending || !isReady}
           onClick={() => {
             void handleMessageSubmit();
           }}
@@ -242,7 +272,7 @@ export default function ChatPanel({
             void handleMessageSubmit();
           }}
         >
-          {isSending ? '送出中…' : '送出'}
+          {!isReady ? '初始化中…' : isSending ? '送出中…' : '送出'}
         </button>
         <button
           ref={keyboardSinkRef}
