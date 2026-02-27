@@ -87,18 +87,24 @@ npm run dev
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
   - 主頁右上角提供 `Debug ON/OFF` 按鈕，可直接切換 `?debug=1`（不需手改網址）。
 
-## 插播排查（timer / ended / lock / timeout）
+## 自動插播排程可靠性（timer + watchdog）
 
 - 播放策略 SSOT（`src/config/oldhousePlayback.ts`）：
   - `MAIN_LOOP = oldhouse_room_loop3`（主畫面常駐）
   - `JUMP_LOOPS = [oldhouse_room_loop, oldhouse_room_loop2]`（插播僅兩支，暫停 loop4）
 - 插播間隔（`computeJumpIntervalMs(curse)`）：
+  - `debug=1`：固定 `10,000 ~ 15,000 ms`（驗收快速回歸用）
+  - 正式模式：
   - `CURSE=0`：`90,000 ~ 120,000 ms`（1.5~2 分鐘）
   - `CURSE=100`：`30,000 ~ 60,000 ms`
   - 下限保護：不會低於 `30,000 ms`（30 秒）
 - 插播影片播放到自然 `ended` 後回 `MAIN_LOOP`，並立刻重排下一次插播。
-- `scheduleNextJump()` 每次都先清掉舊 timer 再重排，避免重複或遺失。
-- `triggerJumpOnce()` 會檢查 `isSwitching` / `isInJump` / `currentKey===MAIN_LOOP`，並輸出 debug log。
+- `plannedJump` 為排程 SSOT：`dueAt/key/url/scheduledAt/timerId/lastTimerFiredAt/lastWatchdogFiredAt/lastExecReason/lastExecResult`。
+- `scheduleNextJump()` 每次都先清掉舊 timer 再重排，避免 timer 被覆寫或遺失。
+- `execPlannedJump(reason)` 是唯一執行入口（`timer | watchdog | force`），禁止重 pick。
+- timer callback 一定寫入 `lastTimerFiredAt`；若 guard 擋住，寫 `skipped_guard` 並 500ms 後重試（同時 watchdog 也會補觸發）。
+- watchdog：每秒檢查 `now >= dueAt` 未執行則補跑 `execPlannedJump('watchdog')`，避免瀏覽器節流造成漏跳。
+- 監聽 `visibilitychange`：頁面回到 visible 時若已過 due，立即以 watchdog 補執行。
 - `switchTo()` 使用 `try/finally` 強制釋放 `isSwitching` lock，任何失敗都不會卡死。
 - `preloadIntoBuffer()` 有 timeout fallback：
   - 3.2 秒內若 `readyState >= HAVE_CURRENT_DATA` 視為可播。
@@ -117,7 +123,11 @@ npm run dev
   - 若候選清單為空或重抽仍等於 MAIN，會回報 error（不 silent fallback）。
   - Console 會輸出 `[JUMP_PICK] { candidates, pickedKey, reason, curse, intervalMs }`。
 - `debug=1` overlay 觀察欄位：
-  - `jumpCandidates` / `plannedJumpKey` / `plannedJumpUrl`
+  - `now / dueAt / diffMs`（`nextJumpDueIn` 唯一由 `dueAt-now` 計算）
+  - `plannedJump key/url/scheduledAt/timerId`
+  - `lastTimerFiredAt/lastWatchdogFiredAt`
+  - `lastExec reason/result/at`、`executedAt/executedForDueAt`
+  - `why not jumped?`（missing planned / guard locked / timer never fired / executed already / last error）
   - `unavailableJumps`（被 gate 的 key 與原因）
   - `lastFallback`（from/to/reason，包含 timeout 或 switch 失敗）
   - `sceneMapDigest`（loop / loop2 / loop3 對應 URL 摘要）
@@ -142,6 +152,7 @@ npm run dev
 - 用於排查插播不切換：
   - 若 `Force LOOP` 可切成功但自動插播不會切，表示排程 / planned jump 還有問題。
   - 若 `Force LOOP` 都無法切換，表示 `switchTo` 或 buffer 覆寫仍有衝突。
+  - 看 `Why not jumped?` 可直接判斷卡在 timer/guard/missing planned/已執行/執行錯誤。
   - 每次點按都會輸出 `console.log('[DEBUG_FORCE]', { action, currentKey, plannedKey, bufferBefore, bufferAfter })`，可快速對照切換前後狀態。
 
 ## Debug Player Harness（`/debug/player`）
