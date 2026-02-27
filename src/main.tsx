@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './app/App';
+import DebugPlayerPage from './app/DebugPlayerPage';
 import './styles.css';
 
 type BootStatus = 'BOOT OK' | 'BOOT FAIL';
@@ -117,7 +118,7 @@ try {
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <BootErrorBoundary>
-        <App />
+        {window.location.pathname === '/debug/player' ? <DebugPlayerPage /> : <App />}
       </BootErrorBoundary>
     </React.StrictMode>
   );

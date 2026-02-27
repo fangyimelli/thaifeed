@@ -9,6 +9,7 @@ import {
   VIDEO_PATH_BY_KEY
 } from '../../config/oldhousePlayback';
 import { resolveAssetUrl } from '../../config/assetUrls';
+import { createPlayerCore } from '../../core/player/playerCore';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import { emitSceneEvent } from '../../core/systems/sceneEvents';
 import type { AnchorType } from '../../core/state/types';
@@ -65,37 +66,9 @@ const ANCHOR_POSITIONS: Record<AnchorType, { top: number; left: number }> = {
 
 const CROSSFADE_MS = 420;
 const PRELOAD_READY_FALLBACK_TIMEOUT_MS = 3200;
-const PAUSE_OLD_VIDEO_AT_RATIO = 0.6;
 const JUMP_RETURN_SCHEDULE_FALLBACK_MS = 45000;
 const FIRST_JUMP_DELAY_MIN_MS = 15000;
 const FIRST_JUMP_DELAY_MAX_MS = 30000;
-
-const wait = (ms: number) => new Promise<void>((resolve) => {
-  window.setTimeout(resolve, ms);
-});
-
-const waitFirstFrame = async (videoEl: HTMLVideoElement) => {
-  return new Promise<void>((resolve) => {
-    if (typeof videoEl.requestVideoFrameCallback === 'function') {
-      videoEl.requestVideoFrameCallback(() => resolve());
-      return;
-    }
-
-    const t0 = performance.now();
-    const tick = () => {
-      if (videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        resolve();
-        return;
-      }
-      if (performance.now() - t0 > 300) {
-        resolve();
-        return;
-      }
-      window.requestAnimationFrame(tick);
-    };
-    window.requestAnimationFrame(tick);
-  });
-};
 
 const randomMs = (min: number, max: number) => {
   const low = Math.floor(Math.min(min, max));
@@ -171,6 +144,7 @@ export default function SceneView({
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
   const currentVideoRef = useRef<'A' | 'B'>('A');
+  const playerCoreRef = useRef(createPlayerCore());
   const fanAudioRef = useRef<HTMLAudioElement | null>(null);
   const footstepsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ghostAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -208,18 +182,6 @@ export default function SceneView({
       playingAudios: []
     };
     window.__AUDIO_DEBUG__ = { ...prev, ...patch };
-  }, []);
-
-  const setActiveVideoAudio = useCallback((activeEl: HTMLVideoElement, inactiveEl: HTMLVideoElement) => {
-    activeEl.defaultMuted = false;
-    activeEl.muted = false;
-    if (activeEl.volume === 0) {
-      activeEl.volume = 1;
-    }
-
-    inactiveEl.muted = true;
-    inactiveEl.defaultMuted = true;
-    inactiveEl.volume = 0;
   }, []);
 
   const stopAllNonPersistentSfx = useCallback(() => {
@@ -310,15 +272,7 @@ export default function SceneView({
 
     const active = currentVideoRef.current === 'A' ? videoA : videoB;
     const inactive = currentVideoRef.current === 'A' ? videoB : videoA;
-    active.classList.add('is-active');
-    inactive.classList.remove('is-active');
-    active.style.display = 'block';
-    inactive.style.display = 'none';
-    active.style.opacity = '1';
-    inactive.style.opacity = '0';
-    active.style.zIndex = '1';
-    inactive.style.zIndex = '1';
-    setActiveVideoAudio(active, inactive);
+    playerCoreRef.current.enforceAudio(active, inactive);
     console.log('[VIDEO]', 'markActiveVideo', {
       activeId: active.id,
       activeSrc: active.currentSrc || active.src,
@@ -335,7 +289,7 @@ export default function SceneView({
       currentReadyState: active.readyState,
       currentPaused: active.paused
     });
-  }, [setActiveVideoAudio, updateVideoDebug]);
+  }, [updateVideoDebug]);
 
   const collectAudioDebugSnapshot = useCallback(() => {
     const currentVideo = getCurrentVideoEl();
@@ -477,7 +431,7 @@ export default function SceneView({
 
     const bufferVideo = getBufferVideoEl();
     if (bufferVideo) {
-      setActiveVideoAudio(video, bufferVideo);
+      playerCoreRef.current.enforceAudio(video, bufferVideo);
     }
 
     try {
@@ -490,7 +444,7 @@ export default function SceneView({
       console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
-  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, playAmbientForKey, setActiveVideoAudio]);
+  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, playAmbientForKey]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     const c = clampCurse(curseValue) / 100;
@@ -509,107 +463,10 @@ export default function SceneView({
   const preloadIntoBuffer = useCallback((nextKey: OldhouseLoopKey) => {
     const bufferEl = getBufferVideoEl();
     if (!bufferEl) return Promise.reject(new Error('Buffer video missing'));
-
-    return new Promise<void>((resolve, reject) => {
-      const nextVideoPath = getVideoUrlForKey(nextKey);
-      const cachedVideo = getCachedAsset(nextVideoPath);
-      const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
-
-      let fallbackTimer: number | null = null;
-      let done = false;
-
-      const resolveReady = (reason: string) => {
-        if (done) return;
-        done = true;
-        cleanup();
-        console.log('[VIDEO]', 'preloadIntoBuffer resolved', {
-          nextKey,
-          reason,
-          id: bufferEl.id,
-          readyState: bufferEl.readyState,
-          src: bufferEl.currentSrc || bufferEl.src
-        });
-        resolve();
-      };
-      const rejectReady = (error: Error) => {
-        if (done) return;
-        done = true;
-        cleanup();
-        setAssets((prev) => ({ ...prev, videoOk: false }));
-        setVideoErrorDetail(error.message);
-        onSceneError?.({
-          summary: '影片載入失敗，直播尚未開始。',
-          missingAssets: [{ name: nextKey, url: resolvedVideoSrc, reason: error.message }]
-        });
-        reject(error);
-      };
-
-      const onMaybeReady = (eventName: string) => {
-        if (bufferEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          resolveReady(eventName);
-        }
-      };
-      const onError = () => {
-        rejectReady(new Error(`Failed to preload ${nextKey} (${resolvedVideoSrc})`));
-      };
-      const cleanup = () => {
-        if (fallbackTimer) {
-          window.clearTimeout(fallbackTimer);
-          fallbackTimer = null;
-        }
-        bufferEl.removeEventListener('loadedmetadata', onLoadedMetadata);
-        bufferEl.removeEventListener('loadeddata', onLoadedData);
-        bufferEl.removeEventListener('canplay', onCanPlay);
-        bufferEl.removeEventListener('canplaythrough', onCanPlayThrough);
-        bufferEl.removeEventListener('error', onError);
-      };
-
-      const onLoadedMetadata = () => onMaybeReady('loadedmetadata');
-      const onLoadedData = () => onMaybeReady('loadeddata');
-      const onCanPlay = () => onMaybeReady('canplay');
-      const onCanPlayThrough = () => onMaybeReady('canplaythrough');
-
-      bufferEl.preload = 'auto';
-      bufferEl.playsInline = true;
-      bufferEl.controls = false;
-      bufferEl.defaultMuted = false;
-      bufferEl.muted = false;
-      bufferEl.volume = 1;
-      bufferEl.loop = false;
-      bufferEl.currentTime = 0;
-
-      bufferEl.pause();
-      bufferEl.currentTime = 0;
-
-      console.log('[VIDEO]', 'set buffer src', { id: bufferEl.id, nextKey, nextUrl: resolvedVideoSrc });
-      bufferEl.src = resolvedVideoSrc;
-      bufferEl.load();
-
-      if (bufferEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        resolveReady('readyState-immediate');
-        return;
-      }
-
-      fallbackTimer = window.setTimeout(() => {
-        console.warn('[VIDEO]', 'preloadIntoBuffer timeout fallback', {
-          nextKey,
-          id: bufferEl.id,
-          readyState: bufferEl.readyState,
-          src: bufferEl.currentSrc || bufferEl.src
-        });
-        if (bufferEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          resolveReady('timeout-readyState');
-          return;
-        }
-        rejectReady(new Error(`影片載入失敗：${nextKey} (${resolvedVideoSrc})`));
-      }, PRELOAD_READY_FALLBACK_TIMEOUT_MS);
-
-      bufferEl.addEventListener('loadedmetadata', onLoadedMetadata);
-      bufferEl.addEventListener('loadeddata', onLoadedData);
-      bufferEl.addEventListener('canplay', onCanPlay);
-      bufferEl.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
-      bufferEl.addEventListener('error', onError, { once: true });
-    });
+    const nextVideoPath = getVideoUrlForKey(nextKey);
+    const cachedVideo = getCachedAsset(nextVideoPath);
+    const resolvedVideoSrc = cachedVideo instanceof HTMLVideoElement ? cachedVideo.src : nextVideoPath;
+    return playerCoreRef.current.loadSource(bufferEl, resolvedVideoSrc, PRELOAD_READY_FALLBACK_TIMEOUT_MS);
   }, [getBufferVideoEl, getVideoUrlForKey]);
 
   const switchTo = useCallback(async (nextKey: OldhouseLoopKey) => {
@@ -663,106 +520,15 @@ export default function SceneView({
       updateAudioDebug({ switchId, phase: 'preloadStart' });
       console.log('[VIDEO]', 'switchTo preload start', { switchId, nextKey, curse: curseRef.current });
 
-      await preloadIntoBuffer(nextKey);
+      await playerCoreRef.current.switchTo(nextKey, nextUrl, CROSSFADE_MS);
 
 
       stopAllNonPersistentSfx();
-      bufferEl.defaultMuted = false;
-      bufferEl.muted = false;
-      bufferEl.volume = 1;
-      bufferEl.controls = false;
-
-      currentEl.muted = true;
-      currentEl.defaultMuted = true;
-      currentEl.volume = 0;
-
-      updateAudioDebug({ switchId, phase: 'bufferPlayStart' });
-      console.log('[VIDEO]', 'switchTo buffer play start', {
-        switchId,
-        nextKey,
-        bufferId: bufferEl.id,
-        bufferReadyState: bufferEl.readyState,
-        bufferPaused: bufferEl.paused,
-        bufferCurrentTime: bufferEl.currentTime
-      });
-
-      try {
-        await bufferEl.play();
-        setActiveVideoAudio(bufferEl, currentEl);
-      } catch (e: unknown) {
-        setNeedsGestureState(true);
-        updateVideoDebug({ lastError: `video play blocked for ${nextKey}` });
-        console.warn('[AUDIO] play blocked/failed', { key: `video_${nextKey}`, errName: e instanceof Error ? e.name : 'unknown' });
-        return;
-      }
-
-      updateAudioDebug({
-        switchId,
-        phase: 'crossfadeStart',
-        activeVideoKey: nextKey,
-        activeVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A'
-      });
-      console.log('[VIDEO]', 'switchTo crossfade start', {
-        switchId,
-        videoKey: nextKey,
-        outgoingVideoEl: currentVideoRef.current,
-        incomingVideoEl: currentVideoRef.current === 'A' ? 'B' : 'A',
-        curse: curseRef.current
-      });
-
-      await waitFirstFrame(bufferEl);
       const startedAt = Date.now();
-
-      bufferEl.style.display = 'block';
-      currentEl.style.display = 'block';
-      bufferEl.style.zIndex = '1';
-      currentEl.style.zIndex = '1';
-      bufferEl.classList.add('is-active');
-      currentEl.classList.remove('is-active');
-      bufferEl.style.opacity = '1';
-      currentEl.style.opacity = '0';
-
-      console.log('[VIDEO]', 'classes', {
-        currentId: currentEl.id,
-        bufferId: bufferEl.id,
-        currentActive: currentEl.classList.contains('is-active'),
-        bufferActive: bufferEl.classList.contains('is-active')
-      });
-
-      console.log('[VIDEO]', 'classes', {
-        currentId: currentEl.id,
-        bufferId: bufferEl.id,
-        currentActive: currentEl.classList.contains('is-active'),
-        bufferActive: bufferEl.classList.contains('is-active')
-      });
-
-      setActiveVideoAudio(bufferEl, currentEl);
-      console.log('[VIDEO]', 'audio lanes', {
-        current: { muted: currentEl.muted, vol: currentEl.volume },
-        buffer: { muted: bufferEl.muted, vol: bufferEl.volume }
-      });
 
       await playAmbientForKey(nextKey);
 
       setNeedsGestureState(false);
-
-      const pauseOldVideoAtMs = Math.floor(CROSSFADE_MS * PAUSE_OLD_VIDEO_AT_RATIO);
-      await wait(pauseOldVideoAtMs);
-      currentEl.pause();
-
-      currentEl.muted = true;
-      currentEl.defaultMuted = true;
-      currentEl.volume = 0;
-
-      const restMs = Math.max(0, CROSSFADE_MS - pauseOldVideoAtMs);
-      if (restMs > 0) {
-        await wait(restMs);
-      }
-
-      currentEl.currentTime = 0;
-      currentEl.muted = true;
-      currentEl.defaultMuted = true;
-      currentEl.volume = 0;
 
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
       markActiveVideo();
@@ -816,11 +582,17 @@ export default function SceneView({
     } catch (error) {
       updateVideoDebug({ lastError: String(error instanceof Error ? error.message : error) });
       console.error('[VIDEO]', 'switchTo failed', error);
-      setAssets((prev) => ({ ...prev, videoOk: false }));
-      onSceneError?.({
-        summary: '影片載入失敗，直播尚未開始。',
-        missingAssets: [{ name: nextKey, url: nextUrl, reason: error instanceof Error ? error.message : String(error) }]
-      });
+      if (nextKey !== MAIN_LOOP) {
+        isInJumpRef.current = false;
+        updateVideoDebug({ isInJump: false });
+        await switchTo(MAIN_LOOP);
+      } else {
+        setAssets((prev) => ({ ...prev, videoOk: false }));
+        onSceneError?.({
+          summary: '影片載入失敗，直播尚未開始。',
+          missingAssets: [{ name: nextKey, url: nextUrl, reason: error instanceof Error ? error.message : String(error) }]
+        });
+      }
     } finally {
       isSwitchingRef.current = false;
       updateVideoDebug({ isSwitching: false });
@@ -830,7 +602,7 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current
       });
     }
-  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, preloadIntoBuffer, setActiveVideoAudio, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
+  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
   const scheduleNextJump = useCallback((options?: { force?: boolean; explicitDelay?: number }) => {
     const force = options?.force ?? false;
@@ -1230,6 +1002,9 @@ export default function SceneView({
 
   useEffect(() => {
     markActiveVideo();
+    if (videoARef.current && videoBRef.current) {
+      playerCoreRef.current.init(videoARef.current, videoBRef.current);
+    }
     const videoA = videoARef.current;
     const videoB = videoBRef.current;
     if (videoA) {
