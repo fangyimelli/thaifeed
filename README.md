@@ -257,7 +257,37 @@ npm run dev
 - 事件綁定：
   - `form onSubmit`：`preventDefault()` 後呼叫 `onSubmit`。
   - `button onClick` / `onTouchEnd`：呼叫同一個 `onSubmit`。
-  - `onKeyDown Enter`：排除 IME 組字（`isComposing`/`keyCode===229`）才送出。
+- `onKeyDown Enter`：排除 IME 組字（`isComposing`/`keyCode===229`）才送出。
+
+## Mobile Layout：打字時保留影片畫面 + 輸入列即時出現
+
+- 手機版改為三段式 layout（header / video / chat）：
+  - `@media (max-width: 1023px)` 下使用 grid，保留影片最小高度 `max(30vh, 180px)`，避免鍵盤打開時影片整塊被推離畫面。
+  - 桌機維持原本 grid（`header/video + chat` 雙欄）不套用 mobile 高度修正。
+- 輸入列改為「永遠 render」：
+  - 初始化未完成時仍顯示輸入框，僅禁用送出按鈕並顯示 `初始化中…`。
+  - loading 訊息改放在聊天室訊息區（`chat-loading-banner`），不再阻擋輸入列出現。
+- 動態 viewport 高度（mobile-only）：
+  - 透過 `visualViewport.height`（fallback `window.innerHeight`）寫入 CSS 變數 `--vvh`。
+  - `.app-shell` 使用 `height: var(--vvh, 100dvh)`，降低 iOS/Android 鍵盤與網址列高度跳動造成黑區。
+- chat 不遮最後一行訊息：
+  - 使用 `ResizeObserver` 量測 chat input 實際高度。
+  - 動態套用 chat scroll `padding-bottom = inputHeight + 8px`，確保 sticky input 不蓋住最新訊息。
+- 鍵盤關閉後維持既有行為：
+  - 送出後會 blur input（手機）並補一次捲到底，避免鍵盤收起時視圖跳動後落點錯誤。
+
+### debug=1 驗證方式（mobile）
+
+- 進入 `?debug=1`，可在主畫面看到 mobile layout debug 資訊：
+  - `visualViewport.height`
+  - `window.innerHeight`
+  - `container height`
+  - `video/chat/header/input` 高度
+  - `keyboard open` 判定（`innerHeight - visualViewport.height > 120`）
+- 驗收重點：
+  - 首次載入就可見輸入框（即使仍在初始化）。
+  - 鍵盤打開時影片仍保有可見高度。
+  - 送出後可自動收鍵盤並維持聊天室在底部。
 - 鍵盤與視窗高度變動：改為全平台 `--app-vh` 佈局（iOS / Android / Desktop 同套），不再依賴輸入列 `translateY` 位移。
 
 ## 聊天室主題與影片狀態連動
