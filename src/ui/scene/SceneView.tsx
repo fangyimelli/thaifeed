@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FAN_LOOP_PATH,
-  FOOTSTEPS_PATH,
-  GHOST_FEMALE_PATH,
   JUMP_LOOPS,
   MAIN_LOOP,
   type OldhouseLoopKey,
@@ -11,10 +9,11 @@ import {
 import { resolveAssetUrl } from '../../config/assetUrls';
 import { createPlayerCore } from '../../core/player/playerCore';
 import { curseVisualClass } from '../../core/systems/curseSystem';
-import { emitSceneEvent } from '../../core/systems/sceneEvents';
+import { emitSceneEvent, onSceneRequest } from '../../core/systems/sceneEvents';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
 import { audioEngine } from '../../audio/AudioEngine';
+import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 
 export type SceneMissingAsset = {
   name: string;
@@ -164,13 +163,18 @@ declare global {
     __AUDIO_DEBUG__?: AudioDebugState;
     __VIDEO_DEBUG__?: VideoDebugState;
     __CHAT_DEBUG__?: {
-      lastEvent: string;
-      lastPickedType: string;
-      lastPersonaId?: string;
-      lastTagTarget?: string;
-      recentDedupHashes: string[];
-      activeUsers: string[];
-      reactionWindow: { remainingSec: number; pending: number } | null;
+      lastEventKey: string;
+      lastEventReason: string;
+      lastLineKey: string;
+      lastVariantId: string;
+      lastTone: string;
+      lastPersona: string;
+      lastSfxKey: string;
+      lastSfxReason: string;
+      sfxCooldowns: Record<string, number>;
+      lock: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
+      queueLength: number;
+      blockedReasons: Record<string, number>;
     };
   }
 }
@@ -206,8 +210,6 @@ export default function SceneView({
   const isSwitchingRef = useRef(false);
   const needsUserGestureToPlayRef = useRef(false);
   const runningAnnouncedRef = useRef(false);
-  const footstepsTimerRef = useRef<number | null>(null);
-  const ghostTimerRef = useRef<number | null>(null);
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
@@ -387,28 +389,6 @@ export default function SceneView({
     return { videoStates, audios, bufferVideo };
   }, [getBufferVideoEl, getCurrentVideoEl, updateAudioDebug]);
 
-  const computeFootstepsIntervalMs = useCallback((curseValue: number) => {
-    const c = clampCurse(curseValue) / 100;
-    const minBase = 120000;
-    const maxBase = 180000;
-    const minFast = 20000;
-    const maxFast = 45000;
-    const min = minBase - (minBase - minFast) * c;
-    const max = maxBase - (maxBase - maxFast) * c;
-    return randomMs(min, max);
-  }, []);
-
-  const computeGhostIntervalMs = useCallback((curseValue: number) => {
-    const c = clampCurse(curseValue) / 100;
-    const minBase = 300000;
-    const maxBase = 300000;
-    const minFast = 60000;
-    const maxFast = 120000;
-    const min = minBase - (minBase - minFast) * c;
-    const max = maxBase - (maxBase - maxFast) * c;
-    return randomMs(min, max) + randomMs(-15000, 15000);
-  }, []);
-
   const startFanLoop = useCallback(async () => {
     try {
       audioEngine.setFanVolume(0.4);
@@ -417,7 +397,7 @@ export default function SceneView({
       const t = Date.now();
       updateAudioDebug({ started: true, lastFanAt: t });
       console.log('[AUDIO] fan loop started', { t, curse: curseRef.current });
-      emitSceneEvent({ type: 'SFX_START', sfxKey: 'fan', startedAt: t });
+      emitSceneEvent({ type: 'SFX_START', sfxKey: 'fan_loop', startedAt: t });
     } catch {
       setNeedsGestureState(true);
       console.warn('[AUDIO] play blocked/failed', { key: 'fan_loop', errName: 'unknown' });
@@ -425,67 +405,21 @@ export default function SceneView({
     }
   }, [setNeedsGestureState, updateAudioDebug]);
 
-  const scheduleFootsteps = useCallback(() => {
-    if (footstepsTimerRef.current) {
-      window.clearTimeout(footstepsTimerRef.current);
-    }
-    const delay = computeFootstepsIntervalMs(curseRef.current);
-    footstepsTimerRef.current = window.setTimeout(() => {
-      if (needsUserGestureToPlayRef.current) {
-        scheduleFootsteps();
-        return;
-      }
-      const footstepsAudio = footstepsAudioRef.current;
-      if (!footstepsAudio) {
-        scheduleFootsteps();
-        return;
-      }
-      footstepsAudio.currentTime = 0;
-      footstepsAudio.muted = false;
-      void footstepsAudio.play().then(() => {
-        const t = Date.now();
-        updateAudioDebug({ started: true, lastFootstepsAt: t });
-        console.log('[AUDIO] footsteps played', { t, curse: curseRef.current });
-        emitSceneEvent({ type: 'SFX_START', sfxKey: 'footsteps', startedAt: t });
-      }).catch((e: unknown) => {
-        setNeedsGestureState(true);
-        console.warn('[AUDIO] play blocked/failed', { key: 'footsteps', errName: e instanceof Error ? e.name : 'unknown' });
-      }).finally(() => {
-        scheduleFootsteps();
-      });
-    }, delay);
-  }, [computeFootstepsIntervalMs, updateAudioDebug]);
-
-  const scheduleGhost = useCallback(() => {
-    if (ghostTimerRef.current) {
-      window.clearTimeout(ghostTimerRef.current);
-    }
-    const delay = computeGhostIntervalMs(curseRef.current);
-    ghostTimerRef.current = window.setTimeout(() => {
-      if (needsUserGestureToPlayRef.current) {
-        scheduleGhost();
-        return;
-      }
-      const ghostAudio = ghostAudioRef.current;
-      if (!ghostAudio) {
-        scheduleGhost();
-        return;
-      }
-      ghostAudio.currentTime = 0;
-      ghostAudio.muted = false;
-      void ghostAudio.play().then(() => {
-        const t = Date.now();
-        updateAudioDebug({ started: true, lastGhostAt: t });
-        console.log('[AUDIO] ghost played', { t, curse: curseRef.current });
-        emitSceneEvent({ type: 'SFX_START', sfxKey: 'ghost', startedAt: t });
-      }).catch((e: unknown) => {
-        setNeedsGestureState(true);
-        console.warn('[AUDIO] play blocked/failed', { key: 'ghost_female', errName: e instanceof Error ? e.name : 'unknown' });
-      }).finally(() => {
-        scheduleGhost();
-      });
-    }, delay);
-  }, [computeGhostIntervalMs, updateAudioDebug]);
+  const playRegisteredSfx = useCallback((sfxKey: SfxKey) => {
+    if (needsUserGestureToPlayRef.current) return;
+    const audio = sfxKey === 'footsteps' ? footstepsAudioRef.current : sfxKey === 'ghost_female' ? ghostAudioRef.current : null;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.muted = false;
+    void audio.play().then(() => {
+      const t = Date.now();
+      updateAudioDebug({ started: true, lastFootstepsAt: sfxKey === 'footsteps' ? t : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0), lastGhostAt: sfxKey === 'ghost_female' ? t : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0) });
+      emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt: t });
+    }).catch((e: unknown) => {
+      setNeedsGestureState(true);
+      console.warn('[AUDIO] play blocked/failed', { key: sfxKey, errName: e instanceof Error ? e.name : 'unknown' });
+    });
+  }, [setNeedsGestureState, updateAudioDebug]);
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
@@ -1020,10 +954,6 @@ export default function SceneView({
         isAudioStartedRef.current = false;
       }
 
-      if (isAudioStartedRef.current) {
-        scheduleFootsteps();
-        scheduleGhost();
-      }
     }
 
     await switchTo(MAIN_LOOP);
@@ -1037,7 +967,7 @@ export default function SceneView({
       explicitDelay: randomMs(FIRST_JUMP_DELAY_MIN_MS, FIRST_JUMP_DELAY_MAX_MS)
     });
     announceRunning();
-  }, [announceRunning, scheduleFootsteps, scheduleGhost, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
+  }, [announceRunning, scheduleNextJump, setNeedsGestureState, startFanLoop, switchTo, tryPlayMedia]);
 
   const stopOldhouseCalmMode = useCallback(() => {
     setAutoNextEnabled(false);
@@ -1053,14 +983,6 @@ export default function SceneView({
       jumpReturnTimerRef.current = null;
     }
 
-    if (footstepsTimerRef.current) {
-      window.clearTimeout(footstepsTimerRef.current);
-      footstepsTimerRef.current = null;
-    }
-    if (ghostTimerRef.current) {
-      window.clearTimeout(ghostTimerRef.current);
-      ghostTimerRef.current = null;
-    }
     isAudioStartedRef.current = false;
   }, [updateVideoDebug]);
 
@@ -1237,13 +1159,13 @@ export default function SceneView({
   }, []);
 
   useEffect(() => {
-    footstepsAudioRef.current = new Audio(FOOTSTEPS_PATH);
+    footstepsAudioRef.current = new Audio(SFX_REGISTRY.footsteps.file);
     footstepsAudioRef.current.preload = 'auto';
     footstepsAudioRef.current.loop = false;
     footstepsAudioRef.current.volume = 0.85;
     footstepsAudioRef.current.muted = false;
 
-    ghostAudioRef.current = new Audio(GHOST_FEMALE_PATH);
+    ghostAudioRef.current = new Audio(SFX_REGISTRY.ghost_female.file);
     ghostAudioRef.current.preload = 'auto';
     ghostAudioRef.current.loop = false;
     ghostAudioRef.current.volume = 0.75;
@@ -1259,6 +1181,24 @@ export default function SceneView({
       ghostAudioRef.current = null;
     };
   }, [stopAllNonPersistentSfx, stopOldhouseCalmMode]);
+
+  useEffect(() => {
+    return onSceneRequest((payload) => {
+      const run = () => {
+        if (payload.type === 'REQUEST_SFX') {
+          if (payload.sfxKey === 'fan_loop') return;
+          playRegisteredSfx(payload.sfxKey);
+          return;
+        }
+        void switchTo(payload.sceneKey);
+      };
+      if (payload.delayMs && payload.delayMs > 0) {
+        window.setTimeout(run, payload.delayMs);
+      } else {
+        run();
+      }
+    });
+  }, [playRegisteredSfx, switchTo]);
 
   useEffect(() => {
     return () => {
@@ -1351,11 +1291,7 @@ export default function SceneView({
           if (!started) {
             return;
           }
-          if (!isAudioStartedRef.current) {
-            isAudioStartedRef.current = true;
-            scheduleFootsteps();
-            scheduleGhost();
-          }
+          if (!isAudioStartedRef.current) isAudioStartedRef.current = true;
           announceRunning();
         } catch {
           setNeedsGestureState(true);
@@ -1367,7 +1303,7 @@ export default function SceneView({
     return () => {
       layer.removeEventListener('click', unlockPlayback);
     };
-  }, [announceRunning, scheduleFootsteps, scheduleGhost, startFanLoop, tryPlayMedia]);
+  }, [announceRunning, startFanLoop, tryPlayMedia]);
 
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
@@ -1534,11 +1470,12 @@ export default function SceneView({
           <div>fan lastRestartReason/mode: {window.__AUDIO_DEBUG__?.fanState?.lastRestartReason ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.mode ?? '-'}</div>
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'} | fan[{String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)}]</div>
-          <div>chat.lastEvent/type: {window.__CHAT_DEBUG__?.lastEvent ?? '-'} / {window.__CHAT_DEBUG__?.lastPickedType ?? '-'}</div>
-          <div>chat.persona/tag: {window.__CHAT_DEBUG__?.lastPersonaId ?? '-'} / {window.__CHAT_DEBUG__?.lastTagTarget ?? '-'}</div>
-          <div>chat.reactionWindow: {window.__CHAT_DEBUG__?.reactionWindow ? `${window.__CHAT_DEBUG__?.reactionWindow.remainingSec}s / pending ${window.__CHAT_DEBUG__?.reactionWindow.pending}` : '-'}</div>
-          <div>chat.activeUsers: {(window.__CHAT_DEBUG__?.activeUsers ?? []).join(', ') || '-'}</div>
-          <div>chat.recentDedupHashes: {(window.__CHAT_DEBUG__?.recentDedupHashes ?? []).slice(-8).join(', ') || '-'}</div>
+          <div>event.lastEvent/reason: {window.__CHAT_DEBUG__?.lastEventKey ?? '-'} / {window.__CHAT_DEBUG__?.lastEventReason ?? '-'}</div>
+          <div>event.line/variant/tone/persona: {window.__CHAT_DEBUG__?.lastLineKey ?? '-'} / {window.__CHAT_DEBUG__?.lastVariantId ?? '-'} / {window.__CHAT_DEBUG__?.lastTone ?? '-'} / {window.__CHAT_DEBUG__?.lastPersona ?? '-'}</div>
+          <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
+          <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
+          <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
         </div>
 
         <div className="video-debug-controls-panel">
