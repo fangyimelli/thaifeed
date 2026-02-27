@@ -27,8 +27,10 @@ export default function ChatPanel({
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
+  const baselineViewportHeightRef = useRef<number>(window.innerHeight);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
   const activeSet = getActiveUserSet(collectActiveUsers(messages));
@@ -39,7 +41,11 @@ export default function ChatPanel({
   }));
 
   const forceScrollToBottom = () => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const listEl = messageListRef.current;
+    if (listEl) {
+      listEl.scrollTop = listEl.scrollHeight;
+    }
+    messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   };
 
   const conditionalScrollToBottom = () => {
@@ -50,6 +56,15 @@ export default function ChatPanel({
     if (distanceFromBottom < STICK_BOTTOM_THRESHOLD) {
       forceScrollToBottom();
     }
+  };
+
+  const handleMessageSubmit = () => {
+    onSubmit();
+    inputRef.current?.blur();
+    window.scrollTo(0, 0);
+    window.setTimeout(() => {
+      forceScrollToBottom();
+    }, 0);
   };
 
   useLayoutEffect(() => {
@@ -88,6 +103,28 @@ export default function ChatPanel({
     };
   }, [autoPaused, onAutoPauseChange]);
 
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    baselineViewportHeightRef.current = Math.max(baselineViewportHeightRef.current, vv.height);
+
+    const onViewportResize = () => {
+      const baseline = Math.max(baselineViewportHeightRef.current, window.innerHeight);
+      const keyboardLikelyOpen = vv.height < baseline - 120;
+      if (keyboardLikelyOpen) {
+        forceScrollToBottom();
+      } else {
+        baselineViewportHeightRef.current = Math.max(baselineViewportHeightRef.current, vv.height);
+      }
+    };
+
+    vv.addEventListener('resize', onViewportResize);
+    return () => {
+      vv.removeEventListener('resize', onViewportResize);
+    };
+  }, []);
+
   return (
     <section className="chat-panel">
       <header className="chat-header input-surface">
@@ -96,7 +133,7 @@ export default function ChatPanel({
 
       <div
         ref={messageListRef}
-        className="chat-list"
+        className="chat-messages chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;
           const distanceBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -128,11 +165,11 @@ export default function ChatPanel({
         className="chat-input input-surface"
         onSubmit={(event) => {
           event.preventDefault();
-          onSubmit();
-          window.setTimeout(forceScrollToBottom, 0);
+          handleMessageSubmit();
         }}
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(event) => onChange(event.target.value)}
           onCompositionStart={() => {
@@ -146,8 +183,7 @@ export default function ChatPanel({
             const isImeEnter = event.keyCode === 229;
             if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !nativeIsComposing && !isImeEnter) {
               event.preventDefault();
-              onSubmit();
-              window.setTimeout(forceScrollToBottom, 0);
+              handleMessageSubmit();
             }
           }}
           placeholder="傳送訊息"
@@ -155,14 +191,10 @@ export default function ChatPanel({
         <button
           type="button"
           disabled={isSending}
-          onClick={() => {
-            onSubmit();
-            window.setTimeout(forceScrollToBottom, 0);
-          }}
+          onClick={handleMessageSubmit}
           onTouchEnd={(event) => {
             event.preventDefault();
-            onSubmit();
-            window.setTimeout(forceScrollToBottom, 0);
+            handleMessageSubmit();
           }}
         >
           {isSending ? '送出中…' : '送出'}
