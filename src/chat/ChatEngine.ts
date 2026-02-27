@@ -4,6 +4,7 @@ import { CHAT_TYPE_META, ChatMessageType, PERSONA_IDS, type ChatEnvelope, type C
 import { PERSONA_POOLS, PERSONA_USERS, THAI_TRANSLATIONS, TYPE_FALLBACK_POOLS } from './ChatPools';
 import { applyTagTemplate, canUseTag, enforceSingleLanguage, hashText, isDeniedTone, isPersonaRepeated, normalizeText, pickTagTarget } from './ChatRules';
 import { buildReactionWindow, pickTypeForEvent, type ReactionSpec } from './ChatSelector';
+import type { EventContentPayload } from '../director/EventEngine';
 
 type DebugState = {
   lastEvent: string;
@@ -23,6 +24,7 @@ export class ChatEngine {
   private windows: ReactionSpec[] = [];
   private activeUsers: string[] = [];
   private curse = 20;
+  private pendingContent = new Map<ChatMessageType, EventContentPayload[]>();
   private debug: DebugState = {
     lastEvent: '-',
     lastPickedType: '-',
@@ -73,6 +75,12 @@ export class ChatEngine {
     return { ...this.debug, recentDedupHashes: [...this.recentHashes].slice(-20) };
   }
 
+  enqueueContent(payload: EventContentPayload): void {
+    const list = this.pendingContent.get(payload.type) ?? [];
+    list.push(payload);
+    this.pendingContent.set(payload.type, list);
+  }
+
   private composeMessage(type: ChatMessageType, now: number): ChatMessage | null {
     const meta = CHAT_TYPE_META[type];
     if ((this.cooldowns.get(type) ?? 0) > now) return null;
@@ -85,7 +93,9 @@ export class ChatEngine {
         : TYPE_FALLBACK_POOLS[type];
       const raw = pool[Math.floor(Math.random() * pool.length)] ?? '';
       const tagTarget = meta.allowTag && canUseTag(this.activeUsers) ? pickTagTarget(this.activeUsers) : undefined;
-      const tagged = applyTagTemplate(raw, tagTarget);
+      const injected = this.dequeueContent(type);
+      const seed = injected?.text ?? raw;
+      const tagged = applyTagTemplate(seed, tagTarget);
       const normalized = normalizeText(enforceSingleLanguage(tagged, meta.language));
       if (!normalized || isDeniedTone(normalized)) continue;
 
@@ -103,6 +113,9 @@ export class ChatEngine {
         tagTarget,
         translation: meta.language === 'th' ? THAI_TRANSLATIONS[normalized] ?? undefined : normalized
       };
+      if (injected?.translation) {
+        envelope.translation = injected.translation;
+      }
       this.remember(envelope, digest, now);
       this.debug.lastPickedType = type;
       this.debug.lastPersonaId = personaId;
@@ -119,6 +132,14 @@ export class ChatEngine {
       };
     }
     return null;
+  }
+
+  private dequeueContent(type: ChatMessageType): EventContentPayload | undefined {
+    const list = this.pendingContent.get(type);
+    if (!list || list.length === 0) return undefined;
+    const first = list.shift();
+    if (list.length === 0) this.pendingContent.delete(type);
+    return first;
   }
 
   private pickPersona(windowSize: number): PersonaId {

@@ -463,6 +463,10 @@ npm run dev
   2. 事件對應台詞只在 `src/chat/LineRegistry.ts` 新增或刪除同名 `lineKey`。
   3. 若事件要播放音效，僅引用 `src/audio/SfxRegistry.ts` 內註冊 `key`。
 - 事件引擎 `src/director/EventEngine.ts` 只讀 registry 執行，不再散落 if/else 大樹。
+- 事件層定位：**content provider only**。
+  - `EventEngine` 只能 enqueue reaction content（句子內容/變體），不能直接 `emitChat`。
+  - 實際發言（speaker 分配、人格輪替、activeUsers 取樣、節奏頻率）一律由 `ChatEngine/ChatScheduler` 控制。
+  - 未來開發禁止在事件層直接輸出聊天室訊息，避免破壞既有節奏模型。
 
 ## SFX Registry（資料驅動 SSOT）
 
@@ -504,9 +508,7 @@ npm run dev
 
 ## 修正：聊天室顯示帳號來源（viewer -> 真實用戶）
 
-- `EventEngine` 現在不再把所有觀眾事件固定顯示為 `viewer`。
-- 規則：
-  1. 若 `actor='viewer'` 且 `LineVariant.persona` 可對應 `PERSONA_USERS`，使用對應帳號。
-  2. 若 persona 無對應，fallback 為 `usernames.json` 隨機帳號。
-  3. `user/ghost/system` 仍維持既定固定發言者名稱。
-- 這樣可恢復原本聊天室「看起來是不同觀眾在說話」的行為。
+- speaker 顯示來源回歸原本聊天引擎：
+  1. 事件/Reaction 僅提供內容 payload，不指定 username/persona。
+  2. username 與 persona 分配由既有 ChatEngine/ChatScheduler 依原規則決定。
+  3. 因此不再存在事件層把使用者固定為 `viewer` 的路徑。
