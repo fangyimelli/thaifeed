@@ -117,7 +117,7 @@ npm run dev
   - 若候選清單為空或重抽仍等於 MAIN，會回報 error（不 silent fallback）。
   - Console 會輸出 `[JUMP_PICK] { candidates, pickedKey, reason, curse, intervalMs }`。
 - `debug=1` overlay 觀察欄位：
-  - `jumpCandidates` / `pickedJumpKey` / `pickedJumpUrl`
+  - `jumpCandidates` / `plannedJumpKey` / `plannedJumpUrl`
   - `unavailableJumps`（被 gate 的 key 與原因）
   - `lastFallback`（from/to/reason，包含 timeout 或 switch 失敗）
   - `sceneMapDigest`（loop / loop2 / loop3 對應 URL 摘要）
@@ -126,6 +126,23 @@ npm run dev
   - key->url mapping 錯誤（撞到 loop3 URL 或空字串）
   - preload/switch 失敗後 fallback 但先前沒有可視化
   - 目前已改為在 debug overlay 顯示 fallback 與 unavailable 原因，避免無聲退回。
+
+
+## Debug 測試控制面板（`?debug=1`）
+
+- 使用方式：
+  - 進入主頁後開啟 `?debug=1`（或按右上角 `Debug ON`），畫面下方 debug overlay 會顯示測試控制按鈕。
+  - 此控制面板僅在 `debug=1` render，正式模式不會顯示。
+- 按鈕用途：
+  - `▶ Force LOOP`：直接呼叫 `switchTo('oldhouse_room_loop')`。
+  - `▶ Force LOOP2`：直接呼叫 `switchTo('oldhouse_room_loop2')`。
+  - `▶ Force MAIN`：直接呼叫 `switchTo('oldhouse_room_loop3')`。
+  - `⚡ Force Planned Jump Now`：直接執行目前已排程的 `plannedJump`（不重 pick、不重排 schedule）。
+  - `🔁 Reschedule Jump`：重新呼叫 `scheduleNextJump()`，重新計算 `dueAt` 與 `plannedJump`。
+- 用於排查插播不切換：
+  - 若 `Force LOOP` 可切成功但自動插播不會切，表示排程 / planned jump 還有問題。
+  - 若 `Force LOOP` 都無法切換，表示 `switchTo` 或 buffer 覆寫仍有衝突。
+  - 每次點按都會輸出 `console.log('[DEBUG_FORCE]', { action, currentKey, plannedKey, bufferBefore, bufferAfter })`，可快速對照切換前後狀態。
 
 ## Debug Player Harness（`/debug/player`）
 
