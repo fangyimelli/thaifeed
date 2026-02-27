@@ -85,6 +85,7 @@ npm run dev
   - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
   - overlay 會顯示目前正在播放的 audio elements（fan/footsteps/ghost）。
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
+  - 主頁右上角提供 `Debug ON/OFF` 按鈕，可直接切換 `?debug=1`（不需手改網址）。
 
 ## 插播排查（timer / ended / lock / timeout）
 
@@ -107,6 +108,7 @@ npm run dev
 ## Debug Player Harness（`/debug/player`）
 
 - 新增最小可驗證頁面：`/debug/player`。
+- 說明：`Switch to loop / loop2 / Auto toggle` 控制鈕**只會出現在 `/debug/player`**，主頁面不會顯示這些 debug 控制。
 - 該頁面與主頁共用 `playerCore`（`src/core/player/playerCore.ts`），不維持第二套切換實作。
 - 介面提供：
   - `Play loop3`
@@ -227,6 +229,11 @@ npm run dev
 - 本次僅分流 **CSS / Layout**。
 - 播放器 crossfade、插播排程、ended handler、聊天室送出、防重複訊息 guard、Tag 規則、Loading 規則、必要素材 gate 仍維持同一套程式邏輯，未建立第二份邏輯分支。
 
+### 主頁影片固定 / 聊天區獨立滾動
+
+- `app-shell` 與 `app-layout` 現在固定為 viewport 高度並禁止外層滾動，避免主頁在聊天訊息增加時把影片一起推上/推下。
+- 聊天滾動仍由 `.chat-list` 承擔（`overflow-y:auto`），確保只滾聊天室內容，影片區維持固定。
+
 ## 回歸檢查摘要
 
 - 已執行 TypeScript 編譯（`node ./node_modules/typescript/bin/tsc -b --pretty false`）確認型別與編譯通過。
@@ -239,6 +246,8 @@ npm run dev
 
 ## 全功能回歸檢查（本次）
 
+- PASS：`scripts/netlify-build.mjs` 新增 rollup optional dependency 自動修復（偵測缺少 `@rollup/rollup-*` 時先 `npm install` 再重試 `vite build`）。
+- PASS：`main.tsx` debug route 判斷改為先計算 `shouldRenderDebugPlayer`，避免 CI/Deploy 出現 `TS6133 isDebugPlayerRoute declared but never read`。
 - PASS：`npm run build`。
 - PASS：`/debug/player` 手動切換可見（已截圖）。
 - PASS：`/debug/player` Auto toggle 60 秒（程式邏輯為固定 interval，未出現 lock guard 持續占用）。

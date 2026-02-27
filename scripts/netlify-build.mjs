@@ -11,17 +11,26 @@ if (sceneViewSource.includes('useMemo')) {
 
 console.log('[netlify-build] SceneView import check passed (no useMemo token).');
 
-const tscResult = spawnSync('node', ['./node_modules/typescript/bin/tsc', '-b', '--force'], {
-  stdio: 'inherit'
-});
+const run = (cmd, args) => spawnSync(cmd, args, { stdio: 'inherit' });
+
+const runViteBuild = () => run('node', ['./node_modules/vite/bin/vite.js', 'build']);
+
+const tscResult = run('node', ['./node_modules/typescript/bin/tsc', '-b', '--force']);
 
 if (tscResult.status !== 0) {
   process.exit(tscResult.status ?? 1);
 }
 
-const viteResult = spawnSync('node', ['./node_modules/vite/bin/vite.js', 'build'], {
-  stdio: 'inherit'
-});
+let viteResult = runViteBuild();
+
+if (viteResult.status !== 0) {
+  console.warn('[netlify-build] Initial vite build failed, running npm install once and retrying build.');
+  const installResult = run('npm', ['install']);
+  if (installResult.status !== 0) {
+    process.exit(installResult.status ?? 1);
+  }
+  viteResult = runViteBuild();
+}
 
 if (viteResult.status !== 0) {
   process.exit(viteResult.status ?? 1);
