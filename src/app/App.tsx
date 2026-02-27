@@ -416,10 +416,10 @@ export default function App() {
   }, [hasFatalInitError]);
 
   const submitChat = useCallback(async (rawText: string) => {
-    if (!isReady || isSending) return;
+    if (!isReady || isSending) return false;
 
     const raw = rawText.trim();
-    if (!raw || chatAutoPaused) return;
+    if (!raw || chatAutoPaused) return false;
 
     setIsSending(true);
     const submitDelayMs = randomInt(1000, 5000);
@@ -462,7 +462,7 @@ export default function App() {
 
       if (isPassCommand(raw)) {
         handlePass();
-        return;
+        return true;
       }
 
       const isHintInput = isVipHintCommand(raw);
@@ -483,7 +483,7 @@ export default function App() {
 
       if (isHintInput) {
         setInput('');
-        return;
+        return true;
       }
 
       if (isAnswerCorrect(raw, playableConsonant)) {
@@ -504,7 +504,7 @@ export default function App() {
           }
         });
         setInput('');
-        return;
+        return true;
       }
 
       const speechHit = parsePlayerSpeech(raw);
@@ -522,7 +522,7 @@ export default function App() {
           dispatchAudienceMessage(message);
         });
         setInput('');
-        return;
+        return true;
       }
 
       const activeUsers = getActiveUsersSnapshot();
@@ -544,7 +544,7 @@ export default function App() {
         setChatAutoPaused(true);
         window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
         setInput('');
-        return;
+        return true;
       }
 
       const wrongMessage = createWrongMessage(state.curse, state.currentAnchor, getActiveUsersSnapshot());
@@ -555,13 +555,14 @@ export default function App() {
         }
       });
       setInput('');
+      return true;
     } finally {
       setIsSending(false);
     }
   }, [chatAutoPaused, isReady, isSending, state, getTopicContext]);
 
   const submit = useCallback(() => {
-    void submitChat(input);
+    return submitChat(input);
   }, [input, submitChat]);
 
   return (

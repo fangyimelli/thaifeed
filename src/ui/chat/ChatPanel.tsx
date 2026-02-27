@@ -2,12 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../core/state/types';
 import { collectActiveUsers, getActiveUserSet, sanitizeMentions } from '../../core/systems/mentionV2';
 import ChatMessage from './ChatMessage';
+import { isMobileDevice } from '../../utils/isMobile';
 
 type Props = {
   messages: ChatMessageType[];
   input: string;
   onChange: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: () => Promise<boolean>;
   onToggleTranslation: (id: string) => void;
   onAutoPauseChange: (paused: boolean) => void;
   isSending: boolean;
@@ -15,6 +16,8 @@ type Props = {
 
 const STICK_BOTTOM_THRESHOLD = 80;
 const MAX_RENDER_COUNT = 100;
+const KEYBOARD_CLOSE_FOLLOWUP_MS = 250;
+const KEYBOARD_VIEWPORT_SYNC_WINDOW_MS = 500;
 
 export default function ChatPanel({
   messages,
@@ -28,11 +31,14 @@ export default function ChatPanel({
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const keyboardSinkRef = useRef<HTMLButtonElement>(null);
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
-  const baselineViewportHeightRef = useRef<number>(window.innerHeight);
+  const viewportSyncUntilRef = useRef(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
+  const isMobile = isMobileDevice();
+  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const activeSet = getActiveUserSet(collectActiveUsers(messages));
   const sanitizedMessages = messages.map((message) => ({
     ...message,
@@ -40,12 +46,33 @@ export default function ChatPanel({
     translation: message.translation ? sanitizeMentions(message.translation, activeSet) : message.translation
   }));
 
-  const forceScrollToBottom = () => {
+  const logDebugState = (reason: string) => {
+    if (!debugEnabled) return;
+    const listEl = messageListRef.current;
+    const activeEl = document.activeElement as HTMLElement | null;
+    console.log('[CHAT_DEBUG]', {
+      reason,
+      activeElement: activeEl
+        ? { tagName: activeEl.tagName, className: activeEl.className }
+        : { tagName: 'NONE', className: '' },
+      isMobile,
+      chatScroll: listEl
+        ? {
+            scrollTop: listEl.scrollTop,
+            scrollHeight: listEl.scrollHeight,
+            clientHeight: listEl.clientHeight
+          }
+        : null,
+      visualViewportHeight: window.visualViewport?.height ?? null
+    });
+  };
+
+  const scrollChatToBottom = (reason: string) => {
     const listEl = messageListRef.current;
     if (listEl) {
       listEl.scrollTop = listEl.scrollHeight;
     }
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    logDebugState(`scroll:${reason}`);
   };
 
   const conditionalScrollToBottom = () => {
@@ -54,17 +81,40 @@ export default function ChatPanel({
 
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     if (distanceFromBottom < STICK_BOTTOM_THRESHOLD) {
-      forceScrollToBottom();
+      scrollChatToBottom('conditional-stick-bottom');
     }
   };
 
-  const handleMessageSubmit = () => {
-    onSubmit();
-    inputRef.current?.blur();
-    window.scrollTo(0, 0);
-    window.setTimeout(() => {
-      forceScrollToBottom();
-    }, 0);
+  const closeKeyboard = () => {
+    const inputEl = inputRef.current;
+    if (!inputEl) return;
+
+    inputEl.blur();
+
+    if (document.activeElement === inputEl) {
+      const sink = keyboardSinkRef.current;
+      sink?.focus();
+      sink?.blur();
+    }
+
+    viewportSyncUntilRef.current = Date.now() + KEYBOARD_VIEWPORT_SYNC_WINDOW_MS;
+    logDebugState('closeKeyboard');
+  };
+
+  const handleMessageSubmit = async () => {
+    const sent = await onSubmit();
+    if (!sent) return;
+
+    window.requestAnimationFrame(() => {
+      scrollChatToBottom('after-append');
+    });
+
+    if (isMobile) {
+      closeKeyboard();
+      window.setTimeout(() => {
+        scrollChatToBottom('after-closeKeyboard');
+      }, KEYBOARD_CLOSE_FOLLOWUP_MS);
+    }
   };
 
   useLayoutEffect(() => {
@@ -107,16 +157,9 @@ export default function ChatPanel({
     const vv = window.visualViewport;
     if (!vv) return;
 
-    baselineViewportHeightRef.current = Math.max(baselineViewportHeightRef.current, vv.height);
-
     const onViewportResize = () => {
-      const baseline = Math.max(baselineViewportHeightRef.current, window.innerHeight);
-      const keyboardLikelyOpen = vv.height < baseline - 120;
-      if (keyboardLikelyOpen) {
-        forceScrollToBottom();
-      } else {
-        baselineViewportHeightRef.current = Math.max(baselineViewportHeightRef.current, vv.height);
-      }
+      if (Date.now() > viewportSyncUntilRef.current) return;
+      scrollChatToBottom('visualViewport.resize-after-closeKeyboard');
     };
 
     vv.addEventListener('resize', onViewportResize);
@@ -153,7 +196,7 @@ export default function ChatPanel({
           className="jump-bottom"
           type="button"
           onClick={() => {
-            forceScrollToBottom();
+            scrollChatToBottom('jump-bottom');
             setStickBottom(true);
           }}
         >
@@ -165,7 +208,7 @@ export default function ChatPanel({
         className="chat-input input-surface"
         onSubmit={(event) => {
           event.preventDefault();
-          handleMessageSubmit();
+          void handleMessageSubmit();
         }}
       >
         <input
@@ -183,7 +226,7 @@ export default function ChatPanel({
             const isImeEnter = event.keyCode === 229;
             if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !nativeIsComposing && !isImeEnter) {
               event.preventDefault();
-              handleMessageSubmit();
+              void handleMessageSubmit();
             }
           }}
           placeholder="傳送訊息"
@@ -191,14 +234,23 @@ export default function ChatPanel({
         <button
           type="button"
           disabled={isSending}
-          onClick={handleMessageSubmit}
+          onClick={() => {
+            void handleMessageSubmit();
+          }}
           onTouchEnd={(event) => {
             event.preventDefault();
-            handleMessageSubmit();
+            void handleMessageSubmit();
           }}
         >
           {isSending ? '送出中…' : '送出'}
         </button>
+        <button
+          ref={keyboardSinkRef}
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          className="keyboard-focus-sink"
+        />
       </form>
     </section>
   );
