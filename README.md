@@ -107,7 +107,6 @@ npm run dev
 ## Debug Player Harness（`/debug/player`）
 
 - 新增最小可驗證頁面：`/debug/player`。
-- 說明：`Switch to loop / loop2 / Auto toggle` 控制鈕**只會出現在 `/debug/player`**，主頁面不會顯示這些 debug 控制。
 - 該頁面與主頁共用 `playerCore`（`src/core/player/playerCore.ts`），不維持第二套切換實作。
 - 介面提供：
   - `Play loop3`
