@@ -168,6 +168,21 @@ export default function SceneView({
   });
   const [debugTick, setDebugTick] = useState(() => Date.now());
 
+  const setDebugQuery = useCallback((enabled: boolean) => {
+    const url = new URL(window.location.href);
+    if (enabled) {
+      url.searchParams.set('debug', '1');
+    } else {
+      url.searchParams.delete('debug');
+      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+      hashParams.delete('debug');
+      const hash = hashParams.toString();
+      url.hash = hash ? `#${hash}` : '';
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    setDebugEnabled(enabled);
+  }, []);
+
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
     const prev: AudioDebugState = window.__AUDIO_DEBUG__ ?? {
       started: false,
@@ -1195,6 +1210,14 @@ export default function SceneView({
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'}</div>
         </div>
       )}
+
+      <button
+        type="button"
+        className={`video-debug-toggle ${debugEnabled ? 'is-on' : 'is-off'}`}
+        onClick={() => setDebugQuery(!debugEnabled)}
+      >
+        {debugEnabled ? 'Debug ON' : 'Debug OFF'}
+      </button>
     </section>
   );
 }
