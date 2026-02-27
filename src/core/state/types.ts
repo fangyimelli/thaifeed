@@ -12,6 +12,9 @@ export type ChatMessage = {
   isSelf?: boolean;
   showTranslation?: boolean;
   donateAmount?: number;
+  chatType?: string;
+  personaId?: string;
+  tagTarget?: string;
 };
 
 export type AnchorType = 'under_table' | 'door' | 'window' | 'corner';

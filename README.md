@@ -377,3 +377,50 @@ npm run dev
 1. blur 後 activeElement 是否已離開 input
 2. 送出後是否有執行捲底補償
 3. keyboard 收合造成 viewport 變化時，聊天室是否仍維持在底部
+
+## Chat System v2：類型驅動
+
+### 類型列表與用途
+- `SYSTEM_PROMPT`：系統引導與節奏提醒
+- `FEAR_SELF_DOUBT`：自我懷疑、心理壓力
+- `DREAD_BUILDUP`：平靜中的不安鋪陳
+- `SOCIAL_REPLY`：聊天室互動與 tag 回覆
+- `UI_STATUS`：系統狀態提示
+- `IDLE_BORING`：loop3 期間「沒事發生但越看越毛」
+- `SCENE_FLICKER_REACT`：loop/loop2/loop4 的燈閃反應
+- `SFX_REACT_FAN` / `SFX_REACT_FOOTSTEPS` / `SFX_REACT_GHOST`：音效事件反應
+
+### 規則
+- 文字正規化：移除全形句點、壓縮空白、修正語助詞前空白
+- 禁止工程口吻/戲劇台詞：命中 deny pattern 直接丟棄重抽
+- 不混中泰：語言依 type metadata 決定，整句單語
+- 去重：全域 recent hash + persona 專屬 recent hash
+- 20 人格：每個人格獨立句池，不共用模板，近期視窗不可重複
+- Tag 規則：
+  - 僅能 tag active users
+  - active users < 3 禁止 tag
+  - 禁止 tag `VIP/system/you/fake_ai/mod_live/chat_mod`
+  - 若模板含 `@{tag}` 但無合法 target，自動降級為不 tag 版本
+- 翻譯按鈕：僅 `language === 'th'` 會顯示
+
+### 事件與觸發
+- `IDLE_TICK`：自然聊天節奏
+- `SCENE_SWITCH(toKey)`：切到 loop/loop2/loop4 後 5 秒進入 reaction window
+- `SFX_START(sfxKey)`：音效開始後 2 秒進入 reaction window
+- `USER_SENT`：玩家送出訊息觸發社交回應/壓力回應
+- `CURSE_CHANGE`：調整 reaction window 密度（高 curse 提高句數、縮短間隔）
+
+### 如何新增新類型
+1. 在 `src/chat/ChatTypes.ts` 新增 enum 與 metadata
+2. 在 `src/chat/ChatPools.ts` 補人格句池與 fallback 池
+3. 在 `src/chat/ChatSelector.ts` 增加事件分支/權重
+4. `ChatEngine` 不需改介面，直接吃新 type metadata
+
+### debug=1 驗證
+- 右上角開啟 debug 後，可在 overlay 看到：
+  - `chat.lastEvent`
+  - `chat.lastPickedType`
+  - `chat.persona/tag`
+  - `chat.reactionWindow`
+  - `chat.activeUsers`
+  - `chat.recentDedupHashes`

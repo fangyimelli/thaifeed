@@ -5,15 +5,8 @@ import { isAnswerCorrect } from '../core/systems/answerParser';
 import { resolvePlayableConsonant } from '../core/systems/consonantSelector';
 import { parsePlayerSpeech } from '../core/systems/playerSpeechParser';
 import {
-  createAudienceMessage,
   createDonateChatMessage,
-  createFakeAiAudienceMessage,
-  createPlayerMessage,
-  createSuccessMessage,
-  createWrongMessage,
-  createPlayerSpeechResponses,
-  getAudienceIntervalMs,
-  hardenMentionsBeforeRender
+  createPlayerMessage
 } from '../core/systems/chatSystem';
 import { createVipPassMessage, handleVipPlayerMessage, isVipHintCommand } from '../core/systems/vipSystem';
 import { getMemoryNode, markReview } from '../core/adaptive/memoryScheduler';
@@ -27,10 +20,10 @@ import LoadingOverlay, { type LoadingState } from '../ui/hud/LoadingOverlay';
 import { preloadAssets, verifyRequiredAssets, type MissingRequiredAsset } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
-import { collectActiveUsers } from '../core/systems/mentionV2';
 import { MAIN_LOOP } from '../config/oldhousePlayback';
 import { onSceneEvent } from '../core/systems/sceneEvents';
-import type { ChatTopicContext } from '../core/systems/chatSystem';
+import { ChatEngine } from '../chat/ChatEngine';
+import type { ChatEvent } from '../chat/ChatTypes';
 
 function formatViewerCount(value: number) {
   if (value < 1000) return `${value}`;
@@ -86,9 +79,8 @@ export default function App() {
   const soundUnlocked = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
-  const topicModeRef = useRef<ChatTopicContext['topicMode']>('CALM_PARANOIA');
-  const lightFearTimerRef = useRef<number | null>(null);
-  const fearEndTimerRef = useRef<number | null>(null);
+  const chatEngineRef = useRef(new ChatEngine());
+
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
@@ -106,30 +98,16 @@ export default function App() {
     };
   }, []);
 
-  const clearLightFearTimer = useCallback(() => {
-    if (lightFearTimerRef.current) {
-      window.clearTimeout(lightFearTimerRef.current);
-      lightFearTimerRef.current = null;
-    }
-  }, []);
-
-  const clearFearEndTimer = useCallback(() => {
-    if (fearEndTimerRef.current) {
-      window.clearTimeout(fearEndTimerRef.current);
-      fearEndTimerRef.current = null;
-    }
-  }, []);
-
-  const getTopicContext = useCallback((): ChatTopicContext => ({
-    currentVideoKey: currentVideoKeyRef.current,
-    topicMode: topicModeRef.current
-  }), []);
-
-  const getActiveUsersSnapshot = () => collectActiveUsers(state.messages);
-
   const dispatchAudienceMessage = (message: ChatMessage) => {
-    const activeUsers = getActiveUsersSnapshot();
-    dispatch({ type: 'AUDIENCE_MESSAGE', payload: hardenMentionsBeforeRender(message, activeUsers) });
+    dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+  };
+
+  const emitChatEvent = (event: ChatEvent) => {
+    chatEngineRef.current.syncFromMessages(state.messages);
+    const emitted = chatEngineRef.current.emit(event);
+    const ticked = chatEngineRef.current.tick();
+    [...emitted, ...ticked].forEach((message) => dispatchAudienceMessage(message));
+    window.__CHAT_DEBUG__ = chatEngineRef.current.getDebugState();
   };
 
   useEffect(() => {
@@ -147,7 +125,6 @@ export default function App() {
 
       if (missingRequired.length > 0) {
         setRequiredAssetErrors(missingRequired);
-        console.error('[asset-required] 素材未加入專案或 base path 解析錯誤', missingRequired);
         setInitStatusText('必要素材缺失（素材未加入專案或 base path 設定錯誤）');
         return;
       }
@@ -168,109 +145,65 @@ export default function App() {
       setLoadingState('ASSETS_READY');
 
       const elapsed = performance.now() - loadingStart;
-      const minimumLoadingMs = 800;
-      if (elapsed < minimumLoadingMs) {
-        await new Promise((resolve) => window.setTimeout(resolve, minimumLoadingMs - elapsed));
-      }
-
+      if (elapsed < 800) await new Promise((resolve) => window.setTimeout(resolve, 800 - elapsed));
       if (isCancelled) return;
 
       setHasOptionalAssetWarning(result.optionalErrors.length > 0);
       if (result.requiredErrors.length > 0) {
-        const preloadMissing = result.requiredErrors.map((url) => {
-          const matchedAsset = ASSET_MANIFEST.find((asset) => asset.src === url);
-          return {
-            name: 'preload_failure',
-            type: matchedAsset?.type === 'audio' ? ('audio' as const) : ('video' as const),
-            relativePath: matchedAsset ? new URL(matchedAsset.src).pathname.replace(/^\//, '') : 'unknown',
-            url,
-            reason: 'preload failed after required-asset verification'
-          };
-        });
-        setRequiredAssetErrors(preloadMissing);
-        console.error('[asset-required] 預載失敗', preloadMissing);
+        setRequiredAssetErrors(result.requiredErrors.map((url) => ({
+          name: 'preload_failure',
+          type: 'video',
+          relativePath: 'unknown',
+          url,
+          reason: 'preload failed after required-asset verification'
+        })));
         setInitStatusText('必要素材預載失敗，請檢查 Console');
         return;
       }
 
       setInitStatusText('初始化完成');
       setIsReady(true);
+      setLoadingState('RUNNING');
     };
 
     void runSetup();
-
-    return () => {
-      isCancelled = true;
-    };
+    return () => { isCancelled = true; };
   }, []);
 
   useEffect(() => {
     if (!isReady || chatAutoPaused) return;
-
     let timer = 0;
-    const tick = () => {
-      const activeUsers = getActiveUsersSnapshot();
-      dispatchAudienceMessage(createAudienceMessage(
-        state.curse,
-        state.currentAnchor,
-        state.messages.slice(-12).map((message) => message.translation ?? message.text),
-        activeUsers,
-        getTopicContext()
-      ));
-      timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse, topicModeRef.current));
+    const nextInterval = () => {
+      const low = Math.max(900, 2200 - Math.floor(state.curse * 7));
+      const high = Math.max(1800, 5200 - Math.floor(state.curse * 20));
+      return randomInt(low, high);
     };
-
-    timer = window.setTimeout(tick, getAudienceIntervalMs(state.curse, topicModeRef.current));
+    const tick = () => {
+      emitChatEvent({ type: 'IDLE_TICK' });
+      timer = window.setTimeout(tick, nextInterval());
+    };
+    timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
-  }, [state.curse, state.currentConsonant.letter, state.currentAnchor, isReady, chatAutoPaused, getTopicContext]);
+  }, [isReady, chatAutoPaused, state.curse, state.messages]);
 
   useEffect(() => {
-    const enterFearMode = () => {
-      topicModeRef.current = 'LIGHT_FLICKER_FEAR';
-      clearFearEndTimer();
-      const fearDurationMs = randomInt(10_000, 12_000);
-      fearEndTimerRef.current = window.setTimeout(() => {
-        const currentKey = currentVideoKeyRef.current;
-        topicModeRef.current = currentKey === MAIN_LOOP ? 'CALM_PARANOIA' : 'NORMAL';
-        fearEndTimerRef.current = null;
-      }, fearDurationMs);
-    };
-
-    const stopFearAndReset = () => {
-      clearLightFearTimer();
-      clearFearEndTimer();
-      topicModeRef.current = 'CALM_PARANOIA';
-    };
-
     const unsubscribe = onSceneEvent((event) => {
-      if (event.type !== 'VIDEO_ACTIVE') return;
-      currentVideoKeyRef.current = event.key;
-
-      if (event.key === MAIN_LOOP) {
-        stopFearAndReset();
-        return;
+      if (event.type === 'VIDEO_ACTIVE') {
+        currentVideoKeyRef.current = event.key;
+        emitChatEvent({ type: 'SCENE_SWITCH', toKey: event.key });
       }
-
-      if (event.key === 'oldhouse_room_loop' || event.key === 'oldhouse_room_loop2') {
-        clearLightFearTimer();
-        clearFearEndTimer();
-        topicModeRef.current = 'NORMAL';
-        lightFearTimerRef.current = window.setTimeout(() => {
-          const currentKey = currentVideoKeyRef.current;
-          const isInsertLoop = currentKey === 'oldhouse_room_loop' || currentKey === 'oldhouse_room_loop2';
-          if (!isInsertLoop) return;
-          enterFearMode();
-          lightFearTimerRef.current = null;
-        }, 5_000);
+      if (event.type === 'SFX_START') {
+        emitChatEvent({ type: 'SFX_START', sfxKey: event.sfxKey });
       }
     });
 
-    return () => {
-      unsubscribe();
-      clearLightFearTimer();
-      clearFearEndTimer();
-    };
-  }, [clearFearEndTimer, clearLightFearTimer]);
+    return () => unsubscribe();
+  }, [state.messages]);
+
+
+  useEffect(() => {
+    emitChatEvent({ type: 'CURSE_CHANGE', value: state.curse });
+  }, [state.curse, state.messages]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -496,10 +429,13 @@ export default function App() {
           message_zh: donateSample.zh
         };
 
+        const successMessage = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' })[0] ?? {
+          id: crypto.randomUUID(), username: 'mod_live', text: '這波有穩住', language: 'zh', translation: '這波有穩住'
+        };
         dispatch({
           type: 'ANSWER_CORRECT',
           payload: {
-            message: createSuccessMessage(state.currentAnchor, getActiveUsersSnapshot()),
+            message: successMessage,
             donateMessage: createDonateChatMessage(donate)
           }
         });
@@ -512,54 +448,26 @@ export default function App() {
       const canTriggerSpeech = Boolean(speechHit) && now >= speechCooldownUntil.current;
       if (canTriggerSpeech) {
         speechCooldownUntil.current = now + 10_000;
-        const activeUsers = getActiveUsersSnapshot();
-        const speechResponses = createPlayerSpeechResponses(
-          state.currentAnchor,
-          state.messages.slice(-20).map((message) => message.translation ?? message.text),
-          activeUsers
-        );
-        speechResponses.forEach((message) => {
-          dispatchAudienceMessage(message);
-        });
-        setInput('');
-        return true;
       }
 
-      const activeUsers = getActiveUsersSnapshot();
-      const fakeAiBatch = createFakeAiAudienceMessage({
-        playerInput: raw,
-        targetConsonant: playableConsonant.letter,
-        curse: state.curse,
-        anchor: state.currentAnchor,
-        recentHistory: state.messages.slice(-12).map((message) => message.translation ?? message.text),
-        activeUsers,
-        topicContext: getTopicContext()
-      });
-
-      fakeAiBatch.messages.forEach((message) => {
-        dispatchAudienceMessage(message);
-      });
-
-      if (fakeAiBatch.pauseMs) {
-        setChatAutoPaused(true);
-        window.setTimeout(() => setChatAutoPaused(false), fakeAiBatch.pauseMs);
-        setInput('');
-        return true;
-      }
-
-      const wrongMessage = createWrongMessage(state.curse, state.currentAnchor, getActiveUsersSnapshot());
+      emitChatEvent({ type: 'USER_SENT', text: raw, user: 'you' });
+      const wrongMessage = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' })[0] ?? {
+        id: crypto.randomUUID(),
+        username: 'chat_mod',
+        text: '這下壓力又上來了',
+        language: 'zh',
+        translation: '這下壓力又上來了'
+      };
       dispatch({
         type: 'ANSWER_WRONG',
-        payload: {
-          message: wrongMessage
-        }
+        payload: { message: wrongMessage }
       });
       setInput('');
       return true;
     } finally {
       setIsSending(false);
     }
-  }, [chatAutoPaused, isReady, isSending, state, getTopicContext]);
+  }, [chatAutoPaused, isReady, isSending, state]);
 
   const submit = useCallback(() => {
     return submitChat(input);
