@@ -87,6 +87,44 @@ npm run dev
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
   - 主頁右上角提供 `Debug ON/OFF` 按鈕，可直接切換 `?debug=1`（不需手改網址）。
 
+
+## 音效：無縫循環（fan_loop）
+
+`fan_loop.wav` 已改為 **Web Audio SSOT（`src/audio/AudioEngine.ts`）**，不再依賴 `HTMLAudioElement.loop` 作為主播放路徑。
+
+### 為何 HTMLAudio loop 容易出現斷點
+
+- `audio.loop=true` 在不同瀏覽器可能受解碼邊界、裝置省電策略、媒體管線切換影響，循環邊界容易出現 click/gap。
+- 若在場景切換時 `pause()/play()` 或重設 `currentTime/src`，會放大邊界不連續問題。
+- 長時間播放（環境音）對邊界更敏感，需避免「單段播完再重播」模型。
+
+### WebAudio 交疊循環做法
+
+- 單例 `AudioEngine`：只建立一次 `AudioContext`（lazy init），`fetch + decodeAudioData` 後快取 `AudioBuffer`。
+- 使用雙 `AudioBufferSourceNode` 交替排程，在每段尾端進行 `~60ms` crossfade：
+  - `sourceA` 先播。
+  - `sourceB` 於 `A.duration - xfade` 進場。
+  - `A gain: 1 -> 0`，`B gain: 0 -> 1`。
+- 每次 start/stop 都透過 GainNode 做 attack/release（避免硬切 `stop()` 產生 click）。
+- `fan_loop` 與影片切換解耦：切換 loop/loop2/loop3 不會重建或重播 fan。
+
+### iOS / visibility 注意事項
+
+- 監聽 `visibilitychange`：回到 visible 時會嘗試 `resume()` 並檢查 fan 狀態，必要時重啟排程。
+- 監聽使用者互動（pointer/touch）以處理 iOS/Safari suspend 後恢復。
+- 若 WebAudio 不可用，才退回單例 `<audio loop preload="auto">`，且不在切片時重設 src/pause/play。
+
+### debug=1 如何確認 fan loop 狀態
+
+在右上角 Debug ON 後，可於 overlay 看到：
+
+- `audioContext.state`
+- `fan playing/currentTime`
+- `fan nextCrossfadeAt/bufferDuration`
+- `fan lastRestartReason/mode`
+
+若上述欄位持續更新且 `fan playing=true`，代表 fan loop 排程持續運作。
+
 ## 自動插播排程可靠性（timer + watchdog）
 
 - 播放策略 SSOT（`src/config/oldhousePlayback.ts`）：
