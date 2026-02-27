@@ -161,6 +161,15 @@ declare global {
   interface Window {
     __AUDIO_DEBUG__?: AudioDebugState;
     __VIDEO_DEBUG__?: VideoDebugState;
+    __CHAT_DEBUG__?: {
+      lastEvent: string;
+      lastPickedType: string;
+      lastPersonaId?: string;
+      lastTagTarget?: string;
+      recentDedupHashes: string[];
+      activeUsers: string[];
+      reactionWindow: { remainingSec: number; pending: number } | null;
+    };
   }
 }
 
@@ -404,6 +413,7 @@ export default function SceneView({
       const t = Date.now();
       updateAudioDebug({ started: true, lastFanAt: t });
       console.log('[AUDIO] fan loop started', { t, curse: curseRef.current });
+      emitSceneEvent({ type: 'SFX_START', sfxKey: 'fan', startedAt: t });
     } catch {
       setNeedsGestureState(true);
       console.warn('[AUDIO] play blocked/failed', { key: 'fan_loop', errName: 'unknown' });
@@ -432,6 +442,7 @@ export default function SceneView({
         const t = Date.now();
         updateAudioDebug({ started: true, lastFootstepsAt: t });
         console.log('[AUDIO] footsteps played', { t, curse: curseRef.current });
+        emitSceneEvent({ type: 'SFX_START', sfxKey: 'footsteps', startedAt: t });
       }).catch((e: unknown) => {
         setNeedsGestureState(true);
         console.warn('[AUDIO] play blocked/failed', { key: 'footsteps', errName: e instanceof Error ? e.name : 'unknown' });
@@ -462,6 +473,7 @@ export default function SceneView({
         const t = Date.now();
         updateAudioDebug({ started: true, lastGhostAt: t });
         console.log('[AUDIO] ghost played', { t, curse: curseRef.current });
+        emitSceneEvent({ type: 'SFX_START', sfxKey: 'ghost', startedAt: t });
       }).catch((e: unknown) => {
         setNeedsGestureState(true);
         console.warn('[AUDIO] play blocked/failed', { key: 'ghost_female', errName: e instanceof Error ? e.name : 'unknown' });
@@ -1515,6 +1527,11 @@ export default function SceneView({
           <div>fan lastRestartReason/mode: {window.__AUDIO_DEBUG__?.fanState?.lastRestartReason ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.mode ?? '-'}</div>
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'} | fan[{String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)}]</div>
+          <div>chat.lastEvent/type: {window.__CHAT_DEBUG__?.lastEvent ?? '-'} / {window.__CHAT_DEBUG__?.lastPickedType ?? '-'}</div>
+          <div>chat.persona/tag: {window.__CHAT_DEBUG__?.lastPersonaId ?? '-'} / {window.__CHAT_DEBUG__?.lastTagTarget ?? '-'}</div>
+          <div>chat.reactionWindow: {window.__CHAT_DEBUG__?.reactionWindow ? `${window.__CHAT_DEBUG__?.reactionWindow.remainingSec}s / pending ${window.__CHAT_DEBUG__?.reactionWindow.pending}` : '-'}</div>
+          <div>chat.activeUsers: {(window.__CHAT_DEBUG__?.activeUsers ?? []).join(', ') || '-'}</div>
+          <div>chat.recentDedupHashes: {(window.__CHAT_DEBUG__?.recentDedupHashes ?? []).slice(-8).join(', ') || '-'}</div>
         </div>
 
         <div className="video-debug-controls-panel">

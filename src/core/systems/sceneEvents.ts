@@ -1,10 +1,16 @@
 import type { OldhouseLoopKey } from '../../config/oldhousePlayback';
 
-export type SceneEventPayload = {
-  type: 'VIDEO_ACTIVE';
-  key: OldhouseLoopKey;
-  startedAt: number;
-};
+export type SceneEventPayload =
+  | {
+      type: 'VIDEO_ACTIVE';
+      key: OldhouseLoopKey;
+      startedAt: number;
+    }
+  | {
+      type: 'SFX_START';
+      sfxKey: 'fan' | 'footsteps' | 'ghost';
+      startedAt: number;
+    };
 
 const sceneEventTarget = new EventTarget();
 
@@ -21,4 +27,3 @@ export function onSceneEvent(handler: (payload: SceneEventPayload) => void): () 
   sceneEventTarget.addEventListener('scene-event', listener);
   return () => sceneEventTarget.removeEventListener('scene-event', listener);
 }
-
