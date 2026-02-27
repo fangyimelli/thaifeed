@@ -115,7 +115,19 @@ type VideoDebugState = {
   bufferActive: boolean;
   currentReadyState: number | null;
   currentPaused: boolean | null;
+  jumpCandidates: OldhouseLoopKey[];
+  pickedJumpKey: OldhouseLoopKey | null;
+  pickedJumpUrl: string | null;
+  lastFallback: { fromKey: OldhouseLoopKey | null; toKey: OldhouseLoopKey | null; reason: string } | null;
+  unavailableJumps: Array<{ key: OldhouseLoopKey; reason: string }>;
+  sceneMapDigest: Record<OldhouseLoopKey, string>;
   timers: { jumpTimer: number | null };
+};
+
+const SCENE_MAP_DIGEST: Record<OldhouseLoopKey, string> = {
+  oldhouse_room_loop: VIDEO_PATH_BY_KEY.oldhouse_room_loop,
+  oldhouse_room_loop2: VIDEO_PATH_BY_KEY.oldhouse_room_loop2,
+  oldhouse_room_loop3: VIDEO_PATH_BY_KEY.oldhouse_room_loop3
 };
 
 declare global {
@@ -235,6 +247,12 @@ export default function SceneView({
       bufferActive: false,
       currentReadyState: null,
       currentPaused: null,
+      jumpCandidates: [],
+      pickedJumpKey: null,
+      pickedJumpUrl: null,
+      lastFallback: null,
+      unavailableJumps: [],
+      sceneMapDigest: SCENE_MAP_DIGEST,
       timers: { jumpTimer: null }
     };
 
@@ -484,6 +502,69 @@ export default function SceneView({
     return playerCoreRef.current.loadSource(bufferEl, resolvedVideoSrc, PRELOAD_READY_FALLBACK_TIMEOUT_MS);
   }, [getBufferVideoEl, getVideoUrlForKey]);
 
+  const getJumpCandidates = useCallback(() => {
+    const unavailable: Array<{ key: OldhouseLoopKey; reason: string }> = [];
+    const mainUrl = getVideoUrlForKey(MAIN_LOOP);
+    const candidates = JUMP_LOOPS.filter((key) => {
+      const url = getVideoUrlForKey(key);
+      if (!url) {
+        unavailable.push({ key, reason: 'empty-url' });
+        return false;
+      }
+      if (url === mainUrl) {
+        unavailable.push({ key, reason: `url-collides-main(${url})` });
+        return false;
+      }
+      return true;
+    });
+    return { candidates, unavailable };
+  }, [getVideoUrlForKey]);
+
+  const pickNextJumpKey = useCallback(() => {
+    const { candidates, unavailable } = getJumpCandidates();
+    updateVideoDebug({ jumpCandidates: candidates, unavailableJumps: unavailable });
+
+    if (candidates.length === 0) {
+      const reason = `no-jump-candidates:${unavailable.map((item) => `${item.key}:${item.reason}`).join(',') || 'empty'}`;
+      updateVideoDebug({
+        pickedJumpKey: null,
+        pickedJumpUrl: null,
+        lastError: reason,
+        lastFallback: { fromKey: null, toKey: MAIN_LOOP, reason }
+      });
+      throw new Error(reason);
+    }
+
+    let picked: OldhouseLoopKey = MAIN_LOOP;
+    let tries = 0;
+    while (picked === MAIN_LOOP && tries < 10) {
+      picked = randomPick(candidates);
+      tries += 1;
+    }
+
+    if (picked === MAIN_LOOP) {
+      const reason = `picked-main-after-retry:${tries}`;
+      updateVideoDebug({
+        pickedJumpKey: null,
+        pickedJumpUrl: null,
+        lastError: reason,
+        lastFallback: { fromKey: MAIN_LOOP, toKey: MAIN_LOOP, reason }
+      });
+      throw new Error(reason);
+    }
+
+    const pickedUrl = getVideoUrlForKey(picked);
+    updateVideoDebug({ pickedJumpKey: picked, pickedJumpUrl: pickedUrl, lastError: null });
+    console.log('[JUMP_PICK]', {
+      candidates,
+      pickedKey: picked,
+      reason: 'random-jump',
+      curse: curseRef.current,
+      intervalMs: nextJumpAtRef.current ? Math.max(0, nextJumpAtRef.current - Date.now()) : null
+    });
+    return { pickedKey: picked, pickedUrl };
+  }, [getJumpCandidates, getVideoUrlForKey, updateVideoDebug]);
+
   const switchTo = useCallback(async (nextKey: OldhouseLoopKey) => {
     console.log('[VIDEO]', 'switchTo requested', {
       nextKey,
@@ -536,7 +617,11 @@ export default function SceneView({
       console.log('[VIDEO]', 'switchTo preload start', { switchId, nextKey, curse: curseRef.current });
 
       await playerCoreRef.current.switchTo(nextKey, nextUrl, CROSSFADE_MS);
-
+      console.log('[VIDEO]', 'switchTo mapping', {
+        targetKey: nextKey,
+        targetUrl: nextUrl,
+        beforeBufferSrc: bufferEl.currentSrc || bufferEl.src
+      });
 
       stopAllNonPersistentSfx();
       const startedAt = Date.now();
@@ -578,7 +663,9 @@ export default function SceneView({
         switchId,
         videoKey: nextKey,
         activeVideoEl: currentVideoRef.current,
-        curse: curseRef.current
+        curse: curseRef.current,
+        afterBufferSrc: getBufferVideoEl()?.currentSrc || getBufferVideoEl()?.src,
+        activeSrc: getCurrentVideoEl()?.currentSrc || getCurrentVideoEl()?.src
       });
 
       const { videoStates, audios } = collectAudioDebugSnapshot();
@@ -598,6 +685,8 @@ export default function SceneView({
       updateVideoDebug({ lastError: String(error instanceof Error ? error.message : error) });
       console.error('[VIDEO]', 'switchTo failed', error);
       if (nextKey !== MAIN_LOOP) {
+        const reason = `switch-failed:${error instanceof Error ? error.message : String(error)}`;
+        updateVideoDebug({ lastFallback: { fromKey: nextKey, toKey: MAIN_LOOP, reason } });
         isInJumpRef.current = false;
         updateVideoDebug({ isInJump: false });
         await switchTo(MAIN_LOOP);
@@ -681,7 +770,16 @@ export default function SceneView({
 
     isInJumpRef.current = true;
     updateVideoDebug({ isInJump: true });
-    const nextKey = randomPick(JUMP_LOOPS);
+    let nextKey: OldhouseLoopKey;
+    try {
+      const picked = pickNextJumpKey();
+      nextKey = picked.pickedKey;
+    } catch (error) {
+      isInJumpRef.current = false;
+      updateVideoDebug({ isInJump: false, lastError: String(error instanceof Error ? error.message : error) });
+      scheduleNextJump({ force: true });
+      return;
+    }
     console.log('[VIDEO]', 'triggerJumpOnce picked nextKey', { nextKey, fromKey: currentLoopKeyRef.current });
 
     try {
@@ -720,7 +818,11 @@ export default function SceneView({
       if (isInJumpRef.current && currentLoopKeyRef.current === nextKey) {
         console.warn('[VIDEO]', 'jump fallback return to MAIN_LOOP', { fromKey: nextKey, mainLoop: MAIN_LOOP });
         isInJumpRef.current = false;
-        updateVideoDebug({ isInJump: false, lastError: 'jump-return-timeout-fallback' });
+        updateVideoDebug({
+          isInJump: false,
+          lastError: 'jump-return-timeout-fallback',
+          lastFallback: { fromKey: nextKey, toKey: MAIN_LOOP, reason: 'jump-return-timeout-fallback' }
+        });
         jumpReturnTimerRef.current = null;
         void switchTo(MAIN_LOOP).then(() => {
           currentLoopKeyRef.current = MAIN_LOOP;
@@ -769,7 +871,7 @@ export default function SceneView({
     void switchTo(MAIN_LOOP).then(() => {
       currentLoopKeyRef.current = MAIN_LOOP;
     });
-  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
+  }, [getCurrentVideoEl, hasConfirmedPlayback, pickNextJumpKey, scheduleNextJump, switchTo, updateVideoDebug]);
 
 
   const startOldhouseCalmMode = useCallback(async () => {
@@ -907,6 +1009,12 @@ export default function SceneView({
       bufferActive: false,
       currentReadyState: null,
       currentPaused: null,
+      jumpCandidates: [],
+      pickedJumpKey: null,
+      pickedJumpUrl: null,
+      lastFallback: null,
+      unavailableJumps: [],
+      sceneMapDigest: SCENE_MAP_DIGEST,
       timers: { jumpTimer: null }
     };
 
@@ -991,7 +1099,8 @@ export default function SceneView({
         currentActive: currentEl?.classList.contains('is-active') ?? false,
         bufferActive: bufferEl?.classList.contains('is-active') ?? false,
         currentReadyState: currentEl?.readyState ?? null,
-        currentPaused: currentEl?.paused ?? null
+        currentPaused: currentEl?.paused ?? null,
+        sceneMapDigest: SCENE_MAP_DIGEST
       });
       if (Date.now() % 2000 < 220) {
         console.log('[AUDIO-DEBUG] tick', {
@@ -1205,6 +1314,15 @@ export default function SceneView({
             lastSwitch: {(videoDebug?.lastSwitchFrom ?? '-')} -&gt; {(videoDebug?.lastSwitchTo ?? '-')} | {lastSwitchAgoMs == null ? '-' : `${lastSwitchAgoMs}ms ago`}
           </div>
           <div>currentEl readyState/paused: {videoDebug?.currentReadyState ?? '-'} / {String(videoDebug?.currentPaused ?? false)}</div>
+          <div>jumpCandidates: {(videoDebug?.jumpCandidates ?? []).join(', ') || '-'}</div>
+          <div>pickedJumpKey/pickedJumpUrl: {videoDebug?.pickedJumpKey ?? '-'} / {trimSrc(videoDebug?.pickedJumpUrl)}</div>
+          <div>unavailableJumps: {(videoDebug?.unavailableJumps ?? []).map((item) => `${item.key}(${item.reason})`).join(', ') || '-'}</div>
+          <div>
+            lastFallback: {videoDebug?.lastFallback ? `${videoDebug.lastFallback.fromKey ?? '-'} -&gt; ${videoDebug.lastFallback.toKey ?? '-'} (${videoDebug.lastFallback.reason})` : '-'}
+          </div>
+          <div>
+            sceneMapDigest: {(Object.entries(videoDebug?.sceneMapDigest ?? SCENE_MAP_DIGEST) as Array<[OldhouseLoopKey, string]>).map(([key, value]) => `${key}=${trimSrc(value)}`).join(' | ')}
+          </div>
           <div>activeKey(audio): {window.__AUDIO_DEBUG__?.activeVideoKey ?? '-'}</div>
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'}</div>

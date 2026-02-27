@@ -105,6 +105,28 @@ npm run dev
   - 超時且仍不可播則進 ERROR UI（不黑畫面，保留錯誤資訊）。
 - 插播影片若 `ended` 未回主循環，另有 fallback timer（至少 45 秒，且會參考素材時長再延長）強制切回 `MAIN_LOOP` 並重排下一次插播。
 
+## 插播選片與除錯（`?debug=1`）
+
+- SSOT 清單位置：`src/config/oldhousePlayback.ts`
+  - `MAIN_LOOP = oldhouse_room_loop3`
+  - `JUMP_LOOPS = [oldhouse_room_loop, oldhouse_room_loop2]`
+  - `VIDEO_PATH_BY_KEY` 為 key->url 唯一 mapping。
+- 選片規則：`src/ui/scene/SceneView.tsx` 的 `pickNextJumpKey()`
+  - 僅從 `JUMP_LOOPS` 可用候選中抽選。
+  - 硬規則：插播不得選到 `MAIN_LOOP`，若抽到會最多重抽 10 次。
+  - 若候選清單為空或重抽仍等於 MAIN，會回報 error（不 silent fallback）。
+  - Console 會輸出 `[JUMP_PICK] { candidates, pickedKey, reason, curse, intervalMs }`。
+- `debug=1` overlay 觀察欄位：
+  - `jumpCandidates` / `pickedJumpKey` / `pickedJumpUrl`
+  - `unavailableJumps`（被 gate 的 key 與原因）
+  - `lastFallback`（from/to/reason，包含 timeout 或 switch 失敗）
+  - `sceneMapDigest`（loop / loop2 / loop3 對應 URL 摘要）
+- 常見「永遠 loop3」原因：
+  - 候選清單空（JUMPS 全被 gate 掉）
+  - key->url mapping 錯誤（撞到 loop3 URL 或空字串）
+  - preload/switch 失敗後 fallback 但先前沒有可視化
+  - 目前已改為在 debug overlay 顯示 fallback 與 unavailable 原因，避免無聲退回。
+
 ## Debug Player Harness（`/debug/player`）
 
 - 新增最小可驗證頁面：`/debug/player`。
