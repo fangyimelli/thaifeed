@@ -85,6 +85,7 @@ npm run dev
   - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
   - overlay 會顯示目前正在播放的 audio elements（fan/footsteps/ghost）。
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
+  - 主頁右上角提供 `Debug ON/OFF` 按鈕，可直接切換 `?debug=1`（不需手改網址）。
 
 ## 插播排查（timer / ended / lock / timeout）
 
@@ -226,6 +227,11 @@ npm run dev
 
 - 本次僅分流 **CSS / Layout**。
 - 播放器 crossfade、插播排程、ended handler、聊天室送出、防重複訊息 guard、Tag 規則、Loading 規則、必要素材 gate 仍維持同一套程式邏輯，未建立第二份邏輯分支。
+
+### 主頁影片固定 / 聊天區獨立滾動
+
+- `app-shell` 與 `app-layout` 現在固定為 viewport 高度並禁止外層滾動，避免主頁在聊天訊息增加時把影片一起推上/推下。
+- 聊天滾動仍由 `.chat-list` 承擔（`overflow-y:auto`），確保只滾聊天室內容，影片區維持固定。
 
 ## 回歸檢查摘要
 

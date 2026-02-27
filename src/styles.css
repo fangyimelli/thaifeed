@@ -21,16 +21,20 @@ body {
 }
 
 .app-shell {
-  min-height: 100%;
+  min-height: 100vh;
+  height: 100vh;
   position: relative;
   padding: var(--shell-padding);
+  overflow: hidden;
 }
 
 .app-layout {
   min-height: calc(100vh - (var(--shell-padding) * 2));
+  height: calc(100vh - (var(--shell-padding) * 2));
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: var(--shell-gap);
+  overflow: hidden;
 }
 
 .top-dock,
@@ -332,6 +336,9 @@ body {
 .content-warning-card small { display: block; margin-top: 10px; color: rgba(255, 255, 255, 0.75); }
 
 .video-debug-overlay { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 250; padding: 8px 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.74); border: 1px solid rgba(142, 182, 255, 0.45); color: #dce8ff; font-size: 11px; line-height: 1.35; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; pointer-events: none; }
+.video-debug-toggle { position: absolute; right: 8px; top: 8px; z-index: 260; border: 1px solid #3e4c66; border-radius: 999px; background: rgba(12, 16, 26, 0.88); color: #dbe6ff; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+.video-debug-toggle.is-on { border-color: #5ba6ff; color: #beddff; }
+.video-debug-toggle.is-off { border-color: #4a4f5e; color: #b8bfcb; }
 .boot-debug-badge { position: fixed; top: 8px; left: 8px; z-index: 5000; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.2px; background: rgba(16, 18, 26, 0.92); border: 1px solid #2f3748; }
 .boot-debug-badge.is-ok { color: #91e6bf; border-color: #2f7a5a; }
 .boot-debug-badge.is-fail { color: #ffb0b0; border-color: #8a3a3a; }
