@@ -108,7 +108,6 @@ npm run dev
 ## Debug Player Harness（`/debug/player`）
 
 - 新增最小可驗證頁面：`/debug/player`。
-- 說明：`Switch to loop / loop2 / Auto toggle` 控制鈕**只會出現在 `/debug/player`**，主頁面不會顯示這些 debug 控制。
 - 該頁面與主頁共用 `playerCore`（`src/core/player/playerCore.ts`），不維持第二套切換實作。
 - 介面提供：
   - `Play loop3`
@@ -246,7 +245,6 @@ npm run dev
 
 ## 全功能回歸檢查（本次）
 
-- PASS：`main.tsx` debug route 判斷改為先計算 `shouldRenderDebugPlayer`，避免 CI/Deploy 出現 `TS6133 isDebugPlayerRoute declared but never read`。
 - PASS：`npm run build`。
 - PASS：`/debug/player` 手動切換可見（已截圖）。
 - PASS：`/debug/player` Auto toggle 60 秒（程式邏輯為固定 interval，未出現 lock guard 持續占用）。

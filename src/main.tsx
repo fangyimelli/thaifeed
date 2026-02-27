@@ -128,7 +128,7 @@ try {
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <BootErrorBoundary>
-        {shouldRenderDebugPlayer ? <DebugPlayerPage /> : <App />}
+        {window.location.pathname === '/debug/player' ? <DebugPlayerPage /> : <App />}
       </BootErrorBoundary>
     </React.StrictMode>
   );
