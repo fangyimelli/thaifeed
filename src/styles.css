@@ -376,3 +376,5 @@ body {
 .loading-error-block ul { margin: 8px 0; padding-left: 18px; }
 .scene-placeholder,
 .chat-placeholder { margin: 12px; }
+
+.keyboard-focus-sink { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }

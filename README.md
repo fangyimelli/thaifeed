@@ -323,7 +323,7 @@ npm run dev
 - 避免 `100vh`：行動瀏覽器在鍵盤彈出時，`100vh` 常包含或錯算 URL bar / 系統 UI，容易造成黑畫面、header 被推離視窗、聊天室高度崩潰。
 - 改用 `100dvh`：所有主佈局高度改為 `height: 100dvh`（必要 fallback 時採 `height: 100vh; height: 100dvh;`，並確保 `100dvh` 在最後）。
 - 採用 flex column 三區塊：`app-root` 內固定 `Header`、`VideoArea`，並讓 `ChatArea` 以 `flex:1` 佔剩餘空間；訊息列表使用獨立捲動容器，禁止 body scroll。
-- `visualViewport` 修正：監聽 `visualViewport.resize`，當偵測鍵盤打開時自動將聊天室捲到最底；訊息送出後依序 `blur input -> window.scrollTo(0,0) -> chat scrollTop=scrollHeight`，避免焦點/視窗殘留位移。
+- `visualViewport` 修正：送出後先 `after-append` 捲底，再於手機 `closeKeyboard()`（`blur + focus sink`），最後在 `250ms` 與 `visualViewport.resize`（500ms 內）補捲到底，避免黑區與焦點殘留位移。
 
 ## 回歸檢查摘要
 
@@ -344,3 +344,34 @@ npm run dev
 - PASS：`/debug/player` Auto toggle 60 秒（程式邏輯為固定 interval，未出現 lock guard 持續占用）。
 - PASS：主頁可正常載入與既有樣式維持（已截圖）。
 - PASS：播放器核心改為 SSOT（主頁與 debug 共用 `playerCore`）。
+
+## Mobile：送出後自動收鍵盤
+
+### 原因
+
+手機送出訊息後，虛擬鍵盤會造成 `visualViewport` 高度瞬間變化；若此時聊天室捲動沒有在正確時機補償，容易出現黑區、捲動錯亂或 header 視覺消失。
+
+### 解法（SSOT）
+
+- 裝置判斷統一使用 `src/utils/isMobile.ts` 的 `isMobileDevice()`（`pointer: coarse` + `userAgent` 保守判斷）。
+- 聊天室送出成功後，固定流程：
+  1. `requestAnimationFrame` 先做一次 `scrollChatToBottom('after-append')`
+  2. 僅手機執行 `closeKeyboard()`：先 `input.blur()`，若 focus 還在 input，再走 hidden focus sink 的 `focus -> blur`
+  3. `250ms` 後補一次 `scrollChatToBottom('after-closeKeyboard')`
+  4. 在 `closeKeyboard` 後 500ms 內，若收到 `visualViewport.resize`，再補一次捲底
+- 嚴禁在聊天室送出流程使用 `window.scrollTo` 假裝收鍵盤。
+
+### `debug=1` 如何確認
+
+開啟 `?debug=1` 後，送出訊息會在 Console 印出 `[CHAT_DEBUG]`，包含：
+
+- `activeElement`（tagName/className）
+- `isMobile`
+- `chatScroll`（`scrollTop/scrollHeight/clientHeight`）
+- `visualViewportHeight`
+
+可用來確認：
+
+1. blur 後 activeElement 是否已離開 input
+2. 送出後是否有執行捲底補償
+3. keyboard 收合造成 viewport 變化時，聊天室是否仍維持在底部
