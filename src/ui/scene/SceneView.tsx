@@ -116,12 +116,29 @@ type VideoDebugState = {
   currentReadyState: number | null;
   currentPaused: boolean | null;
   jumpCandidates: OldhouseLoopKey[];
-  plannedJumpKey: OldhouseLoopKey | null;
-  plannedJumpUrl: string | null;
+  plannedJump: PlannedJumpState | null;
+  nowMs: number;
+  dueInMs: number | null;
+  whyNotJumped: string;
   lastFallback: { fromKey: OldhouseLoopKey | null; toKey: OldhouseLoopKey | null; reason: string } | null;
   unavailableJumps: Array<{ key: OldhouseLoopKey; reason: string }>;
   sceneMapDigest: Record<OldhouseLoopKey, string>;
-  timers: { jumpTimer: number | null };
+  timers: { jumpTimer: number | null; watchdogTimer: number | null };
+};
+
+type PlannedJumpState = {
+  dueAt: number;
+  key: OldhouseLoopKey;
+  url: string;
+  scheduledAt: number;
+  timerId: number | null;
+  lastTimerFiredAt: number | null;
+  lastWatchdogFiredAt: number | null;
+  executedForDueAt: number | null;
+  executedAt: number | null;
+  lastExecAt: number | null;
+  lastExecReason: 'timer' | 'watchdog' | 'force' | null;
+  lastExecResult: string | null;
 };
 
 const SCENE_MAP_DIGEST: Record<OldhouseLoopKey, string> = {
@@ -174,7 +191,8 @@ export default function SceneView({
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
-  const plannedJumpRef = useRef<{ key: OldhouseLoopKey; url: string } | null>(null);
+  const plannedJumpRef = useRef<PlannedJumpState | null>(null);
+  const jumpWatchdogRef = useRef<number | null>(null);
   const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('debug') === '1';
@@ -228,7 +246,7 @@ export default function SceneView({
     return currentVideoRef.current === 'A' ? videoBRef.current : videoARef.current;
   }, []);
 
-  const updateVideoDebug = useCallback((patch: Partial<VideoDebugState>) => {
+  const updateVideoDebug = useCallback((patch: Omit<Partial<VideoDebugState>, 'timers'> & { timers?: Partial<VideoDebugState['timers']> }) => {
     const prev: VideoDebugState = window.__VIDEO_DEBUG__ ?? {
       currentKey: null,
       bufferKey: null,
@@ -249,12 +267,14 @@ export default function SceneView({
       currentReadyState: null,
       currentPaused: null,
       jumpCandidates: [],
-      plannedJumpKey: null,
-      plannedJumpUrl: null,
+      plannedJump: null,
+      nowMs: Date.now(),
+      dueInMs: null,
+      whyNotJumped: 'planned_jump_missing',
       lastFallback: null,
       unavailableJumps: [],
       sceneMapDigest: SCENE_MAP_DIGEST,
-      timers: { jumpTimer: null }
+      timers: { jumpTimer: null, watchdogTimer: null }
     };
 
     window.__VIDEO_DEBUG__ = {
@@ -481,6 +501,9 @@ export default function SceneView({
   }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, playAmbientForKey]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
+    if (debugEnabled) {
+      return randomMs(10000, 15000);
+    }
     const c = clampCurse(curseValue) / 100;
 
     const minBase = 90000;
@@ -492,7 +515,7 @@ export default function SceneView({
     const max = maxBase - (maxBase - maxFast) * c;
 
     return randomMs(min, max);
-  }, []);
+  }, [debugEnabled]);
 
   const preloadIntoBuffer = useCallback((nextKey: OldhouseLoopKey) => {
     const bufferEl = getBufferVideoEl();
@@ -528,8 +551,7 @@ export default function SceneView({
     if (candidates.length === 0) {
       const reason = `no-jump-candidates:${unavailable.map((item) => `${item.key}:${item.reason}`).join(',') || 'empty'}`;
       updateVideoDebug({
-        plannedJumpKey: null,
-        plannedJumpUrl: null,
+        plannedJump: null,
         lastError: reason,
         lastFallback: { fromKey: null, toKey: MAIN_LOOP, reason }
       });
@@ -546,8 +568,7 @@ export default function SceneView({
     if (picked === MAIN_LOOP) {
       const reason = `picked-main-after-retry:${tries}`;
       updateVideoDebug({
-        plannedJumpKey: null,
-        plannedJumpUrl: null,
+        plannedJump: null,
         lastError: reason,
         lastFallback: { fromKey: MAIN_LOOP, toKey: MAIN_LOOP, reason }
       });
@@ -555,7 +576,7 @@ export default function SceneView({
     }
 
     const pickedUrl = getVideoUrlForKey(picked);
-    updateVideoDebug({ plannedJumpKey: picked, plannedJumpUrl: pickedUrl, lastError: null });
+    updateVideoDebug({ lastError: null });
     console.log('[JUMP_PICK]', {
       candidates,
       pickedKey: picked,
@@ -709,6 +730,43 @@ export default function SceneView({
     }
   }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
+  const computeWhyNotJumped = useCallback(() => {
+    const planned = plannedJumpRef.current;
+    if (!planned) return 'planned_jump_missing';
+    if (planned.executedForDueAt === planned.dueAt) return 'executed_already';
+    if (isSwitchingRef.current || isInJumpRef.current) {
+      return `guard_locked(${isSwitchingRef.current ? 'isSwitching' : 'isInJump'})`;
+    }
+    if (Date.now() >= planned.dueAt && planned.lastTimerFiredAt == null) return 'timer_never_fired';
+    if (planned.lastExecResult && planned.lastExecResult !== 'ok') return `last_exec_${planned.lastExecResult}`;
+    return 'waiting_due';
+  }, []);
+
+  const syncPlannedJumpDebug = useCallback(() => {
+    const planned = plannedJumpRef.current;
+    if (!planned) {
+      nextJumpAtRef.current = null;
+      updateVideoDebug({
+        plannedJump: null,
+        nextJumpAt: null,
+        nowMs: Date.now(),
+        dueInMs: null,
+        whyNotJumped: 'planned_jump_missing',
+        timers: { jumpTimer: null }
+      });
+      return;
+    }
+    nextJumpAtRef.current = planned.dueAt;
+    updateVideoDebug({
+      plannedJump: planned,
+      nextJumpAt: planned.dueAt,
+      nowMs: Date.now(),
+      dueInMs: planned.dueAt - Date.now(),
+      whyNotJumped: computeWhyNotJumped(),
+      timers: { jumpTimer: planned.timerId }
+    });
+  }, [computeWhyNotJumped, updateVideoDebug]);
+
   const scheduleNextJump = useCallback((options?: { force?: boolean; explicitDelay?: number }) => {
     const force = options?.force ?? false;
     const explicitDelay = options?.explicitDelay;
@@ -720,8 +778,6 @@ export default function SceneView({
     if (jumpTimerRef.current) {
       window.clearTimeout(jumpTimerRef.current);
       jumpTimerRef.current = null;
-      nextJumpAtRef.current = null;
-      updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
     }
     if (jumpReturnTimerRef.current) {
       window.clearTimeout(jumpReturnTimerRef.current);
@@ -732,89 +788,114 @@ export default function SceneView({
     const dueAt = Date.now() + interval;
     try {
       const picked = pickNextJumpKey();
-      plannedJumpRef.current = { key: picked.pickedKey, url: picked.pickedUrl };
+      plannedJumpRef.current = {
+        dueAt,
+        key: picked.pickedKey,
+        url: picked.pickedUrl,
+        scheduledAt: Date.now(),
+        timerId: null,
+        lastTimerFiredAt: null,
+        lastWatchdogFiredAt: null,
+        executedForDueAt: null,
+        executedAt: null,
+        lastExecAt: null,
+        lastExecReason: null,
+        lastExecResult: null
+      };
     } catch (error) {
       plannedJumpRef.current = null;
       updateVideoDebug({
-        plannedJumpKey: null,
-        plannedJumpUrl: null,
-        lastError: String(error instanceof Error ? error.message : error)
+        plannedJump: null,
+        lastError: String(error instanceof Error ? error.message : error),
+        whyNotJumped: 'planned_jump_missing',
+        dueInMs: null,
+        nextJumpAt: null,
+        timers: { jumpTimer: null }
       });
+      return;
     }
-    nextJumpAtRef.current = dueAt;
+
+    jumpTimerRef.current = window.setTimeout(() => {
+      const planned = plannedJumpRef.current;
+      if (planned) {
+        planned.lastTimerFiredAt = Date.now();
+        planned.timerId = null;
+      }
+      jumpTimerRef.current = null;
+      syncPlannedJumpDebug();
+      void execPlannedJump('timer');
+    }, Math.max(0, dueAt - Date.now()));
+
+    if (plannedJumpRef.current) {
+      plannedJumpRef.current.timerId = jumpTimerRef.current;
+    }
+
     console.log('[VIDEO]', 'scheduleNextJump set timer', {
       delay: interval,
       curse: curseRef.current,
       force,
-      explicitDelay
+      explicitDelay,
+      timerId: jumpTimerRef.current,
+      dueAt
     });
-    jumpTimerRef.current = window.setTimeout(() => {
-      jumpTimerRef.current = null;
-      nextJumpAtRef.current = null;
-      updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
-      void triggerJumpOnce();
-    }, interval);
-    updateVideoDebug({
-      timers: { jumpTimer: jumpTimerRef.current },
-      nextJumpAt: dueAt,
-      plannedJumpKey: plannedJumpRef.current?.key ?? null,
-      plannedJumpUrl: plannedJumpRef.current?.url ?? null
-    });
-  }, [computeJumpIntervalMs, pickNextJumpKey, updateVideoDebug]);
+    syncPlannedJumpDebug();
+  }, [computeJumpIntervalMs, pickNextJumpKey, syncPlannedJumpDebug, updateVideoDebug]);
 
-  const triggerJumpOnce = useCallback(async () => {
-    console.log('[VIDEO]', 'triggerJumpOnce enter', {
-      isSwitching: isSwitchingRef.current,
-      isInJump: isInJumpRef.current,
-      currentKey: currentLoopKeyRef.current
-    });
-    if (isSwitchingRef.current || isInJumpRef.current) {
-      const reason = isSwitchingRef.current ? 'isSwitching' : 'isInJump';
-      console.warn('[VIDEO]', 'triggerJumpOnce skipped', { reason });
-      if (reason === 'isSwitching') {
-        scheduleNextJump({ force: true });
-      }
-      return;
-    }
-    if (currentLoopKeyRef.current !== MAIN_LOOP) {
-      console.warn('[VIDEO]', 'triggerJumpOnce skipped: not on MAIN_LOOP', {
-        currentKey: currentLoopKeyRef.current,
-        mainLoop: MAIN_LOOP
-      });
-      scheduleNextJump({ force: true });
-      return;
-    }
-
-    isInJumpRef.current = true;
-    updateVideoDebug({ isInJump: true });
+  const execPlannedJump = useCallback(async (reason: 'timer' | 'watchdog' | 'force') => {
     const planned = plannedJumpRef.current;
     if (!planned) {
-      isInJumpRef.current = false;
-      updateVideoDebug({ isInJump: false, lastError: 'planned-jump-missing' });
-      scheduleNextJump({ force: true });
+      updateVideoDebug({ lastError: 'planned-jump-missing', whyNotJumped: 'planned_jump_missing' });
       return;
     }
-    const nextKey = planned.key;
-    console.log('[VIDEO]', 'triggerJumpOnce picked nextKey', { nextKey, fromKey: currentLoopKeyRef.current });
-    plannedJumpRef.current = null;
-    updateVideoDebug({ plannedJumpKey: null, plannedJumpUrl: null });
 
+    if (reason === 'watchdog') {
+      planned.lastWatchdogFiredAt = Date.now();
+    }
+    planned.lastExecReason = reason;
+    planned.lastExecAt = Date.now();
+
+    if (planned.executedForDueAt === planned.dueAt) {
+      planned.lastExecResult = 'executed_already';
+      syncPlannedJumpDebug();
+      return;
+    }
+
+    if (isSwitchingRef.current || isInJumpRef.current || currentLoopKeyRef.current !== MAIN_LOOP) {
+      planned.lastExecResult = 'skipped_guard';
+      syncPlannedJumpDebug();
+      window.setTimeout(() => {
+        if (plannedJumpRef.current?.dueAt === planned.dueAt && plannedJumpRef.current.executedForDueAt !== planned.dueAt) {
+          void execPlannedJump('watchdog');
+        }
+      }, 500);
+      return;
+    }
+
+    planned.executedAt = Date.now();
+    planned.executedForDueAt = planned.dueAt;
+    if (jumpTimerRef.current) {
+      window.clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = null;
+    }
+    planned.timerId = null;
+    isInJumpRef.current = true;
+    updateVideoDebug({ isInJump: true });
+
+    const nextKey = planned.key;
     try {
       await switchTo(nextKey);
+      planned.lastExecResult = currentLoopKeyRef.current === nextKey ? 'ok' : 'switch_mismatch';
     } catch (error) {
-      isInJumpRef.current = false;
-      updateVideoDebug({ isInJump: false, lastError: String(error instanceof Error ? error.message : error) });
-      scheduleNextJump();
-      return;
+      planned.lastExecResult = 'switch_error';
+      updateVideoDebug({ lastError: String(error instanceof Error ? error.message : error) });
+    } finally {
+      planned.lastExecAt = Date.now();
+      syncPlannedJumpDebug();
     }
 
-    if (currentLoopKeyRef.current !== nextKey) {
+    if (planned.lastExecResult !== 'ok') {
       isInJumpRef.current = false;
       updateVideoDebug({ isInJump: false });
-      console.warn('[VIDEO]', 'triggerJumpOnce switch mismatch; reschedule', {
-        expected: nextKey,
-        actual: currentLoopKeyRef.current
-      });
       scheduleNextJump({ force: true });
       return;
     }
@@ -843,13 +924,11 @@ export default function SceneView({
         jumpReturnTimerRef.current = null;
         void switchTo(MAIN_LOOP).then(() => {
           currentLoopKeyRef.current = MAIN_LOOP;
-          scheduleNextJump();
+          scheduleNextJump({ force: true });
         });
       }
     }, fallbackDelay);
-    console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current, fallbackDelay });
-  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
-
+  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, syncPlannedJumpDebug, updateVideoDebug]);
   const runDebugForceAction = useCallback(async (
     action: 'FORCE_LOOP' | 'FORCE_LOOP2' | 'FORCE_MAIN' | 'FORCE_PLANNED' | 'RESCHEDULE_JUMP',
     runner: () => Promise<void> | void
@@ -874,14 +953,8 @@ export default function SceneView({
       updateVideoDebug({ lastError: 'force-planned-missing' });
       return;
     }
-    plannedJumpRef.current = null;
-    updateVideoDebug({ plannedJumpKey: null, plannedJumpUrl: null, nextJumpAt: null, timers: { jumpTimer: null } });
-    if (jumpTimerRef.current) {
-      window.clearTimeout(jumpTimerRef.current);
-      jumpTimerRef.current = null;
-    }
-    await switchTo(planned.key);
-  }, [switchTo, updateVideoDebug]);
+    await execPlannedJump('force');
+  }, [execPlannedJump, updateVideoDebug]);
 
   const handleEnded = useCallback((event?: Event) => {
     const activeKey = currentLoopKeyRef.current;
@@ -1027,6 +1100,41 @@ export default function SceneView({
     scheduleNextJump();
   }, [hasConfirmedPlayback, scheduleNextJump]);
 
+  useEffect(() => {
+    if (!hasConfirmedPlayback) return;
+    if (jumpWatchdogRef.current) {
+      window.clearInterval(jumpWatchdogRef.current);
+      jumpWatchdogRef.current = null;
+    }
+    jumpWatchdogRef.current = window.setInterval(() => {
+      const planned = plannedJumpRef.current;
+      if (!planned || !autoNextEnabledRef.current) return;
+      if (Date.now() >= planned.dueAt && planned.executedForDueAt !== planned.dueAt) {
+        void execPlannedJump('watchdog');
+      }
+    }, 1000);
+    updateVideoDebug({ timers: { watchdogTimer: jumpWatchdogRef.current } });
+    return () => {
+      if (jumpWatchdogRef.current) {
+        window.clearInterval(jumpWatchdogRef.current);
+        jumpWatchdogRef.current = null;
+      }
+      updateVideoDebug({ timers: { watchdogTimer: null } });
+    };
+  }, [execPlannedJump, hasConfirmedPlayback, updateVideoDebug]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      const planned = plannedJumpRef.current;
+      if (planned && Date.now() >= planned.dueAt && planned.executedForDueAt !== planned.dueAt) {
+        void execPlannedJump('watchdog');
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [execPlannedJump]);
+
   const bindEnded = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return;
     el.loop = false;
@@ -1060,12 +1168,14 @@ export default function SceneView({
       currentReadyState: null,
       currentPaused: null,
       jumpCandidates: [],
-      plannedJumpKey: null,
-      plannedJumpUrl: null,
+      plannedJump: null,
+      nowMs: Date.now(),
+      dueInMs: null,
+      whyNotJumped: 'planned_jump_missing',
       lastFallback: null,
       unavailableJumps: [],
       sceneMapDigest: SCENE_MAP_DIGEST,
-      timers: { jumpTimer: null }
+      timers: { jumpTimer: null, watchdogTimer: null }
     };
 
     window.__AUDIO_DEBUG__ = {
@@ -1142,6 +1252,10 @@ export default function SceneView({
         isSwitching: isSwitchingRef.current,
         isInJump: isInJumpRef.current,
         nextJumpAt: nextJumpAtRef.current,
+        plannedJump: plannedJumpRef.current,
+        nowMs: Date.now(),
+        dueInMs: plannedJumpRef.current ? plannedJumpRef.current.dueAt - Date.now() : null,
+        whyNotJumped: computeWhyNotJumped(),
         activeVideoId: currentEl?.id === 'videoA' ? 'videoA' : currentEl?.id === 'videoB' ? 'videoB' : null,
         activeVideoSrc: currentEl?.currentSrc ?? currentEl?.src ?? null,
         bufferVideoId: bufferEl?.id === 'videoA' ? 'videoA' : bufferEl?.id === 'videoB' ? 'videoB' : null,
@@ -1164,14 +1278,14 @@ export default function SceneView({
     return () => {
       window.clearInterval(timer);
     };
-  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, updateVideoDebug]);
+  }, [collectAudioDebugSnapshot, computeWhyNotJumped, debugEnabled, getBufferVideoEl, getCurrentVideoEl, updateVideoDebug]);
 
   const videoDebug = window.__VIDEO_DEBUG__;
   const trimSrc = (src: string | null | undefined) => {
     if (!src) return '-';
     return src.length > 72 ? `...${src.slice(-72)}` : src;
   };
-  const nextJumpDueInSec = videoDebug?.nextJumpAt ? Math.max(0, (videoDebug.nextJumpAt - debugTick) / 1000).toFixed(1) : '-';
+  const nextJumpDueInSec = videoDebug?.dueInMs != null ? Math.max(0, videoDebug.dueInMs / 1000).toFixed(1) : '-';
   const lastSwitchAgoMs = videoDebug?.lastSwitchAt ? Math.max(0, debugTick - videoDebug.lastSwitchAt) : null;
 
   useEffect(() => {
@@ -1361,12 +1475,18 @@ export default function SceneView({
           <div>currentActive/bufferActive: {String(videoDebug?.currentActive ?? false)} / {String(videoDebug?.bufferActive ?? false)}</div>
           <div>isSwitching / isInJump: {String(videoDebug?.isSwitching ?? false)} / {String(videoDebug?.isInJump ?? false)}</div>
           <div>nextJumpDueIn: {nextJumpDueInSec}s</div>
+          <div>now/dueAt/diffMs: {videoDebug?.nowMs ?? '-'} / {videoDebug?.plannedJump?.dueAt ?? '-'} / {videoDebug?.dueInMs ?? '-'}</div>
           <div>
             lastSwitch: {(videoDebug?.lastSwitchFrom ?? '-')} -&gt; {(videoDebug?.lastSwitchTo ?? '-')} | {lastSwitchAgoMs == null ? '-' : `${lastSwitchAgoMs}ms ago`}
           </div>
           <div>currentEl readyState/paused: {videoDebug?.currentReadyState ?? '-'} / {String(videoDebug?.currentPaused ?? false)}</div>
           <div>jumpCandidates: {(videoDebug?.jumpCandidates ?? []).join(', ') || '-'}</div>
-          <div>plannedJumpKey/plannedJumpUrl: {videoDebug?.plannedJumpKey ?? '-'} / {trimSrc(videoDebug?.plannedJumpUrl)}</div>
+          <div>plannedJumpKey/plannedJumpUrl: {videoDebug?.plannedJump?.key ?? '-'} / {trimSrc(videoDebug?.plannedJump?.url)}</div>
+          <div>planned scheduledAt/timerId: {videoDebug?.plannedJump?.scheduledAt ?? '-'} / {videoDebug?.plannedJump?.timerId ?? '-'}</div>
+          <div>lastTimerFiredAt/lastWatchdogFiredAt: {videoDebug?.plannedJump?.lastTimerFiredAt ?? '-'} / {videoDebug?.plannedJump?.lastWatchdogFiredAt ?? '-'}</div>
+          <div>lastExec reason/result/at: {videoDebug?.plannedJump?.lastExecReason ?? '-'} / {videoDebug?.plannedJump?.lastExecResult ?? '-'} / {videoDebug?.plannedJump?.lastExecAt ?? '-'}</div>
+          <div>executedAt/executedForDueAt: {videoDebug?.plannedJump?.executedAt ?? '-'} / {videoDebug?.plannedJump?.executedForDueAt ?? '-'}</div>
+          <div>why not jumped?: {videoDebug?.whyNotJumped ?? '-'}</div>
           <div>unavailableJumps: {(videoDebug?.unavailableJumps ?? []).map((item) => `${item.key}(${item.reason})`).join(', ') || '-'}</div>
           <div>
             lastFallback: {videoDebug?.lastFallback ? `${videoDebug.lastFallback.fromKey ?? '-'} -&gt; ${videoDebug.lastFallback.toKey ?? '-'} (${videoDebug.lastFallback.reason})` : '-'}
