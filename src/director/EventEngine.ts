@@ -1,11 +1,10 @@
 import { collectActiveUsers } from '../core/systems/mentionV2';
 import type { ChatMessage } from '../core/state/types';
-import usernames from '../content/pools/usernames.json';
-import { PERSONA_USERS } from '../chat/ChatPools';
 import { getSfxSpec, type SfxKey } from '../audio/SfxRegistry';
 import { EVENT_REGISTRY, type EventKey } from './EventRegistry';
 import { LINE_REGISTRY, type LineVariant } from '../chat/LineRegistry';
 import type { OldhouseLoopKey } from '../config/oldhousePlayback';
+import { ChatMessageType } from '../chat/ChatTypes';
 
 type TriggerContext = {
   now?: number;
@@ -34,27 +33,24 @@ type DebugState = {
 
 type EngineResult = { chats: ChatMessage[] };
 
+export type EventContentPayload = {
+  type: ChatMessageType;
+  text: string;
+  translation?: string;
+};
+
 type EventEngineDeps = {
-  emitChat: (message: ChatMessage) => void;
   playSfx: (key: SfxKey, reason: string, delayMs?: number) => void;
   requestSceneSwitch: (sceneKey: OldhouseLoopKey, reason: string, delayMs?: number) => void;
 };
 
-const ACTOR_NAME: Record<string, string> = {
-  user: 'you', ghost: 'ghost', viewer: 'viewer', system: 'system'
-};
-
-function pickRandomUsername(): string {
-  const pool = usernames as string[];
-  return pool[Math.floor(Math.random() * pool.length)] ?? 'viewer';
-}
-
-function resolveUsername(actor: 'user' | 'ghost' | 'viewer' | 'system', persona: string): string {
-  if (actor === 'viewer') {
-    const mapped = (PERSONA_USERS as Record<string, string>)[persona];
-    return mapped ?? pickRandomUsername();
-  }
-  return ACTOR_NAME[actor];
+function mapEventToType(key: EventKey): ChatMessageType {
+  if (key === 'USER_SENT') return ChatMessageType.SOCIAL_REPLY;
+  if (key === 'SCENE_SWITCH_REACT') return ChatMessageType.SCENE_FLICKER_REACT;
+  if (key === 'SFX_FAN_REACT') return ChatMessageType.SFX_REACT_FAN;
+  if (key === 'SFX_FOOTSTEPS_REACT') return ChatMessageType.SFX_REACT_FOOTSTEPS;
+  if (key === 'SFX_GHOST_REACT') return ChatMessageType.SFX_REACT_GHOST;
+  return ChatMessageType.IDLE_BORING;
 }
 
 export class EventEngine {
@@ -65,6 +61,7 @@ export class EventEngine {
   private recentPersonas: string[] = [];
   private lockState = { isLocked: false, target: null as string | null, startedAt: 0 };
   private blockedReasons = new Map<string, number>();
+  private pendingContent: EventContentPayload[] = [];
 
   constructor(private deps: EventEngineDeps) {}
 
@@ -111,20 +108,21 @@ export class EventEngine {
     });
 
     const text = variant.lines.join(' ');
-    const message: ChatMessage = {
-      id: crypto.randomUUID(),
-      username: resolveUsername(spec.actor, variant.persona),
-      text: context.tagTarget ? text.replace(/@\{tag\}/g, `@${context.tagTarget}`) : text.replace(/@\{tag\}\s*/g, ''),
-      language: spec.actor === 'ghost' ? 'th' : 'zh',
-      translation: spec.actor === 'ghost' ? variant.lines[variant.lines.length - 1] : text,
-      personaId: variant.persona,
-      tagTarget: context.tagTarget,
-      chatType: key
-    };
-    this.deps.emitChat(message);
+    const formattedText = context.tagTarget ? text.replace(/@\{tag\}/g, `@${context.tagTarget}`) : text.replace(/@\{tag\}\s*/g, '');
+    this.pendingContent.push({
+      type: mapEventToType(key),
+      text: formattedText,
+      translation: spec.actor === 'ghost' ? variant.lines[variant.lines.length - 1] : formattedText
+    });
     this.setDebug(key, 'emitted', spec.lineKey, variant);
     this.flushQueue(now);
-    return { chats: [message] };
+    return { chats: [] };
+  }
+
+  drainPendingContent(): EventContentPayload[] {
+    const out = [...this.pendingContent];
+    this.pendingContent = [];
+    return out;
   }
 
   unlockLockByReply(target: string): boolean {
