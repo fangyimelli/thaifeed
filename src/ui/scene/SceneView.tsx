@@ -14,6 +14,7 @@ import { curseVisualClass } from '../../core/systems/curseSystem';
 import { emitSceneEvent } from '../../core/systems/sceneEvents';
 import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
+import { audioEngine } from '../../audio/AudioEngine';
 
 export type SceneMissingAsset = {
   name: string;
@@ -92,6 +93,15 @@ type AudioDebugState = {
   activeVideoEl: 'A' | 'B';
   switchId: number;
   phase: string;
+  fanState: {
+    mode: 'webaudio' | 'html-audio-fallback' | 'none';
+    contextState: AudioContextState | 'unsupported';
+    playing: boolean;
+    currentTime: number;
+    nextCrossfadeAt: number | null;
+    bufferDuration: number | null;
+    lastRestartReason: string | null;
+  };
   videoStates: Array<{ id: 'videoA' | 'videoB'; paused: boolean; muted: boolean; volume: number; currentTime: number }>;
   playingAudios: Array<{ label: string; muted: boolean; volume: number; currentTime: number }>;
 };
@@ -174,7 +184,6 @@ export default function SceneView({
   const videoBRef = useRef<HTMLVideoElement>(null);
   const currentVideoRef = useRef<'A' | 'B'>('A');
   const playerCoreRef = useRef(createPlayerCore());
-  const fanAudioRef = useRef<HTMLAudioElement | null>(null);
   const footstepsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ghostAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentLoopKeyRef = useRef<OldhouseLoopKey>(MAIN_LOOP);
@@ -224,6 +233,15 @@ export default function SceneView({
       activeVideoEl: currentVideoRef.current,
       switchId: 0,
       phase: 'idle',
+      fanState: {
+        mode: 'none',
+        contextState: 'unsupported',
+        playing: false,
+        currentTime: 0,
+        nextCrossfadeAt: null,
+        bufferDuration: null,
+        lastRestartReason: null
+      },
       videoStates: [],
       playingAudios: []
     };
@@ -293,26 +311,6 @@ export default function SceneView({
     onNeedUserGestureChange?.(value);
   }, [onNeedUserGestureChange]);
 
-  const playAmbientForKey = useCallback(async (key: OldhouseLoopKey) => {
-    if (key === MAIN_LOOP) {
-      stopAllNonPersistentSfx();
-    }
-    const fanAudio = fanAudioRef.current;
-    if (!fanAudio || needsUserGestureToPlayRef.current) return;
-    if (!fanAudio.paused) return;
-    fanAudio.currentTime = 0;
-    fanAudio.loop = true;
-    fanAudio.muted = false;
-    if (fanAudio.volume === 0) {
-      fanAudio.volume = 0.4;
-    }
-    try {
-      await fanAudio.play();
-    } catch {
-      setNeedsGestureState(true);
-    }
-  }, [setNeedsGestureState, stopAllNonPersistentSfx]);
-
   const announceRunning = useCallback(() => {
     if (runningAnnouncedRef.current) return;
     runningAnnouncedRef.current = true;
@@ -358,7 +356,6 @@ export default function SceneView({
         currentTime: Number(video.currentTime.toFixed(2))
       }));
     const audios = [
-      { label: 'fan_loop', el: fanAudioRef.current },
       { label: 'footsteps', el: footstepsAudioRef.current },
       { label: 'ghost_female', el: ghostAudioRef.current }
     ].filter((item) => item.el && !item.el.paused)
@@ -370,6 +367,7 @@ export default function SceneView({
       }));
     updateAudioDebug({
       activeVideoEl: currentVideo?.id === 'videoB' ? 'B' : 'A',
+      fanState: audioEngine.getFanDebugStatus(),
       videoStates,
       playingAudios: audios
     });
@@ -399,15 +397,9 @@ export default function SceneView({
   }, []);
 
   const startFanLoop = useCallback(async () => {
-    const fanAudio = fanAudioRef.current;
-    if (!fanAudio) {
-      throw new Error('Missing fan audio instance');
-    }
-    fanAudio.loop = true;
-    fanAudio.muted = false;
-    if (fanAudio.volume === 0) fanAudio.volume = 0.4;
     try {
-      await fanAudio.play();
+      audioEngine.setFanVolume(0.4);
+      await audioEngine.startFanLoop(FAN_LOOP_PATH, 0.4, 'scene_start');
       setNeedsGestureState(false);
       const t = Date.now();
       updateAudioDebug({ started: true, lastFanAt: t });
@@ -417,7 +409,7 @@ export default function SceneView({
       console.warn('[AUDIO] play blocked/failed', { key: 'fan_loop', errName: 'unknown' });
       throw new Error('Fan loop autoplay blocked until user gesture');
     }
-  }, [updateAudioDebug]);
+  }, [setNeedsGestureState, updateAudioDebug]);
 
   const scheduleFootsteps = useCallback(() => {
     if (footstepsTimerRef.current) {
@@ -490,7 +482,6 @@ export default function SceneView({
 
     try {
       await video.play();
-      await playAmbientForKey(currentLoopKeyRef.current);
       setNeedsGestureState(false);
       return true;
     } catch (e: unknown) {
@@ -498,7 +489,7 @@ export default function SceneView({
       console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
-  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, playAmbientForKey]);
+  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, setNeedsGestureState]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     if (debugEnabled) {
@@ -648,8 +639,6 @@ export default function SceneView({
       stopAllNonPersistentSfx();
       const startedAt = Date.now();
 
-      await playAmbientForKey(nextKey);
-
       setNeedsGestureState(false);
 
       currentVideoRef.current = currentVideoRef.current === 'A' ? 'B' : 'A';
@@ -728,7 +717,7 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current
       });
     }
-  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, playAmbientForKey, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
+  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
   const computeWhyNotJumped = useCallback(() => {
     const planned = plannedJumpRef.current;
@@ -1130,10 +1119,33 @@ export default function SceneView({
       if (planned && Date.now() >= planned.dueAt && planned.executedForDueAt !== planned.dueAt) {
         void execPlannedJump('watchdog');
       }
+      void audioEngine.ensureFanAfterVisibility().then(() => {
+        updateAudioDebug({ fanState: audioEngine.getFanDebugStatus() });
+      }).catch((error: unknown) => {
+        console.warn('[AUDIO] visibility fan resume failed', { errName: error instanceof Error ? error.name : 'unknown' });
+        updateAudioDebug({ fanState: audioEngine.getFanDebugStatus() });
+      });
     };
+
+    const onUserInteractionResume = () => {
+      void audioEngine.resumeFromGesture().then(() => {
+        void audioEngine.ensureFanAfterVisibility();
+        updateAudioDebug({ fanState: audioEngine.getFanDebugStatus() });
+      }).catch(() => {
+        // keep existing gesture lock flow
+      });
+    };
+
     document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [execPlannedJump]);
+    window.addEventListener('pointerdown', onUserInteractionResume, { passive: true });
+    window.addEventListener('touchstart', onUserInteractionResume, { passive: true });
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pointerdown', onUserInteractionResume);
+      window.removeEventListener('touchstart', onUserInteractionResume);
+    };
+  }, [execPlannedJump, updateAudioDebug]);
 
   const bindEnded = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return;
@@ -1187,6 +1199,15 @@ export default function SceneView({
       activeVideoEl: currentVideoRef.current,
       switchId: 0,
       phase: 'init',
+      fanState: {
+        mode: 'none',
+        contextState: 'unsupported',
+        playing: false,
+        currentTime: 0,
+        nextCrossfadeAt: null,
+        bufferDuration: null,
+        lastRestartReason: null
+      },
       videoStates: [],
       playingAudios: []
     };
@@ -1198,12 +1219,6 @@ export default function SceneView({
   }, []);
 
   useEffect(() => {
-    fanAudioRef.current = new Audio(FAN_LOOP_PATH);
-    fanAudioRef.current.preload = 'auto';
-    fanAudioRef.current.loop = true;
-    fanAudioRef.current.volume = 0.4;
-    fanAudioRef.current.muted = false;
-
     footstepsAudioRef.current = new Audio(FOOTSTEPS_PATH);
     footstepsAudioRef.current.preload = 'auto';
     footstepsAudioRef.current.loop = false;
@@ -1219,10 +1234,9 @@ export default function SceneView({
     return () => {
       stopAllNonPersistentSfx();
       stopOldhouseCalmMode();
-      fanAudioRef.current?.pause();
       footstepsAudioRef.current?.pause();
       ghostAudioRef.current?.pause();
-      fanAudioRef.current = null;
+      audioEngine.teardown();
       footstepsAudioRef.current = null;
       ghostAudioRef.current = null;
     };
@@ -1448,7 +1462,7 @@ export default function SceneView({
                     if (videoA) videoA.pause();
                     if (videoB) videoB.pause();
                     stopAllNonPersistentSfx();
-                    fanAudioRef.current?.pause();
+                    audioEngine.stopFanLoop('declined_content_warning');
                   }}
                 >
                   否
@@ -1495,8 +1509,12 @@ export default function SceneView({
             sceneMapDigest: {(Object.entries(videoDebug?.sceneMapDigest ?? SCENE_MAP_DIGEST) as Array<[OldhouseLoopKey, string]>).map(([key, value]) => `${key}=${trimSrc(value)}`).join(' | ')}
           </div>
           <div>activeKey(audio): {window.__AUDIO_DEBUG__?.activeVideoKey ?? '-'}</div>
+          <div>audioContext.state: {window.__AUDIO_DEBUG__?.fanState?.contextState ?? '-'}</div>
+          <div>fan playing/currentTime: {String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)} / {(window.__AUDIO_DEBUG__?.fanState?.currentTime ?? 0).toFixed(2)}</div>
+          <div>fan nextCrossfadeAt/bufferDuration: {window.__AUDIO_DEBUG__?.fanState?.nextCrossfadeAt?.toFixed?.(2) ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.bufferDuration?.toFixed?.(2) ?? '-'}</div>
+          <div>fan lastRestartReason/mode: {window.__AUDIO_DEBUG__?.fanState?.lastRestartReason ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.mode ?? '-'}</div>
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
-          <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'}</div>
+          <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'} | fan[{String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)}]</div>
         </div>
 
         <div className="video-debug-controls-panel">
