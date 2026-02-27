@@ -3,30 +3,25 @@ export type FanDebugStatus = {
   contextState: AudioContextState | 'unsupported';
   playing: boolean;
   currentTime: number;
-  nextCrossfadeAt: number | null;
+  nextStartTime: number | null;
+  xfadeSec: number;
+  hasScheduledNext: boolean;
   bufferDuration: number | null;
   lastRestartReason: string | null;
 };
 
-type FanVoice = {
-  source: AudioBufferSourceNode;
-  gain: GainNode;
-  startAt: number;
-};
-
-const ATTACK_SEC = 0.012;
+const ATTACK_SEC = 0.3;
 const RELEASE_SEC = 0.016;
-const CROSSFADE_SEC = 0.06;
-const SCHEDULER_INTERVAL_MS = 250;
-const SCHEDULE_LOOKAHEAD_SEC = 0.35;
+const CROSSFADE_SEC = 2;
+const SCHEDULE_LEAD_SEC = 1;
 
 class AudioEngine {
   private context: AudioContext | null = null;
   private fanBus: GainNode | null = null;
   private fanBuffer: AudioBuffer | null = null;
   private fanBufferPromise: Promise<AudioBuffer> | null = null;
-  private fanVoice: FanVoice | null = null;
-  private fanNextCrossfadeAt: number | null = null;
+  private fanNextStartTime: number | null = null;
+  private fanHasScheduledNext = false;
   private fanSchedulerTimer: number | null = null;
   private fanTargetVolume = 0.4;
   private fanPlaying = false;
@@ -65,57 +60,57 @@ class AudioEngine {
     return this.fanBufferPromise;
   }
 
-  private createVoice(startAt: number, fadeIn: boolean) {
+  private scheduleNext(reason: string) {
     if (!this.context || !this.fanBus || !this.fanBuffer) return null;
+    if (this.fanNextStartTime == null) {
+      this.fanNextStartTime = Math.max(this.context.currentTime + 0.02, this.context.currentTime);
+    }
+
     const source = this.context.createBufferSource();
     source.buffer = this.fanBuffer;
     const gain = this.context.createGain();
     source.connect(gain);
     gain.connect(this.fanBus);
 
-    const safeStart = Math.max(startAt, this.context.currentTime + 0.01);
-    const attackEnd = safeStart + ATTACK_SEC;
-    gain.gain.setValueAtTime(fadeIn ? 0.0001 : 1, safeStart);
-    gain.gain.linearRampToValueAtTime(1, attackEnd);
-    source.start(safeStart);
+    const startTime = Math.max(this.fanNextStartTime, this.context.currentTime + 0.01);
+    const endTime = startTime + this.fanBuffer.duration;
+    const fadeOutStart = Math.max(startTime + ATTACK_SEC, endTime - CROSSFADE_SEC);
 
-    return { source, gain, startAt: safeStart };
-  }
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.linearRampToValueAtTime(1, Math.min(startTime + ATTACK_SEC, fadeOutStart));
+    gain.gain.setValueAtTime(1, fadeOutStart);
+    gain.gain.linearRampToValueAtTime(0.0001, endTime);
+    source.start(startTime);
 
-  private scheduleCrossfade(reason: string) {
-    if (!this.context || !this.fanBuffer || !this.fanVoice || !this.fanPlaying) return;
-    const now = this.context.currentTime;
-    const nextStart = this.fanVoice.startAt + this.fanBuffer.duration - CROSSFADE_SEC;
-    if (nextStart > now + SCHEDULE_LOOKAHEAD_SEC) {
-      this.fanNextCrossfadeAt = nextStart;
-      return;
+    this.fanNextStartTime = endTime - CROSSFADE_SEC;
+    this.fanHasScheduledNext = true;
+    this.lastRestartReason = reason;
+
+    if (this.fanSchedulerTimer != null) {
+      window.clearTimeout(this.fanSchedulerTimer);
+      this.fanSchedulerTimer = null;
     }
 
-    const outgoing = this.fanVoice;
-    const incoming = this.createVoice(nextStart, true);
-    if (!incoming) return;
+    const timeoutSec = Math.max(this.fanBuffer.duration - CROSSFADE_SEC - SCHEDULE_LEAD_SEC, 0.1);
+    this.fanSchedulerTimer = window.setTimeout(() => {
+      this.fanSchedulerTimer = null;
+      if (!this.fanPlaying) return;
+      this.scheduleNext('schedule_overlap');
+    }, timeoutSec * 1000);
 
-    outgoing.gain.gain.setValueAtTime(Math.max(outgoing.gain.gain.value, 0.0001), nextStart);
-    outgoing.gain.gain.linearRampToValueAtTime(0.0001, nextStart + CROSSFADE_SEC);
-    outgoing.source.stop(nextStart + CROSSFADE_SEC + 0.03);
-
-    this.fanVoice = incoming;
-    this.fanNextCrossfadeAt = incoming.startAt + this.fanBuffer.duration - CROSSFADE_SEC;
-    this.lastRestartReason = reason;
+    return { source, gain, startTime, endTime };
   }
 
   private startScheduler() {
-    if (this.fanSchedulerTimer != null) window.clearInterval(this.fanSchedulerTimer);
-    this.fanSchedulerTimer = window.setInterval(() => {
-      this.scheduleCrossfade('crossfade');
-    }, SCHEDULER_INTERVAL_MS);
+    this.scheduleNext('schedule_start');
   }
 
   private stopScheduler() {
     if (this.fanSchedulerTimer != null) {
-      window.clearInterval(this.fanSchedulerTimer);
+      window.clearTimeout(this.fanSchedulerTimer);
       this.fanSchedulerTimer = null;
     }
+    this.fanHasScheduledNext = false;
   }
 
   async resumeFromGesture() {
@@ -141,13 +136,10 @@ class AudioEngine {
       this.fanBus.gain.setValueAtTime(Math.max(this.fanBus.gain.value, 0.0001), context.currentTime);
       this.fanBus.gain.linearRampToValueAtTime(this.fanTargetVolume, context.currentTime + ATTACK_SEC);
 
-      if (!this.fanVoice) {
-        const first = this.createVoice(context.currentTime + 0.02, true);
-        if (!first) throw new Error('Failed to create initial fan voice');
-        this.fanVoice = first;
+      if (this.fanNextStartTime == null) {
+        this.fanNextStartTime = Math.max(context.currentTime, 0);
       }
       this.fanPlaying = true;
-      this.fanNextCrossfadeAt = this.fanVoice.startAt + this.fanBuffer.duration - CROSSFADE_SEC;
       this.lastRestartReason = reason;
       this.startScheduler();
       return;
@@ -171,10 +163,11 @@ class AudioEngine {
       if (context.state !== 'running') {
         await context.resume();
       }
-      if (!this.fanVoice && this.fanSrc) {
-        await this.startFanLoop(this.fanSrc, this.fanTargetVolume, 'visibility_resume');
+      if (this.fanSrc && this.fanNextStartTime == null) {
+        this.fanNextStartTime = Math.max(context.currentTime, 0);
       }
-      this.scheduleCrossfade('visibility_resume');
+      this.startScheduler();
+      this.lastRestartReason = 'visibility_resume';
       return;
     }
     if (this.fallbackAudio && this.fallbackAudio.paused) {
@@ -200,11 +193,7 @@ class AudioEngine {
       this.fanBus.gain.cancelScheduledValues(now);
       this.fanBus.gain.setValueAtTime(Math.max(this.fanBus.gain.value, 0.0001), now);
       this.fanBus.gain.linearRampToValueAtTime(0.0001, now + RELEASE_SEC);
-      if (this.fanVoice) {
-        this.fanVoice.source.stop(now + RELEASE_SEC + 0.03);
-      }
-      this.fanVoice = null;
-      this.fanNextCrossfadeAt = null;
+      this.fanNextStartTime = null;
       this.stopScheduler();
     }
 
@@ -248,9 +237,11 @@ class AudioEngine {
     return {
       mode: this.supportsWebAudio ? 'webaudio' : this.fallbackAudio ? 'html-audio-fallback' : 'none',
       contextState: this.context?.state ?? (this.supportsWebAudio ? 'suspended' : 'unsupported'),
-      playing: this.supportsWebAudio ? this.fanPlaying && Boolean(this.fanVoice) : Boolean(this.fallbackAudio && !this.fallbackAudio.paused),
+      playing: this.supportsWebAudio ? this.fanPlaying : Boolean(this.fallbackAudio && !this.fallbackAudio.paused),
       currentTime: this.context?.currentTime ?? this.fallbackAudio?.currentTime ?? 0,
-      nextCrossfadeAt: this.fanNextCrossfadeAt,
+      nextStartTime: this.fanNextStartTime,
+      xfadeSec: CROSSFADE_SEC,
+      hasScheduledNext: this.fanHasScheduledNext,
       bufferDuration: this.fanBuffer?.duration ?? null,
       lastRestartReason: this.lastRestartReason
     };
