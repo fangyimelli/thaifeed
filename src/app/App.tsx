@@ -22,8 +22,8 @@ import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
 import { MAIN_LOOP } from '../config/oldhousePlayback';
 import { onSceneEvent } from '../core/systems/sceneEvents';
-import { ChatEngine } from '../chat/ChatEngine';
-import type { ChatEvent } from '../chat/ChatTypes';
+import { requestSceneAction } from '../core/systems/sceneEvents';
+import { EventEngine } from '../director/EventEngine';
 
 function formatViewerCount(value: number) {
   if (value < 1000) return `${value}`;
@@ -88,7 +88,11 @@ export default function App() {
   const soundUnlocked = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
-  const chatEngineRef = useRef(new ChatEngine());
+  const eventEngineRef = useRef(new EventEngine({
+    emitChat: (message) => dispatch({ type: 'AUDIENCE_MESSAGE', payload: message }),
+    playSfx: (sfxKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SFX', sfxKey, reason, delayMs }),
+    requestSceneSwitch: (sceneKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey, reason, delayMs })
+  }));
 
 
   useEffect(() => {
@@ -141,12 +145,9 @@ export default function App() {
     dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
   };
 
-  const emitChatEvent = (event: ChatEvent) => {
-    chatEngineRef.current.syncFromMessages(state.messages);
-    const emitted = chatEngineRef.current.emit(event);
-    const ticked = chatEngineRef.current.tick();
-    [...emitted, ...ticked].forEach((message) => dispatchAudienceMessage(message));
-    window.__CHAT_DEBUG__ = chatEngineRef.current.getDebugState();
+  const emitEvent = (eventKey: string, context: { tagTarget?: string; lockTarget?: string } = {}) => {
+    eventEngineRef.current.trigger(eventKey, { messages: state.messages, ...context });
+    window.__CHAT_DEBUG__ = eventEngineRef.current.getDebugState() as unknown as Window['__CHAT_DEBUG__'];
   };
 
   useEffect(() => {
@@ -218,7 +219,7 @@ export default function App() {
       return randomInt(low, high);
     };
     const tick = () => {
-      emitChatEvent({ type: 'IDLE_TICK' });
+      emitEvent('IDLE_TICK');
       timer = window.setTimeout(tick, nextInterval());
     };
     timer = window.setTimeout(tick, nextInterval());
@@ -229,20 +230,20 @@ export default function App() {
     const unsubscribe = onSceneEvent((event) => {
       if (event.type === 'VIDEO_ACTIVE') {
         currentVideoKeyRef.current = event.key;
-        emitChatEvent({ type: 'SCENE_SWITCH', toKey: event.key });
+        emitEvent('SCENE_SWITCH_REACT');
       }
       if (event.type === 'SFX_START') {
-        emitChatEvent({ type: 'SFX_START', sfxKey: event.sfxKey });
+        const eventMap: Record<string, string> = {
+          fan_loop: 'SFX_FAN_REACT',
+          footsteps: 'SFX_FOOTSTEPS_REACT',
+          ghost_female: 'SFX_GHOST_REACT'
+        };
+        emitEvent(eventMap[event.sfxKey] ?? 'IDLE_TICK');
       }
     });
 
     return () => unsubscribe();
   }, [state.messages]);
-
-
-  useEffect(() => {
-    emitChatEvent({ type: 'CURSE_CHANGE', value: state.curse });
-  }, [state.curse, state.messages]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -474,8 +475,8 @@ export default function App() {
           message_zh: donateSample.zh
         };
 
-        const successMessage = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' })[0] ?? {
-          id: crypto.randomUUID(), username: 'mod_live', text: '這波有穩住', language: 'zh', translation: '這波有穩住'
+        const successMessage = {
+          id: crypto.randomUUID(), username: 'mod_live', text: '這波有穩住', language: 'zh' as const, translation: '這波有穩住'
         };
         dispatch({
           type: 'ANSWER_CORRECT',
@@ -495,14 +496,10 @@ export default function App() {
         speechCooldownUntil.current = now + 10_000;
       }
 
-      emitChatEvent({ type: 'USER_SENT', text: raw, user: 'you' });
-      const wrongMessage = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' })[0] ?? {
-        id: crypto.randomUUID(),
-        username: 'chat_mod',
-        text: '這下壓力又上來了',
-        language: 'zh',
-        translation: '這下壓力又上來了'
-      };
+      const tagTarget = raw.match(/@([\w_]+)/)?.[1];
+      if (tagTarget) emitEvent('LOCK_START', { tagTarget, lockTarget: tagTarget });
+      const chats = eventEngineRef.current.trigger('USER_SENT', { messages: state.messages, tagTarget }).chats;
+      const wrongMessage = chats[0] ?? { id: crypto.randomUUID(), username: 'chat_mod', text: '這下壓力又上來了', language: 'zh', translation: '這下壓力又上來了' };
       dispatch({
         type: 'ANSWER_WRONG',
         payload: { message: wrongMessage }
