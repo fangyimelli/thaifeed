@@ -106,36 +106,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isDesktopLayout) {
-      document.documentElement.style.removeProperty('--app-vh');
-      document.documentElement.style.removeProperty('--vv-offset-top');
-      document.documentElement.style.removeProperty('--vv-offset-left');
-      return;
-    }
-
-    const updateAppVh = () => {
-      const vv = window.visualViewport;
-      const h = vv ? vv.height : window.innerHeight;
-      document.documentElement.style.setProperty('--app-vh', `${h}px`);
-      document.documentElement.style.setProperty('--vv-offset-top', `${vv ? vv.offsetTop : 0}px`);
-      document.documentElement.style.setProperty('--vv-offset-left', `${vv ? vv.offsetLeft : 0}px`);
-    };
-
-    updateAppVh();
-    window.addEventListener('resize', updateAppVh);
-    window.addEventListener('orientationchange', updateAppVh);
-    window.visualViewport?.addEventListener('resize', updateAppVh);
-    window.visualViewport?.addEventListener('scroll', updateAppVh);
-
-    return () => {
-      window.removeEventListener('resize', updateAppVh);
-      window.removeEventListener('orientationchange', updateAppVh);
-      window.visualViewport?.removeEventListener('resize', updateAppVh);
-      window.visualViewport?.removeEventListener('scroll', updateAppVh);
-    };
-  }, [isDesktopLayout]);
-
   const clearLightFearTimer = useCallback(() => {
     if (lightFearTimerRef.current) {
       window.clearTimeout(lightFearTimerRef.current);
@@ -604,25 +574,25 @@ export default function App() {
         errors={requiredAssetErrors.map(formatMissingAsset)}
       />
       {shouldShowMainContent && (
-      <main className="app-layout">
-        <div className="top-dock">
+      <main className="app-root app-layout">
+        <header className="app-header top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
-          <div className={`video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
-            {!hasFatalInitError ? (
-              <SceneView
-                targetConsonant={state.currentConsonant.letter}
-                curse={state.curse}
-                anchor={state.currentAnchor}
-                isDesktopLayout={isDesktopLayout}
-              />
-            ) : (
-              <div className="asset-warning scene-placeholder">
-                初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="chat-container input-surface">
+        </header>
+        <section className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
+          {!hasFatalInitError ? (
+            <SceneView
+              targetConsonant={state.currentConsonant.letter}
+              curse={state.curse}
+              anchor={state.currentAnchor}
+              isDesktopLayout={isDesktopLayout}
+            />
+          ) : (
+            <div className="asset-warning scene-placeholder">
+              初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
+            </div>
+          )}
+        </section>
+        <section className="chat-area chat-container input-surface">
           <ChatPanel
             messages={state.messages}
             input={input}
@@ -634,7 +604,7 @@ export default function App() {
             onAutoPauseChange={setChatAutoPaused}
             isSending={isSending}
           />
-        </div>
+        </section>
       </main>
       )}
     </div>

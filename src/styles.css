@@ -2,9 +2,6 @@
   font-family: 'Noto Sans TC', system-ui, sans-serif;
   color: #f6f6f6;
   background: #0f1117;
-  --app-vh: 100vh;
-  --vv-offset-top: 0px;
-  --vv-offset-left: 0px;
   --shell-padding: 12px;
   --shell-gap: 12px;
 }
@@ -21,30 +18,47 @@ body {
 }
 
 .app-shell {
-  min-height: 100vh;
-  height: 100vh;
   position: relative;
   padding: var(--shell-padding);
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.app-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .app-layout {
-  min-height: calc(100vh - (var(--shell-padding) * 2));
-  height: calc(100vh - (var(--shell-padding) * 2));
-  display: grid;
-  grid-template-columns: 2fr 1fr;
   gap: var(--shell-gap);
-  overflow: hidden;
 }
 
-.top-dock,
+.app-header,
+.video-area,
+.chat-area,
 .chat-container {
   min-height: 0;
 }
 
+.app-header,
 .top-dock {
   display: flex;
   flex-direction: column;
+}
+
+.video-area {
+  flex: 0 0 auto;
+}
+
+.chat-area,
+.chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .loading-overlay {
@@ -89,14 +103,30 @@ body {
   overflow: hidden;
 }
 
+@media (min-width: 1024px) {
+  .app-root.app-layout {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "header chat"
+      "video chat";
+    height: 100%;
+  }
+
+  .app-header { grid-area: header; }
+  .video-area { grid-area: video; }
+  .chat-area { grid-area: chat; }
+}
+
 .chat-container {
   overflow: hidden;
 }
 
 .chat-panel {
   height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: #111316;
   border: 1px solid #2b2d31;
@@ -110,6 +140,12 @@ body {
   border-bottom: 1px solid #2b2d33;
   font-size: 13px;
   background: #1a1c21;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-list {
@@ -153,8 +189,7 @@ body {
 .jump-bottom { position: absolute; right: 14px; bottom: 72px; border: none; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: #2f6eff; color: #fff; cursor: pointer; z-index: 2; }
 
 .chat-input {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -234,29 +269,22 @@ body {
   }
 
   html,
-  body {
-    height: var(--app-vh);
-    overflow: hidden;
-  }
-
+  body,
   #root,
   .app-shell {
-    height: var(--app-vh);
+    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
   }
 
-  .app-layout {
+  .app-root.app-layout {
     height: 100%;
     min-height: 0;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
-    overflow: hidden;
   }
 
+  .app-header,
   .top-dock {
-    position: sticky;
-    top: 0;
     z-index: 30;
     background: #0f1117;
   }
@@ -318,11 +346,6 @@ body {
     border-top: none;
   }
 
-  .chat-input {
-    position: sticky;
-    bottom: 0;
-  }
-
   .glyph-blink {
     font-size: clamp(52px, 13vw, 84px);
   }
@@ -348,7 +371,7 @@ body {
 .boot-debug-badge.is-ok { color: #91e6bf; border-color: #2f7a5a; }
 .boot-debug-badge.is-fail { color: #ffb0b0; border-color: #8a3a3a; }
 
-.boot-fallback { min-height: var(--app-vh); display: grid; place-content: center; gap: 8px; padding: 24px; background: #0a0d13; color: #f4f4f4; text-align: center; }
+.boot-fallback { height: 100vh; height: 100dvh; display: grid; place-content: center; gap: 8px; padding: 24px; background: #0a0d13; color: #f4f4f4; text-align: center; }
 .loading-error-block { margin-top: 8px; text-align: left; max-width: 620px; background: rgba(30, 14, 14, 0.7); border: 1px solid #8a3a3a; border-radius: 8px; padding: 12px; }
 .loading-error-block ul { margin: 8px 0; padding-left: 18px; }
 .scene-placeholder,

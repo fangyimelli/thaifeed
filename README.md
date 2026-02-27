@@ -248,21 +248,16 @@ npm run dev
 - **DesktopLayout（>=1024px）**
   - 回復桌機雙欄：左側影片區、右側聊天室。
   - 使用一般頁面高度與可捲動行為，不套用 mobile 專用 `overflow:hidden`。
-  - 不啟用 `visualViewport` 監聽，也不做 `--app-vh` 高度重算。
+  - 不做 mobile 專用高度變數重算，桌機維持原始雙欄與滾動行為。
 - **MobileLayout（<1024px）**
   - 維持三區塊：`TopDock`（頂部固定）/ `ChatScroll`（可捲動）/ `InputDock`（底部固定）。
-  - 啟用 `--app-vh` + `visualViewport` 監聽，確保鍵盤彈出時輸入列可見。
-  - `html/body/#root/.app-shell` 在 mobile 下改為固定高度並禁止整頁滾動，避免鍵盤導致整頁亂跳。
+  - 啟用 `100dvh` + `visualViewport.resize` 捲底修正，確保鍵盤彈出時 header 與聊天輸入區不消失。
+  - `html/body/#root/.app-shell` 在 mobile 下固定為 viewport 高度並禁止整頁滾動，避免鍵盤導致整頁亂跳。
 
-### 為何 Mobile 需要 `--app-vh`
+### 為何 Desktop 不做行動端鍵盤補償
 
-- 手機鍵盤彈出時，瀏覽器可視區高度會變動，且 `100vh` 在不同瀏覽器不穩定。
-- 使用 `visualViewport.height` 寫入 `--app-vh` 後，版面高度可跟著真實可視區更新，InputDock 不會被鍵盤吃掉。
-
-### 為何 Desktop 不使用 `visualViewport` 修正
-
-- 桌機通常沒有行動鍵盤遮擋問題，套用行動端高度重算會造成不必要的高度抖動與版面壓縮。
-- 因此桌機明確關閉 `--app-vh` 寫入與 `visualViewport` 監聽，保持原本穩定雙欄布局。
+- 桌機通常沒有行動鍵盤遮擋問題，套用行動端補償會造成不必要的高度抖動與版面壓縮。
+- 因此桌機維持穩定雙欄布局，不加 mobile 專用鍵盤捲底策略。
 
 
 ### 手機影片不裁切修正（2026-02）
@@ -283,6 +278,14 @@ npm run dev
 
 - `app-shell` 與 `app-layout` 現在固定為 viewport 高度並禁止外層滾動，避免主頁在聊天訊息增加時把影片一起推上/推下。
 - 聊天滾動仍由 `.chat-list` 承擔（`overflow-y:auto`），確保只滾聊天室內容，影片區維持固定。
+
+
+## Mobile layout 設計規則
+
+- 避免 `100vh`：行動瀏覽器在鍵盤彈出時，`100vh` 常包含或錯算 URL bar / 系統 UI，容易造成黑畫面、header 被推離視窗、聊天室高度崩潰。
+- 改用 `100dvh`：所有主佈局高度改為 `height: 100dvh`（必要 fallback 時採 `height: 100vh; height: 100dvh;`，並確保 `100dvh` 在最後）。
+- 採用 flex column 三區塊：`app-root` 內固定 `Header`、`VideoArea`，並讓 `ChatArea` 以 `flex:1` 佔剩餘空間；訊息列表使用獨立捲動容器，禁止 body scroll。
+- `visualViewport` 修正：監聽 `visualViewport.resize`，當偵測鍵盤打開時自動將聊天室捲到最底；訊息送出後依序 `blur input -> window.scrollTo(0,0) -> chat scrollTop=scrollHeight`，避免焦點/視窗殘留位移。
 
 ## 回歸檢查摘要
 
