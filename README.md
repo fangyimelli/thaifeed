@@ -101,12 +101,13 @@ npm run dev
 ### WebAudio 交疊循環做法
 
 - 單例 `AudioEngine`：只建立一次 `AudioContext`（lazy init），`fetch + decodeAudioData` 後快取 `AudioBuffer`。
-- 使用雙 `AudioBufferSourceNode` 交替排程，在每段尾端進行 `~60ms` crossfade：
-  - `sourceA` 先播。
-  - `sourceB` 於 `A.duration - xfade` 進場。
-  - `A gain: 1 -> 0`，`B gain: 0 -> 1`。
-- 每次 start/stop 都透過 GainNode 做 attack/release（避免硬切 `stop()` 產生 click）。
-- `fan_loop` 與影片切換解耦：切換 loop/loop2/loop3 不會重建或重播 fan。
+- `fan_loop` 改為「提前排程」模型，不使用 `onended`：
+  - `nextStartTime` 初始為 `audioContext.currentTime`。
+  - 每次建立新的 `AudioBufferSourceNode + GainNode`，並直接排入時間軸。
+  - 下一段開始時間固定為 `endTime - xfade`（目前 `xfade=2s`）。
+  - 使用 `setTimeout(duration - xfade - 1s)` 提前排下一段，避免等待尾端才觸發。
+- fade 參數：淡入 `0.3s`、淡出 `2s`，以降低邊界可聽縫隙。
+- `fan_loop` 與影片切換解耦：切換 loop/loop2/loop3 不會重建 fan source，也不會重新 decode。
 
 ### iOS / visibility 注意事項
 
@@ -120,7 +121,8 @@ npm run dev
 
 - `audioContext.state`
 - `fan playing/currentTime`
-- `fan nextCrossfadeAt/bufferDuration`
+- `fan nextStartTime/xfade/currentTime/scheduled`
+- `fan bufferDuration`
 - `fan lastRestartReason/mode`
 
 若上述欄位持續更新且 `fan playing=true`，代表 fan loop 排程持續運作。

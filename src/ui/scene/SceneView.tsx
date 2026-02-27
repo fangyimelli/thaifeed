@@ -98,7 +98,9 @@ type AudioDebugState = {
     contextState: AudioContextState | 'unsupported';
     playing: boolean;
     currentTime: number;
-    nextCrossfadeAt: number | null;
+    nextStartTime: number | null;
+    xfadeSec: number;
+    hasScheduledNext: boolean;
     bufferDuration: number | null;
     lastRestartReason: string | null;
   };
@@ -238,7 +240,9 @@ export default function SceneView({
         contextState: 'unsupported',
         playing: false,
         currentTime: 0,
-        nextCrossfadeAt: null,
+        nextStartTime: null,
+        xfadeSec: 2,
+        hasScheduledNext: false,
         bufferDuration: null,
         lastRestartReason: null
       },
@@ -1204,7 +1208,9 @@ export default function SceneView({
         contextState: 'unsupported',
         playing: false,
         currentTime: 0,
-        nextCrossfadeAt: null,
+        nextStartTime: null,
+        xfadeSec: 2,
+        hasScheduledNext: false,
         bufferDuration: null,
         lastRestartReason: null
       },
@@ -1511,7 +1517,8 @@ export default function SceneView({
           <div>activeKey(audio): {window.__AUDIO_DEBUG__?.activeVideoKey ?? '-'}</div>
           <div>audioContext.state: {window.__AUDIO_DEBUG__?.fanState?.contextState ?? '-'}</div>
           <div>fan playing/currentTime: {String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)} / {(window.__AUDIO_DEBUG__?.fanState?.currentTime ?? 0).toFixed(2)}</div>
-          <div>fan nextCrossfadeAt/bufferDuration: {window.__AUDIO_DEBUG__?.fanState?.nextCrossfadeAt?.toFixed?.(2) ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.bufferDuration?.toFixed?.(2) ?? '-'}</div>
+          <div>fan nextStartTime/xfade/currentTime/scheduled: {window.__AUDIO_DEBUG__?.fanState?.nextStartTime?.toFixed?.(2) ?? '-'} / {(window.__AUDIO_DEBUG__?.fanState?.xfadeSec ?? 0).toFixed(2)} / {(window.__AUDIO_DEBUG__?.fanState?.currentTime ?? 0).toFixed(2)} / {String(window.__AUDIO_DEBUG__?.fanState?.hasScheduledNext ?? false)}</div>
+          <div>fan bufferDuration: {window.__AUDIO_DEBUG__?.fanState?.bufferDuration?.toFixed?.(2) ?? '-'}</div>
           <div>fan lastRestartReason/mode: {window.__AUDIO_DEBUG__?.fanState?.lastRestartReason ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.mode ?? '-'}</div>
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'} | fan[{String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)}]</div>
