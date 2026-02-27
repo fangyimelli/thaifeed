@@ -116,8 +116,8 @@ type VideoDebugState = {
   currentReadyState: number | null;
   currentPaused: boolean | null;
   jumpCandidates: OldhouseLoopKey[];
-  pickedJumpKey: OldhouseLoopKey | null;
-  pickedJumpUrl: string | null;
+  plannedJumpKey: OldhouseLoopKey | null;
+  plannedJumpUrl: string | null;
   lastFallback: { fromKey: OldhouseLoopKey | null; toKey: OldhouseLoopKey | null; reason: string } | null;
   unavailableJumps: Array<{ key: OldhouseLoopKey; reason: string }>;
   sceneMapDigest: Record<OldhouseLoopKey, string>;
@@ -174,6 +174,7 @@ export default function SceneView({
   const isAudioStartedRef = useRef(false);
   const switchCounterRef = useRef(0);
   const nextJumpAtRef = useRef<number | null>(null);
+  const plannedJumpRef = useRef<{ key: OldhouseLoopKey; url: string } | null>(null);
   const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('debug') === '1';
@@ -248,8 +249,8 @@ export default function SceneView({
       currentReadyState: null,
       currentPaused: null,
       jumpCandidates: [],
-      pickedJumpKey: null,
-      pickedJumpUrl: null,
+      plannedJumpKey: null,
+      plannedJumpUrl: null,
       lastFallback: null,
       unavailableJumps: [],
       sceneMapDigest: SCENE_MAP_DIGEST,
@@ -527,8 +528,8 @@ export default function SceneView({
     if (candidates.length === 0) {
       const reason = `no-jump-candidates:${unavailable.map((item) => `${item.key}:${item.reason}`).join(',') || 'empty'}`;
       updateVideoDebug({
-        pickedJumpKey: null,
-        pickedJumpUrl: null,
+        plannedJumpKey: null,
+        plannedJumpUrl: null,
         lastError: reason,
         lastFallback: { fromKey: null, toKey: MAIN_LOOP, reason }
       });
@@ -545,8 +546,8 @@ export default function SceneView({
     if (picked === MAIN_LOOP) {
       const reason = `picked-main-after-retry:${tries}`;
       updateVideoDebug({
-        pickedJumpKey: null,
-        pickedJumpUrl: null,
+        plannedJumpKey: null,
+        plannedJumpUrl: null,
         lastError: reason,
         lastFallback: { fromKey: MAIN_LOOP, toKey: MAIN_LOOP, reason }
       });
@@ -554,7 +555,7 @@ export default function SceneView({
     }
 
     const pickedUrl = getVideoUrlForKey(picked);
-    updateVideoDebug({ pickedJumpKey: picked, pickedJumpUrl: pickedUrl, lastError: null });
+    updateVideoDebug({ plannedJumpKey: picked, plannedJumpUrl: pickedUrl, lastError: null });
     console.log('[JUMP_PICK]', {
       candidates,
       pickedKey: picked,
@@ -729,6 +730,17 @@ export default function SceneView({
 
     const interval = typeof explicitDelay === 'number' ? explicitDelay : computeJumpIntervalMs(curseRef.current);
     const dueAt = Date.now() + interval;
+    try {
+      const picked = pickNextJumpKey();
+      plannedJumpRef.current = { key: picked.pickedKey, url: picked.pickedUrl };
+    } catch (error) {
+      plannedJumpRef.current = null;
+      updateVideoDebug({
+        plannedJumpKey: null,
+        plannedJumpUrl: null,
+        lastError: String(error instanceof Error ? error.message : error)
+      });
+    }
     nextJumpAtRef.current = dueAt;
     console.log('[VIDEO]', 'scheduleNextJump set timer', {
       delay: interval,
@@ -742,8 +754,13 @@ export default function SceneView({
       updateVideoDebug({ timers: { jumpTimer: null }, nextJumpAt: null });
       void triggerJumpOnce();
     }, interval);
-    updateVideoDebug({ timers: { jumpTimer: jumpTimerRef.current }, nextJumpAt: dueAt });
-  }, [computeJumpIntervalMs, updateVideoDebug]);
+    updateVideoDebug({
+      timers: { jumpTimer: jumpTimerRef.current },
+      nextJumpAt: dueAt,
+      plannedJumpKey: plannedJumpRef.current?.key ?? null,
+      plannedJumpUrl: plannedJumpRef.current?.url ?? null
+    });
+  }, [computeJumpIntervalMs, pickNextJumpKey, updateVideoDebug]);
 
   const triggerJumpOnce = useCallback(async () => {
     console.log('[VIDEO]', 'triggerJumpOnce enter', {
@@ -770,17 +787,17 @@ export default function SceneView({
 
     isInJumpRef.current = true;
     updateVideoDebug({ isInJump: true });
-    let nextKey: OldhouseLoopKey;
-    try {
-      const picked = pickNextJumpKey();
-      nextKey = picked.pickedKey;
-    } catch (error) {
+    const planned = plannedJumpRef.current;
+    if (!planned) {
       isInJumpRef.current = false;
-      updateVideoDebug({ isInJump: false, lastError: String(error instanceof Error ? error.message : error) });
+      updateVideoDebug({ isInJump: false, lastError: 'planned-jump-missing' });
       scheduleNextJump({ force: true });
       return;
     }
+    const nextKey = planned.key;
     console.log('[VIDEO]', 'triggerJumpOnce picked nextKey', { nextKey, fromKey: currentLoopKeyRef.current });
+    plannedJumpRef.current = null;
+    updateVideoDebug({ plannedJumpKey: null, plannedJumpUrl: null });
 
     try {
       await switchTo(nextKey);
@@ -832,6 +849,39 @@ export default function SceneView({
     }, fallbackDelay);
     console.log('[VIDEO]', 'triggerJumpOnce jump active', { currentKey: currentLoopKeyRef.current, fallbackDelay });
   }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, updateVideoDebug]);
+
+  const runDebugForceAction = useCallback(async (
+    action: 'FORCE_LOOP' | 'FORCE_LOOP2' | 'FORCE_MAIN' | 'FORCE_PLANNED' | 'RESCHEDULE_JUMP',
+    runner: () => Promise<void> | void
+  ) => {
+    const bufferBefore = getBufferVideoEl()?.currentSrc || getBufferVideoEl()?.src || null;
+    const currentKey = currentLoopKeyRef.current;
+    const plannedKey = plannedJumpRef.current?.key ?? null;
+    await runner();
+    const bufferAfter = getBufferVideoEl()?.currentSrc || getBufferVideoEl()?.src || null;
+    console.log('[DEBUG_FORCE]', {
+      action,
+      currentKey,
+      plannedKey,
+      bufferBefore,
+      bufferAfter
+    });
+  }, [getBufferVideoEl]);
+
+  const forcePlannedJumpNow = useCallback(async () => {
+    const planned = plannedJumpRef.current;
+    if (!planned) {
+      updateVideoDebug({ lastError: 'force-planned-missing' });
+      return;
+    }
+    plannedJumpRef.current = null;
+    updateVideoDebug({ plannedJumpKey: null, plannedJumpUrl: null, nextJumpAt: null, timers: { jumpTimer: null } });
+    if (jumpTimerRef.current) {
+      window.clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = null;
+    }
+    await switchTo(planned.key);
+  }, [switchTo, updateVideoDebug]);
 
   const handleEnded = useCallback((event?: Event) => {
     const activeKey = currentLoopKeyRef.current;
@@ -1010,8 +1060,8 @@ export default function SceneView({
       currentReadyState: null,
       currentPaused: null,
       jumpCandidates: [],
-      pickedJumpKey: null,
-      pickedJumpUrl: null,
+      plannedJumpKey: null,
+      plannedJumpUrl: null,
       lastFallback: null,
       unavailableJumps: [],
       sceneMapDigest: SCENE_MAP_DIGEST,
@@ -1303,6 +1353,7 @@ export default function SceneView({
       )}
 
       {debugEnabled && (
+        <>
         <div className="video-debug-overlay" aria-live="polite">
           <div>currentKey: {videoDebug?.currentKey ?? '-'}</div>
           <div>currentEl: {videoDebug?.activeVideoId ?? '-'} | src: {trimSrc(videoDebug?.activeVideoSrc)}</div>
@@ -1315,7 +1366,7 @@ export default function SceneView({
           </div>
           <div>currentEl readyState/paused: {videoDebug?.currentReadyState ?? '-'} / {String(videoDebug?.currentPaused ?? false)}</div>
           <div>jumpCandidates: {(videoDebug?.jumpCandidates ?? []).join(', ') || '-'}</div>
-          <div>pickedJumpKey/pickedJumpUrl: {videoDebug?.pickedJumpKey ?? '-'} / {trimSrc(videoDebug?.pickedJumpUrl)}</div>
+          <div>plannedJumpKey/plannedJumpUrl: {videoDebug?.plannedJumpKey ?? '-'} / {trimSrc(videoDebug?.plannedJumpUrl)}</div>
           <div>unavailableJumps: {(videoDebug?.unavailableJumps ?? []).map((item) => `${item.key}(${item.reason})`).join(', ') || '-'}</div>
           <div>
             lastFallback: {videoDebug?.lastFallback ? `${videoDebug.lastFallback.fromKey ?? '-'} -&gt; ${videoDebug.lastFallback.toKey ?? '-'} (${videoDebug.lastFallback.reason})` : '-'}
@@ -1327,6 +1378,17 @@ export default function SceneView({
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'}</div>
         </div>
+
+        <div className="video-debug-controls-panel">
+          <div className="video-debug-controls">
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP', () => switchTo('oldhouse_room_loop')); }}>▶ Force LOOP</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP2', () => switchTo('oldhouse_room_loop2')); }}>▶ Force LOOP2</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_MAIN', () => switchTo('oldhouse_room_loop3')); }}>▶ Force MAIN</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_PLANNED', forcePlannedJumpNow); }}>⚡ Force Planned Jump Now</button>
+            <button type="button" onClick={() => { void runDebugForceAction('RESCHEDULE_JUMP', () => scheduleNextJump({ force: true })); }}>🔁 Reschedule Jump</button>
+          </div>
+        </div>
+        </>
       )}
 
       <button
