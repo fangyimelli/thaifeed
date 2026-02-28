@@ -523,9 +523,20 @@ npm run dev
 - `is_sending`：前一次送出尚在進行中。
 - `cooldown_active`：送出冷卻時間未結束。
 - `empty_input`：輸入為空。
-- `chat_auto_paused`：聊天室自動暫停中。
 - `is_composing`：IME 組字中（例如中文輸入法）。
 - `self_tag_ignored`：檢測到自己 tag 自己，已自動解除 target（不中斷送出流程）。
+
+### Auto Pause 與送出整合規則
+
+- `chatAutoPaused` 只影響自動聊天排程（scheduler tick / auto enqueue），不影響使用者送出。
+- `canSendComputed` 不再包含 `chatAutoPaused` 條件。
+- 使用者送出成功後，若當下 `chatAutoPaused === true`：
+  - 會強制切回 `false`；
+  - 會重啟 scheduler tick（透過 restart key 觸發 effect 重建）。
+- Debug 欄位持續保留：
+  - `chat.autoPaused`
+  - `ui.send.lastResult`
+  - `canSendComputed`
 
 ### Guard / reason code 一覽
 

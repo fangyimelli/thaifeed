@@ -137,6 +137,7 @@ export default function App() {
   const [initStatusText, setInitStatusText] = useState('初始化中');
   const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
+  const [chatTickRestartKey, setChatTickRestartKey] = useState(0);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
@@ -426,7 +427,7 @@ export default function App() {
     };
     timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, isReady, state.messages]);
+  }, [chatAutoPaused, chatTickRestartKey, isReady, state.messages]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
@@ -735,12 +736,12 @@ export default function App() {
             tagLockActive: Boolean(replyTarget || mentionTarget),
             replyTarget,
             mentionTarget,
-            canSendComputed: isReady && !isSending && input.trim().length > 0 && !chatAutoPaused && !(debugComposingOverride ?? isComposing)
+            canSendComputed: isReady && !isSending && input.trim().length > 0 && !(debugComposingOverride ?? isComposing)
           }
         }
       }
     });
-  }, [chatAutoPaused, debugComposingOverride, input, isComposing, isReady, isSending, mentionTarget, replyTarget, sendDebug, updateChatDebug]);
+  }, [debugComposingOverride, input, isComposing, isReady, isSending, mentionTarget, replyTarget, sendDebug, updateChatDebug]);
 
   const submitChat = useCallback(async (rawText: string, source: SendSource): Promise<SendResult> => {
     const now = Date.now();
@@ -773,7 +774,6 @@ export default function App() {
 
     const raw = rawText.trim();
     if (!raw) return markBlocked('empty_input');
-    if (chatAutoPaused) return markBlocked('chat_auto_paused');
     if (debugComposingOverride ?? isComposing) return markBlocked('is_composing');
 
     let nextReplyTarget = replyTarget;
@@ -801,6 +801,16 @@ export default function App() {
       lastAttemptAt: now,
       blockedReason: '',
       errorMessage: ''
+    };
+    const markSent = (mode: string): SendResult => {
+      if (chatAutoPaused) {
+        setChatAutoPaused(false);
+        setChatTickRestartKey((prev) => prev + 1);
+      }
+      const next = { ...attemptDebug, lastResult: 'sent' as const };
+      setSendDebug(next);
+      logSendDebug('sent', { source, mode, autoResumed: chatAutoPaused });
+      return { ok: true, status: 'sent' };
     };
     setSendDebug(attemptDebug);
     logSendDebug('attempt', { source, inputLen: raw.length, submitDelayMs });
@@ -845,10 +855,7 @@ export default function App() {
         handlePass();
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        const next = { ...attemptDebug, lastResult: 'sent' as const };
-        setSendDebug(next);
-        logSendDebug('sent', { source, mode: 'pass' });
-        return { ok: true, status: 'sent' };
+        return markSent('pass');
       }
 
       const isHintInput = isVipHintCommand(raw);
@@ -871,10 +878,7 @@ export default function App() {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        const next = { ...attemptDebug, lastResult: 'sent' as const };
-        setSendDebug(next);
-        logSendDebug('sent', { source, mode: 'hint' });
-        return { ok: true, status: 'sent' };
+        return markSent('hint');
       }
 
       if (isAnswerCorrect(raw, playableConsonant)) {
@@ -900,10 +904,7 @@ export default function App() {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        const next = { ...attemptDebug, lastResult: 'sent' as const };
-        setSendDebug(next);
-        logSendDebug('sent', { source, mode: 'answer_correct' });
-        return { ok: true, status: 'sent' };
+        return markSent('answer_correct');
       }
 
       const speechHit = parsePlayerSpeech(raw);
@@ -925,10 +926,7 @@ export default function App() {
       setInput('');
       sendCooldownUntil.current = Date.now() + 350;
       tagSlowActiveRef.current = false;
-      const next = { ...attemptDebug, lastResult: 'sent' as const };
-      setSendDebug(next);
-      logSendDebug('sent', { source, mode: 'answer_wrong' });
-      return { ok: true, status: 'sent' };
+      return markSent('answer_wrong');
     } catch (error) {
       const errorMessage = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
       const next = {
