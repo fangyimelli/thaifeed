@@ -614,6 +614,20 @@ npm run dev
   - cooldown 若超過預期 3 倍視為 stale，會自動 reset 並記錄 debug。
   - 事件載入失敗採 backoff（5~12 秒）重排，不阻塞整體 pipeline。
 
+## chat_auto_paused 與事件排程邊界
+
+- `chat_auto_paused` 只允許影響聊天室自動訊息 pacing（`chatEngine.tick` 與強制 base message）。
+- `chat_auto_paused` 不得阻擋事件 scheduler、影片切換 scheduler、或音效播放（含 `fan_loop` 連續播放）。
+- `event.scheduler.blockedReason` 與 `event.blocking.schedulerBlockedReason` 僅允許反映事件層互斥（例如 `app_not_started`、`lock_active`），不再出現 `chat_auto_paused`。
+
+### Debug 指標（新增/強化）
+
+- `event.registry.count`
+- `event.registry.keys`
+- `chat.activeUsers.count`
+- `chat.activeUsers.nameSample`（最多 6 位）
+- `chat.autoPaused`
+
 ## Anti-Overanalysis Lint
 
 - 禁止句型：

@@ -313,6 +313,7 @@ export default function App() {
   const eventLastVariantIdRef = useRef('-');
   const eventLastKeyRef = useRef('-');
   const eventLastAtRef = useRef(0);
+  const eventNextDueAtRef = useRef(0);
 
 
   useEffect(() => {
@@ -572,7 +573,7 @@ export default function App() {
     return true;
   }, [updateEventDebug]);
 
-  const tryTriggerStoryEvent = useCallback((raw: string) => {
+  const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
     const activeUsers = collectActiveUsers(state.messages);
     const target = activeUsers.length > 0 ? pickOne(activeUsers) : null;
@@ -581,7 +582,7 @@ export default function App() {
 
     if (!appStarted) return;
 
-    if (pending && now <= pending.expiresAt) {
+    if (source === 'user_input' && pending && now <= pending.expiresAt) {
       const repliedYes = /有/.test(raw);
       const repliedNo = /沒有/.test(raw);
       const repliedBrave = /不怕/.test(raw);
@@ -627,6 +628,10 @@ export default function App() {
       return;
     }
 
+    if (pending && now > pending.expiresAt) {
+      pendingReplyEventRef.current = null;
+    }
+
     const gateRejectSummary: Record<string, number> = {};
     if (!target) gateRejectSummary.need_activeUsers = 1;
     if (isLocked) gateRejectSummary.locked = 1;
@@ -638,7 +643,7 @@ export default function App() {
     const can = (key: StoryEventKey, cooldownMs: number) => (eventCooldownsRef.current[key] ?? 0) <= now && (eventCooldownsRef.current[key] = now + cooldownMs, true);
 
     if (activeUsers.length >= 1 && Math.random() < 0.08 && can('VOICE_CONFIRM', 90_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'VOICE_CONFIRM';
       eventLastAtRef.current = now;
       postEventLine(target, 'VOICE_CONFIRM', 'opener');
@@ -646,7 +651,7 @@ export default function App() {
       return;
     }
     if (activeUsers.length >= 3 && (cooldownsRef.current.ghost_ping_actor ?? 0) <= now && Math.random() < 0.06 && can('GHOST_PING', 120_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'GHOST_PING';
       eventLastAtRef.current = now;
       postEventLine(target, 'GHOST_PING', 'opener');
@@ -655,7 +660,7 @@ export default function App() {
       return;
     }
     if (activeUsers.length >= 3 && (cooldownsRef.current.loop4 ?? 0) <= now && Math.random() < 0.07 && can('TV_EVENT', 90_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'TV_EVENT';
       eventLastAtRef.current = now;
       postEventLine(target, 'TV_EVENT', 'opener');
@@ -664,7 +669,7 @@ export default function App() {
       return;
     }
     if (Math.random() < 0.06 && can('NAME_CALL', 90_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'NAME_CALL';
       eventLastAtRef.current = now;
       postEventLine(target, 'NAME_CALL', 'opener');
@@ -672,7 +677,7 @@ export default function App() {
       return;
     }
     if (Math.random() < 0.06 && can('VIEWER_SPIKE', 90_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'VIEWER_SPIKE';
       eventLastAtRef.current = now;
       postEventLine(target, 'VIEWER_SPIKE', 'opener');
@@ -680,7 +685,7 @@ export default function App() {
       return;
     }
     if (Math.random() < 0.05 && can('LIGHT_GLITCH', 90_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'LIGHT_GLITCH';
       eventLastAtRef.current = now;
       postEventLine(target, 'LIGHT_GLITCH', 'opener');
@@ -689,7 +694,7 @@ export default function App() {
       return;
     }
     if (Math.random() < 0.06 && can('FEAR_CHALLENGE', 90_000)) {
-      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
       eventLastKeyRef.current = 'FEAR_CHALLENGE';
       eventLastAtRef.current = now;
       postEventLine(target, 'FEAR_CHALLENGE', 'opener');
@@ -854,19 +859,24 @@ export default function App() {
       eventTickCountRef.current += 1;
       eventLastTickAtRef.current = now;
       const topicWeights = getCurrentTopicWeights(now);
-      const timedChats = chatEngineRef.current.tick(now);
+      const timedChats = chatAutoPaused ? [] : chatEngineRef.current.tick(now);
       dispatchTimedChats(timedChats);
       syncChatEngineDebug();
+      tryTriggerStoryEvent('', 'scheduler_tick');
       emitChatEvent({ type: 'IDLE_TICK', topicWeights });
-      if (Date.now() - lastChatMessageAtRef.current > 2500) {
+      if (!chatAutoPaused && Date.now() - lastChatMessageAtRef.current > 2500) {
         dispatchForcedBaseMessage();
       }
-      timer = window.setTimeout(tick, nextInterval());
+      const delay = nextInterval();
+      eventNextDueAtRef.current = Date.now() + delay;
+      timer = window.setTimeout(tick, delay);
     };
 
-    timer = window.setTimeout(tick, nextInterval());
+    const initialDelay = nextInterval();
+    eventNextDueAtRef.current = Date.now() + initialDelay;
+    timer = window.setTimeout(tick, initialDelay);
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, getCurrentTopicWeights, isReady, state.curse, state.messages]);
+  }, [chatAutoPaused, getCurrentTopicWeights, isReady, state.curse, state.messages, syncChatEngineDebug, tryTriggerStoryEvent]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
@@ -1085,8 +1095,8 @@ export default function App() {
     const timer = window.setInterval(() => {
       const now = Date.now();
       const activeUsers = collectActiveUsers(state.messages);
-      const nextDueAt = Math.max(now, lastChatMessageAtRef.current + 1600);
-      const schedulerBlockedReason = !appStarted ? 'app_not_started' : (chatAutoPaused ? 'chat_auto_paused' : (lockStateRef.current.isLocked ? 'lock_active' : '-'));
+      const nextDueAt = Math.max(now, eventNextDueAtRef.current || now);
+      const schedulerBlockedReason = !appStarted ? 'app_not_started' : (lockStateRef.current.isLocked ? 'lock_active' : '-');
       const schedulerBlocked = schedulerBlockedReason !== '-';
       const snapshot = {
         registry: {
@@ -1131,9 +1141,11 @@ export default function App() {
         event: snapshot,
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          autoPaused: chatAutoPaused,
           activeUsers: {
             count: activeUsers.length,
-            namesSample: activeUsers.slice(0, 10)
+            nameSample: activeUsers.slice(0, 6),
+            namesSample: activeUsers.slice(0, 6)
           }
         }
       } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
@@ -1352,7 +1364,7 @@ export default function App() {
       if (lockStateRef.current.isLocked && lockStateRef.current.target && tagTarget && tagTarget !== lockStateRef.current.target) {
         return markBlocked('lock_target_mismatch');
       }
-      tryTriggerStoryEvent(raw);
+      tryTriggerStoryEvent(raw, 'user_input');
       const chats = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' }, Date.now());
       const wrongMessage = chats[0] ?? { id: crypto.randomUUID(), username: 'chat_mod', text: '這下壓力又上來了', language: 'zh', translation: '這下壓力又上來了' };
       dispatch({
