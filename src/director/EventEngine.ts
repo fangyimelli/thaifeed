@@ -55,6 +55,7 @@ function mapEventToType(key: EventKey): ChatMessageType {
 
 export class EventEngine {
   private cooldowns = new Map<string, number>();
+  private cooldownMeta = new Map<string, { setAt: number; expectedMs: number }>();
   private queue: QueueItem[] = [];
   private recentVariantIds: string[] = [];
   private recentTones: string[] = [];
@@ -87,10 +88,15 @@ export class EventEngine {
 
     this.rememberVariant(variant);
     this.cooldowns.set(spec.key, now + spec.cooldownMs);
+    this.cooldownMeta.set(spec.key, { setAt: now, expectedMs: spec.cooldownMs });
     if (spec.sharedCooldownKey) this.cooldowns.set(spec.sharedCooldownKey, now + spec.cooldownMs);
+    if (spec.sharedCooldownKey) this.cooldownMeta.set(spec.sharedCooldownKey, { setAt: now, expectedMs: spec.cooldownMs });
     if (spec.sfxPlan) {
       const sfx = getSfxSpec(spec.sfxPlan.key);
-      if (sfx?.cooldownMs) this.cooldowns.set(`sfx:${sfx.key}`, now + sfx.cooldownMs);
+      if (sfx?.cooldownMs) {
+        this.cooldowns.set(`sfx:${sfx.key}`, now + sfx.cooldownMs);
+        this.cooldownMeta.set(`sfx:${sfx.key}`, { setAt: now, expectedMs: sfx.cooldownMs });
+      }
       this.deps.playSfx(spec.sfxPlan.key, `event:${key}`, spec.sfxPlan.delayMs);
     }
     if (spec.scenePlan) {
@@ -153,6 +159,33 @@ export class EventEngine {
       queueLength: this.queue.length,
       blockedReasons: Object.fromEntries(this.blockedReasons)
     };
+  }
+
+  getCooldownSnapshot(): Record<string, number> {
+    return Object.fromEntries(this.cooldowns.entries());
+  }
+
+  resetStaleCooldowns(now = Date.now()): string[] {
+    const staleKeys: string[] = [];
+    for (const [key, until] of this.cooldowns.entries()) {
+      const meta = this.cooldownMeta.get(key);
+      if (!meta) continue;
+      const staleThreshold = meta.setAt + meta.expectedMs * 3;
+      if (until > now && now > staleThreshold) {
+        this.cooldowns.delete(key);
+        this.cooldownMeta.delete(key);
+        staleKeys.push(key);
+      }
+    }
+    if (staleKeys.length > 0) {
+      this.setDebug('SYSTEM', `stale_cooldown_reset:${staleKeys.join(',')}`);
+    }
+    return staleKeys;
+  }
+
+  resetLocks(): void {
+    this.lockState = { isLocked: false, target: null, startedAt: 0 };
+    this.queue = [];
   }
 
   private checkBlocked(spec: (typeof EVENT_REGISTRY)[string], now: number, activeUsers: number): string | null {
