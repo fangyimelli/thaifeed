@@ -231,8 +231,11 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
+const EVENT_REGISTRY_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_EVENT', 'NAME_CALL', 'VIEWER_SPIKE', 'LIGHT_GLITCH', 'FEAR_CHALLENGE'];
+
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const isDebugRoute = window.location.pathname.replace(/\/+$/, '').endsWith('/debug');
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -300,6 +303,16 @@ export default function App() {
     FEAR_CHALLENGE: []
   });
   const globalRecentContentIdsRef = useRef<string[]>([]);
+  const eventTickCountRef = useRef(0);
+  const eventLastTickAtRef = useRef(0);
+  const eventLastCandidateCountRef = useRef(0);
+  const eventLastCandidateKeysRef = useRef<string[]>([]);
+  const eventGateRejectSummaryRef = useRef<Record<string, number>>({});
+  const eventLastComputedAtRef = useRef(0);
+  const eventLastReasonRef = useRef('INIT');
+  const eventLastVariantIdRef = useRef('-');
+  const eventLastKeyRef = useRef('-');
+  const eventLastAtRef = useRef(0);
 
 
   useEffect(() => {
@@ -367,9 +380,18 @@ export default function App() {
     dispatch({ type: 'AUDIENCE_MESSAGE', payload: linted.message });
   };
 
-  const syncChatEngineDebug = () => {
+  const syncChatEngineDebug = useCallback(() => {
     const engineDebug = chatEngineRef.current.getDebugState() as {
       lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
+      activeUsers?: string[];
+      activeUsersCount?: number;
+      pacing?: {
+        mode?: 'normal' | 'slowed' | 'locked_slowed';
+        baseRate?: number;
+        currentRate?: number;
+        jitterEnabled?: boolean;
+        nextMessageDueInSec?: number;
+      };
     };
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
@@ -379,10 +401,21 @@ export default function App() {
           lastRejectedText: engineDebug.lint?.lastRejectedText ?? '-',
           lastRejectedReason: engineDebug.lint?.lastRejectedReason ?? '-',
           rerollCount: engineDebug.lint?.rerollCount ?? 0
+        },
+        activeUsers: {
+          count: engineDebug.activeUsersCount ?? engineDebug.activeUsers?.length ?? 0,
+          namesSample: (engineDebug.activeUsers ?? []).slice(0, 10)
+        },
+        pacing: {
+          mode: engineDebug.pacing?.mode ?? 'normal',
+          baseRate: engineDebug.pacing?.baseRate ?? 0,
+          currentRate: engineDebug.pacing?.currentRate ?? 0,
+          jitterEnabled: engineDebug.pacing?.jitterEnabled ?? true,
+          nextMessageDueInSec: engineDebug.pacing?.nextMessageDueInSec ?? 0
         }
       }
     };
-  };
+  }, []);
 
   const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
     const chats = chatEngineRef.current.emit(event, Date.now());
@@ -442,7 +475,7 @@ export default function App() {
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
         scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), lastFiredAt: fireAt, nextDueAt: fireAt + durationMs },
-        lastEvent: `reaction:${topic}`
+        lastEventLabel: `reaction:${topic}`
       }
     });
   }, [emitChatEvent, markEventTopicBoost, updateEventDebug]);
@@ -473,6 +506,7 @@ export default function App() {
   const postEventLine = useCallback((target: string, eventKey: StoryEventKey, phase: EventLinePhase) => {
     markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
     const picked = pickEventLine(eventKey, phase);
+    eventLastVariantIdRef.current = picked.option.id;
     const loreLevel = state.curse >= 70 ? 3 : state.curse >= 40 ? 2 : 1;
     const lore = ghostLoreRef.current.inject({
       fragment: picked.option.text,
@@ -488,7 +522,7 @@ export default function App() {
       contentRepeatBlocked: picked.repeatBlocked,
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
-        lastEvent: `event:${eventKey}:${phase}`
+        lastEventLabel: `event:${eventKey}:${phase}`
       }
     });
     dispatchAudienceMessage({
@@ -530,7 +564,7 @@ export default function App() {
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
         scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), cooldowns: { ...cooldownsRef.current } },
-        lastEvent: options.reason
+        lastEventLabel: options.reason
       },
       lastGhostSfxReason: key === 'ghost_female' ? options.reason : window.__CHAT_DEBUG__?.lastGhostSfxReason,
       violation: violation ? `ghost_female source=${options.source}` : window.__CHAT_DEBUG__?.violation
@@ -593,43 +627,71 @@ export default function App() {
       return;
     }
 
+    const gateRejectSummary: Record<string, number> = {};
+    if (!target) gateRejectSummary.need_activeUsers = 1;
+    if (isLocked) gateRejectSummary.locked = 1;
+    eventLastComputedAtRef.current = now;
+    eventLastCandidateKeysRef.current = EVENT_REGISTRY_KEYS.slice(0, 10);
+    eventLastCandidateCountRef.current = target && !isLocked ? EVENT_REGISTRY_KEYS.length : 0;
+    eventGateRejectSummaryRef.current = gateRejectSummary;
     if (!target || isLocked) return;
     const can = (key: StoryEventKey, cooldownMs: number) => (eventCooldownsRef.current[key] ?? 0) <= now && (eventCooldownsRef.current[key] = now + cooldownMs, true);
 
     if (activeUsers.length >= 1 && Math.random() < 0.08 && can('VOICE_CONFIRM', 90_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'VOICE_CONFIRM';
+      eventLastAtRef.current = now;
       postEventLine(target, 'VOICE_CONFIRM', 'opener');
       pendingReplyEventRef.current = { key: 'VOICE_CONFIRM', target, expiresAt: now + 20_000 };
       return;
     }
     if (activeUsers.length >= 3 && (cooldownsRef.current.ghost_ping_actor ?? 0) <= now && Math.random() < 0.06 && can('GHOST_PING', 120_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'GHOST_PING';
+      eventLastAtRef.current = now;
       postEventLine(target, 'GHOST_PING', 'opener');
       lockStateRef.current = { isLocked: true, target, startedAt: now };
       pendingReplyEventRef.current = { key: 'GHOST_PING', target, expiresAt: now + 20_000 };
       return;
     }
     if (activeUsers.length >= 3 && (cooldownsRef.current.loop4 ?? 0) <= now && Math.random() < 0.07 && can('TV_EVENT', 90_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'TV_EVENT';
+      eventLastAtRef.current = now;
       postEventLine(target, 'TV_EVENT', 'opener');
       pendingReplyEventRef.current = { key: 'TV_EVENT', target, expiresAt: now + 20_000 };
       cooldownsRef.current.loop4 = now + 90_000;
       return;
     }
     if (Math.random() < 0.06 && can('NAME_CALL', 90_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'NAME_CALL';
+      eventLastAtRef.current = now;
       postEventLine(target, 'NAME_CALL', 'opener');
       pendingReplyEventRef.current = { key: 'NAME_CALL', target, expiresAt: now + 20_000 };
       return;
     }
     if (Math.random() < 0.06 && can('VIEWER_SPIKE', 90_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'VIEWER_SPIKE';
+      eventLastAtRef.current = now;
       postEventLine(target, 'VIEWER_SPIKE', 'opener');
       pendingReplyEventRef.current = { key: 'VIEWER_SPIKE', target, expiresAt: now + 20_000 };
       return;
     }
     if (Math.random() < 0.05 && can('LIGHT_GLITCH', 90_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'LIGHT_GLITCH';
+      eventLastAtRef.current = now;
       postEventLine(target, 'LIGHT_GLITCH', 'opener');
       requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: 'event:LIGHT_GLITCH' });
       triggerReactionBurst('light');
       return;
     }
     if (Math.random() < 0.06 && can('FEAR_CHALLENGE', 90_000)) {
+      eventLastReasonRef.current = 'TIMER_TICK';
+      eventLastKeyRef.current = 'FEAR_CHALLENGE';
+      eventLastAtRef.current = now;
       postEventLine(target, 'FEAR_CHALLENGE', 'opener');
       pendingReplyEventRef.current = { key: 'FEAR_CHALLENGE', target, expiresAt: now + 20_000 };
     }
@@ -741,6 +803,13 @@ export default function App() {
       const slowMultiplier = shouldSlowForLock || shouldSlowForTag ? 2 : 1;
       const scaled = Math.floor(base * slowMultiplier);
       const transitionAt = mode === 'tag_slow' ? null : Math.min(pacingModeUntilRef.current, pacingNextModeFlipAtRef.current);
+      chatEngineRef.current.setPacingDebug({
+        mode: lockStateRef.current.isLocked ? 'locked_slowed' : (mode === 'tag_slow' ? 'slowed' : 'normal'),
+        baseRate: base,
+        currentRate: scaled,
+        jitterEnabled: true,
+        nextMessageDueInSec: Math.max(0, Math.ceil(scaled / 1000))
+      });
       window.__CHAT_DEBUG__ = {
         ...(window.__CHAT_DEBUG__ ?? {}),
         chat: {
@@ -782,6 +851,8 @@ export default function App() {
 
     const tick = () => {
       const now = Date.now();
+      eventTickCountRef.current += 1;
+      eventLastTickAtRef.current = now;
       const topicWeights = getCurrentTopicWeights(now);
       const timedChats = chatEngineRef.current.tick(now);
       dispatchTimedChats(timedChats);
@@ -973,7 +1044,7 @@ export default function App() {
   const hasFatalInitError = requiredAssetErrors.length > 0;
   const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
   const shouldShowMainContent = true;
-  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const debugEnabled = isDebugRoute || new URLSearchParams(window.location.search).get('debug') === '1';
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
@@ -1009,6 +1080,67 @@ export default function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const activeUsers = collectActiveUsers(state.messages);
+      const nextDueAt = Math.max(now, lastChatMessageAtRef.current + 1600);
+      const schedulerBlockedReason = !appStarted ? 'app_not_started' : (chatAutoPaused ? 'chat_auto_paused' : (lockStateRef.current.isLocked ? 'lock_active' : '-'));
+      const schedulerBlocked = schedulerBlockedReason !== '-';
+      const snapshot = {
+        registry: {
+          count: EVENT_REGISTRY_KEYS.length,
+          keys: EVENT_REGISTRY_KEYS.slice(0, 20),
+          enabledCount: EVENT_REGISTRY_KEYS.length,
+          disabledCount: 0
+        },
+        scheduler: {
+          now,
+          nextDueAt,
+          lastFiredAt: eventLastAtRef.current,
+          tickCount: eventTickCountRef.current,
+          lastTickAt: eventLastTickAtRef.current,
+          blocked: schedulerBlocked,
+          blockedReason: schedulerBlockedReason,
+          cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current }
+        },
+        candidates: {
+          lastComputedAt: eventLastComputedAtRef.current,
+          lastCandidateCount: eventLastCandidateCountRef.current,
+          lastCandidateKeys: eventLastCandidateKeysRef.current.slice(0, 10),
+          lastGateRejectSummary: { ...eventGateRejectSummaryRef.current }
+        },
+        lastEvent: {
+          key: eventLastKeyRef.current,
+          at: eventLastAtRef.current,
+          reason: eventLastReasonRef.current,
+          lineVariantId: eventLastVariantIdRef.current
+        },
+        blocking: {
+          isLocked: lockStateRef.current.isLocked,
+          lockTarget: lockStateRef.current.target,
+          lockElapsedSec: lockStateRef.current.isLocked ? Math.max(0, Math.floor((now - lockStateRef.current.startedAt) / 1000)) : 0,
+          schedulerBlocked,
+          schedulerBlockedReason
+        },
+        cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current }
+      };
+
+      updateChatDebug({
+        event: snapshot,
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          activeUsers: {
+            count: activeUsers.length,
+            namesSample: activeUsers.slice(0, 10)
+          }
+        }
+      } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+      syncChatEngineDebug();
+    }, 600);
+    return () => window.clearInterval(timer);
+  }, [appStarted, chatAutoPaused, state.messages, syncChatEngineDebug, updateChatDebug]);
 
   const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
     if (!debugEnabled) return;
@@ -1264,6 +1396,28 @@ export default function App() {
     logSendDebug('click', { source: 'button' });
   }, [logSendDebug]);
 
+  const forceEventNow = useCallback(() => {
+    const activeUsers = collectActiveUsers(state.messages);
+    const target = activeUsers[0];
+    if (!target) {
+      eventGateRejectSummaryRef.current = { need_activeUsers: 1 };
+      eventLastCandidateCountRef.current = 0;
+      eventLastComputedAtRef.current = Date.now();
+      return;
+    }
+    eventLastReasonRef.current = 'DEBUG_FORCE_EVENT';
+    eventLastKeyRef.current = 'NAME_CALL';
+    eventLastAtRef.current = Date.now();
+    postEventLine(target, 'NAME_CALL', 'opener');
+  }, [postEventLine, state.messages]);
+
+  const forceTagLock = useCallback(() => {
+    const activeUsers = collectActiveUsers(state.messages);
+    const target = activeUsers[0] ?? null;
+    if (!target) return;
+    lockStateRef.current = { isLocked: true, target, startedAt: Date.now() };
+  }, [state.messages]);
+
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
@@ -1277,6 +1431,7 @@ export default function App() {
       <main className="app-root app-layout">
         <header ref={headerRef} className="app-header top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+          <a className="debug-route-link" href={isDebugRoute ? '/' : '/debug?debug=1'}>{isDebugRoute ? 'Back' : 'Open Debug'}</a>
         </header>
         <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
           {!hasFatalInitError ? (
@@ -1348,6 +1503,18 @@ export default function App() {
             onSendButtonClick={handleSendButtonClick}
           />
         </section>
+        {isDebugRoute && debugEnabled && (
+          <aside className="debug-route-panel">
+            <h3>Debug Snapshot</h3>
+            <div className="debug-route-controls">
+              <button type="button" onClick={forceEventNow}>Force Event Now</button>
+              <button type="button" onClick={forceTagLock}>Force Tag Lock</button>
+              <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_RESCHEDULE_JUMP' })}>Reschedule</button>
+              <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_FORCE_JUMP_NOW' })}>Force Jump Now</button>
+            </div>
+            <pre>{JSON.stringify(window.__CHAT_DEBUG__ ?? {}, null, 2)}</pre>
+          </aside>
+        )}
         {!isDesktopLayout && debugEnabled && (
           <aside className="mobile-layout-debug" data-tick={layoutMetricsTick}>
             <div>visualViewport.height: {mobileViewportHeight ? Math.round(mobileViewportHeight) : 'n/a'}</div>

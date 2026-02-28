@@ -16,7 +16,9 @@ export type SceneRequestPayload =
     endVolume?: number;
     rampSec?: number;
   }
-  | { type: 'REQUEST_SCENE_SWITCH'; sceneKey: OldhouseLoopKey; reason: string; delayMs?: number };
+  | { type: 'REQUEST_SCENE_SWITCH'; sceneKey: OldhouseLoopKey; reason: string; delayMs?: number }
+  | { type: 'DEBUG_FORCE_JUMP_NOW' }
+  | { type: 'DEBUG_RESCHEDULE_JUMP' };
 
 const sceneEventTarget = new EventTarget();
 

@@ -689,3 +689,20 @@ npm run dev
 - PASS：`npm run build`（TypeScript 編譯 + Vite 打包通過）。
 - PASS：事件觸發主流程仍維持原邏輯（僅改語句來源）。
 - PASS：reactionBurst 觸發時機與排程未改，只替換反應文字池。
+
+## Debug 面板欄位維護規則
+
+- 若某個問題/欄位連續 3 次 PR 未提及 → 從 debug 移除。
+- 若之後同問題再次出現 → 重新加回欄位。
+
+### 目前追蹤中的 debug 問題/欄位
+
+- `events_not_firing`：追蹤 `event.registry` / `event.candidates` / `chat.activeUsers` 與推論區塊。
+- `chat_auto_paused`：追蹤 `ui.send.lastResult` / `ui.send.blockedReason`。
+
+## Debug SSOT（單一來源）
+
+- 事件與聊天室 debug 統一由 `window.__CHAT_DEBUG__` 組裝輸出。
+- 事件排程快照在 `App.tsx` 週期性更新，欄位集中於 `event.*`。
+- 聊天快照由 `ChatEngine.getDebugState()` 提供，再回填到 `chat.*`。
+- `/debug` 頁（`/debug?debug=1`）顯示完整 snapshot 與快速推論（例如 `NO_CANDIDATES` / `INSUFFICIENT_ACTIVE_USERS` / `SCHEDULER_NOT_TICKING`）。

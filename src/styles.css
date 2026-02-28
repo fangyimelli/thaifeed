@@ -253,6 +253,10 @@ body {
 .live-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; color: #ff5c5c; white-space: nowrap; }
 .live-tag::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #ff4343; box-shadow: 0 0 10px rgba(255, 67, 67, 0.8); animation: livePulse 1.2s ease-in-out infinite; }
 .viewer-count { font-size: 14px; color: #dbe7ff; white-space: nowrap; }
+.debug-route-link { pointer-events: auto; margin-left: auto; color: #b9d6ff; font-size: 12px; text-decoration: none; border: 1px solid rgba(146, 185, 255, 0.5); border-radius: 8px; padding: 4px 8px; background: rgba(17, 24, 36, 0.75); }
+.debug-route-panel { margin-top: 8px; border: 1px solid #2b3140; border-radius: 10px; padding: 10px; background: #0f1522; max-height: 42vh; overflow: auto; }
+.debug-route-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.debug-route-controls button { border: 1px solid #3d578c; background: #17243a; color: #cfe2ff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
 
 .curse-meter { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .curse-meter .bar { width: 140px; height: 8px; background: #262b38; border-radius: 99px; overflow: hidden; }
