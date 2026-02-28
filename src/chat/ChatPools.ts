@@ -65,8 +65,48 @@ export const TYPE_FALLBACK_POOLS: Record<ChatMessageType, string[]> = {
   [ChatMessageType.SOCIAL_REPLY]: ['@{tag} 我也有同感', '@{tag} 你這句太關鍵'],
   [ChatMessageType.UI_STATUS]: ['系統已就緒'],
   [ChatMessageType.IDLE_BORING]: ['今天這裡就是一直吊著人', '我一直在等下一個動靜'],
-  [ChatMessageType.SCENE_FLICKER_REACT]: ['切鏡後整個氣壓變了', '這一下切換太突兀了'],
   [ChatMessageType.SFX_REACT_FAN]: ['風扇聲是不是怪怪的', '剛剛風扇聲好像變重了', '你們有沒有覺得聲音不太一樣', '可能我錯覺 但我聽了不舒服', '我戴耳機整個毛起來', '那個聲音忽然壓過來 我好不舒服', '剛剛那陣聲音讓我背脊發緊', '我怎麼聽到一種越靠越近的感覺', '這個嗡嗡聲讓我心裡一直發毛', '你們也有聽到那種悶悶的變化嗎', '那聲音一下輕一下重 我快不敢聽', '我耳機裡那股聲音怪到不行'],
-  [ChatMessageType.SFX_REACT_FOOTSTEPS]: ['我剛剛真的聽到腳步', '是不是有人在外面走動'],
-  [ChatMessageType.SFX_REACT_GHOST]: ['เสียงนั้นมาอีกแล้วเงียบเลย', 'อย่าหันกลับนะ']
+  [ChatMessageType.SFX_REACT_FOOTSTEPS]: [
+    '有腳步聲吧',
+    '你們有聽到走路聲嗎',
+    '剛剛那個是踩地板嗎',
+    '好像有人在走',
+    '不是風聲',
+    '那個不是錯覺吧',
+    '我有聽到',
+    '有人走過去',
+    '那聲音靠近了',
+    '好像在旁邊',
+    '不要嚇我',
+    '這太怪了'
+  ],
+  [ChatMessageType.SFX_REACT_GHOST]: [
+    '不對勁',
+    '有點怪',
+    '你們有聽到嗎',
+    '那不是我',
+    '我起雞皮疙瘩了',
+    '等一下',
+    '剛剛那個是什麼',
+    '我不敢看了',
+    '有點毛',
+    '那聲音不正常',
+    '你們不要亂講',
+    '我覺得怪怪的',
+    '是不是有人',
+    '這樣不太對',
+    '好像有東西'
+  ],
+  [ChatMessageType.SCENE_FLICKER_REACT]: [
+    '亮度變了',
+    '剛剛是不是暗一下',
+    '那個光怪怪的',
+    '我看到閃一下',
+    '那個角落有動',
+    '不是我眼花吧',
+    '是不是燈壞了',
+    '怎麼忽明忽暗',
+    '那個影子怪怪的',
+    '有東西動'
+  ]
 };

@@ -649,3 +649,37 @@ npm run dev
   - 觀察 `event.lastGhostSfxReason`，必須為事件名稱（如 `event:VOICE_CONFIRM`）
   - 觀察 `event.violation`，若非事件來源觸發鬼聲會顯示 violation
   - 觀察 `event.lock` 與 `event.sfxCooldowns` 以驗證鎖定與冷卻
+
+## 事件語句內容池與防重複（2026-02）
+
+- 本次僅調整「語句內容層」，未修改節奏、頻率、使用者名稱邏輯、reactionBurst 節奏與標點風格。
+- 已整合事件語句池（opener / followUp）：
+  - 聲音確認
+  - 電視事件
+  - 燈怪怪
+  - 你怕嗎
+  - 名字被叫
+  - 人數異常
+- 既有舊硬編碼事件句已改為統一從內容池抽取，避免新舊邏輯並存。
+
+### ReactionBurst 內容池
+
+- `ghost` 反應池已擴充至 15 條。
+- `footsteps` 反應池已擴充至 12 條。
+- `light` 反應池已擴充至 10 條（沿用 `SCENE_FLICKER_REACT` 類型，不新增語氣系統）。
+
+### 防重複規則（內容層）
+
+- 同一事件最近 5 次不可重複同一句。
+- 全域最近 10 句不可重複。
+- 若抽到重複會重抽。
+- 若池不足則回退使用 shuffle 後首條，避免事件中斷。
+- `debug=1` 新增可觀察欄位：
+  - `event.lastContentId`
+  - `event.contentRepeatBlocked`
+
+### 通盤檢查結果（PASS/FAIL）
+
+- PASS：`npm run build`（TypeScript 編譯 + Vite 打包通過）。
+- PASS：事件觸發主流程仍維持原邏輯（僅改語句來源）。
+- PASS：reactionBurst 觸發時機與排程未改，只替換反應文字池。
