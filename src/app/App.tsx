@@ -157,10 +157,12 @@ const EVENT_TOPIC_WEIGHT: TopicWeightProfile = {
 };
 
 const DEBUG_SEED_USERS = ['ink31', 'mew88', 'koo_77', 'nana23'];
+const EVENT_TESTER_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_EVENT', 'NAME_CALL', 'VIEWER_SPIKE', 'LIGHT_GLITCH', 'FEAR_CHALLENGE'];
 
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const isDebugRoute = window.location.pathname.replace(/\/+$/, '').endsWith('/debug');
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -1494,7 +1496,7 @@ export default function App() {
   }, [state.messages]);
 
   return (
-    <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
+    <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'} ${isDebugRoute ? 'debug-route-shell' : ''}`}>
       <LoadingOverlay
         visible={isLoading}
         progress={loadingProgress}
@@ -1503,10 +1505,16 @@ export default function App() {
         errors={requiredAssetErrors.map(formatMissingAsset)}
       />
       {shouldShowMainContent && (
-      <main className="app-root app-layout">
+      <main className={`app-root app-layout ${isDebugRoute ? 'debug-route-layout' : ''}`}>
         <header ref={headerRef} className="app-header top-dock">
-          <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
-          {isDebugRoute && <a className="debug-route-link" href="/">Back</a>}
+          <div className="top-dock-row">
+            <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+            {isDebugRoute ? (
+              <a className="debug-route-link" href="/">Back</a>
+            ) : (
+              <a className="debug-entry-link" href="/debug" aria-label="Open debug page">Debug</a>
+            )}
+          </div>
         </header>
         <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
           {!hasFatalInitError ? (
@@ -1581,17 +1589,27 @@ export default function App() {
         {isDebugRoute && debugEnabled && (
           <aside className="debug-route-panel">
             <h3>Debug Snapshot</h3>
+            <div className="debug-route-meta">
+              <div>route: {window.location.pathname}</div>
+              <div>isDev: {String(isDev)}</div>
+              <div>eventTesterRendered: true</div>
+            </div>
             <div className="debug-route-controls">
               <button type="button" onClick={forceTagLock}>Force Tag Lock</button>
               <label><input type="checkbox" checked={simulatePlayerReply} onChange={(event) => setSimulatePlayerReply(event.target.checked)} />simulatePlayerReply</label>
               <label><input type="checkbox" checked={debugLowerCooldown} onChange={(event) => setDebugLowerCooldown(event.target.checked)} />lowerCooldown(debug only)</label>
-              <button type="button" onClick={() => triggerEventFromTester('VOICE_CONFIRM')}>Trigger VOICE_CONFIRM</button>
-              <button type="button" onClick={() => triggerEventFromTester('GHOST_PING')}>Trigger GHOST_PING</button>
-              <button type="button" onClick={() => triggerEventFromTester('TV_EVENT')}>Trigger TV_EVENT</button>
-              <button type="button" onClick={() => triggerEventFromTester('NAME_CALL')}>Trigger NAME_CALL</button>
-              <button type="button" onClick={() => triggerEventFromTester('VIEWER_SPIKE')}>Trigger VIEWER_SPIKE</button>
-              <button type="button" onClick={() => triggerEventFromTester('LIGHT_GLITCH')}>Trigger LIGHT_GLITCH</button>
-              <button type="button" onClick={() => triggerEventFromTester('FEAR_CHALLENGE')}>Trigger FEAR_CHALLENGE</button>
+            </div>
+            <div className="debug-event-tester" aria-label="Event Tester">
+              <h4>Event Tester</h4>
+              <div className="debug-route-controls">
+                {EVENT_TESTER_KEYS.map((eventKey) => (
+                  <button key={eventKey} type="button" onClick={() => triggerEventFromTester(eventKey)}>
+                    Trigger {eventKey}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="debug-route-controls">
               <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_RESCHEDULE_JUMP' })}>Reschedule</button>
               <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_FORCE_JUMP_NOW' })}>Force Jump Now</button>
             </div>

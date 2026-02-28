@@ -85,7 +85,7 @@ npm run dev
   - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
   - overlay 會顯示目前正在播放的 audio elements（fan/footsteps/ghost）。
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
-  - 主頁右上角提供 `Debug ON/OFF` 按鈕，可直接切換 `?debug=1`（不需手改網址）。
+  - 主頁右上角提供小型 `Debug` 按鈕，可直接進入 `/debug`；若需要 overlay 詳細欄位可再加上 `?debug=1`。
 
 
 ## 音效：無縫循環（fan_loop）
@@ -117,7 +117,7 @@ npm run dev
 
 ### debug=1 如何確認 fan loop 狀態
 
-在右上角 Debug ON 後，可於 overlay 看到：
+進入 `/debug?debug=1` 後，可於 overlay 看到：
 
 - `audioContext.state`
 - `fan playing/currentTime`
@@ -181,7 +181,7 @@ npm run dev
 ## Debug 測試控制面板（`?debug=1`）
 
 - 使用方式：
-  - 進入主頁後開啟 `?debug=1`（或按右上角 `Debug ON`），畫面下方 debug overlay 會顯示測試控制按鈕。
+  - 從主頁右上角 `Debug` 進入 `/debug`，再開啟 `?debug=1`，畫面下方 debug overlay 會顯示測試控制按鈕。
   - 此控制面板僅在 `debug=1` render，正式模式不會顯示。
 - 按鈕用途：
   - `▶ Force LOOP`：直接呼叫 `switchTo('oldhouse_room_loop')`。
@@ -790,8 +790,8 @@ npm run dev
 
 ## DebugOn Event Tester（2026-02）
 
-- 入口：移除主畫面 `Open Debug` 按鈕，改為直接使用網址進入：`/debug?debug=1`。
-- DebugOn 新增 **Event Tester**，包含 7 顆事件按鈕：
+- 入口：主畫面右上角小型 `Debug` 按鈕可直接進入 `/debug`（不遮擋影片與聊天室輸入區）。
+- `/debug` 頁固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
   - Trigger VOICE_CONFIRM
   - Trigger GHOST_PING
   - Trigger TV_EVENT
@@ -803,6 +803,12 @@ npm run dev
 - 可選項：
   - `simulatePlayerReply`（預設 on）：會在 800~1500ms 內以玩家流程送出對應回覆。
   - `lowerCooldown(debug only)`（預設 off）：僅降低冷卻，不跳過 lock/tag/gating。
+
+- `/debug` 額外顯示：
+  - `route`
+  - `isDev`
+  - `eventTesterRendered`
+- 注意事項：Event Tester 會走正式事件流程，請先確認聊天室可送出訊息，再觸發事件以驗證 tag/lock/cooldown 行為。
 - Debug 顯示補充：
   - `event.lastEvent.waitingForReply`
   - `event.lastReactions.count`
