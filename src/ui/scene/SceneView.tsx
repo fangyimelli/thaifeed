@@ -176,7 +176,10 @@ declare global {
       lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
       queueLength?: number;
       blockedReasons?: Record<string, number>;
-      chat?: { pacing?: { mode?: 'normal' | 'fast' | 'burst' | 'tag_slow'; nextModeInSec?: number } };
+      chat?: {
+        pacing?: { mode?: 'normal' | 'fast' | 'burst' | 'tag_slow'; nextModeInSec?: number };
+        lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
+      };
       event?: {
         scheduler?: {
           now?: number;
@@ -1512,6 +1515,9 @@ export default function SceneView({
           <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
           <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
+          <div>chat.lint.lastRejectedText: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedText ?? '-'}</div>
+          <div>chat.lint.lastRejectedReason: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedReason ?? '-'}</div>
+          <div>chat.lint.rerollCount: {window.__CHAT_DEBUG__?.chat?.lint?.rerollCount ?? 0}</div>
           <div>event.scheduler.now: {window.__CHAT_DEBUG__?.event?.scheduler?.now ?? '-'}</div>
           <div>event.scheduler.nextDueAt: {window.__CHAT_DEBUG__?.event?.scheduler?.nextDueAt ?? '-'}</div>
           <div>event.scheduler.lastFiredAt: {window.__CHAT_DEBUG__?.event?.scheduler?.lastFiredAt ?? '-'}</div>

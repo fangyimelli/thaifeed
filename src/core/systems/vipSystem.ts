@@ -114,7 +114,7 @@ function createHintText(letter: string): string {
 }
 
 function createFearText() {
-  return '先看別處三秒再回來 你可以先打pass或提示 我會陪你慢慢來';
+  return '先看別處一下再回來 你可以先打pass或提示 我會陪你慢慢來';
 }
 
 function createLocationText(anchor: AnchorType) {
@@ -122,7 +122,7 @@ function createLocationText(anchor: AnchorType) {
 }
 
 function createUncertainText() {
-  return '你先用兩個候選比對看看 例如送氣跟不送氣 也可以用注音拼音或泰文字母回答';
+  return '你先用兩個候選對照看看 例如送氣跟不送氣 也可以用注音拼音或泰文字母回答';
 }
 
 function createVipMessage(text: string): ChatMessage {

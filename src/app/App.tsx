@@ -25,6 +25,8 @@ import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
 import { EventEngine } from '../director/EventEngine';
 import { ChatEngine } from '../chat/ChatEngine';
+import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
+import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -47,6 +49,51 @@ function randomInt(min: number, max: number) {
 
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
+}
+
+function pickSafeFallbackText() {
+  for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
+    const candidate = pickOne(SAFE_FALLBACK_POOL).trim();
+    if (candidate && !getChatLintReason(candidate)) return candidate;
+  }
+  return '先等等 我有點發毛';
+}
+
+function lintOutgoingMessage(message: ChatMessage): { message: ChatMessage; rejectedText: string; rejectedReason: string; rerollCount: number } {
+  const reason = getChatLintReason(message.text);
+  if (!reason) {
+    return { message, rejectedText: '-', rejectedReason: '-', rerollCount: 0 };
+  }
+
+  let rerollCount = 0;
+  while (rerollCount < 6) {
+    const fallback = pickSafeFallbackText();
+    rerollCount += 1;
+    if (!getChatLintReason(fallback)) {
+      return {
+        message: {
+          ...message,
+          text: fallback,
+          translation: message.language === 'th' ? message.translation : fallback
+        },
+        rejectedText: truncateLintText(message.text),
+        rejectedReason: reason,
+        rerollCount
+      };
+    }
+  }
+
+  const safeFallback = '先等等 我有點發毛';
+  return {
+    message: {
+      ...message,
+      text: safeFallback,
+      translation: message.language === 'th' ? message.translation : safeFallback
+    },
+    rejectedText: truncateLintText(message.text),
+    rejectedReason: reason,
+    rerollCount: 6
+  };
 }
 
 type ChatPacingMode = 'normal' | 'fast' | 'burst' | 'tag_slow';
@@ -90,6 +137,7 @@ export default function App() {
   const [initStatusText, setInitStatusText] = useState('初始化中');
   const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
+  const [chatTickRestartKey, setChatTickRestartKey] = useState(0);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
@@ -181,12 +229,44 @@ export default function App() {
   }, [isDesktopLayout]);
 
   const dispatchAudienceMessage = (message: ChatMessage) => {
-    dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+    const linted = lintOutgoingMessage(message);
+    if (linted.rejectedReason !== '-') {
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          lint: {
+            lastRejectedText: linted.rejectedText,
+            lastRejectedReason: linted.rejectedReason,
+            rerollCount: linted.rerollCount
+          }
+        }
+      };
+    }
+    dispatch({ type: 'AUDIENCE_MESSAGE', payload: linted.message });
+  };
+
+  const syncChatEngineDebug = () => {
+    const engineDebug = chatEngineRef.current.getDebugState() as {
+      lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
+    };
+    window.__CHAT_DEBUG__ = {
+      ...(window.__CHAT_DEBUG__ ?? {}),
+      chat: {
+        ...(window.__CHAT_DEBUG__?.chat ?? {}),
+        lint: {
+          lastRejectedText: engineDebug.lint?.lastRejectedText ?? '-',
+          lastRejectedReason: engineDebug.lint?.lastRejectedReason ?? '-',
+          rerollCount: engineDebug.lint?.rerollCount ?? 0
+        }
+      }
+    };
   };
 
   const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
     const chats = chatEngineRef.current.emit(event, Date.now());
     chats.forEach(dispatchAudienceMessage);
+    syncChatEngineDebug();
   };
 
   const emitEvent = (eventKey: string, context: { tagTarget?: string; lockTarget?: string } = {}) => {
@@ -340,13 +420,14 @@ export default function App() {
     const tick = () => {
       const timedChats = chatEngineRef.current.tick(Date.now());
       dispatchTimedChats(timedChats);
+      syncChatEngineDebug();
       emitChatEvent({ type: 'IDLE_TICK' });
       emitEvent('IDLE_TICK');
       timer = window.setTimeout(tick, nextInterval());
     };
     timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, isReady, state.messages]);
+  }, [chatAutoPaused, chatTickRestartKey, isReady, state.messages]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
@@ -655,12 +736,12 @@ export default function App() {
             tagLockActive: Boolean(replyTarget || mentionTarget),
             replyTarget,
             mentionTarget,
-            canSendComputed: isReady && !isSending && input.trim().length > 0 && !chatAutoPaused && !(debugComposingOverride ?? isComposing)
+            canSendComputed: isReady && !isSending && input.trim().length > 0 && !(debugComposingOverride ?? isComposing)
           }
         }
       }
     });
-  }, [chatAutoPaused, debugComposingOverride, input, isComposing, isReady, isSending, mentionTarget, replyTarget, sendDebug, updateChatDebug]);
+  }, [debugComposingOverride, input, isComposing, isReady, isSending, mentionTarget, replyTarget, sendDebug, updateChatDebug]);
 
   const submitChat = useCallback(async (rawText: string, source: SendSource): Promise<SendResult> => {
     const now = Date.now();
@@ -693,7 +774,6 @@ export default function App() {
 
     const raw = rawText.trim();
     if (!raw) return markBlocked('empty_input');
-    if (chatAutoPaused) return markBlocked('chat_auto_paused');
     if (debugComposingOverride ?? isComposing) return markBlocked('is_composing');
 
     let nextReplyTarget = replyTarget;
@@ -721,6 +801,16 @@ export default function App() {
       lastAttemptAt: now,
       blockedReason: '',
       errorMessage: ''
+    };
+    const markSent = (mode: string): SendResult => {
+      if (chatAutoPaused) {
+        setChatAutoPaused(false);
+        setChatTickRestartKey((prev) => prev + 1);
+      }
+      const next = { ...attemptDebug, lastResult: 'sent' as const };
+      setSendDebug(next);
+      logSendDebug('sent', { source, mode, autoResumed: chatAutoPaused });
+      return { ok: true, status: 'sent' };
     };
     setSendDebug(attemptDebug);
     logSendDebug('attempt', { source, inputLen: raw.length, submitDelayMs });
@@ -765,10 +855,7 @@ export default function App() {
         handlePass();
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        const next = { ...attemptDebug, lastResult: 'sent' as const };
-        setSendDebug(next);
-        logSendDebug('sent', { source, mode: 'pass' });
-        return { ok: true, status: 'sent' };
+        return markSent('pass');
       }
 
       const isHintInput = isVipHintCommand(raw);
@@ -791,10 +878,7 @@ export default function App() {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        const next = { ...attemptDebug, lastResult: 'sent' as const };
-        setSendDebug(next);
-        logSendDebug('sent', { source, mode: 'hint' });
-        return { ok: true, status: 'sent' };
+        return markSent('hint');
       }
 
       if (isAnswerCorrect(raw, playableConsonant)) {
@@ -820,10 +904,7 @@ export default function App() {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        const next = { ...attemptDebug, lastResult: 'sent' as const };
-        setSendDebug(next);
-        logSendDebug('sent', { source, mode: 'answer_correct' });
-        return { ok: true, status: 'sent' };
+        return markSent('answer_correct');
       }
 
       const speechHit = parsePlayerSpeech(raw);
@@ -845,10 +926,7 @@ export default function App() {
       setInput('');
       sendCooldownUntil.current = Date.now() + 350;
       tagSlowActiveRef.current = false;
-      const next = { ...attemptDebug, lastResult: 'sent' as const };
-      setSendDebug(next);
-      logSendDebug('sent', { source, mode: 'answer_wrong' });
-      return { ok: true, status: 'sent' };
+      return markSent('answer_wrong');
     } catch (error) {
       const errorMessage = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
       const next = {
