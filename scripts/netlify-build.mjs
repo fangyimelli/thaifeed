@@ -11,6 +11,16 @@ if (sceneViewSource.includes('useMemo')) {
 
 console.log('[netlify-build] SceneView import check passed (no useMemo token).');
 
+const appPath = 'src/app/App.tsx';
+const appSource = readFileSync(appPath, 'utf8');
+
+if (appSource.includes('setChatTickRestartKey') || appSource.includes('chatTickRestartKey')) {
+  console.error(`[netlify-build] Unexpected legacy chatTickRestartKey token found in ${appPath}.`);
+  process.exit(1);
+}
+
+console.log('[netlify-build] App legacy chatTickRestartKey check passed.');
+
 const run = (cmd, args) => spawnSync(cmd, args, { stdio: 'inherit' });
 
 const runViteBuild = () => run('node', ['./node_modules/vite/bin/vite.js', 'build']);

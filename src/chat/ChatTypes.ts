@@ -52,7 +52,16 @@ export const CHAT_TYPE_META: Record<ChatMessageType, ChatTypeMeta> = {
 };
 
 export type ChatEvent =
-  | { type: 'IDLE_TICK' }
+  | {
+      type: 'IDLE_TICK';
+      topicWeights?: {
+        randomComment: number;
+        videoObservation: number;
+        suspicion: number;
+        buildUp: number;
+        eventTopic: number;
+      };
+    }
   | { type: 'SCENE_SWITCH'; toKey: string }
   | { type: 'SFX_START'; sfxKey: 'fan' | 'footsteps' | 'ghost' }
   | { type: 'USER_SENT'; text: string; user: string }
