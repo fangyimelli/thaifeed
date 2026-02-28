@@ -512,3 +512,51 @@ npm run dev
   1. 事件/Reaction 僅提供內容 payload，不指定 username/persona。
   2. username 與 persona 分配由既有 ChatEngine/ChatScheduler 依原規則決定。
   3. 因此不再存在事件層把使用者固定為 `viewer` 的路徑。
+
+## Mobile Send Reliability
+
+為了修正「手機按送出偶發沒反應」，送出流程改為可觀測、單一路徑、可回報阻擋原因。
+
+### 常見無反應原因
+
+- `not_ready`：初始化尚未完成。
+- `is_sending`：前一次送出尚在進行中。
+- `cooldown_active`：送出冷卻時間未結束。
+- `empty_input`：輸入為空。
+- `chat_auto_paused`：聊天室自動暫停中。
+- `is_composing`：IME 組字中（例如中文輸入法）。
+- `self_tag_ignored`：檢測到自己 tag 自己，已自動解除 target（不中斷送出流程）。
+
+### Guard / reason code 一覽
+
+- 所有送出 guard 都會回傳 reason code（不再 silent return）。
+- reason 會同步顯示：
+  - 輕量 UI 提示（輸入框下方短暫文字）；
+  - `?debug=1` debug overlay 的 `ui.send.blockedReason`；
+  - `window.__CHAT_DEBUG__.ui.send`。
+
+### Debug 面板如何看 blockedReason
+
+在 `?debug=1` 的 debug overlay 可看到：
+
+- `ui.send.lastClickAt`
+- `ui.send.lastSubmitAt`
+- `ui.send.lastAttemptAt`
+- `ui.send.lastResult` (`sent|blocked|error`)
+- `ui.send.blockedReason`
+- `ui.send.errorMessage`
+- `ui.send.stateSnapshot`
+  - `inputLen`
+  - `isSending`
+  - `isComposing`
+  - `cooldownMsLeft`
+  - `tagLockActive`
+  - `replyTarget`
+  - `mentionTarget`
+  - `canSendComputed`
+
+另外，`debug=1` 下聊天室提供 3 個快速驗證按鈕：
+
+- `Simulate Send`：以目前 input 走同一條 submit 流程。
+- `Toggle TagLock(Self)`：把 tag/reply target 切到自己，驗證會被自動解除。
+- `Toggle isComposing`：模擬 composition 狀態，驗證不會永遠卡死。

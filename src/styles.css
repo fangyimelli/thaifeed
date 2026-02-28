@@ -421,3 +421,25 @@ body {
   padding: 8px;
   pointer-events: none;
 }
+
+.chat-send-feedback {
+  margin: 4px 12px 0;
+  color: #a3acbb;
+  font-size: 12px;
+}
+
+.chat-debug-send-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 12px 10px;
+}
+
+.chat-debug-send-tools button {
+  border: 1px solid #465069;
+  background: #171d2b;
+  color: #cfe1ff;
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 4px 8px;
+}

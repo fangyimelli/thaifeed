@@ -26,6 +26,15 @@ import { requestSceneAction } from '../core/systems/sceneEvents';
 import { EventEngine } from '../director/EventEngine';
 import { ChatEngine } from '../chat/ChatEngine';
 
+export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
+
+export type SendResult = {
+  ok: boolean;
+  status: 'sent' | 'blocked' | 'error';
+  reason?: string;
+  errorMessage?: string;
+};
+
 function formatViewerCount(value: number) {
   if (value < 1000) return `${value}`;
   if (value < 10_000) return `${(value / 1000).toFixed(1)}K`;
@@ -81,6 +90,7 @@ export default function App() {
   const chatAreaRef = useRef<HTMLElement>(null);
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const burstCooldownUntil = useRef(0);
+  const sendCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
   const lastInputTimestamp = useRef(Date.now());
   const lastIdleCurseAt = useRef(0);
@@ -155,7 +165,12 @@ export default function App() {
     eventEngineRef.current.trigger(eventKey, { messages: state.messages, ...context });
     const pendingContent = eventEngineRef.current.drainPendingContent();
     pendingContent.forEach((payload) => chatEngineRef.current.enqueueContent(payload));
-    window.__CHAT_DEBUG__ = eventEngineRef.current.getDebugState() as unknown as Window['__CHAT_DEBUG__'];
+    const eventDebug = eventEngineRef.current.getDebugState() as unknown as Window['__CHAT_DEBUG__'];
+    window.__CHAT_DEBUG__ = {
+      ...(window.__CHAT_DEBUG__ ?? {}),
+      ...eventDebug,
+      ui: window.__CHAT_DEBUG__?.ui
+    };
   };
 
   useEffect(() => {
@@ -401,6 +416,19 @@ export default function App() {
   const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
   const shouldShowMainContent = true;
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const [replyTarget, setReplyTarget] = useState<string | null>(null);
+  const [mentionTarget, setMentionTarget] = useState<string | null>(null);
+  const [isComposing, setIsComposing] = useState(false);
+  const [debugComposingOverride, setDebugComposingOverride] = useState<boolean | null>(null);
+  const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
+  const [sendDebug, setSendDebug] = useState({
+    lastClickAt: 0,
+    lastSubmitAt: 0,
+    lastAttemptAt: 0,
+    lastResult: '-' as 'sent' | 'blocked' | 'error' | '-',
+    blockedReason: '',
+    errorMessage: ''
+  });
 
   const containerHeight = shellRef.current?.getBoundingClientRect().height ?? null;
   const headerHeight = headerRef.current?.getBoundingClientRect().height ?? null;
@@ -412,14 +440,113 @@ export default function App() {
     return '初始化失敗：素材未加入專案或 base path 設定錯誤';
   }, [hasFatalInitError]);
 
-  const submitChat = useCallback(async (rawText: string) => {
-    if (!isReady || isSending) return false;
+  const updateChatDebug = useCallback((patch: Partial<NonNullable<Window['__CHAT_DEBUG__']>>) => {
+    const base = window.__CHAT_DEBUG__ ?? ({} as NonNullable<Window['__CHAT_DEBUG__']>);
+    window.__CHAT_DEBUG__ = {
+      ...base,
+      ...patch,
+      ui: {
+        ...(base.ui ?? {}),
+        ...(patch.ui ?? {})
+      }
+    };
+  }, []);
+
+  const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
+    if (!debugEnabled) return;
+    console.log('[CHAT_DEBUG_SEND]', event, payload);
+  }, [debugEnabled]);
+
+  useEffect(() => {
+    if (!sendFeedback) return;
+    const timer = window.setTimeout(() => {
+      setSendFeedback((prev) => (prev?.at === sendFeedback.at ? null : prev));
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [sendFeedback]);
+
+  useEffect(() => {
+    updateChatDebug({
+      ui: {
+        send: {
+          ...sendDebug,
+          stateSnapshot: {
+            inputLen: input.trim().length,
+            isSending,
+            isComposing: debugComposingOverride ?? isComposing,
+            cooldownMsLeft: Math.max(0, sendCooldownUntil.current - Date.now()),
+            tagLockActive: Boolean(replyTarget || mentionTarget),
+            replyTarget,
+            mentionTarget,
+            canSendComputed: isReady && !isSending && input.trim().length > 0 && !chatAutoPaused && !(debugComposingOverride ?? isComposing)
+          }
+        }
+      }
+    });
+  }, [chatAutoPaused, debugComposingOverride, input, isComposing, isReady, isSending, mentionTarget, replyTarget, sendDebug, updateChatDebug]);
+
+  const submitChat = useCallback(async (rawText: string, source: SendSource): Promise<SendResult> => {
+    const now = Date.now();
+    const markBlocked = (reason: string): SendResult => {
+      const next = {
+        ...sendDebug,
+        lastAttemptAt: now,
+        lastResult: 'blocked' as const,
+        blockedReason: reason,
+        errorMessage: ''
+      };
+      setSendDebug(next);
+      setSendFeedback({ reason, at: now });
+      updateChatDebug({
+        ui: {
+          send: {
+            ...next,
+            blockedAt: now
+          }
+        }
+      });
+      logSendDebug('blocked', { reason, source, inputLen: rawText.trim().length });
+      return { ok: false, status: 'blocked', reason };
+    };
+
+    if (!isReady) return markBlocked('not_ready');
+    if (isSending) return markBlocked('is_sending');
+    const cooldownMsLeft = Math.max(0, sendCooldownUntil.current - now);
+    if (cooldownMsLeft > 0) return markBlocked('cooldown_active');
 
     const raw = rawText.trim();
-    if (!raw || chatAutoPaused) return false;
+    if (!raw) return markBlocked('empty_input');
+    if (chatAutoPaused) return markBlocked('chat_auto_paused');
+    if (debugComposingOverride ?? isComposing) return markBlocked('is_composing');
+
+    let nextReplyTarget = replyTarget;
+    let nextMentionTarget = mentionTarget;
+    const selfTokens = new Set(['you']);
+    const explicitMention = raw.match(/@([\w_]+)/)?.[1] ?? null;
+    if (explicitMention) nextMentionTarget = explicitMention;
+    const selfTagged = [nextReplyTarget, nextMentionTarget].some((target) => target && selfTokens.has(target.toLowerCase()));
+    if (selfTagged) {
+      nextReplyTarget = null;
+      nextMentionTarget = null;
+      setReplyTarget(null);
+      setMentionTarget(null);
+      logSendDebug('self_tag_ignored', { source, raw });
+      updateChatDebug({ ui: { send: { blockedReason: 'self_tag_ignored' } } });
+    }
+
+    setReplyTarget(nextReplyTarget);
+    setMentionTarget(nextMentionTarget);
 
     setIsSending(true);
     const submitDelayMs = randomInt(1000, 5000);
+    const attemptDebug = {
+      ...sendDebug,
+      lastAttemptAt: now,
+      blockedReason: '',
+      errorMessage: ''
+    };
+    setSendDebug(attemptDebug);
+    logSendDebug('attempt', { source, inputLen: raw.length, submitDelayMs });
 
     try {
       await new Promise<void>((resolve) => {
@@ -459,7 +586,11 @@ export default function App() {
 
       if (isPassCommand(raw)) {
         handlePass();
-        return true;
+        sendCooldownUntil.current = Date.now() + 350;
+        const next = { ...attemptDebug, lastResult: 'sent' as const };
+        setSendDebug(next);
+        logSendDebug('sent', { source, mode: 'pass' });
+        return { ok: true, status: 'sent' };
       }
 
       const isHintInput = isVipHintCommand(raw);
@@ -480,7 +611,11 @@ export default function App() {
 
       if (isHintInput) {
         setInput('');
-        return true;
+        sendCooldownUntil.current = Date.now() + 350;
+        const next = { ...attemptDebug, lastResult: 'sent' as const };
+        setSendDebug(next);
+        logSendDebug('sent', { source, mode: 'hint' });
+        return { ok: true, status: 'sent' };
       }
 
       if (isAnswerCorrect(raw, playableConsonant)) {
@@ -504,7 +639,11 @@ export default function App() {
           }
         });
         setInput('');
-        return true;
+        sendCooldownUntil.current = Date.now() + 350;
+        const next = { ...attemptDebug, lastResult: 'sent' as const };
+        setSendDebug(next);
+        logSendDebug('sent', { source, mode: 'answer_correct' });
+        return { ok: true, status: 'sent' };
       }
 
       const speechHit = parsePlayerSpeech(raw);
@@ -524,15 +663,38 @@ export default function App() {
         payload: { message: wrongMessage }
       });
       setInput('');
-      return true;
+      sendCooldownUntil.current = Date.now() + 350;
+      const next = { ...attemptDebug, lastResult: 'sent' as const };
+      setSendDebug(next);
+      logSendDebug('sent', { source, mode: 'answer_wrong' });
+      return { ok: true, status: 'sent' };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+      const next = {
+        ...attemptDebug,
+        lastResult: 'error' as const,
+        errorMessage
+      };
+      setSendDebug(next);
+      logSendDebug('error', { source, errorMessage });
+      return { ok: false, status: 'error', errorMessage };
     } finally {
       setIsSending(false);
     }
-  }, [chatAutoPaused, isReady, isSending, state]);
+  }, [chatAutoPaused, debugComposingOverride, emitEvent, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, updateChatDebug]);
 
-  const submit = useCallback(() => {
-    return submitChat(input);
-  }, [input, submitChat]);
+  const submit = useCallback((source: SendSource) => {
+    if (source === 'submit') {
+      setSendDebug((prev) => ({ ...prev, lastSubmitAt: Date.now() }));
+      logSendDebug('submit', { source });
+    }
+    return submitChat(input, source);
+  }, [input, logSendDebug, submitChat]);
+
+  const handleSendButtonClick = useCallback(() => {
+    setSendDebug((prev) => ({ ...prev, lastClickAt: Date.now() }));
+    logSendDebug('click', { source: 'button' });
+  }, [logSendDebug]);
 
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
@@ -569,13 +731,24 @@ export default function App() {
             onChange={(value) => {
               setInput(value);
             }}
-            onSubmit={submit}
             onToggleTranslation={(id) => dispatch({ type: 'TOGGLE_CHAT_TRANSLATION', payload: { id } })}
             onAutoPauseChange={setChatAutoPaused}
             isSending={isSending}
             isReady={isReady}
             loadingStatusText={initStatusText}
             onInputHeightChange={setChatInputHeight}
+            sendFeedback={sendFeedback?.reason ?? null}
+            onSubmit={submit}
+            onCompositionStateChange={setIsComposing}
+            isComposing={debugComposingOverride ?? isComposing}
+            onDebugSimulateSend={() => submit('debug_simulate')}
+            onDebugToggleSelfTag={() => {
+              setReplyTarget((prev) => (prev ? null : 'you'));
+            }}
+            onDebugToggleComposing={() => {
+              setDebugComposingOverride((prev) => (prev == null ? true : !prev));
+            }}
+            onSendButtonClick={handleSendButtonClick}
           />
         </section>
         {!isDesktopLayout && debugEnabled && (
