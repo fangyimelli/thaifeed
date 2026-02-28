@@ -14,6 +14,7 @@ type EventContentPayload = {
 
 type DebugState = {
   lastEvent: string;
+  lastEventAt: number;
   lastPickedType: string;
   lastPersonaId?: string;
   lastTagTarget?: string;
@@ -24,7 +25,15 @@ type DebugState = {
   };
   recentDedupHashes: string[];
   activeUsers: string[];
+  activeUsersCount: number;
   reactionWindow: { remainingSec: number; pending: number } | null;
+  pacing: {
+    mode: 'normal' | 'slowed' | 'locked_slowed';
+    baseRate: number;
+    currentRate: number;
+    jitterEnabled: boolean;
+    nextMessageDueInSec: number;
+  };
 };
 
 export class ChatEngine {
@@ -38,6 +47,7 @@ export class ChatEngine {
   private pendingContent = new Map<ChatMessageType, EventContentPayload[]>();
   private debug: DebugState = {
     lastEvent: '-',
+    lastEventAt: 0,
     lastPickedType: '-',
     lint: {
       lastRejectedText: '-',
@@ -46,16 +56,20 @@ export class ChatEngine {
     },
     recentDedupHashes: [],
     activeUsers: [],
-    reactionWindow: null
+    activeUsersCount: 0,
+    reactionWindow: null,
+    pacing: { mode: 'normal', baseRate: 0, currentRate: 0, jitterEnabled: true, nextMessageDueInSec: 0 }
   };
 
   syncFromMessages(messages: ChatMessage[]): void {
     this.activeUsers = collectActiveUsers(messages);
     this.debug.activeUsers = this.activeUsers.slice(0, 20);
+    this.debug.activeUsersCount = this.activeUsers.length;
   }
 
   emit(event: ChatEvent, now = Date.now()): ChatMessage[] {
     this.debug.lastEvent = event.type;
+    this.debug.lastEventAt = now;
     if (event.type === 'CURSE_CHANGE') {
       this.curse = event.value;
       return [];
@@ -225,7 +239,19 @@ export class ChatEngine {
     if (!['system', 'you', 'fake_ai'].includes(envelope.username) && !this.activeUsers.includes(envelope.username)) {
       this.activeUsers.push(envelope.username);
       this.debug.activeUsers = this.activeUsers.slice(0, 20);
+      this.debug.activeUsersCount = this.activeUsers.length;
     }
+  }
+
+
+  setPacingDebug(pacing: {
+    mode: 'normal' | 'slowed' | 'locked_slowed';
+    baseRate: number;
+    currentRate: number;
+    jitterEnabled: boolean;
+    nextMessageDueInSec: number;
+  }) {
+    this.debug.pacing = pacing;
   }
 
   private updateWindowDebug(now: number) {
