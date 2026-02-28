@@ -31,6 +31,7 @@ type Props = {
   curse: number;
   anchor: AnchorType;
   isDesktopLayout: boolean;
+  appStarted: boolean;
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
@@ -173,6 +174,7 @@ declare global {
       lastSfxReason?: string;
       lastGhostSfxReason?: string;
       lastContentId?: string;
+      lastNameInjected?: string;
       contentRepeatBlocked?: boolean;
       violation?: string;
       sfxCooldowns?: Record<string, number>;
@@ -224,6 +226,7 @@ export default function SceneView({
   curse,
   anchor,
   isDesktopLayout,
+  appStarted,
   onNeedUserGestureChange,
   onSceneRunning,
   onSceneError
@@ -231,8 +234,6 @@ export default function SceneView({
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
-  const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
-  const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
   const [videoErrorDetail, setVideoErrorDetail] = useState<string | null>(null);
   const videoLayerRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
@@ -492,7 +493,7 @@ export default function SceneView({
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
-    if (!video || !hasConfirmedPlayback) return false;
+    if (!video || !appStarted) return false;
 
     const bufferVideo = getBufferVideoEl();
     if (bufferVideo) {
@@ -508,7 +509,7 @@ export default function SceneView({
       console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
-  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, setNeedsGestureState]);
+  }, [appStarted, getBufferVideoEl, getCurrentVideoEl, setNeedsGestureState]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     if (debugEnabled) {
@@ -600,14 +601,14 @@ export default function SceneView({
   const switchTo = useCallback(async (nextKey: OldhouseLoopKey) => {
     console.log('[VIDEO]', 'switchTo requested', {
       nextKey,
-      hasConfirmedPlayback,
+      hasConfirmedPlayback: appStarted,
       isSwitching: isSwitchingRef.current,
       needsUserGestureToPlay: needsUserGestureToPlayRef.current,
       currentKey: currentLoopKeyRef.current
     });
-    if (!hasConfirmedPlayback) {
+    if (!appStarted) {
       updateVideoDebug({ lastError: `switchTo skipped(no-confirm) -> ${nextKey}` });
-      console.warn('[VIDEO]', 'switchTo skipped: no playback confirmation', { nextKey });
+      console.warn('[VIDEO]', 'switchTo skipped: app not started', { nextKey });
       return;
     }
     if (isSwitchingRef.current) {
@@ -736,7 +737,7 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current
       });
     }
-  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
+  }, [appStarted, collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, markActiveVideo, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
   const computeWhyNotJumped = useCallback(() => {
     const planned = plannedJumpRef.current;
@@ -920,7 +921,7 @@ export default function SceneView({
       : JUMP_RETURN_SCHEDULE_FALLBACK_MS;
 
     jumpReturnTimerRef.current = window.setTimeout(() => {
-      if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+      if (!autoNextEnabledRef.current || !appStarted) return;
       if (isInJumpRef.current && currentLoopKeyRef.current === nextKey) {
         console.warn('[VIDEO]', 'jump fallback return to MAIN_LOOP', { fromKey: nextKey, mainLoop: MAIN_LOOP });
         isInJumpRef.current = false;
@@ -936,7 +937,7 @@ export default function SceneView({
         });
       }
     }, fallbackDelay);
-  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, syncPlannedJumpDebug, updateVideoDebug]);
+  }, [appStarted, getCurrentVideoEl, scheduleNextJump, switchTo, syncPlannedJumpDebug, updateVideoDebug]);
   const runDebugForceAction = useCallback(async (
     action: 'FORCE_LOOP' | 'FORCE_LOOP2' | 'FORCE_MAIN' | 'FORCE_PLANNED' | 'RESCHEDULE_JUMP',
     runner: () => Promise<void> | void
@@ -981,7 +982,7 @@ export default function SceneView({
       videoId: endedEl?.id ?? activeVideo?.id ?? 'unknown'
     });
     updateVideoDebug({ lastEndedKey: activeKey });
-    if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+    if (!autoNextEnabledRef.current || !appStarted) return;
 
     if (isInJumpRef.current) {
       isInJumpRef.current = false;
@@ -1002,7 +1003,7 @@ export default function SceneView({
     void switchTo(MAIN_LOOP).then(() => {
       currentLoopKeyRef.current = MAIN_LOOP;
     });
-  }, [getCurrentVideoEl, hasConfirmedPlayback, pickNextJumpKey, scheduleNextJump, switchTo, updateVideoDebug]);
+  }, [appStarted, getCurrentVideoEl, pickNextJumpKey, scheduleNextJump, switchTo, updateVideoDebug]);
 
 
   const startOldhouseCalmMode = useCallback(async () => {
@@ -1085,19 +1086,19 @@ export default function SceneView({
   }, []);
 
   useEffect(() => {
-    if (!hasConfirmedPlayback) return;
+    if (!appStarted) return;
     void startOldhouseCalmMode().catch((error) => {
       console.error('[audio-required] 啟動失敗，已阻止進入直播開始狀態', error);
     });
-  }, [hasConfirmedPlayback, startOldhouseCalmMode]);
+  }, [appStarted, startOldhouseCalmMode]);
 
   useEffect(() => {
-    if (!hasConfirmedPlayback || !autoNextEnabledRef.current || isInJumpRef.current) return;
+    if (!appStarted || !autoNextEnabledRef.current || isInJumpRef.current) return;
     scheduleNextJump();
-  }, [hasConfirmedPlayback, scheduleNextJump]);
+  }, [appStarted, scheduleNextJump]);
 
   useEffect(() => {
-    if (!hasConfirmedPlayback) return;
+    if (!appStarted) return;
     if (jumpWatchdogRef.current) {
       window.clearInterval(jumpWatchdogRef.current);
       jumpWatchdogRef.current = null;
@@ -1117,7 +1118,15 @@ export default function SceneView({
       }
       updateVideoDebug({ timers: { watchdogTimer: null } });
     };
-  }, [execPlannedJump, hasConfirmedPlayback, updateVideoDebug]);
+  }, [appStarted, execPlannedJump, updateVideoDebug]);
+
+  useEffect(() => {
+    const shouldMute = !appStarted;
+    const videoA = videoARef.current;
+    const videoB = videoBRef.current;
+    if (videoA) videoA.muted = shouldMute;
+    if (videoB) videoB.muted = shouldMute;
+  }, [appStarted]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -1466,40 +1475,6 @@ export default function SceneView({
           />
         )}
 
-        {!hasConfirmedPlayback && (
-          <div className="content-warning-overlay" role="dialog" aria-modal="true" aria-label="內容警告">
-            <div className="content-warning-card">
-              <p>本影片含有驚悚內容，是否確認觀賞？</p>
-              <div className="content-warning-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasDeclinedPlayback(false);
-                    setHasConfirmedPlayback(true);
-                  }}
-                >
-                  是
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasDeclinedPlayback(true);
-                    setHasConfirmedPlayback(false);
-                    const videoA = videoARef.current;
-                    const videoB = videoBRef.current;
-                    if (videoA) videoA.pause();
-                    if (videoB) videoB.pause();
-                    stopAllNonPersistentSfx();
-                    audioEngine.stopFanLoop('declined_content_warning');
-                  }}
-                >
-                  否
-                </button>
-              </div>
-              {hasDeclinedPlayback && <small>你可以稍後按「是」開始播放。</small>}
-            </div>
-          </div>
-        )}
       </div>
 
       {!assets.videoOk && (
@@ -1549,6 +1524,7 @@ export default function SceneView({
           <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
           <div>event.lastGhostSfxReason: {window.__CHAT_DEBUG__?.lastGhostSfxReason ?? '-'}</div>
           <div>event.lastContentId/repeatBlocked: {window.__CHAT_DEBUG__?.lastContentId ?? '-'} / {String(window.__CHAT_DEBUG__?.contentRepeatBlocked ?? false)}</div>
+          <div>event.lastNameInjected: {window.__CHAT_DEBUG__?.lastNameInjected ?? '-'}</div>
           <div>event.violation: {window.__CHAT_DEBUG__?.violation ?? '-'}</div>
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
