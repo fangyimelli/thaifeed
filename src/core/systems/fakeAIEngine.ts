@@ -41,7 +41,7 @@ function sanitizeZh(text: string): string {
 }
 
 function createAnchorZhMessage(anchor: AnchorType): string {
-  return sanitizeZh(pickOne(corpus.anchors[anchor]?.zhOnly ?? [], '這格有點不對勁'));
+  return sanitizeZh(pickOne(corpus.anchors[anchor]?.zhOnly ?? [], '這裡有點不對勁'));
 }
 
 function createUrbanLegendZhMessage(anchor: AnchorType): string {

@@ -596,3 +596,22 @@ npm run dev
   - loop3 長時間停留時，至少每 90~140 秒規劃一次鬼動（loop/loop2）。
   - cooldown 若超過預期 3 倍視為 stale，會自動 reset 並記錄 debug。
   - 事件載入失敗採 backoff（5~12 秒）重排，不阻塞整體 pipeline。
+
+## Anti-Overanalysis Lint
+
+- 禁止句型：
+  - `第\s*\d+\s*(秒|段|格|幀)`
+  - `第 + 中文數字 + (秒|段|格|幀)`（例如「第七秒」）
+- 禁止詞彙（中英）：
+  - `frame`, `frame drop`, `bitrate`, `encoding`, `encode`, `codec`, `compress`, `artifact`, `calibrate`, `compare`, `amplitude`, `spectrum`
+  - `壓縮噪點`, `壓縮`, `編碼`, `噪點`, `校準`, `比對`, `振幅`, `頻譜`, `幀差`, `時間碼`
+- lint 行為：
+  - 聊天輸出最後出口會先檢查文字。
+  - 命中違規字詞時：拒絕送出並重抽，最多重抽 6 次。
+  - 若重抽仍失敗：強制改用 `SAFE_FALLBACK_POOL`，避免聊天室停擺。
+- `debug=1` 驗證方式：
+  - 於 debug overlay 檢查：
+    - `chat.lint.lastRejectedText`
+    - `chat.lint.lastRejectedReason`（`timecode_phrase` / `technical_term`）
+    - `chat.lint.rerollCount`
+  - 當句子被擋下並重抽時，上述欄位會更新，可直接確認 lint 正在工作。
