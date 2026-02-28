@@ -750,3 +750,40 @@ npm run dev
 - 事件排程快照在 `App.tsx` 週期性更新，欄位集中於 `event.*`。
 - 聊天快照由 `ChatEngine.getDebugState()` 提供，再回填到 `chat.*`。
 - `/debug` 頁（`/debug?debug=1`）顯示完整 snapshot 與快速推論（例如 `NO_CANDIDATES` / `INSUFFICIENT_ACTIVE_USERS` / `SCHEDULER_NOT_TICKING`）。
+
+## 事件必 tag 與事件台詞庫（2026-02）
+
+- 事件啟動 SSOT 已整合為 `src/core/events/*`：
+  - `eventRegistry.ts`：事件定義與挑選 key
+  - `eventTypes.ts`：事件型別
+  - `eventRunner.ts`：生命週期（tag -> active -> done/abort）
+  - `eventDialogs.ts`：事件台詞（opener/followUp/closer）
+  - `eventReactions.ts`：reaction topics（ghost/footsteps/light）
+  - `dedupe.ts`：短期防重複抽句
+- 所有事件都必須先送出 starter tag（`starterTagSent=true`）才允許進入後續流程。
+- 若 starter tag 送出失敗（例如 `chat_auto_paused` / `locked_target_only` / `rate_limited` / `empty`），事件會直接 `abort`，且不會觸發 SFX、影片切換、reactionBurst。
+
+### 台詞庫結構
+
+- 每個事件固定：
+  - `opener`: 8 句（全部 `@${activeUser}` 開頭）
+  - `followUp`: 6 句
+  - `closer`: 4 句（目前 FEAR_CHALLENGE 使用）
+- 防重複規則：
+  - 同一事件 opener：5 次內不重複
+  - 同一 topic reactions：8 次內不重複
+
+### debug=1 驗證「不會再有鬼聲無 tag」
+
+- 觀察 `event.lastEvent.starterTagSent`：
+  - `true` 才允許事件後續音效/影片行為
+  - `false` 代表事件已 abort，必須同時看到 `event.lastEvent.abortedReason`
+- 觀察 `event.lastEvent.lineIds` 與 `event.lastEvent.openerLineId/followUpLineId`，確認事件句子與流程對齊。
+- 觀察 `chat.activeUsers.count` + `chat.activeUsers.nameSample`，確認當前可 tag 對象。
+- 觀察 `ui.send.lastResult` + `ui.send.blockedReason`，定位 starter tag 被阻擋原因。
+
+### Debug 三次 PR 未提及就移除（追蹤清單更新）
+
+- `events_not_firing`：追蹤 `event.registry` / `event.candidates` / `event.lastEvent`。
+- `chat_auto_paused`：追蹤 `ui.send.lastResult` / `ui.send.blockedReason`。
+- `event_tag_abort_chain`：追蹤 `event.lastEvent.starterTagSent` / `event.lastEvent.abortedReason` / `event.lastEvent.lineIds`。
