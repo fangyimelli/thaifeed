@@ -182,7 +182,7 @@ declare global {
       queueLength?: number;
       blockedReasons?: Record<string, number>;
       chat?: {
-        pacing?: { mode?: 'normal' | 'fast' | 'burst' | 'tag_slow'; nextModeInSec?: number };
+        pacing?: { mode?: 'normal' | 'slightlyBusy' | 'tense' | 'quiet' | 'tag_slow'; nextModeInSec?: number };
         lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
       };
       event?: {
