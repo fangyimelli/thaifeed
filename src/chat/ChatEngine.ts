@@ -119,6 +119,7 @@ export class ChatEngine {
         };
         lintRerollCount += 1;
         if (lintRerollCount <= 6) continue;
+        break;
       }
 
       const digest = hashText(normalized);
@@ -155,10 +156,7 @@ export class ChatEngine {
       };
     }
 
-    const fallback = SAFE_FALLBACK_POOL[Math.floor(Math.random() * SAFE_FALLBACK_POOL.length)] ?? '先等等 我有點發毛';
-    const fallbackNormalized = normalizeText(fallback);
-    const fallbackReason = getChatLintReason(fallbackNormalized);
-    if (fallbackReason) return null;
+    const fallbackNormalized = this.pickSafeFallback();
     const digest = hashText(fallbackNormalized);
     const envelope: ChatEnvelope = {
       type,
@@ -183,6 +181,15 @@ export class ChatEngine {
       personaId: envelope.personaId,
       tagTarget: envelope.tagTarget
     };
+  }
+
+  private pickSafeFallback(): string {
+    for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
+      const fallback = SAFE_FALLBACK_POOL[Math.floor(Math.random() * SAFE_FALLBACK_POOL.length)] ?? '';
+      const normalized = normalizeText(fallback);
+      if (normalized && !getChatLintReason(normalized)) return normalized;
+    }
+    return '先等等 我有點發毛';
   }
 
   private dequeueContent(type: ChatMessageType): EventContentPayload | undefined {

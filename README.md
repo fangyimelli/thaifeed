@@ -606,9 +606,10 @@ npm run dev
   - `frame`, `frame drop`, `bitrate`, `encoding`, `encode`, `codec`, `compress`, `artifact`, `calibrate`, `compare`, `amplitude`, `spectrum`
   - `壓縮噪點`, `壓縮`, `編碼`, `噪點`, `校準`, `比對`, `振幅`, `頻譜`, `幀差`, `時間碼`
 - lint 行為：
-  - 聊天輸出最後出口會先檢查文字。
+  - 在 `ChatEngine.composeMessage` 與 `generateChatMessageV2` 先做一次 lint，命中就重抽（最多 6 次）。
+  - 在 `App.dispatchAudienceMessage` 的最終送出出口再做第二層 lint（雙保險）。
   - 命中違規字詞時：拒絕送出並重抽，最多重抽 6 次。
-  - 若重抽仍失敗：強制改用 `SAFE_FALLBACK_POOL`，避免聊天室停擺。
+  - 若重抽仍失敗：強制改用 `SAFE_FALLBACK_POOL` 或保底句，避免聊天室停擺且不輸出違規句。
 - `debug=1` 驗證方式：
   - 於 debug overlay 檢查：
     - `chat.lint.lastRejectedText`

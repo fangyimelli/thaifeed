@@ -240,6 +240,7 @@ export function generateChatMessageV2(input: GenerateInput): ChatMessage {
     if (lintReason) {
       lintRerollCount += 1;
       if (lintRerollCount <= 6) continue;
+      break;
     }
 
     rememberMessage(candidate.text);
@@ -252,7 +253,7 @@ export function generateChatMessageV2(input: GenerateInput): ChatMessage {
     };
   }
 
-  const fallback = lintCanon(pickOne(SAFE_FALLBACK_POOL)) || '先等等 我有點發毛';
+  const fallback = pickSafeFallbackLine();
   rememberMessage(fallback);
   return {
     id: crypto.randomUUID(),
@@ -261,6 +262,15 @@ export function generateChatMessageV2(input: GenerateInput): ChatMessage {
     language: 'zh',
     translation: fallback
   };
+}
+
+
+function pickSafeFallbackLine(): string {
+  for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
+    const candidate = lintCanon(pickOne(SAFE_FALLBACK_POOL));
+    if (candidate && !getChatLintReason(candidate)) return candidate;
+  }
+  return '先等等 我有點發毛';
 }
 
 export function createSpeechWaveV2(anchor: AnchorType, recentHistory: string[], activeUsers: string[]): ChatMessage[] {

@@ -66,7 +66,7 @@ export const TYPE_FALLBACK_POOLS: Record<ChatMessageType, string[]> = {
   [ChatMessageType.UI_STATUS]: ['系統已就緒'],
   [ChatMessageType.IDLE_BORING]: ['今天這裡就是一直吊著人', '我一直在等下一個動靜'],
   [ChatMessageType.SCENE_FLICKER_REACT]: ['切鏡後整個氣壓變了', '這一下切換太突兀了'],
-  [ChatMessageType.SFX_REACT_FAN]: ['風扇聲是不是怪怪的', '剛剛風扇聲好像變重了', '你們有沒有覺得聲音不太一樣', '可能我錯覺 但我聽了不舒服', '我戴耳機整個毛起來'],
+  [ChatMessageType.SFX_REACT_FAN]: ['風扇聲是不是怪怪的', '剛剛風扇聲好像變重了', '你們有沒有覺得聲音不太一樣', '可能我錯覺 但我聽了不舒服', '我戴耳機整個毛起來', '那個聲音忽然壓過來 我好不舒服', '剛剛那陣聲音讓我背脊發緊', '我怎麼聽到一種越靠越近的感覺', '這個嗡嗡聲讓我心裡一直發毛', '你們也有聽到那種悶悶的變化嗎', '那聲音一下輕一下重 我快不敢聽', '我耳機裡那股聲音怪到不行'],
   [ChatMessageType.SFX_REACT_FOOTSTEPS]: ['我剛剛真的聽到腳步', '是不是有人在外面走動'],
   [ChatMessageType.SFX_REACT_GHOST]: ['เสียงนั้นมาอีกแล้วเงียบเลย', 'อย่าหันกลับนะ']
 };
