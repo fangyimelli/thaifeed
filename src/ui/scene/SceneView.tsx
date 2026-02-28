@@ -163,18 +163,39 @@ declare global {
     __AUDIO_DEBUG__?: AudioDebugState;
     __VIDEO_DEBUG__?: VideoDebugState;
     __CHAT_DEBUG__?: {
-      lastEventKey: string;
-      lastEventReason: string;
-      lastLineKey: string;
-      lastVariantId: string;
-      lastTone: string;
-      lastPersona: string;
-      lastSfxKey: string;
-      lastSfxReason: string;
-      sfxCooldowns: Record<string, number>;
-      lock: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
-      queueLength: number;
-      blockedReasons: Record<string, number>;
+      lastEventKey?: string;
+      lastEventReason?: string;
+      lastLineKey?: string;
+      lastVariantId?: string;
+      lastTone?: string;
+      lastPersona?: string;
+      lastSfxKey?: string;
+      lastSfxReason?: string;
+      sfxCooldowns?: Record<string, number>;
+      lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
+      queueLength?: number;
+      blockedReasons?: Record<string, number>;
+      ui?: {
+        send?: {
+          lastClickAt?: number;
+          lastSubmitAt?: number;
+          lastAttemptAt?: number;
+          blockedAt?: number;
+          lastResult?: 'sent' | 'blocked' | 'error' | '-';
+          blockedReason?: string;
+          errorMessage?: string;
+          stateSnapshot?: {
+            inputLen?: number;
+            isSending?: boolean;
+            isComposing?: boolean;
+            cooldownMsLeft?: number;
+            tagLockActive?: boolean;
+            replyTarget?: string | null;
+            mentionTarget?: string | null;
+            canSendComputed?: boolean;
+          };
+        };
+      };
     };
   }
 }
@@ -1476,6 +1497,13 @@ export default function SceneView({
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
           <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>ui.send.lastClickAt: {window.__CHAT_DEBUG__?.ui?.send?.lastClickAt ?? '-'}</div>
+          <div>ui.send.lastSubmitAt: {window.__CHAT_DEBUG__?.ui?.send?.lastSubmitAt ?? '-'}</div>
+          <div>ui.send.lastAttemptAt: {window.__CHAT_DEBUG__?.ui?.send?.lastAttemptAt ?? '-'}</div>
+          <div>ui.send.lastResult: {window.__CHAT_DEBUG__?.ui?.send?.lastResult ?? '-'}</div>
+          <div>ui.send.blockedReason: {window.__CHAT_DEBUG__?.ui?.send?.blockedReason || '-'}</div>
+          <div>ui.send.errorMessage: {window.__CHAT_DEBUG__?.ui?.send?.errorMessage || '-'}</div>
+          <div>ui.send.stateSnapshot: {JSON.stringify(window.__CHAT_DEBUG__?.ui?.send?.stateSnapshot ?? null)}</div>
         </div>
 
         <div className="video-debug-controls-panel">

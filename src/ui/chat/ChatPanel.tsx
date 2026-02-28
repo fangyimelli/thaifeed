@@ -3,18 +3,26 @@ import type { ChatMessage as ChatMessageType } from '../../core/state/types';
 import { collectActiveUsers, getActiveUserSet, sanitizeMentions } from '../../core/systems/mentionV2';
 import ChatMessage from './ChatMessage';
 import { isMobileDevice } from '../../utils/isMobile';
+import type { SendResult, SendSource } from '../../app/App';
 
 type Props = {
   messages: ChatMessageType[];
   input: string;
   onChange: (value: string) => void;
-  onSubmit: () => Promise<boolean>;
+  onSubmit: (source: SendSource) => Promise<SendResult>;
   onToggleTranslation: (id: string) => void;
   onAutoPauseChange: (paused: boolean) => void;
   isSending: boolean;
   isReady: boolean;
+  isComposing: boolean;
   loadingStatusText: string;
   onInputHeightChange?: (height: number) => void;
+  onCompositionStateChange: (isComposing: boolean) => void;
+  sendFeedback?: string | null;
+  onDebugSimulateSend?: () => Promise<SendResult>;
+  onDebugToggleSelfTag?: () => void;
+  onDebugToggleComposing?: () => void;
+  onSendButtonClick?: () => void;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -31,14 +39,22 @@ export default function ChatPanel({
   onAutoPauseChange,
   isSending,
   isReady,
+  isComposing,
   loadingStatusText,
-  onInputHeightChange
+  onInputHeightChange,
+  onCompositionStateChange,
+  sendFeedback,
+  onDebugSimulateSend,
+  onDebugToggleSelfTag,
+  onDebugToggleComposing,
+  onSendButtonClick
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const keyboardSinkRef = useRef<HTMLButtonElement>(null);
   const inputFormRef = useRef<HTMLFormElement>(null);
+  const submitPendingRef = useRef(false);
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
   const viewportSyncUntilRef = useRef(0);
@@ -109,15 +125,15 @@ export default function ChatPanel({
     logDebugState('closeKeyboard');
   };
 
-  const handleMessageSubmit = async () => {
-    const sent = await onSubmit();
-    if (!sent) return;
+  const handleMessageSubmit = async (source: SendSource) => {
+    const result = await onSubmit(source);
+    if (!result.ok) return;
 
     window.requestAnimationFrame(() => {
       scrollChatToBottom('after-append');
     });
 
-    if (isMobile) {
+    if (isMobile && (window.visualViewport || window.innerWidth < 1024)) {
       closeKeyboard();
       window.setTimeout(() => {
         scrollChatToBottom('after-closeKeyboard');
@@ -238,7 +254,8 @@ export default function ChatPanel({
         className="chat-input input-surface"
         onSubmit={(event) => {
           event.preventDefault();
-          void handleMessageSubmit();
+          submitPendingRef.current = false;
+          void handleMessageSubmit('submit');
         }}
       >
         <input
@@ -247,29 +264,33 @@ export default function ChatPanel({
           onChange={(event) => onChange(event.target.value)}
           onCompositionStart={() => {
             isComposingRef.current = true;
+            onCompositionStateChange(true);
           }}
           onCompositionEnd={() => {
             isComposingRef.current = false;
+            onCompositionStateChange(false);
           }}
           onKeyDown={(event) => {
             const nativeIsComposing = (event.nativeEvent as KeyboardEvent).isComposing;
             const isImeEnter = event.keyCode === 229;
             if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !nativeIsComposing && !isImeEnter) {
               event.preventDefault();
-              void handleMessageSubmit();
+              void handleMessageSubmit('submit');
             }
           }}
           placeholder="傳送訊息"
         />
         <button
-          type="button"
+          type="submit"
           disabled={isSending || !isReady}
           onClick={() => {
-            void handleMessageSubmit();
-          }}
-          onTouchEnd={(event) => {
-            event.preventDefault();
-            void handleMessageSubmit();
+            onSendButtonClick?.();
+            submitPendingRef.current = true;
+            window.setTimeout(() => {
+              if (!submitPendingRef.current) return;
+              submitPendingRef.current = false;
+              void handleMessageSubmit('fallback_click');
+            }, 0);
           }}
         >
           {!isReady ? '初始化中…' : isSending ? '送出中…' : '送出'}
@@ -282,6 +303,16 @@ export default function ChatPanel({
           className="keyboard-focus-sink"
         />
       </form>
+
+      {!!sendFeedback && <div className="chat-send-feedback">{sendFeedback}</div>}
+
+      {debugEnabled && (
+        <div className="chat-debug-send-tools">
+          <button type="button" onClick={() => { void onDebugSimulateSend?.(); }}>Simulate Send</button>
+          <button type="button" onClick={onDebugToggleSelfTag}>Toggle TagLock(Self)</button>
+          <button type="button" onClick={onDebugToggleComposing}>Toggle isComposing ({String(isComposing)})</button>
+        </div>
+      )}
     </section>
   );
 }
