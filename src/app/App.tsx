@@ -25,6 +25,8 @@ import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
 import { EventEngine } from '../director/EventEngine';
 import { ChatEngine } from '../chat/ChatEngine';
+import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
+import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -47,6 +49,51 @@ function randomInt(min: number, max: number) {
 
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
+}
+
+function pickSafeFallbackText() {
+  for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
+    const candidate = pickOne(SAFE_FALLBACK_POOL).trim();
+    if (candidate && !getChatLintReason(candidate)) return candidate;
+  }
+  return '先等等 我有點發毛';
+}
+
+function lintOutgoingMessage(message: ChatMessage): { message: ChatMessage; rejectedText: string; rejectedReason: string; rerollCount: number } {
+  const reason = getChatLintReason(message.text);
+  if (!reason) {
+    return { message, rejectedText: '-', rejectedReason: '-', rerollCount: 0 };
+  }
+
+  let rerollCount = 0;
+  while (rerollCount < 6) {
+    const fallback = pickSafeFallbackText();
+    rerollCount += 1;
+    if (!getChatLintReason(fallback)) {
+      return {
+        message: {
+          ...message,
+          text: fallback,
+          translation: message.language === 'th' ? message.translation : fallback
+        },
+        rejectedText: truncateLintText(message.text),
+        rejectedReason: reason,
+        rerollCount
+      };
+    }
+  }
+
+  const safeFallback = '先等等 我有點發毛';
+  return {
+    message: {
+      ...message,
+      text: safeFallback,
+      translation: message.language === 'th' ? message.translation : safeFallback
+    },
+    rejectedText: truncateLintText(message.text),
+    rejectedReason: reason,
+    rerollCount: 6
+  };
 }
 
 type ChatPacingMode = 'normal' | 'fast' | 'burst' | 'tag_slow';
@@ -181,7 +228,21 @@ export default function App() {
   }, [isDesktopLayout]);
 
   const dispatchAudienceMessage = (message: ChatMessage) => {
-    dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
+    const linted = lintOutgoingMessage(message);
+    if (linted.rejectedReason !== '-') {
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          lint: {
+            lastRejectedText: linted.rejectedText,
+            lastRejectedReason: linted.rejectedReason,
+            rerollCount: linted.rerollCount
+          }
+        }
+      };
+    }
+    dispatch({ type: 'AUDIENCE_MESSAGE', payload: linted.message });
   };
 
   const syncChatEngineDebug = () => {
