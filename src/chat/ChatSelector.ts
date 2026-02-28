@@ -44,7 +44,7 @@ export function buildReactionWindow(
   const maxGapMs = Math.max(2_000, 5_000 - intensity * 300);
 
   if (event.type === 'SCENE_SWITCH') {
-    if (!['oldhouse_room_loop', 'oldhouse_room_loop2', 'oldhouse_room_loop4'].includes(event.toKey)) return null;
+    if (!['oldhouse_room_loop', 'oldhouse_room_loop2'].includes(event.toKey)) return null;
     return {
       startAt: now + 5_000,
       endAt: now + 5_000 + durationMs,

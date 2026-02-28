@@ -49,6 +49,18 @@ function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
 }
 
+type ChatPacingMode = 'normal' | 'fast' | 'burst' | 'tag_slow';
+
+type EventSchedulerDebug = {
+  now: number;
+  nextDueAt: number;
+  lastFiredAt: number;
+  blocked: boolean;
+  blockedReason: string;
+  cooldowns: Record<string, number>;
+  lastEvent: string;
+};
+
 
 
 function formatMissingAsset(asset: MissingRequiredAsset) {
@@ -99,6 +111,22 @@ export default function App() {
   const soundUnlocked = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
+  const pacingModeRef = useRef<ChatPacingMode>('normal');
+  const pacingModeUntilRef = useRef(0);
+  const pacingNextModeFlipAtRef = useRef(Date.now() + randomInt(10_000, 25_000));
+  const pacingBurstRollAtRef = useRef(Date.now() + randomInt(45_000, 120_000));
+  const tagSlowActiveRef = useRef(false);
+  const recentAutoUserRef = useRef<{ username: string; count: number }>({ username: '', count: 0 });
+  const eventSchedulerRef = useRef<EventSchedulerDebug>({
+    now: Date.now(),
+    nextDueAt: Date.now() + randomInt(90_000, 140_000),
+    lastFiredAt: 0,
+    blocked: false,
+    blockedReason: '-',
+    cooldowns: {},
+    lastEvent: '-'
+  });
+  const eventRetryTimerRef = useRef<number | null>(null);
   const chatEngineRef = useRef(new ChatEngine());
   const eventEngineRef = useRef(new EventEngine({
     playSfx: (sfxKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SFX', sfxKey, reason, delayMs }),
@@ -162,7 +190,7 @@ export default function App() {
   };
 
   const emitEvent = (eventKey: string, context: { tagTarget?: string; lockTarget?: string } = {}) => {
-    eventEngineRef.current.trigger(eventKey, { messages: state.messages, ...context });
+    eventEngineRef.current.trigger(eventKey, { messages: state.messages, ...context, now: Date.now() });
     const pendingContent = eventEngineRef.current.drainPendingContent();
     pendingContent.forEach((payload) => chatEngineRef.current.enqueueContent(payload));
     const eventDebug = eventEngineRef.current.getDebugState() as unknown as Window['__CHAT_DEBUG__'];
@@ -241,20 +269,84 @@ export default function App() {
     if (!isReady || chatAutoPaused) return;
     let timer = 0;
     const nextInterval = () => {
-      const low = Math.max(900, 2200 - Math.floor(state.curse * 7));
-      const high = Math.max(1800, 5200 - Math.floor(state.curse * 20));
-      return randomInt(low, high);
+      const now = Date.now();
+      if (tagSlowActiveRef.current) {
+        pacingModeRef.current = 'tag_slow';
+      } else {
+        if (pacingModeRef.current !== 'burst' && now >= pacingBurstRollAtRef.current) {
+          if (Math.random() < 0.35) {
+            pacingModeRef.current = 'burst';
+            pacingModeUntilRef.current = now + randomInt(8_000, 15_000);
+          }
+          pacingBurstRollAtRef.current = now + randomInt(45_000, 120_000);
+        }
+        if (pacingModeRef.current === 'burst' && now >= pacingModeUntilRef.current) {
+          pacingModeRef.current = 'normal';
+        }
+        if (pacingModeRef.current !== 'burst' && now >= pacingNextModeFlipAtRef.current) {
+          if (pacingModeRef.current === 'fast') {
+            pacingModeRef.current = 'normal';
+            pacingNextModeFlipAtRef.current = now + randomInt(10_000, 25_000);
+          } else {
+            pacingModeRef.current = 'fast';
+            pacingModeUntilRef.current = now + randomInt(2_000, 6_000);
+            pacingNextModeFlipAtRef.current = pacingModeUntilRef.current;
+          }
+        }
+        if (pacingModeRef.current === 'fast' && now >= pacingModeUntilRef.current) {
+          pacingModeRef.current = 'normal';
+          pacingNextModeFlipAtRef.current = now + randomInt(10_000, 25_000);
+        }
+      }
+
+      const mode = pacingModeRef.current;
+      const base = mode === 'burst'
+        ? randomInt(80, 320)
+        : mode === 'fast'
+          ? randomInt(120, 450)
+          : randomInt(350, 1800);
+      const scaled = mode === 'tag_slow' ? Math.floor(base * (1.5 + Math.random() * 0.5)) : base;
+      const transitionAt = mode === 'tag_slow'
+        ? null
+        : mode === 'burst' || mode === 'fast'
+          ? pacingModeUntilRef.current
+          : Math.min(pacingBurstRollAtRef.current, pacingNextModeFlipAtRef.current);
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          pacing: {
+            mode,
+            nextModeInSec: transitionAt ? Math.max(0, Math.ceil((transitionAt - now) / 1000)) : -1
+          }
+        }
+      };
+      return scaled;
     };
+
+    const dispatchTimedChats = (messages: ChatMessage[]) => {
+      messages.forEach((message) => {
+        if (pacingModeRef.current === 'burst') {
+          const recent = recentAutoUserRef.current;
+          if (message.username === recent.username && recent.count >= 2) return;
+          recentAutoUserRef.current = message.username === recent.username
+            ? { username: message.username, count: recent.count + 1 }
+            : { username: message.username, count: 1 };
+        }
+        dispatchAudienceMessage(message);
+      });
+    };
+
     const tick = () => {
       const timedChats = chatEngineRef.current.tick(Date.now());
-      timedChats.forEach(dispatchAudienceMessage);
+      dispatchTimedChats(timedChats);
       emitChatEvent({ type: 'IDLE_TICK' });
       emitEvent('IDLE_TICK');
       timer = window.setTimeout(tick, nextInterval());
     };
     timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
-  }, [isReady, chatAutoPaused, state.curse, state.messages]);
+  }, [chatAutoPaused, isReady, state.messages]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
@@ -277,6 +369,91 @@ export default function App() {
 
     return () => unsubscribe();
   }, [state.messages]);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    const fireGhostEvent = (reason: string) => {
+      const now = Date.now();
+      eventSchedulerRef.current.lastFiredAt = now;
+      eventSchedulerRef.current.lastEvent = reason;
+      requestSceneAction({
+        type: 'REQUEST_SFX',
+        sfxKey: Math.random() < 0.5 ? 'ghost_female' : 'footsteps',
+        reason: `scheduler:${reason}`,
+        delayMs: 2_000
+      });
+      emitEvent('SFX_GHOST_REACT');
+      window.setTimeout(() => emitEvent('SFX_FOOTSTEPS_REACT'), randomInt(10_000, 12_000));
+      window.setTimeout(() => {
+        const sceneKey = Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2';
+        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey, reason: `scheduler:${reason}`, delayMs: 5_000 });
+      }, 0);
+      window.setTimeout(() => emitEvent('SCENE_SWITCH_REACT'), 7_000);
+      eventSchedulerRef.current.nextDueAt = now + randomInt(90_000, 140_000);
+    };
+
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      eventEngineRef.current.resetStaleCooldowns(now);
+      const cooldowns = eventEngineRef.current.getCooldownSnapshot();
+      const due = eventSchedulerRef.current.nextDueAt;
+      const blockedByCooldown = Object.values(cooldowns).some((until) => until > now);
+      eventSchedulerRef.current = {
+        ...eventSchedulerRef.current,
+        now,
+        cooldowns,
+        blocked: blockedByCooldown,
+        blockedReason: blockedByCooldown ? 'event_cooldown_active' : '-'
+      };
+      if (now >= due && !blockedByCooldown) {
+        fireGhostEvent('scheduled');
+      } else if (now >= due && blockedByCooldown && !eventRetryTimerRef.current) {
+        eventRetryTimerRef.current = window.setTimeout(() => {
+          eventRetryTimerRef.current = null;
+          fireGhostEvent('backoff_retry');
+        }, randomInt(5_000, 12_000));
+      }
+
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          scheduler: {
+            now: eventSchedulerRef.current.now,
+            nextDueAt: eventSchedulerRef.current.nextDueAt,
+            lastFiredAt: eventSchedulerRef.current.lastFiredAt,
+            blocked: eventSchedulerRef.current.blocked,
+            blockedReason: eventSchedulerRef.current.blockedReason,
+            cooldowns: eventSchedulerRef.current.cooldowns
+          },
+          lastEvent: eventSchedulerRef.current.lastEvent
+        }
+      };
+    }, 1000);
+
+    (window as Window & {
+      __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
+    }).__EVENT_SCHEDULER_CONTROLS__ = {
+      forceFire: () => fireGhostEvent('force_fire'),
+      resetLocks: () => {
+        eventEngineRef.current.resetLocks();
+        eventSchedulerRef.current.blocked = false;
+        eventSchedulerRef.current.blockedReason = 'manual_reset';
+      }
+    };
+
+    return () => {
+      window.clearInterval(timer);
+      if (eventRetryTimerRef.current) {
+        window.clearTimeout(eventRetryTimerRef.current);
+        eventRetryTimerRef.current = null;
+      }
+      (window as Window & {
+        __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
+      }).__EVENT_SCHEDULER_CONTROLS__ = undefined;
+    };
+  }, [emitEvent, isReady]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -587,6 +764,7 @@ export default function App() {
       if (isPassCommand(raw)) {
         handlePass();
         sendCooldownUntil.current = Date.now() + 350;
+        tagSlowActiveRef.current = false;
         const next = { ...attemptDebug, lastResult: 'sent' as const };
         setSendDebug(next);
         logSendDebug('sent', { source, mode: 'pass' });
@@ -612,6 +790,7 @@ export default function App() {
       if (isHintInput) {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
+        tagSlowActiveRef.current = false;
         const next = { ...attemptDebug, lastResult: 'sent' as const };
         setSendDebug(next);
         logSendDebug('sent', { source, mode: 'hint' });
@@ -640,6 +819,7 @@ export default function App() {
         });
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
+        tagSlowActiveRef.current = false;
         const next = { ...attemptDebug, lastResult: 'sent' as const };
         setSendDebug(next);
         logSendDebug('sent', { source, mode: 'answer_correct' });
@@ -664,6 +844,7 @@ export default function App() {
       });
       setInput('');
       sendCooldownUntil.current = Date.now() + 350;
+      tagSlowActiveRef.current = false;
       const next = { ...attemptDebug, lastResult: 'sent' as const };
       setSendDebug(next);
       logSendDebug('sent', { source, mode: 'answer_wrong' });
@@ -690,6 +871,11 @@ export default function App() {
     }
     return submitChat(input, source);
   }, [input, logSendDebug, submitChat]);
+
+
+  useEffect(() => {
+    tagSlowActiveRef.current = Boolean(replyTarget || mentionTarget);
+  }, [mentionTarget, replyTarget]);
 
   const handleSendButtonClick = useCallback(() => {
     setSendDebug((prev) => ({ ...prev, lastClickAt: Date.now() }));

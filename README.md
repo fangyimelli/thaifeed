@@ -131,7 +131,7 @@ npm run dev
 
 - 播放策略 SSOT（`src/config/oldhousePlayback.ts`）：
   - `MAIN_LOOP = oldhouse_room_loop3`（主畫面常駐）
-  - `JUMP_LOOPS = [oldhouse_room_loop, oldhouse_room_loop2]`（插播僅兩支，暫停 loop4）
+  - `JUMP_LOOPS = [oldhouse_room_loop, oldhouse_room_loop2]`（插播僅兩支，已完整移除 loop4）
 - 插播間隔（`computeJumpIntervalMs(curse)`）：
   - `debug=1`：固定 `10,000 ~ 15,000 ms`（驗收快速回歸用）
   - 正式模式：
@@ -417,7 +417,7 @@ npm run dev
 - `SOCIAL_REPLY`：聊天室互動與 tag 回覆
 - `UI_STATUS`：系統狀態提示
 - `IDLE_BORING`：loop3 期間「沒事發生但越看越毛」
-- `SCENE_FLICKER_REACT`：loop/loop2/loop4 的燈閃反應
+- `SCENE_FLICKER_REACT`：loop/loop2 的燈閃反應
 - `SFX_REACT_FAN` / `SFX_REACT_FOOTSTEPS` / `SFX_REACT_GHOST`：音效事件反應
 
 ### 規則
@@ -435,7 +435,7 @@ npm run dev
 
 ### 事件與觸發
 - `IDLE_TICK`：自然聊天節奏
-- `SCENE_SWITCH(toKey)`：切到 loop/loop2/loop4 後 5 秒進入 reaction window
+- `SCENE_SWITCH(toKey)`：切到 loop/loop2 後 5 秒進入 reaction window
 - `SFX_START(sfxKey)`：音效開始後 2 秒進入 reaction window
 - `USER_SENT`：玩家送出訊息觸發社交回應/壓力回應
 - `CURSE_CHANGE`：調整 reaction window 密度（高 curse 提高句數、縮短間隔）
@@ -560,3 +560,39 @@ npm run dev
 - `Simulate Send`：以目前 input 走同一條 submit 流程。
 - `Toggle TagLock(Self)`：把 tag/reply target 切到自己，驗證會被自動解除。
 - `Toggle isComposing`：模擬 composition 狀態，驗證不會永遠卡死。
+
+
+## Loop4 Removal（完整移除）
+
+- `oldhouse_room_loop4` 已從場景切換候選與聊天反應條件完整移除，鬼動僅使用 `loop / loop2`，`loop3` 作為常態主畫面。
+- 專案啟動所需素材仍維持 3 支影片（loop/loop2/loop3）+ 3 支音效（fan/footsteps/ghost）。
+- Debug overlay 不再顯示任何 loop4 相關候選或規劃鍵值。
+
+## Chat Pacing 狀態機設計
+
+- 模式：`normal | fast | burst | tag_slow`。
+- `normal`：350~1800ms。
+- `fast`：每 10~25 秒進入一次，持續 2~6 秒，120~450ms。
+- `burst`：每 45~120 秒檢查一次，35% 機率進入，持續 8~15 秒，80~320ms，且限制同一使用者最多連續 2 則。
+- `tag_slow`：當 tag lock 存在時啟用，速度為原本 x1.5~2，直到玩家回覆送出才解除。
+- 僅更動間隔模型，不更動使用者名稱生成與語氣句池策略。
+
+## Event Scheduler Debug 指南
+
+- 新增 debug 欄位：
+  - `chat.pacing.mode`
+  - `chat.pacing.nextModeInSec`
+  - `event.scheduler.now`
+  - `event.scheduler.nextDueAt`
+  - `event.scheduler.lastFiredAt`
+  - `event.scheduler.blocked`
+  - `event.scheduler.blockedReason`
+  - `event.scheduler.cooldowns`
+  - `event.lastEvent`
+- 新增 debug 控制按鈕：
+  - `Force Fire Event`
+  - `Reset Event Locks`
+- Scheduler 保障：
+  - loop3 長時間停留時，至少每 90~140 秒規劃一次鬼動（loop/loop2）。
+  - cooldown 若超過預期 3 倍視為 stale，會自動 reset 並記錄 debug。
+  - 事件載入失敗採 backoff（5~12 秒）重排，不阻塞整體 pipeline。

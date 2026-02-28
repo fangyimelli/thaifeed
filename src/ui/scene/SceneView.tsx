@@ -160,6 +160,7 @@ const SCENE_MAP_DIGEST: Record<OldhouseLoopKey, string> = {
 
 declare global {
   interface Window {
+    __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
     __AUDIO_DEBUG__?: AudioDebugState;
     __VIDEO_DEBUG__?: VideoDebugState;
     __CHAT_DEBUG__?: {
@@ -175,6 +176,18 @@ declare global {
       lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
       queueLength?: number;
       blockedReasons?: Record<string, number>;
+      chat?: { pacing?: { mode?: 'normal' | 'fast' | 'burst' | 'tag_slow'; nextModeInSec?: number } };
+      event?: {
+        scheduler?: {
+          now?: number;
+          nextDueAt?: number;
+          lastFiredAt?: number;
+          blocked?: boolean;
+          blockedReason?: string;
+          cooldowns?: Record<string, number>;
+        };
+        lastEvent?: string;
+      };
       ui?: {
         send?: {
           lastClickAt?: number;
@@ -1497,6 +1510,15 @@ export default function SceneView({
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
           <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
+          <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
+          <div>event.scheduler.now: {window.__CHAT_DEBUG__?.event?.scheduler?.now ?? '-'}</div>
+          <div>event.scheduler.nextDueAt: {window.__CHAT_DEBUG__?.event?.scheduler?.nextDueAt ?? '-'}</div>
+          <div>event.scheduler.lastFiredAt: {window.__CHAT_DEBUG__?.event?.scheduler?.lastFiredAt ?? '-'}</div>
+          <div>event.scheduler.blocked: {String(window.__CHAT_DEBUG__?.event?.scheduler?.blocked ?? false)}</div>
+          <div>event.scheduler.blockedReason: {window.__CHAT_DEBUG__?.event?.scheduler?.blockedReason ?? '-'}</div>
+          <div>event.scheduler.cooldowns: {Object.entries(window.__CHAT_DEBUG__?.event?.scheduler?.cooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>event.lastEvent: {window.__CHAT_DEBUG__?.event?.lastEvent ?? '-'}</div>
           <div>ui.send.lastClickAt: {window.__CHAT_DEBUG__?.ui?.send?.lastClickAt ?? '-'}</div>
           <div>ui.send.lastSubmitAt: {window.__CHAT_DEBUG__?.ui?.send?.lastSubmitAt ?? '-'}</div>
           <div>ui.send.lastAttemptAt: {window.__CHAT_DEBUG__?.ui?.send?.lastAttemptAt ?? '-'}</div>
@@ -1513,6 +1535,8 @@ export default function SceneView({
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_MAIN', () => switchTo('oldhouse_room_loop3')); }}>▶ Force MAIN</button>
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_PLANNED', forcePlannedJumpNow); }}>⚡ Force Planned Jump Now</button>
             <button type="button" onClick={() => { void runDebugForceAction('RESCHEDULE_JUMP', () => scheduleNextJump({ force: true })); }}>🔁 Reschedule Jump</button>
+            <button type="button" onClick={() => { window.__EVENT_SCHEDULER_CONTROLS__?.forceFire(); }}>⚡ Force Fire Event</button>
+            <button type="button" onClick={() => { window.__EVENT_SCHEDULER_CONTROLS__?.resetLocks(); }}>🧹 Reset Event Locks</button>
           </div>
         </div>
         </>
