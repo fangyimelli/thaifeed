@@ -97,7 +97,30 @@ function lintOutgoingMessage(message: ChatMessage): { message: ChatMessage; reje
   };
 }
 
-type ChatPacingMode = 'normal' | 'fast' | 'burst' | 'tag_slow';
+type ChatPacingMode = 'normal' | 'slightlyBusy' | 'tense' | 'tag_slow';
+type TopicWeightProfile = {
+  randomComment: number;
+  videoObservation: number;
+  suspicion: number;
+  buildUp: number;
+  eventTopic: number;
+};
+
+const NORMAL_TOPIC_WEIGHT: TopicWeightProfile = {
+  randomComment: 60,
+  videoObservation: 25,
+  suspicion: 10,
+  buildUp: 5,
+  eventTopic: 0
+};
+
+const EVENT_TOPIC_WEIGHT: TopicWeightProfile = {
+  eventTopic: 70,
+  randomComment: 20,
+  suspicion: 10,
+  videoObservation: 0,
+  buildUp: 0
+};
 
 type StoryEventKey =
   | 'VOICE_CONFIRM'
@@ -247,10 +270,12 @@ export default function App() {
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
   const pacingModeRef = useRef<ChatPacingMode>('normal');
   const pacingModeUntilRef = useRef(0);
-  const pacingNextModeFlipAtRef = useRef(Date.now() + randomInt(10_000, 25_000));
-  const pacingBurstRollAtRef = useRef(Date.now() + randomInt(45_000, 120_000));
+  const pacingNextModeFlipAtRef = useRef(Date.now() + randomInt(20_000, 40_000));
   const tagSlowActiveRef = useRef(false);
-  const recentAutoUserRef = useRef<{ username: string; count: number }>({ username: '', count: 0 });
+  const lastPacingModeRef = useRef<Exclude<ChatPacingMode, 'tag_slow'>>('normal');
+  const eventWeightActiveUntilRef = useRef(0);
+  const eventWeightRecoverUntilRef = useRef(0);
+  const lastChatMessageAtRef = useRef(Date.now());
   const chatEngineRef = useRef(new ChatEngine());
   const ghostLoreRef = useRef(createGhostLore());
   const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number }>({ isLocked: false, target: null, startedAt: 0 });
@@ -339,6 +364,7 @@ export default function App() {
         }
       };
     }
+    lastChatMessageAtRef.current = Date.now();
     dispatch({ type: 'AUDIENCE_MESSAGE', payload: linted.message });
   };
 
@@ -373,7 +399,30 @@ export default function App() {
     };
   }, []);
 
+  const markEventTopicBoost = useCallback((activeMs: number) => {
+    const now = Date.now();
+    eventWeightActiveUntilRef.current = Math.max(eventWeightActiveUntilRef.current, now + activeMs);
+    eventWeightRecoverUntilRef.current = Math.max(eventWeightRecoverUntilRef.current, eventWeightActiveUntilRef.current + 5_000);
+  }, []);
+
+  const getCurrentTopicWeights = useCallback((now: number): TopicWeightProfile => {
+    if (now <= eventWeightActiveUntilRef.current) return { ...EVENT_TOPIC_WEIGHT };
+    if (now < eventWeightRecoverUntilRef.current) {
+      const span = Math.max(1, eventWeightRecoverUntilRef.current - eventWeightActiveUntilRef.current);
+      const progress = Math.min(1, Math.max(0, (now - eventWeightActiveUntilRef.current) / span));
+      return {
+        randomComment: EVENT_TOPIC_WEIGHT.randomComment + (NORMAL_TOPIC_WEIGHT.randomComment - EVENT_TOPIC_WEIGHT.randomComment) * progress,
+        videoObservation: EVENT_TOPIC_WEIGHT.videoObservation + (NORMAL_TOPIC_WEIGHT.videoObservation - EVENT_TOPIC_WEIGHT.videoObservation) * progress,
+        suspicion: EVENT_TOPIC_WEIGHT.suspicion + (NORMAL_TOPIC_WEIGHT.suspicion - EVENT_TOPIC_WEIGHT.suspicion) * progress,
+        buildUp: EVENT_TOPIC_WEIGHT.buildUp + (NORMAL_TOPIC_WEIGHT.buildUp - EVENT_TOPIC_WEIGHT.buildUp) * progress,
+        eventTopic: EVENT_TOPIC_WEIGHT.eventTopic + (NORMAL_TOPIC_WEIGHT.eventTopic - EVENT_TOPIC_WEIGHT.eventTopic) * progress
+      };
+    }
+    return { ...NORMAL_TOPIC_WEIGHT };
+  }, []);
+
   const triggerReactionBurst = useCallback((topic: 'ghost' | 'footsteps' | 'light') => {
+    markEventTopicBoost(12_000);
     if (reactionBurstTimerRef.current) {
       window.clearTimeout(reactionBurstTimerRef.current);
       reactionBurstTimerRef.current = null;
@@ -397,7 +446,7 @@ export default function App() {
         lastEvent: `reaction:${topic}`
       }
     });
-  }, [emitChatEvent, updateEventDebug]);
+  }, [emitChatEvent, markEventTopicBoost, updateEventDebug]);
 
   const pickEventLine = useCallback((eventKey: StoryEventKey, phase: EventLinePhase): { option: EventLineOption; repeatBlocked: boolean } => {
     const fallback = { id: `${eventKey.toLowerCase()}_${phase}_fallback`, text: '等一下' };
@@ -423,6 +472,7 @@ export default function App() {
   }, []);
 
   const postEventLine = useCallback((target: string, eventKey: StoryEventKey, phase: EventLinePhase) => {
+    markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
     const picked = pickEventLine(eventKey, phase);
     const loreLevel = state.curse >= 70 ? 3 : state.curse >= 40 ? 2 : 1;
     const lore = ghostLoreRef.current.inject({
@@ -451,6 +501,7 @@ export default function App() {
       translation: `@${target} ${line}`,
       tagTarget: target
     });
+  }, [dispatchAudienceMessage, markEventTopicBoost, pickEventLine, updateEventDebug]);
   }, [activeUser, dispatchAudienceMessage, pickEventLine, state.curse, updateEventDebug]);
 
   const playSfx = useCallback((
@@ -651,57 +702,54 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isReady) return;
     if (!isReady || chatAutoPaused || !appStarted) return;
     let timer = 0;
+
+    const pickNextRhythm = (): Exclude<ChatPacingMode, 'tag_slow'> => {
+      const options: Array<Exclude<ChatPacingMode, 'tag_slow'>> = ['normal', 'slightlyBusy', 'tense'];
+      const candidates = options.filter((mode) => mode !== lastPacingModeRef.current);
+      return pickOne(candidates.length > 0 ? candidates : options);
+    };
+
     const nextInterval = () => {
       const now = Date.now();
+      if (!tagSlowActiveRef.current && now >= pacingNextModeFlipAtRef.current) {
+        const nextMode = pickNextRhythm();
+        pacingModeRef.current = nextMode;
+        lastPacingModeRef.current = nextMode;
+        pacingModeUntilRef.current = now + randomInt(10_000, 20_000);
+        pacingNextModeFlipAtRef.current = now + randomInt(20_000, 40_000);
+      }
+
+      if (!tagSlowActiveRef.current && now >= pacingModeUntilRef.current && pacingModeRef.current !== 'normal') {
+        pacingModeRef.current = 'normal';
+      }
+
       if (tagSlowActiveRef.current || lockStateRef.current.isLocked) {
         pacingModeRef.current = 'tag_slow';
-      } else {
-        if (pacingModeRef.current !== 'burst' && now >= pacingBurstRollAtRef.current) {
-          if (Math.random() < 0.35) {
-            pacingModeRef.current = 'burst';
-            pacingModeUntilRef.current = now + randomInt(8_000, 15_000);
-          }
-          pacingBurstRollAtRef.current = now + randomInt(45_000, 120_000);
-        }
-        if (pacingModeRef.current === 'burst' && now >= pacingModeUntilRef.current) {
-          pacingModeRef.current = 'normal';
-        }
-        if (pacingModeRef.current !== 'burst' && now >= pacingNextModeFlipAtRef.current) {
-          if (pacingModeRef.current === 'fast') {
-            pacingModeRef.current = 'normal';
-            pacingNextModeFlipAtRef.current = now + randomInt(10_000, 25_000);
-          } else {
-            pacingModeRef.current = 'fast';
-            pacingModeUntilRef.current = now + randomInt(2_000, 6_000);
-            pacingNextModeFlipAtRef.current = pacingModeUntilRef.current;
-          }
-        }
-        if (pacingModeRef.current === 'fast' && now >= pacingModeUntilRef.current) {
-          pacingModeRef.current = 'normal';
-          pacingNextModeFlipAtRef.current = now + randomInt(10_000, 25_000);
-        }
       }
 
       const mode = pacingModeRef.current;
-      const base = mode === 'burst'
-        ? randomInt(80, 320)
-        : mode === 'fast'
-          ? randomInt(120, 450)
-          : randomInt(350, 1800);
-      const scaled = mode === 'tag_slow' ? Math.floor(base * 2) : base;
-      const transitionAt = mode === 'tag_slow'
-        ? null
-        : mode === 'burst' || mode === 'fast'
-          ? pacingModeUntilRef.current
-          : Math.min(pacingBurstRollAtRef.current, pacingNextModeFlipAtRef.current);
+      const quietMode = !lockStateRef.current.isLocked && mode === 'normal' && state.curse <= 30;
+      const base = quietMode
+        ? randomInt(1200, 2200)
+        : mode === 'tense'
+          ? randomInt(400, 900)
+          : mode === 'slightlyBusy'
+            ? randomInt(650, 1200)
+            : randomInt(800, 1600);
+      const shouldSlowForLock = lockStateRef.current.isLocked;
+      const shouldSlowForTag = mode === 'tag_slow';
+      const slowMultiplier = shouldSlowForLock || shouldSlowForTag ? 2 : 1;
+      const scaled = Math.floor(base * slowMultiplier);
+      const transitionAt = mode === 'tag_slow' ? null : Math.min(pacingModeUntilRef.current, pacingNextModeFlipAtRef.current);
       window.__CHAT_DEBUG__ = {
         ...(window.__CHAT_DEBUG__ ?? {}),
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
           pacing: {
-            mode,
+            mode: quietMode ? 'quiet' : mode,
             nextModeInSec: transitionAt ? Math.max(0, Math.ceil((transitionAt - now) / 1000)) : -1
           }
         }
@@ -711,26 +759,46 @@ export default function App() {
 
     const dispatchTimedChats = (messages: ChatMessage[]) => {
       messages.forEach((message) => {
-        if (pacingModeRef.current === 'burst') {
-          const recent = recentAutoUserRef.current;
-          if (message.username === recent.username && recent.count >= 2) return;
-          recentAutoUserRef.current = message.username === recent.username
-            ? { username: message.username, count: recent.count + 1 }
-            : { username: message.username, count: 1 };
-        }
         dispatchAudienceMessage(message);
       });
     };
 
+    const dispatchForcedBaseMessage = () => {
+      const recentTexts = new Set(state.messages.slice(-40).map((message) => (message.translation ?? message.text).trim()));
+      let fallback = pickSafeFallbackText();
+      for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
+        const candidate = pickSafeFallbackText();
+        if (!recentTexts.has(candidate)) {
+          fallback = candidate;
+          break;
+        }
+      }
+      dispatchAudienceMessage({
+        id: crypto.randomUUID(),
+        username: pickOne(usernames),
+        text: fallback,
+        language: 'zh',
+        translation: fallback,
+        type: 'chat'
+      });
+    };
+
     const tick = () => {
-      const timedChats = chatEngineRef.current.tick(Date.now());
+      const now = Date.now();
+      const topicWeights = getCurrentTopicWeights(now);
+      const timedChats = chatEngineRef.current.tick(now);
       dispatchTimedChats(timedChats);
       syncChatEngineDebug();
-      emitChatEvent({ type: 'IDLE_TICK' });
+      emitChatEvent({ type: 'IDLE_TICK', topicWeights });
+      if (Date.now() - lastChatMessageAtRef.current > 2500) {
+        dispatchForcedBaseMessage();
+      }
       timer = window.setTimeout(tick, nextInterval());
     };
+
     timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
+  }, [chatAutoPaused, getCurrentTopicWeights, isReady, state.curse, state.messages]);
   }, [appStarted, chatAutoPaused, chatTickRestartKey, isReady]);
 
   useEffect(() => {
@@ -1044,7 +1112,6 @@ export default function App() {
       }
       if (chatAutoPaused) {
         setChatAutoPaused(false);
-        setChatTickRestartKey((prev) => prev + 1);
       }
       const next = { ...attemptDebug, lastResult: 'sent' as const };
       setSendDebug(next);

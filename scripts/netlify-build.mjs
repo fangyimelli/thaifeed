@@ -11,27 +11,48 @@ if (sceneViewSource.includes('useMemo')) {
 
 console.log('[netlify-build] SceneView import check passed (no useMemo token).');
 
-const run = (cmd, args) => spawnSync(cmd, args, { stdio: 'inherit' });
+const appPath = 'src/app/App.tsx';
+const appSource = readFileSync(appPath, 'utf8');
 
-const runViteBuild = () => run('node', ['./node_modules/vite/bin/vite.js', 'build']);
-
-const tscResult = run('node', ['./node_modules/typescript/bin/tsc', '-b', '--force']);
-
-if (tscResult.status !== 0) {
-  process.exit(tscResult.status ?? 1);
+if (appSource.includes('setChatTickRestartKey') || appSource.includes('chatTickRestartKey')) {
+  console.error(`[netlify-build] Unexpected legacy chatTickRestartKey token found in ${appPath}.`);
+  process.exit(1);
 }
 
-let viteResult = runViteBuild();
+console.log('[netlify-build] App legacy chatTickRestartKey check passed.');
 
-if (viteResult.status !== 0) {
-  console.warn('[netlify-build] Initial vite build failed, running npm install once and retrying build.');
-  const installResult = run('npm', ['install']);
-  if (installResult.status !== 0) {
-    process.exit(installResult.status ?? 1);
+const run = (cmd, args, label) => {
+  const result = spawnSync(cmd, args, { stdio: 'inherit' });
+  if (result.error) {
+    console.error(`[netlify-build] ${label} failed to start.`, result.error);
+    return 1;
   }
-  viteResult = runViteBuild();
+  if (result.status !== 0) {
+    const signalText = result.signal ? ` signal=${result.signal}` : '';
+    console.error(`[netlify-build] ${label} failed with exit=${result.status ?? 'null'}${signalText}.`);
+    return result.status ?? 1;
+  }
+  return 0;
+};
+
+const runViteBuild = () => run('node', ['./node_modules/vite/bin/vite.js', 'build'], 'vite build');
+
+const tscExit = run('node', ['./node_modules/typescript/bin/tsc', '-b', '--force'], 'tsc -b --force');
+if (tscExit !== 0) {
+  process.exit(tscExit);
 }
 
-if (viteResult.status !== 0) {
-  process.exit(viteResult.status ?? 1);
+let viteExit = runViteBuild();
+
+if (viteExit !== 0) {
+  console.warn('[netlify-build] Initial vite build failed, running npm install once and retrying build.');
+  const installExit = run('npm', ['install'], 'npm install');
+  if (installExit !== 0) {
+    process.exit(installExit);
+  }
+  viteExit = runViteBuild();
+}
+
+if (viteExit !== 0) {
+  process.exit(viteExit);
 }

@@ -1,10 +1,20 @@
 import { ChatMessageType, type ChatEvent } from './ChatTypes';
 
-const weightedIdleTypes: Array<{ type: ChatMessageType; weight: number }> = [
-  { type: ChatMessageType.IDLE_BORING, weight: 50 },
-  { type: ChatMessageType.DREAD_BUILDUP, weight: 30 },
-  { type: ChatMessageType.SOCIAL_REPLY, weight: 20 }
-];
+type IdleTopicWeights = {
+  randomComment: number;
+  videoObservation: number;
+  suspicion: number;
+  buildUp: number;
+  eventTopic: number;
+};
+
+const defaultIdleTopicWeights: IdleTopicWeights = {
+  randomComment: 60,
+  videoObservation: 25,
+  suspicion: 10,
+  buildUp: 5,
+  eventTopic: 0
+};
 
 type ReactionSpec = {
   startAt: number;
@@ -27,7 +37,15 @@ function weightedPick<T>(items: Array<{ type: T; weight: number }>): T {
 }
 
 export function pickTypeForEvent(event: ChatEvent): ChatMessageType | null {
-  if (event.type === 'IDLE_TICK') return weightedPick(weightedIdleTypes);
+  if (event.type === 'IDLE_TICK') {
+    const topicWeights = event.topicWeights ?? defaultIdleTopicWeights;
+    return weightedPick([
+      { type: ChatMessageType.IDLE_BORING, weight: topicWeights.randomComment },
+      { type: ChatMessageType.SCENE_FLICKER_REACT, weight: topicWeights.videoObservation + topicWeights.eventTopic },
+      { type: ChatMessageType.FEAR_SELF_DOUBT, weight: topicWeights.suspicion },
+      { type: ChatMessageType.DREAD_BUILDUP, weight: topicWeights.buildUp }
+    ]);
+  }
   if (event.type === 'USER_SENT') return Math.random() < 0.65 ? ChatMessageType.SOCIAL_REPLY : ChatMessageType.FEAR_SELF_DOUBT;
   return null;
 }
