@@ -79,7 +79,7 @@ npm run dev
   - crossfade 結束後，舊的 current video 會 `pause()` 並維持靜音/零音量，避免殘留聲音。
 - 獨立 audio 僅保留三套：
   - 常駐：`fan_loop`
-  - 排程觸發：`footsteps`、`ghost_female`
+  - 事件觸發：`footsteps`、`ghost_female`
 - 已移除 per-video ambient mapping 舊邏輯，避免「影片音軌 + per-video ambient」並存導致錯誤判讀。
 - Debug 排查（`?debug=1`）：
   - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
@@ -627,3 +627,25 @@ npm run dev
     - `chat.lint.lastRejectedReason`（`timecode_phrase` / `technical_term`）
     - `chat.lint.rerollCount`
   - 當句子被擋下並重抽時，上述欄位會更新，可直接確認 lint 正在工作。
+
+## Ghost 事件化更新（2026-02）
+
+- 已完全移除 `ghost_female` 固定排程，鬼聲僅能由事件流程觸發。
+- 事件清單：
+  1. 聲音確認（玩家回「有」後 2 秒，鬼聲 0→1 漸強 3 秒）
+  2. 鬼偽裝 tag「你還在嗎」（回覆後 3 秒鬼聲，並追問）
+  3. 電視事件（玩家回「沒有」後切 loop2，並可選短鬼聲）
+  4. 名字被叫（回覆後短鬼聲）
+  5. 觀看人數異常（回覆後 footsteps）
+  6. 燈怪怪（立即切 loop/loop2）
+  7. 你怕嗎（玩家回「不怕」後觸發 footsteps 或 ghost）
+- 音效互斥/冷卻：
+  - `ghost_female >= 180s`
+  - `footsteps >= 120s`
+  - `low_rumble >= 120s`（保留在同一互斥冷卻規則）
+  - `fan_loop` 常駐且不受互斥影響
+- `playSfx(key, options)` 統一入口支援 `delayMs / startVolume / endVolume / rampSec`。
+- `debug=1` 驗證：
+  - 觀察 `event.lastGhostSfxReason`，必須為事件名稱（如 `event:VOICE_CONFIRM`）
+  - 觀察 `event.violation`，若非事件來源觸發鬼聲會顯示 violation
+  - 觀察 `event.lock` 與 `event.sfxCooldowns` 以驗證鎖定與冷卻

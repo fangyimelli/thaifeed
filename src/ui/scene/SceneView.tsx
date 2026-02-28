@@ -160,7 +160,6 @@ const SCENE_MAP_DIGEST: Record<OldhouseLoopKey, string> = {
 
 declare global {
   interface Window {
-    __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
     __AUDIO_DEBUG__?: AudioDebugState;
     __VIDEO_DEBUG__?: VideoDebugState;
     __CHAT_DEBUG__?: {
@@ -172,6 +171,8 @@ declare global {
       lastPersona?: string;
       lastSfxKey?: string;
       lastSfxReason?: string;
+      lastGhostSfxReason?: string;
+      violation?: string;
       sfxCooldowns?: Record<string, number>;
       lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
       queueLength?: number;
@@ -442,20 +443,49 @@ export default function SceneView({
     }
   }, [setNeedsGestureState, updateAudioDebug]);
 
-  const playRegisteredSfx = useCallback((sfxKey: SfxKey) => {
-    if (needsUserGestureToPlayRef.current) return;
-    const audio = sfxKey === 'footsteps' ? footstepsAudioRef.current : sfxKey === 'ghost_female' ? ghostAudioRef.current : null;
-    if (!audio) return;
-    audio.currentTime = 0;
-    audio.muted = false;
-    void audio.play().then(() => {
-      const t = Date.now();
-      updateAudioDebug({ started: true, lastFootstepsAt: sfxKey === 'footsteps' ? t : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0), lastGhostAt: sfxKey === 'ghost_female' ? t : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0) });
-      emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt: t });
-    }).catch((e: unknown) => {
-      setNeedsGestureState(true);
-      console.warn('[AUDIO] play blocked/failed', { key: sfxKey, errName: e instanceof Error ? e.name : 'unknown' });
-    });
+  const playSfx = useCallback((sfxKey: SfxKey, options?: { delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number }) => {
+    if (sfxKey === 'fan_loop') return;
+    const run = () => {
+      if (needsUserGestureToPlayRef.current) return;
+      const audio = sfxKey === 'footsteps' ? footstepsAudioRef.current : sfxKey === 'ghost_female' ? ghostAudioRef.current : null;
+      if (!audio) return;
+      const startVolume = options?.startVolume ?? audio.volume;
+      const endVolume = options?.endVolume ?? startVolume;
+      const rampSec = options?.rampSec ?? 0;
+      audio.currentTime = 0;
+      audio.volume = Math.max(0, Math.min(1, startVolume));
+      audio.muted = false;
+      void audio.play().then(() => {
+        const startedAt = Date.now();
+        if (rampSec > 0 && startVolume !== endVolume) {
+          const stepMs = 50;
+          const totalMs = Math.max(1, Math.floor(rampSec * 1000));
+          const diff = endVolume - startVolume;
+          const rampTimer = window.setInterval(() => {
+            const elapsed = Date.now() - startedAt;
+            const progress = Math.min(1, elapsed / totalMs);
+            audio.volume = Math.max(0, Math.min(1, startVolume + diff * progress));
+            if (progress >= 1) {
+              window.clearInterval(rampTimer);
+            }
+          }, stepMs);
+        }
+        updateAudioDebug({
+          started: true,
+          lastFootstepsAt: sfxKey === 'footsteps' ? startedAt : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0),
+          lastGhostAt: sfxKey === 'ghost_female' ? startedAt : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0)
+        });
+        emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt });
+      }).catch((e: unknown) => {
+        setNeedsGestureState(true);
+        console.warn('[AUDIO] play blocked/failed', { key: sfxKey, errName: e instanceof Error ? e.name : 'unknown' });
+      });
+    };
+    if (options?.delayMs && options.delayMs > 0) {
+      window.setTimeout(run, options.delayMs);
+      return;
+    }
+    run();
   }, [setNeedsGestureState, updateAudioDebug]);
 
   const tryPlayMedia = useCallback(async () => {
@@ -1224,7 +1254,12 @@ export default function SceneView({
       const run = () => {
         if (payload.type === 'REQUEST_SFX') {
           if (payload.sfxKey === 'fan_loop') return;
-          playRegisteredSfx(payload.sfxKey);
+          playSfx(payload.sfxKey, {
+            delayMs: payload.delayMs,
+            startVolume: payload.startVolume,
+            endVolume: payload.endVolume,
+            rampSec: payload.rampSec
+          });
           return;
         }
         void switchTo(payload.sceneKey);
@@ -1235,7 +1270,7 @@ export default function SceneView({
         run();
       }
     });
-  }, [playRegisteredSfx, switchTo]);
+  }, [playSfx, switchTo]);
 
   useEffect(() => {
     return () => {
@@ -1510,6 +1545,8 @@ export default function SceneView({
           <div>event.lastEvent/reason: {window.__CHAT_DEBUG__?.lastEventKey ?? '-'} / {window.__CHAT_DEBUG__?.lastEventReason ?? '-'}</div>
           <div>event.line/variant/tone/persona: {window.__CHAT_DEBUG__?.lastLineKey ?? '-'} / {window.__CHAT_DEBUG__?.lastVariantId ?? '-'} / {window.__CHAT_DEBUG__?.lastTone ?? '-'} / {window.__CHAT_DEBUG__?.lastPersona ?? '-'}</div>
           <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
+          <div>event.lastGhostSfxReason: {window.__CHAT_DEBUG__?.lastGhostSfxReason ?? '-'}</div>
+          <div>event.violation: {window.__CHAT_DEBUG__?.violation ?? '-'}</div>
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
           <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
@@ -1541,8 +1578,6 @@ export default function SceneView({
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_MAIN', () => switchTo('oldhouse_room_loop3')); }}>▶ Force MAIN</button>
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_PLANNED', forcePlannedJumpNow); }}>⚡ Force Planned Jump Now</button>
             <button type="button" onClick={() => { void runDebugForceAction('RESCHEDULE_JUMP', () => scheduleNextJump({ force: true })); }}>🔁 Reschedule Jump</button>
-            <button type="button" onClick={() => { window.__EVENT_SCHEDULER_CONTROLS__?.forceFire(); }}>⚡ Force Fire Event</button>
-            <button type="button" onClick={() => { window.__EVENT_SCHEDULER_CONTROLS__?.resetLocks(); }}>🧹 Reset Event Locks</button>
           </div>
         </div>
         </>

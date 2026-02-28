@@ -23,10 +23,10 @@ import { pickOne } from '../utils/random';
 import { MAIN_LOOP } from '../config/oldhousePlayback';
 import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
-import { EventEngine } from '../director/EventEngine';
 import { ChatEngine } from '../chat/ChatEngine';
 import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
 import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
+import { collectActiveUsers } from '../core/systems/mentionV2';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -98,17 +98,14 @@ function lintOutgoingMessage(message: ChatMessage): { message: ChatMessage; reje
 
 type ChatPacingMode = 'normal' | 'fast' | 'burst' | 'tag_slow';
 
-type EventSchedulerDebug = {
-  now: number;
-  nextDueAt: number;
-  lastFiredAt: number;
-  blocked: boolean;
-  blockedReason: string;
-  cooldowns: Record<string, number>;
-  lastEvent: string;
-};
-
-
+type StoryEventKey =
+  | 'VOICE_CONFIRM'
+  | 'GHOST_PING'
+  | 'TV_EVENT'
+  | 'NAME_CALL'
+  | 'VIEWER_SPIKE'
+  | 'LIGHT_GLITCH'
+  | 'FEAR_CHALLENGE';
 
 function formatMissingAsset(asset: MissingRequiredAsset) {
   return `[${asset.type}] ${asset.name} | ${asset.relativePath} | ${asset.url} | ${asset.reason}`;
@@ -165,21 +162,21 @@ export default function App() {
   const pacingBurstRollAtRef = useRef(Date.now() + randomInt(45_000, 120_000));
   const tagSlowActiveRef = useRef(false);
   const recentAutoUserRef = useRef<{ username: string; count: number }>({ username: '', count: 0 });
-  const eventSchedulerRef = useRef<EventSchedulerDebug>({
-    now: Date.now(),
-    nextDueAt: Date.now() + randomInt(90_000, 140_000),
-    lastFiredAt: 0,
-    blocked: false,
-    blockedReason: '-',
-    cooldowns: {},
-    lastEvent: '-'
-  });
-  const eventRetryTimerRef = useRef<number | null>(null);
   const chatEngineRef = useRef(new ChatEngine());
-  const eventEngineRef = useRef(new EventEngine({
-    playSfx: (sfxKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SFX', sfxKey, reason, delayMs }),
-    requestSceneSwitch: (sceneKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey, reason, delayMs })
-  }));
+  const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number }>({ isLocked: false, target: null, startedAt: 0 });
+  const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, loop4: 0, ghost_ping_actor: 0 });
+  const eventCooldownsRef = useRef<Record<StoryEventKey, number>>({
+    VOICE_CONFIRM: 0,
+    GHOST_PING: 0,
+    TV_EVENT: 0,
+    NAME_CALL: 0,
+    VIEWER_SPIKE: 0,
+    LIGHT_GLITCH: 0,
+    FEAR_CHALLENGE: 0
+  });
+  const pendingReplyEventRef = useRef<{ key: StoryEventKey; target: string; expiresAt: number } | null>(null);
+  const reactionBurstTimerRef = useRef<number | null>(null);
+  const lineCursorRef = useRef(0);
 
 
   useEffect(() => {
@@ -269,17 +266,188 @@ export default function App() {
     syncChatEngineDebug();
   };
 
-  const emitEvent = (eventKey: string, context: { tagTarget?: string; lockTarget?: string } = {}) => {
-    eventEngineRef.current.trigger(eventKey, { messages: state.messages, ...context, now: Date.now() });
-    const pendingContent = eventEngineRef.current.drainPendingContent();
-    pendingContent.forEach((payload) => chatEngineRef.current.enqueueContent(payload));
-    const eventDebug = eventEngineRef.current.getDebugState() as unknown as Window['__CHAT_DEBUG__'];
+  const updateEventDebug = useCallback((patch: Partial<NonNullable<Window['__CHAT_DEBUG__']>>) => {
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
-      ...eventDebug,
+      ...patch,
       ui: window.__CHAT_DEBUG__?.ui
     };
-  };
+  }, []);
+
+  const triggerReactionBurst = useCallback((topic: 'ghost' | 'footsteps' | 'light') => {
+    if (reactionBurstTimerRef.current) {
+      window.clearTimeout(reactionBurstTimerRef.current);
+      reactionBurstTimerRef.current = null;
+    }
+    const durationMs = randomInt(10_000, 12_000);
+    const fireAt = Date.now() + randomInt(300, 1200);
+    reactionBurstTimerRef.current = window.setTimeout(() => {
+      reactionBurstTimerRef.current = null;
+      if (topic === 'ghost') {
+        emitChatEvent({ type: 'SFX_START', sfxKey: 'ghost' });
+      } else if (topic === 'footsteps') {
+        emitChatEvent({ type: 'SFX_START', sfxKey: 'footsteps' });
+      } else {
+        emitChatEvent({ type: 'SCENE_SWITCH', toKey: currentVideoKeyRef.current });
+      }
+    }, Math.max(0, fireAt - Date.now()));
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), lastFiredAt: fireAt, nextDueAt: fireAt + durationMs },
+        lastEvent: `reaction:${topic}`
+      }
+    });
+  }, [emitChatEvent, updateEventDebug]);
+
+  const nextLine = useCallback((options: string[]) => {
+    const index = lineCursorRef.current % options.length;
+    lineCursorRef.current += 1;
+    return options[index];
+  }, []);
+
+  const postEventLine = useCallback((target: string, options: string[]) => {
+    const line = nextLine(options);
+    dispatchAudienceMessage({
+      id: crypto.randomUUID(),
+      username: 'mod_live',
+      type: 'chat',
+      text: `@${target} ${line}`,
+      language: 'zh',
+      translation: `@${target} ${line}`,
+      tagTarget: target
+    });
+  }, [dispatchAudienceMessage, nextLine]);
+
+  const playSfx = useCallback((
+    key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
+    options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number }
+  ) => {
+    const now = Date.now();
+    const cooldownMin = key === 'ghost_female' ? 180_000 : key === 'footsteps' || key === 'low_rumble' ? 120_000 : 0;
+    if (key !== 'fan_loop') {
+      const cooldownUntil = cooldownsRef.current[key] ?? 0;
+      if (cooldownUntil > now) return false;
+      cooldownsRef.current[key] = now + cooldownMin;
+    }
+    const violation = key === 'ghost_female' && options.source !== 'event';
+    requestSceneAction({
+      type: 'REQUEST_SFX',
+      sfxKey: key === 'low_rumble' ? 'footsteps' : key,
+      reason: options.reason,
+      source: options.source,
+      delayMs: options.delayMs,
+      startVolume: options.startVolume,
+      endVolume: options.endVolume,
+      rampSec: options.rampSec
+    });
+    updateEventDebug({
+      lastSfxKey: key,
+      lastSfxReason: options.reason,
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), cooldowns: { ...cooldownsRef.current } },
+        lastEvent: options.reason
+      },
+      lastGhostSfxReason: key === 'ghost_female' ? options.reason : window.__CHAT_DEBUG__?.lastGhostSfxReason,
+      violation: violation ? `ghost_female source=${options.source}` : window.__CHAT_DEBUG__?.violation
+    } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+    return true;
+  }, [updateEventDebug]);
+
+  const tryTriggerStoryEvent = useCallback((raw: string) => {
+    const now = Date.now();
+    const activeUsers = collectActiveUsers(state.messages);
+    const target = activeUsers.length > 0 ? pickOne(activeUsers) : null;
+    const pending = pendingReplyEventRef.current;
+    const isLocked = lockStateRef.current.isLocked && Boolean(lockStateRef.current.target);
+
+    if (pending && now <= pending.expiresAt) {
+      const repliedYes = /有/.test(raw);
+      const repliedNo = /沒有/.test(raw);
+      const repliedBrave = /不怕/.test(raw);
+      if (pending.key === 'VOICE_CONFIRM' && repliedYes) {
+        playSfx('ghost_female', { reason: 'event:VOICE_CONFIRM', source: 'event', delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
+        triggerReactionBurst('ghost');
+      }
+      if (pending.key === 'GHOST_PING') {
+        playSfx('ghost_female', { reason: 'event:GHOST_PING', source: 'event', delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
+        postEventLine(pending.target, ['你有聽到我的聲音嗎 我說了什麼']);
+        triggerReactionBurst('ghost');
+        cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
+        lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+      }
+      if (pending.key === 'TV_EVENT' && repliedNo) {
+        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop2', reason: 'event:TV_EVENT', delayMs: 2000 });
+        postEventLine(pending.target, ['你沒看到我嗎']);
+        triggerReactionBurst(Math.random() < 0.5 ? 'light' : 'ghost');
+        if (Math.random() < 0.5 && (cooldownsRef.current.ghost_female ?? 0) <= now) {
+          playSfx('ghost_female', { reason: 'event:TV_EVENT_OPTIONAL_GHOST', source: 'event', delayMs: 200, startVolume: 0.9, endVolume: 1, rampSec: 0.4 });
+        }
+      }
+      if (pending.key === 'NAME_CALL') {
+        playSfx('ghost_female', { reason: 'event:NAME_CALL', source: 'event', delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
+        triggerReactionBurst('ghost');
+      }
+      if (pending.key === 'VIEWER_SPIKE') {
+        playSfx('footsteps', { reason: 'event:VIEWER_SPIKE', source: 'event' });
+        triggerReactionBurst('footsteps');
+      }
+      if (pending.key === 'FEAR_CHALLENGE' && repliedBrave) {
+        const chooseGhost = Math.random() < 0.5;
+        const played = chooseGhost
+          ? playSfx('ghost_female', { reason: 'event:FEAR_CHALLENGE_GHOST', source: 'event', delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
+          : playSfx('footsteps', { reason: 'event:FEAR_CHALLENGE_FOOTSTEPS', source: 'event', delayMs: 2000 });
+        if (played) {
+          postEventLine(pending.target, ['太毛了啦我要下線了']);
+          triggerReactionBurst(chooseGhost ? 'ghost' : 'footsteps');
+        }
+      }
+      pendingReplyEventRef.current = null;
+      return;
+    }
+
+    if (!target || isLocked) return;
+    const can = (key: StoryEventKey, cooldownMs: number) => (eventCooldownsRef.current[key] ?? 0) <= now && (eventCooldownsRef.current[key] = now + cooldownMs, true);
+
+    if (activeUsers.length >= 1 && Math.random() < 0.08 && can('VOICE_CONFIRM', 90_000)) {
+      postEventLine(target, ['你那邊有開聲音嗎']);
+      pendingReplyEventRef.current = { key: 'VOICE_CONFIRM', target, expiresAt: now + 20_000 };
+      return;
+    }
+    if (activeUsers.length >= 3 && (cooldownsRef.current.ghost_ping_actor ?? 0) <= now && Math.random() < 0.06 && can('GHOST_PING', 120_000)) {
+      postEventLine(target, ['你還在嗎']);
+      lockStateRef.current = { isLocked: true, target, startedAt: now };
+      pendingReplyEventRef.current = { key: 'GHOST_PING', target, expiresAt: now + 20_000 };
+      return;
+    }
+    if (activeUsers.length >= 3 && (cooldownsRef.current.loop4 ?? 0) <= now && Math.random() < 0.07 && can('TV_EVENT', 90_000)) {
+      postEventLine(target, ['電視是不是動了一下啊']);
+      pendingReplyEventRef.current = { key: 'TV_EVENT', target, expiresAt: now + 20_000 };
+      cooldownsRef.current.loop4 = now + 90_000;
+      return;
+    }
+    if (Math.random() < 0.06 && can('NAME_CALL', 90_000)) {
+      postEventLine(target, ['剛剛有人叫你名字']);
+      pendingReplyEventRef.current = { key: 'NAME_CALL', target, expiresAt: now + 20_000 };
+      return;
+    }
+    if (Math.random() < 0.06 && can('VIEWER_SPIKE', 90_000)) {
+      postEventLine(target, ['剛剛人數是不是跳了一下']);
+      pendingReplyEventRef.current = { key: 'VIEWER_SPIKE', target, expiresAt: now + 20_000 };
+      return;
+    }
+    if (Math.random() < 0.05 && can('LIGHT_GLITCH', 90_000)) {
+      postEventLine(target, ['你有看到燈怪怪的嗎']);
+      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: 'event:LIGHT_GLITCH' });
+      triggerReactionBurst('light');
+      return;
+    }
+    if (Math.random() < 0.06 && can('FEAR_CHALLENGE', 90_000)) {
+      postEventLine(target, ['你怕嗎']);
+      pendingReplyEventRef.current = { key: 'FEAR_CHALLENGE', target, expiresAt: now + 20_000 };
+    }
+  }, [playSfx, postEventLine, state.messages, triggerReactionBurst]);
 
   useEffect(() => {
     chatEngineRef.current.syncFromMessages(state.messages);
@@ -350,7 +518,7 @@ export default function App() {
     let timer = 0;
     const nextInterval = () => {
       const now = Date.now();
-      if (tagSlowActiveRef.current) {
+      if (tagSlowActiveRef.current || lockStateRef.current.isLocked) {
         pacingModeRef.current = 'tag_slow';
       } else {
         if (pacingModeRef.current !== 'burst' && now >= pacingBurstRollAtRef.current) {
@@ -385,7 +553,7 @@ export default function App() {
         : mode === 'fast'
           ? randomInt(120, 450)
           : randomInt(350, 1800);
-      const scaled = mode === 'tag_slow' ? Math.floor(base * (1.5 + Math.random() * 0.5)) : base;
+      const scaled = mode === 'tag_slow' ? Math.floor(base * 2) : base;
       const transitionAt = mode === 'tag_slow'
         ? null
         : mode === 'burst' || mode === 'fast'
@@ -422,119 +590,50 @@ export default function App() {
       dispatchTimedChats(timedChats);
       syncChatEngineDebug();
       emitChatEvent({ type: 'IDLE_TICK' });
-      emitEvent('IDLE_TICK');
       timer = window.setTimeout(tick, nextInterval());
     };
     timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, chatTickRestartKey, isReady, state.messages]);
+  }, [chatAutoPaused, chatTickRestartKey, isReady]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
       if (event.type === 'VIDEO_ACTIVE') {
         currentVideoKeyRef.current = event.key;
         emitChatEvent({ type: 'SCENE_SWITCH', toKey: event.key });
-        emitEvent('SCENE_SWITCH_REACT');
       }
       if (event.type === 'SFX_START') {
         const sfxKey = event.sfxKey === 'fan_loop' ? 'fan' : event.sfxKey === 'footsteps' ? 'footsteps' : 'ghost';
         emitChatEvent({ type: 'SFX_START', sfxKey });
-        const eventMap: Record<string, string> = {
-          fan_loop: 'SFX_FAN_REACT',
-          footsteps: 'SFX_FOOTSTEPS_REACT',
-          ghost_female: 'SFX_GHOST_REACT'
-        };
-        emitEvent(eventMap[event.sfxKey] ?? 'IDLE_TICK');
       }
     });
 
     return () => unsubscribe();
-  }, [state.messages]);
+  }, []);
 
   useEffect(() => {
-    if (!isReady) return;
-
-    const fireGhostEvent = (reason: string) => {
-      const now = Date.now();
-      eventSchedulerRef.current.lastFiredAt = now;
-      eventSchedulerRef.current.lastEvent = reason;
-      requestSceneAction({
-        type: 'REQUEST_SFX',
-        sfxKey: Math.random() < 0.5 ? 'ghost_female' : 'footsteps',
-        reason: `scheduler:${reason}`,
-        delayMs: 2_000
-      });
-      emitEvent('SFX_GHOST_REACT');
-      window.setTimeout(() => emitEvent('SFX_FOOTSTEPS_REACT'), randomInt(10_000, 12_000));
-      window.setTimeout(() => {
-        const sceneKey = Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2';
-        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey, reason: `scheduler:${reason}`, delayMs: 5_000 });
-      }, 0);
-      window.setTimeout(() => emitEvent('SCENE_SWITCH_REACT'), 7_000);
-      eventSchedulerRef.current.nextDueAt = now + randomInt(90_000, 140_000);
-    };
-
     const timer = window.setInterval(() => {
       const now = Date.now();
-      eventEngineRef.current.resetStaleCooldowns(now);
-      const cooldowns = eventEngineRef.current.getCooldownSnapshot();
-      const due = eventSchedulerRef.current.nextDueAt;
-      const blockedByCooldown = Object.values(cooldowns).some((until) => until > now);
-      eventSchedulerRef.current = {
-        ...eventSchedulerRef.current,
-        now,
-        cooldowns,
-        blocked: blockedByCooldown,
-        blockedReason: blockedByCooldown ? 'event_cooldown_active' : '-'
-      };
-      if (now >= due && !blockedByCooldown) {
-        fireGhostEvent('scheduled');
-      } else if (now >= due && blockedByCooldown && !eventRetryTimerRef.current) {
-        eventRetryTimerRef.current = window.setTimeout(() => {
-          eventRetryTimerRef.current = null;
-          fireGhostEvent('backoff_retry');
-        }, randomInt(5_000, 12_000));
-      }
-
-      window.__CHAT_DEBUG__ = {
-        ...(window.__CHAT_DEBUG__ ?? {}),
+      updateEventDebug({
+        lock: {
+          isLocked: lockStateRef.current.isLocked,
+          target: lockStateRef.current.target,
+          elapsed: lockStateRef.current.isLocked ? now - lockStateRef.current.startedAt : 0,
+          chatSpeedMultiplier: lockStateRef.current.isLocked ? 0.5 : 1
+        },
+        sfxCooldowns: { ...cooldownsRef.current },
         event: {
           ...(window.__CHAT_DEBUG__?.event ?? {}),
           scheduler: {
-            now: eventSchedulerRef.current.now,
-            nextDueAt: eventSchedulerRef.current.nextDueAt,
-            lastFiredAt: eventSchedulerRef.current.lastFiredAt,
-            blocked: eventSchedulerRef.current.blocked,
-            blockedReason: eventSchedulerRef.current.blockedReason,
-            cooldowns: eventSchedulerRef.current.cooldowns
-          },
-          lastEvent: eventSchedulerRef.current.lastEvent
+            ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}),
+            now,
+            cooldowns: { ...cooldownsRef.current }
+          }
         }
-      };
+      });
     }, 1000);
-
-    (window as Window & {
-      __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
-    }).__EVENT_SCHEDULER_CONTROLS__ = {
-      forceFire: () => fireGhostEvent('force_fire'),
-      resetLocks: () => {
-        eventEngineRef.current.resetLocks();
-        eventSchedulerRef.current.blocked = false;
-        eventSchedulerRef.current.blockedReason = 'manual_reset';
-      }
-    };
-
-    return () => {
-      window.clearInterval(timer);
-      if (eventRetryTimerRef.current) {
-        window.clearTimeout(eventRetryTimerRef.current);
-        eventRetryTimerRef.current = null;
-      }
-      (window as Window & {
-        __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
-      }).__EVENT_SCHEDULER_CONTROLS__ = undefined;
-    };
-  }, [emitEvent, isReady]);
+    return () => window.clearInterval(timer);
+  }, [updateEventDebug]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -914,9 +1013,11 @@ export default function App() {
         speechCooldownUntil.current = now + 10_000;
       }
 
-      const tagTarget = raw.match(/@([\w_]+)/)?.[1];
-      if (tagTarget) emitEvent('LOCK_START', { tagTarget, lockTarget: tagTarget });
-      emitEvent('USER_SENT', { tagTarget });
+      const tagTarget = raw.match(/@([\w_]+)/)?.[1] ?? null;
+      if (lockStateRef.current.isLocked && lockStateRef.current.target && tagTarget && tagTarget !== lockStateRef.current.target) {
+        return markBlocked('lock_target_mismatch');
+      }
+      tryTriggerStoryEvent(raw);
       const chats = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' }, Date.now());
       const wrongMessage = chats[0] ?? { id: crypto.randomUUID(), username: 'chat_mod', text: '這下壓力又上來了', language: 'zh', translation: '這下壓力又上來了' };
       dispatch({
@@ -940,7 +1041,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [chatAutoPaused, debugComposingOverride, emitEvent, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, updateChatDebug]);
+  }, [chatAutoPaused, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {

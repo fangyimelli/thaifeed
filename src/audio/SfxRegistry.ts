@@ -13,8 +13,8 @@ export interface SfxSpec {
 
 export const SFX_REGISTRY: Record<string, SfxSpec> = {
   fan_loop: { key: 'fan_loop', file: FAN_LOOP_PATH, kind: 'loop', defaultVolume: 0.4 },
-  footsteps: { key: 'footsteps', file: FOOTSTEPS_PATH, kind: 'oneshot', mutexGroup: 'oneshot_scare', cooldownMs: 45_000, defaultVolume: 0.85 },
-  ghost_female: { key: 'ghost_female', file: GHOST_FEMALE_PATH, kind: 'oneshot', mutexGroup: 'oneshot_scare', cooldownMs: 60_000, defaultVolume: 0.75 }
+  footsteps: { key: 'footsteps', file: FOOTSTEPS_PATH, kind: 'oneshot', mutexGroup: 'oneshot_scare', cooldownMs: 120_000, defaultVolume: 0.85 },
+  ghost_female: { key: 'ghost_female', file: GHOST_FEMALE_PATH, kind: 'oneshot', mutexGroup: 'oneshot_scare', cooldownMs: 180_000, defaultVolume: 0.75 }
 };
 
 export type SfxKey = keyof typeof SFX_REGISTRY;
