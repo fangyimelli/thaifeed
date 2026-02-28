@@ -309,24 +309,11 @@ export default function SceneView({
   const jumpWatchdogRef = useRef<number | null>(null);
   const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('debug') === '1';
+    const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+    const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
+    return searchEnabled || hashEnabled;
   });
   const [debugTick, setDebugTick] = useState(() => Date.now());
-
-  const setDebugQuery = useCallback((enabled: boolean) => {
-    const url = new URL(window.location.href);
-    if (enabled) {
-      url.searchParams.set('debug', '1');
-    } else {
-      url.searchParams.delete('debug');
-      const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
-      hashParams.delete('debug');
-      const hash = hashParams.toString();
-      url.hash = hash ? `#${hash}` : '';
-    }
-    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-    setDebugEnabled(enabled);
-  }, []);
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
     const prev: AudioDebugState = window.__AUDIO_DEBUG__ ?? {
@@ -1654,13 +1641,6 @@ export default function SceneView({
         </>
       )}
 
-      <button
-        type="button"
-        className={`video-debug-toggle ${debugEnabled ? 'is-on' : 'is-off'}`}
-        onClick={() => setDebugQuery(!debugEnabled)}
-      >
-        {debugEnabled ? 'Debug ON' : 'Debug OFF'}
-      </button>
     </section>
   );
 }
