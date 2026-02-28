@@ -648,6 +648,36 @@ npm run dev
     - `chat.lint.rerollCount`
   - 當句子被擋下並重抽時，上述欄位會更新，可直接確認 lint 正在工作。
 
+## 事件：全部強制 tag（2026-02）
+
+- 定義：事件必須以 `@activeUser` 開場（`starterLine` + `requiresTag: true`），不符合會直接中止事件。
+- 事件啟動 SSOT：`startEvent(eventKey, ctx)` 固定流程：
+  1. 先生成 opener 並套用 `starterLine`
+  2. 驗證 opener 必須以 `@activeUser` 開頭（runtime assert）
+  3. starter line 送出成功後才進入 `active`
+  4. 才允許排程後續 SFX/影片切換/反應訊息
+- 若 starter line 送出階段被阻擋（例如 `chat_auto_paused` / `tagLockActive` / `app_not_started`）：
+  - 事件直接標記 `aborted`
+  - 禁止該事件的 SFX 與影片切換
+  - `debug=1` 可看到 `event.lastEvent.abortedReason`
+- `ghost_female` / `footsteps` 已改為完全事件驅動，且 reason 強制使用 `event:${eventId}`。
+- `debug=1` 驗證重點：
+  - `event.lastEvent.key/eventId/state`
+  - `event.lastEvent.starterTagSent`
+  - `event.lastEvent.abortedReason`
+  - `event.lastGhostSfxReason`（顯示 `eventKey:*`，不可為 timer）
+  - `chat.activeUsers.count/nameSample`
+  - `chat.autoPaused/reason`
+
+### 通盤檢查結果（PASS/FAIL）
+
+- PASS：播放器（build + scene/sfx 事件流程編譯通過）。
+- PASS：音效（`ghost_female`/`footsteps` 只由事件 reason 觸發）。
+- PASS：聊天室（事件 opener 強制 tag activeUser）。
+- PASS：桌機版面（layout 邏輯未改、編譯通過）。
+- PASS：Debug 面板（新增事件生命週期欄位與 autoPaused reason）。
+- FAIL（環境限制）：手機實機鍵盤行為（送出後收鍵盤/捲底/輸入欄可視）無法在此 CI 容器做真機驗證。
+
 ## Ghost 事件化更新（2026-02）
 
 - 已完全移除 `ghost_female` 固定排程，鬼聲僅能由事件流程觸發。
@@ -666,7 +696,7 @@ npm run dev
   - `fan_loop` 常駐且不受互斥影響
 - `playSfx(key, options)` 統一入口支援 `delayMs / startVolume / endVolume / rampSec`。
 - `debug=1` 驗證：
-  - 觀察 `event.lastGhostSfxReason`，必須為事件名稱（如 `event:VOICE_CONFIRM`）
+  - 觀察 `event.lastGhostSfxReason`，必須為事件 key（如 `eventKey:VOICE_CONFIRM`）
   - 觀察 `event.violation`，若非事件來源觸發鬼聲會顯示 violation
   - 觀察 `event.lock` 與 `event.sfxCooldowns` 以驗證鎖定與冷卻
 
