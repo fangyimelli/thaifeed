@@ -113,7 +113,6 @@ bootDiagnostics();
 
 const computeDebugPlayerRoute = () => {
   const path = window.location.pathname.replace(/\/+$/, '');
-  if (path.endsWith('/debug')) return false;
   if (path.endsWith('/debug/player')) return true;
   const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
   if (!base) return false;

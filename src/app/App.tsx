@@ -162,8 +162,6 @@ const EVENT_TESTER_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_E
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const isDebugRoute = window.location.pathname.replace(/\/+$/, '').endsWith('/debug');
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -188,6 +186,7 @@ export default function App() {
   const videoRef = useRef<HTMLElement>(null);
   const chatAreaRef = useRef<HTMLElement>(null);
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
+  const [debugOpen, setDebugOpen] = useState(false);
   const burstCooldownUntil = useRef(0);
   const sendCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
@@ -1065,13 +1064,13 @@ export default function App() {
   const hasFatalInitError = requiredAssetErrors.length > 0;
   const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
   const shouldShowMainContent = true;
-  const debugEnabled = isDebugRoute || new URLSearchParams(window.location.search).get('debug') === '1';
+  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [debugComposingOverride, setDebugComposingOverride] = useState<boolean | null>(null);
-  const [simulatePlayerReply, setSimulatePlayerReply] = useState(true);
-  const [debugLowerCooldown, setDebugLowerCooldown] = useState(false);
+  const [simulatePlayerReply] = useState(true);
+  const [debugLowerCooldown] = useState(false);
   const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
   const [sendDebug, setSendDebug] = useState({
     lastClickAt: 0,
@@ -1488,15 +1487,8 @@ export default function App() {
     }, delay);
   }, [debugLowerCooldown, ensureDebugActiveUsers, simulatePlayerReply, simulateReplyText, startEvent, submitChat, triggerReactionBurst]);
 
-  const forceTagLock = useCallback(() => {
-    const activeUsers = collectActiveUsers(state.messages);
-    const target = activeUsers[0] ?? null;
-    if (!target) return;
-    lockStateRef.current = { isLocked: true, target, startedAt: Date.now() };
-  }, [state.messages]);
-
   return (
-    <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'} ${isDebugRoute ? 'debug-route-shell' : ''}`}>
+    <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
         visible={isLoading}
         progress={loadingProgress}
@@ -1505,18 +1497,16 @@ export default function App() {
         errors={requiredAssetErrors.map(formatMissingAsset)}
       />
       {shouldShowMainContent && (
-      <main className={`app-root app-layout ${isDebugRoute ? 'debug-route-layout' : ''}`}>
+      <main className="app-root app-layout">
         <header ref={headerRef} className="app-header top-dock">
           <div className="top-dock-row">
             <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
-            {isDebugRoute ? (
-              <a className="debug-route-link" href="/">Back</a>
-            ) : (
-              <a className="debug-entry-link" href="/debug" aria-label="Open debug page">Debug</a>
-            )}
           </div>
         </header>
         <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
+          <button type="button" className="video-debug-toggle" onClick={() => setDebugOpen((prev) => !prev)} aria-expanded={debugOpen}>
+            Debug
+          </button>
           {!hasFatalInitError ? (
             <SceneView
               targetConsonant={state.currentConsonant.letter}
@@ -1558,6 +1548,32 @@ export default function App() {
               </div>
             </div>
           )}
+          {debugOpen && (
+            <aside className="video-debug-panel" aria-label="Debug Panel">
+              <button type="button" className="video-debug-close" onClick={() => setDebugOpen(false)} aria-label="Close debug panel">×</button>
+              <div className="debug-event-tester" aria-label="Event Tester">
+                <h4>Event Tester</h4>
+                <div className="debug-route-controls">
+                  {EVENT_TESTER_KEYS.map((eventKey) => (
+                    <button key={eventKey} type="button" onClick={() => triggerEventFromTester(eventKey)}>
+                      Trigger {eventKey}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="debug-route-meta">
+                <div>event.registry.count: {window.__CHAT_DEBUG__?.event?.registry?.count ?? 0}</div>
+                <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
+                <div>lastEvent.key: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'}</div>
+                <div>lastEvent.starterTagSent: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)}</div>
+                <div>lastEvent.abortedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
+                <div>lock.isLocked: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)}</div>
+                <div>lock.lockTarget: {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'}</div>
+                <div>sfx.ghostCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.ghost_female ?? 0}</div>
+                <div>sfx.footstepsCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.footsteps ?? 0}</div>
+              </div>
+            </aside>
+          )}
         </section>
         <section ref={chatAreaRef} className="chat-area chat-container input-surface">
           <ChatPanel
@@ -1586,36 +1602,6 @@ export default function App() {
             onSendButtonClick={handleSendButtonClick}
           />
         </section>
-        {isDebugRoute && debugEnabled && (
-          <aside className="debug-route-panel">
-            <h3>Debug Snapshot</h3>
-            <div className="debug-route-meta">
-              <div>route: {window.location.pathname}</div>
-              <div>isDev: {String(isDev)}</div>
-              <div>eventTesterRendered: true</div>
-            </div>
-            <div className="debug-route-controls">
-              <button type="button" onClick={forceTagLock}>Force Tag Lock</button>
-              <label><input type="checkbox" checked={simulatePlayerReply} onChange={(event) => setSimulatePlayerReply(event.target.checked)} />simulatePlayerReply</label>
-              <label><input type="checkbox" checked={debugLowerCooldown} onChange={(event) => setDebugLowerCooldown(event.target.checked)} />lowerCooldown(debug only)</label>
-            </div>
-            <div className="debug-event-tester" aria-label="Event Tester">
-              <h4>Event Tester</h4>
-              <div className="debug-route-controls">
-                {EVENT_TESTER_KEYS.map((eventKey) => (
-                  <button key={eventKey} type="button" onClick={() => triggerEventFromTester(eventKey)}>
-                    Trigger {eventKey}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="debug-route-controls">
-              <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_RESCHEDULE_JUMP' })}>Reschedule</button>
-              <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_FORCE_JUMP_NOW' })}>Force Jump Now</button>
-            </div>
-            <pre>{JSON.stringify(window.__CHAT_DEBUG__ ?? {}, null, 2)}</pre>
-          </aside>
-        )}
         {!isDesktopLayout && debugEnabled && (
           <aside className="mobile-layout-debug" data-tick={layoutMetricsTick}>
             <div>visualViewport.height: {mobileViewportHeight ? Math.round(mobileViewportHeight) : 'n/a'}</div>
