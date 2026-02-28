@@ -184,9 +184,27 @@ export default function App() {
     dispatch({ type: 'AUDIENCE_MESSAGE', payload: message });
   };
 
+  const syncChatEngineDebug = () => {
+    const engineDebug = chatEngineRef.current.getDebugState() as {
+      lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
+    };
+    window.__CHAT_DEBUG__ = {
+      ...(window.__CHAT_DEBUG__ ?? {}),
+      chat: {
+        ...(window.__CHAT_DEBUG__?.chat ?? {}),
+        lint: {
+          lastRejectedText: engineDebug.lint?.lastRejectedText ?? '-',
+          lastRejectedReason: engineDebug.lint?.lastRejectedReason ?? '-',
+          rerollCount: engineDebug.lint?.rerollCount ?? 0
+        }
+      }
+    };
+  };
+
   const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
     const chats = chatEngineRef.current.emit(event, Date.now());
     chats.forEach(dispatchAudienceMessage);
+    syncChatEngineDebug();
   };
 
   const emitEvent = (eventKey: string, context: { tagTarget?: string; lockTarget?: string } = {}) => {
@@ -340,6 +358,7 @@ export default function App() {
     const tick = () => {
       const timedChats = chatEngineRef.current.tick(Date.now());
       dispatchTimedChats(timedChats);
+      syncChatEngineDebug();
       emitChatEvent({ type: 'IDLE_TICK' });
       emitEvent('IDLE_TICK');
       timer = window.setTimeout(tick, nextInterval());

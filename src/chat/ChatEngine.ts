@@ -1,16 +1,22 @@
 import type { ChatMessage } from '../core/state/types';
 import { collectActiveUsers } from '../core/systems/mentionV2';
 import { CHAT_TYPE_META, ChatMessageType, PERSONA_IDS, type ChatEnvelope, type ChatEvent, type PersonaId } from './ChatTypes';
-import { PERSONA_POOLS, PERSONA_USERS, THAI_TRANSLATIONS, TYPE_FALLBACK_POOLS } from './ChatPools';
+import { PERSONA_POOLS, PERSONA_USERS, SAFE_FALLBACK_POOL, THAI_TRANSLATIONS, TYPE_FALLBACK_POOLS } from './ChatPools';
 import { applyTagTemplate, canUseTag, enforceSingleLanguage, hashText, isDeniedTone, isPersonaRepeated, normalizeText, pickTagTarget } from './ChatRules';
 import { buildReactionWindow, pickTypeForEvent, type ReactionSpec } from './ChatSelector';
 import type { EventContentPayload } from '../director/EventEngine';
+import { getChatLintReason, truncateLintText } from './ChatLint';
 
 type DebugState = {
   lastEvent: string;
   lastPickedType: string;
   lastPersonaId?: string;
   lastTagTarget?: string;
+  lint: {
+    lastRejectedText: string;
+    lastRejectedReason: 'timecode_phrase' | 'technical_term' | '-';
+    rerollCount: number;
+  };
   recentDedupHashes: string[];
   activeUsers: string[];
   reactionWindow: { remainingSec: number; pending: number } | null;
@@ -28,6 +34,11 @@ export class ChatEngine {
   private debug: DebugState = {
     lastEvent: '-',
     lastPickedType: '-',
+    lint: {
+      lastRejectedText: '-',
+      lastRejectedReason: '-',
+      rerollCount: 0
+    },
     recentDedupHashes: [],
     activeUsers: [],
     reactionWindow: null
@@ -84,6 +95,7 @@ export class ChatEngine {
   private composeMessage(type: ChatMessageType, now: number): ChatMessage | null {
     const meta = CHAT_TYPE_META[type];
     if ((this.cooldowns.get(type) ?? 0) > now) return null;
+    let lintRerollCount = 0;
 
     for (let i = 0; i < 24; i += 1) {
       const personaId = meta.personaPolicy.enabled ? this.pickPersona(meta.personaPolicy.rotateWindow) : undefined;
@@ -98,6 +110,16 @@ export class ChatEngine {
       const tagged = applyTagTemplate(seed, tagTarget);
       const normalized = normalizeText(enforceSingleLanguage(tagged, meta.language));
       if (!normalized || isDeniedTone(normalized)) continue;
+      const lintReason = getChatLintReason(normalized);
+      if (lintReason) {
+        this.debug.lint = {
+          lastRejectedText: truncateLintText(normalized),
+          lastRejectedReason: lintReason,
+          rerollCount: Math.min(lintRerollCount + 1, 6)
+        };
+        lintRerollCount += 1;
+        if (lintRerollCount <= 6) continue;
+      }
 
       const digest = hashText(normalized);
       if (this.recentHashes.slice(-meta.maxRepeatWindow).includes(digest)) continue;
@@ -120,6 +142,7 @@ export class ChatEngine {
       this.debug.lastPickedType = type;
       this.debug.lastPersonaId = personaId;
       this.debug.lastTagTarget = tagTarget;
+      this.debug.lint.rerollCount = lintRerollCount;
       return {
         id: crypto.randomUUID(),
         username: envelope.username,
@@ -131,7 +154,35 @@ export class ChatEngine {
         tagTarget: envelope.tagTarget
       };
     }
-    return null;
+
+    const fallback = SAFE_FALLBACK_POOL[Math.floor(Math.random() * SAFE_FALLBACK_POOL.length)] ?? '先等等 我有點發毛';
+    const fallbackNormalized = normalizeText(fallback);
+    const fallbackReason = getChatLintReason(fallbackNormalized);
+    if (fallbackReason) return null;
+    const digest = hashText(fallbackNormalized);
+    const envelope: ChatEnvelope = {
+      type,
+      text: fallbackNormalized,
+      language: 'zh',
+      personaId: undefined,
+      username: 'system',
+      translation: fallbackNormalized
+    };
+    this.remember(envelope, digest, now);
+    this.debug.lastPickedType = type;
+    this.debug.lastPersonaId = undefined;
+    this.debug.lastTagTarget = undefined;
+    this.debug.lint.rerollCount = Math.max(lintRerollCount, 6);
+    return {
+      id: crypto.randomUUID(),
+      username: envelope.username,
+      text: envelope.text,
+      language: envelope.language,
+      translation: envelope.translation,
+      chatType: type,
+      personaId: envelope.personaId,
+      tagTarget: envelope.tagTarget
+    };
   }
 
   private dequeueContent(type: ChatMessageType): EventContentPayload | undefined {
