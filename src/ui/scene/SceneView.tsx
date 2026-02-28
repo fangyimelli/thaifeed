@@ -239,6 +239,11 @@ declare global {
           state?: 'active' | 'aborted' | 'done';
           starterTagSent?: boolean;
           abortedReason?: string;
+          waitingForReply?: boolean;
+        };
+        lastReactions?: {
+          count?: number;
+          lastReactionActors?: string[];
         };
         lastEventLabel?: string;
       };
