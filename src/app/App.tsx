@@ -237,6 +237,9 @@ export default function App() {
   const [isSending, setIsSending] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
+  const [appStarted, setAppStarted] = useState(false);
+  const [activeUser, setActiveUser] = useState('');
+  const [startNameInput, setStartNameInput] = useState('');
   const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);

@@ -247,6 +247,12 @@ npm run dev
   - inactive 一律 `muted=true + volume=0 + pause()`。
   - 主頁與 debug harness 必須共用同一個 `playerCore`，避免雙軌邏輯並存。
 
+## Netlify legacy token 清理（chatTickRestartKey）
+
+- `src/app/App.tsx` 已完整移除 legacy `chatTickRestartKey`（含 state/setter/props/key 殘留）。
+- 聊天室節奏/重啟不再透過 React `key` 強制 remount；改由既有聊天引擎事件流維持：`ChatEngine.emit()`、`ChatEngine.tick()`、`ChatEngine.syncFromMessages()`。
+- 送出訊息時若自動暫停中，會走既有 `setChatAutoPaused(false)` 自動恢復流程，作為 resume 機制。
+
 ## 聊天室送出穩定性
 
 - 單一路徑：`App.tsx` 的 `submitChat(text)` 是唯一送出入口。
