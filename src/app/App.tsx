@@ -57,6 +57,20 @@ function randomInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function pickNonRepeatingActor(pool: string[], recentActors: string[]): string {
+  if (pool.length === 0) return 'ink31';
+  const lastActor = recentActors[recentActors.length - 1];
+  const recentFive = recentActors.slice(-4);
+  const scored = pool.filter((actor) => {
+    if (actor === lastActor) return false;
+    const countInRecent = recentFive.filter((item) => item === actor).length;
+    return countInRecent < 2;
+  });
+  const source = scored.length > 0 ? scored : pool.filter((actor) => actor !== lastActor);
+  const usable = source.length > 0 ? source : pool;
+  return usable[Math.floor(Math.random() * usable.length)] ?? pool[0];
+}
+
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
@@ -141,6 +155,8 @@ const EVENT_TOPIC_WEIGHT: TopicWeightProfile = {
   videoObservation: 0,
   buildUp: 0
 };
+
+const DEBUG_SEED_USERS = ['ink31', 'mew88', 'koo_77', 'nana23'];
 
 
 export default function App() {
@@ -227,6 +243,8 @@ export default function App() {
 
   const eventLifecycleRef = useRef<EventRunRecord | null>(null);
   const reactionRecentIdsRef = useRef<Record<EventTopic, string[]>>({ ghost: [], footsteps: [], light: [] });
+  const reactionActorHistoryRef = useRef<string[]>([]);
+  const reactionTextHistoryRef = useRef<string[]>([]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
@@ -381,14 +399,43 @@ export default function App() {
       reactionBurstTimerRef.current = null;
       lines.forEach((line, index) => {
         window.setTimeout(() => {
+          const activePool = collectActiveUsers(state.messages);
+          const actorPool = activePool.length >= 3
+            ? activePool
+            : Array.from(new Set([...activePool, ...reactionActorHistoryRef.current, ...DEBUG_SEED_USERS]));
+          let pickedLine = line;
+          let rerollCount = 0;
+          let rejectedReason = '-';
+          while (reactionTextHistoryRef.current.slice(-8).includes(pickedLine.text) && rerollCount < 5) {
+            const rerolled = pickReactionLines(topic, 1, reactionRecentIdsRef.current[topic])[0];
+            if (!rerolled) break;
+            pickedLine = rerolled;
+            rerollCount += 1;
+            rejectedReason = 'duplicate';
+          }
+          reactionTextHistoryRef.current = [...reactionTextHistoryRef.current, pickedLine.text].slice(-12);
+          const actor = pickNonRepeatingActor(actorPool, reactionActorHistoryRef.current);
+          reactionActorHistoryRef.current = [...reactionActorHistoryRef.current, actor].slice(-10);
           dispatchAudienceMessage({
             id: crypto.randomUUID(),
-            username: pickOne(usernames),
+            username: actor,
             type: 'chat',
-            text: line.text,
+            text: pickedLine.text,
             language: 'zh',
-            translation: line.text
+            translation: pickedLine.text
           });
+          window.__CHAT_DEBUG__ = {
+            ...(window.__CHAT_DEBUG__ ?? {}),
+            chat: {
+              ...(window.__CHAT_DEBUG__?.chat ?? {}),
+              lint: {
+                ...(window.__CHAT_DEBUG__?.chat?.lint ?? {}),
+                rerollCount,
+                lastRejectedReason: rejectedReason,
+                lastRejectedText: rejectedReason === 'duplicate' ? pickedLine.text : '-'
+              }
+            }
+          };
         }, Math.floor((durationMs / Math.max(1, reactionCount)) * index));
       });
     }, Math.max(0, fireAt - Date.now()));
@@ -396,10 +443,15 @@ export default function App() {
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
         scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), lastFiredAt: fireAt, nextDueAt: fireAt + durationMs },
-        lastEventLabel: `reaction:${topic}`
-      }
+        lastEventLabel: `reaction:${topic}`,
+        lastReactions: {
+          count: reactionCount,
+          lastReactionActors: reactionActorHistoryRef.current.slice(-10)
+        }
+      },
+      violation: reactionActorHistoryRef.current.some((actor) => actor === 'system') ? 'reaction_actor_system=true' : window.__CHAT_DEBUG__?.violation
     });
-  }, [dispatchAudienceMessage, markEventTopicBoost, updateEventDebug]);
+  }, [dispatchAudienceMessage, markEventTopicBoost, state.messages, updateEventDebug]);
 
   const buildEventLine = useCallback((eventKey: StoryEventKey, phase: EventLinePhase, target: string): { line: string; lineId: string } => {
     markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
@@ -476,7 +528,7 @@ export default function App() {
     return true;
   }, []);
 
-  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' }) => {
+  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester' }) => {
     const record = runEventStart(eventKey, {
       activeUsers: collectActiveUsers(state.messages),
       sendLine: (line, meta) => {
@@ -501,7 +553,7 @@ export default function App() {
       }
     });
 
-    eventLastReasonRef.current = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
+    eventLastReasonRef.current = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
     eventLastKeyRef.current = eventKey;
     eventLastAtRef.current = Date.now();
     updateEventDebug({
@@ -1016,6 +1068,8 @@ export default function App() {
   const [mentionTarget, setMentionTarget] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [debugComposingOverride, setDebugComposingOverride] = useState<boolean | null>(null);
+  const [simulatePlayerReply, setSimulatePlayerReply] = useState(true);
+  const [debugLowerCooldown, setDebugLowerCooldown] = useState(false);
   const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
   const [sendDebug, setSendDebug] = useState({
     lastClickAt: 0,
@@ -1087,6 +1141,7 @@ export default function App() {
           state: eventLifecycleRef.current?.state ?? 'done',
           starterTagSent: eventLifecycleRef.current?.starterTagSent ?? false,
           abortedReason: eventLifecycleRef.current?.abortedReason,
+          waitingForReply: Boolean(pendingReplyEventRef.current),
           openerLineId: eventLifecycleRef.current?.openerLineId,
           followUpLineId: eventLifecycleRef.current?.followUpLineId,
           lineIds: eventLifecycleRef.current?.lineIds ?? [],
@@ -1374,17 +1429,62 @@ export default function App() {
     logSendDebug('click', { source: 'button' });
   }, [logSendDebug]);
 
-  const forceEventNow = useCallback(() => {
-    const activeUsers = collectActiveUsers(state.messages);
-    const target = activeUsers[0];
-    if (!target) {
-      eventGateRejectSummaryRef.current = { need_activeUsers: 1 };
-      eventLastCandidateCountRef.current = 0;
-      eventLastComputedAtRef.current = Date.now();
+  const ensureDebugActiveUsers = useCallback(() => {
+    const active = collectActiveUsers(state.messages);
+    if (active.length > 0) return active;
+    DEBUG_SEED_USERS.forEach((username) => {
+      dispatchAudienceMessage({
+        id: crypto.randomUUID(),
+        type: 'chat',
+        username,
+        text: '在',
+        language: 'zh',
+        translation: '在'
+      });
+    });
+    return DEBUG_SEED_USERS;
+  }, [dispatchAudienceMessage, state.messages]);
+
+  const simulateReplyText = useCallback((key: StoryEventKey) => {
+    if (key === 'VOICE_CONFIRM') return '有';
+    if (key === 'TV_EVENT') return '沒有';
+    if (key === 'FEAR_CHALLENGE') return '我不怕';
+    return '我在';
+  }, []);
+
+  const triggerEventFromTester = useCallback((eventKey: StoryEventKey) => {
+    const activeUsers = ensureDebugActiveUsers();
+    if (activeUsers.length === 0) return;
+    const now = Date.now();
+    if (!debugLowerCooldown) {
+      const cooldown = eventCooldownsRef.current[eventKey] ?? 0;
+      if (cooldown > now) return;
+      eventCooldownsRef.current[eventKey] = now + EVENT_REGISTRY[eventKey].cooldownMs;
+    } else {
+      eventCooldownsRef.current[eventKey] = now + 5_000;
+    }
+    const started = startEvent(eventKey, { source: 'debug_tester' });
+    if (!started) return;
+    if (eventKey === 'LIGHT_GLITCH') {
+      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
+      triggerReactionBurst('light');
+      if (eventLifecycleRef.current) {
+        eventLifecycleRef.current.state = 'done';
+        eventLifecycleRef.current.topic = 'light';
+      }
       return;
     }
-    startEvent('NAME_CALL', { source: 'scheduler_tick' });
-  }, [startEvent, state.messages]);
+    pendingReplyEventRef.current = { key: eventKey, target: started.target || activeUsers[0], eventId: started.eventId, expiresAt: now + 20_000 };
+    if (!simulatePlayerReply) return;
+    const delay = randomInt(800, 1500);
+    window.setTimeout(() => {
+      if (!pendingReplyEventRef.current || pendingReplyEventRef.current.eventId !== started.eventId) return;
+      const target = pendingReplyEventRef.current.target;
+      setReplyTarget(target);
+      setInput(`@${target} ${simulateReplyText(eventKey)}`);
+      void submitChat(`@${target} ${simulateReplyText(eventKey)}`, 'debug_simulate');
+    }, delay);
+  }, [debugLowerCooldown, ensureDebugActiveUsers, simulatePlayerReply, simulateReplyText, startEvent, submitChat, triggerReactionBurst]);
 
   const forceTagLock = useCallback(() => {
     const activeUsers = collectActiveUsers(state.messages);
@@ -1406,7 +1506,7 @@ export default function App() {
       <main className="app-root app-layout">
         <header ref={headerRef} className="app-header top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
-          <a className="debug-route-link" href={isDebugRoute ? '/' : '/debug?debug=1'}>{isDebugRoute ? 'Back' : 'Open Debug'}</a>
+          {isDebugRoute && <a className="debug-route-link" href="/">Back</a>}
         </header>
         <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
           {!hasFatalInitError ? (
@@ -1482,8 +1582,16 @@ export default function App() {
           <aside className="debug-route-panel">
             <h3>Debug Snapshot</h3>
             <div className="debug-route-controls">
-              <button type="button" onClick={forceEventNow}>Force Event Now</button>
               <button type="button" onClick={forceTagLock}>Force Tag Lock</button>
+              <label><input type="checkbox" checked={simulatePlayerReply} onChange={(event) => setSimulatePlayerReply(event.target.checked)} />simulatePlayerReply</label>
+              <label><input type="checkbox" checked={debugLowerCooldown} onChange={(event) => setDebugLowerCooldown(event.target.checked)} />lowerCooldown(debug only)</label>
+              <button type="button" onClick={() => triggerEventFromTester('VOICE_CONFIRM')}>Trigger VOICE_CONFIRM</button>
+              <button type="button" onClick={() => triggerEventFromTester('GHOST_PING')}>Trigger GHOST_PING</button>
+              <button type="button" onClick={() => triggerEventFromTester('TV_EVENT')}>Trigger TV_EVENT</button>
+              <button type="button" onClick={() => triggerEventFromTester('NAME_CALL')}>Trigger NAME_CALL</button>
+              <button type="button" onClick={() => triggerEventFromTester('VIEWER_SPIKE')}>Trigger VIEWER_SPIKE</button>
+              <button type="button" onClick={() => triggerEventFromTester('LIGHT_GLITCH')}>Trigger LIGHT_GLITCH</button>
+              <button type="button" onClick={() => triggerEventFromTester('FEAR_CHALLENGE')}>Trigger FEAR_CHALLENGE</button>
               <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_RESCHEDULE_JUMP' })}>Reschedule</button>
               <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_FORCE_JUMP_NOW' })}>Force Jump Now</button>
             </div>

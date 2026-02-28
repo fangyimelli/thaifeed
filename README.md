@@ -787,3 +787,36 @@ npm run dev
 - `events_not_firing`：追蹤 `event.registry` / `event.candidates` / `event.lastEvent`。
 - `chat_auto_paused`：追蹤 `ui.send.lastResult` / `ui.send.blockedReason`。
 - `event_tag_abort_chain`：追蹤 `event.lastEvent.starterTagSent` / `event.lastEvent.abortedReason` / `event.lastEvent.lineIds`。
+
+## DebugOn Event Tester（2026-02）
+
+- 入口：移除主畫面 `Open Debug` 按鈕，改為直接使用網址進入：`/debug?debug=1`。
+- DebugOn 新增 **Event Tester**，包含 7 顆事件按鈕：
+  - Trigger VOICE_CONFIRM
+  - Trigger GHOST_PING
+  - Trigger TV_EVENT
+  - Trigger NAME_CALL
+  - Trigger VIEWER_SPIKE
+  - Trigger LIGHT_GLITCH
+  - Trigger FEAR_CHALLENGE
+- 每顆按鈕都走同一套 production 入口 `startEvent(eventKey, ctx)`，不繞過 tag/lock/gating。
+- 可選項：
+  - `simulatePlayerReply`（預設 on）：會在 800~1500ms 內以玩家流程送出對應回覆。
+  - `lowerCooldown(debug only)`（預設 off）：僅降低冷卻，不跳過 lock/tag/gating。
+- Debug 顯示補充：
+  - `event.lastEvent.waitingForReply`
+  - `event.lastReactions.count`
+  - `event.lastReactions.lastReactionActors`
+  - `violation=reaction_actor_system=true`（若反應誤用 system）
+
+## System message 使用邊界（SSOT）
+
+- `system` 僅保留給：Loading / 初始化 / 錯誤提示。
+- reactions / ambient / idle / event burst 一律視為觀眾訊息，必須使用 activeUsers（不足時由歷史使用者池補足），不得使用 `system`。
+
+## Reactions/ambient actor 規則
+
+- 事件 burst 視窗內每句都重新抽 actor。
+- 禁止同 actor 連續出現（no back-to-back）。
+- 最近 5 句內同 actor 最多 2 次。
+- 同句 8 次內不可重複；重複時最多 reroll 5 次，並在 debug 記錄 duplicate reroll。
