@@ -4,8 +4,13 @@ import { CHAT_TYPE_META, ChatMessageType, PERSONA_IDS, type ChatEnvelope, type C
 import { PERSONA_POOLS, PERSONA_USERS, SAFE_FALLBACK_POOL, THAI_TRANSLATIONS, TYPE_FALLBACK_POOLS } from './ChatPools';
 import { applyTagTemplate, canUseTag, enforceSingleLanguage, hashText, isDeniedTone, isPersonaRepeated, normalizeText, pickTagTarget } from './ChatRules';
 import { buildReactionWindow, pickTypeForEvent, type ReactionSpec } from './ChatSelector';
-import type { EventContentPayload } from '../director/EventEngine';
 import { getChatLintReason, truncateLintText } from './ChatLint';
+
+type EventContentPayload = {
+  type: ChatMessageType;
+  text: string;
+  translation?: string;
+};
 
 type DebugState = {
   lastEvent: string;
