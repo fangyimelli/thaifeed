@@ -172,6 +172,8 @@ declare global {
       lastSfxKey?: string;
       lastSfxReason?: string;
       lastGhostSfxReason?: string;
+      lastContentId?: string;
+      contentRepeatBlocked?: boolean;
       violation?: string;
       sfxCooldowns?: Record<string, number>;
       lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
@@ -1546,6 +1548,7 @@ export default function SceneView({
           <div>event.line/variant/tone/persona: {window.__CHAT_DEBUG__?.lastLineKey ?? '-'} / {window.__CHAT_DEBUG__?.lastVariantId ?? '-'} / {window.__CHAT_DEBUG__?.lastTone ?? '-'} / {window.__CHAT_DEBUG__?.lastPersona ?? '-'}</div>
           <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
           <div>event.lastGhostSfxReason: {window.__CHAT_DEBUG__?.lastGhostSfxReason ?? '-'}</div>
+          <div>event.lastContentId/repeatBlocked: {window.__CHAT_DEBUG__?.lastContentId ?? '-'} / {String(window.__CHAT_DEBUG__?.contentRepeatBlocked ?? false)}</div>
           <div>event.violation: {window.__CHAT_DEBUG__?.violation ?? '-'}</div>
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>

@@ -107,6 +107,91 @@ type StoryEventKey =
   | 'LIGHT_GLITCH'
   | 'FEAR_CHALLENGE';
 
+type EventLinePhase = 'opener' | 'followUp';
+type EventLineOption = { id: string; text: string };
+
+const STORY_EVENT_CONTENT: Record<StoryEventKey, { opener: EventLineOption[]; followUp?: EventLineOption[] }> = {
+  VOICE_CONFIRM: {
+    opener: [
+      { id: 'voice_open_1', text: '你那邊有開聲音嗎' },
+      { id: 'voice_open_2', text: '你現在有聽到什麼嗎' },
+      { id: 'voice_open_3', text: '你有開喇叭嗎' },
+      { id: 'voice_open_4', text: '你有戴耳機嗎' },
+      { id: 'voice_open_5', text: '你那邊是不是有聲音' }
+    ],
+    followUp: [
+      { id: 'voice_follow_1', text: '我剛剛好像聽到東西' },
+      { id: 'voice_follow_2', text: '你那邊是不是有怪聲' },
+      { id: 'voice_follow_3', text: '好像不是風聲' },
+      { id: 'voice_follow_4', text: '剛剛那個不是我吧' },
+      { id: 'voice_follow_5', text: '那聲音不是聊天室的' }
+    ]
+  },
+  GHOST_PING: {
+    opener: [{ id: 'ghost_ping_open_1', text: '你還在嗎' }],
+    followUp: [{ id: 'ghost_ping_follow_1', text: '你有聽到我的聲音嗎 我說了什麼' }]
+  },
+  TV_EVENT: {
+    opener: [
+      { id: 'tv_open_1', text: '電視是不是動了一下' },
+      { id: 'tv_open_2', text: '你有看到畫面怪怪的嗎' },
+      { id: 'tv_open_3', text: '剛剛那邊是不是有閃' },
+      { id: 'tv_open_4', text: '那個角落是不是有影子' },
+      { id: 'tv_open_5', text: '剛剛是不是晃了一下' }
+    ],
+    followUp: [
+      { id: 'tv_follow_1', text: '你真的沒看到嗎' },
+      { id: 'tv_follow_2', text: '不對 那不是我眼花' },
+      { id: 'tv_follow_3', text: '那個不是正常的吧' },
+      { id: 'tv_follow_4', text: '剛剛那個是什麼' },
+      { id: 'tv_follow_5', text: '你沒看到我嗎' }
+    ]
+  },
+  NAME_CALL: {
+    opener: [
+      { id: 'name_open_1', text: '剛剛有人叫你名字' },
+      { id: 'name_open_2', text: '你有聽到有人叫你嗎' },
+      { id: 'name_open_3', text: '好像有人在喊你' },
+      { id: 'name_open_4', text: '那聲音是不是在叫你' },
+      { id: 'name_open_5', text: '你剛剛有聽到自己的名字嗎' }
+    ]
+  },
+  VIEWER_SPIKE: {
+    opener: [
+      { id: 'viewer_open_1', text: '人數是不是跳了一下' },
+      { id: 'viewer_open_2', text: '剛剛觀看數怪怪的' },
+      { id: 'viewer_open_3', text: '那個數字是不是動了' },
+      { id: 'viewer_open_4', text: '我剛剛看到人數變化' },
+      { id: 'viewer_open_5', text: '好像有人突然進來' }
+    ]
+  },
+  LIGHT_GLITCH: {
+    opener: [
+      { id: 'light_open_1', text: '燈是不是怪怪的' },
+      { id: 'light_open_2', text: '你有看到亮度變嗎' },
+      { id: 'light_open_3', text: '剛剛是不是暗了一下' },
+      { id: 'light_open_4', text: '那盞燈是不是在動' },
+      { id: 'light_open_5', text: '我怎麼覺得亮度不對' }
+    ]
+  },
+  FEAR_CHALLENGE: {
+    opener: [
+      { id: 'fear_open_1', text: '你怕嗎' },
+      { id: 'fear_open_2', text: '你現在會怕嗎' },
+      { id: 'fear_open_3', text: '這樣你不會怕嗎' },
+      { id: 'fear_open_4', text: '你真的不怕嗎' },
+      { id: 'fear_open_5', text: '你心跳有變快嗎' }
+    ],
+    followUp: [
+      { id: 'fear_follow_1', text: '我好像聽到聲音' },
+      { id: 'fear_follow_2', text: '等一下 那是什麼' },
+      { id: 'fear_follow_3', text: '剛剛那個不是我' },
+      { id: 'fear_follow_4', text: '我不太對勁' },
+      { id: 'fear_follow_5', text: '好像有人在走' }
+    ]
+  }
+};
+
 function formatMissingAsset(asset: MissingRequiredAsset) {
   return `[${asset.type}] ${asset.name} | ${asset.relativePath} | ${asset.url} | ${asset.reason}`;
 }
@@ -176,7 +261,16 @@ export default function App() {
   });
   const pendingReplyEventRef = useRef<{ key: StoryEventKey; target: string; expiresAt: number } | null>(null);
   const reactionBurstTimerRef = useRef<number | null>(null);
-  const lineCursorRef = useRef(0);
+  const eventRecentContentIdsRef = useRef<Record<StoryEventKey, string[]>>({
+    VOICE_CONFIRM: [],
+    GHOST_PING: [],
+    TV_EVENT: [],
+    NAME_CALL: [],
+    VIEWER_SPIKE: [],
+    LIGHT_GLITCH: [],
+    FEAR_CHALLENGE: []
+  });
+  const globalRecentContentIdsRef = useRef<string[]>([]);
 
 
   useEffect(() => {
@@ -300,14 +394,42 @@ export default function App() {
     });
   }, [emitChatEvent, updateEventDebug]);
 
-  const nextLine = useCallback((options: string[]) => {
-    const index = lineCursorRef.current % options.length;
-    lineCursorRef.current += 1;
-    return options[index];
+  const pickEventLine = useCallback((eventKey: StoryEventKey, phase: EventLinePhase): { option: EventLineOption; repeatBlocked: boolean } => {
+    const fallback = { id: `${eventKey.toLowerCase()}_${phase}_fallback`, text: '等一下' };
+    const options = STORY_EVENT_CONTENT[eventKey][phase] ?? [];
+    if (options.length === 0) return { option: fallback, repeatBlocked: false };
+
+    const eventRecent = eventRecentContentIdsRef.current[eventKey].slice(-5);
+    const globalRecent = globalRecentContentIdsRef.current.slice(-10);
+    const shuffled = [...options].sort(() => Math.random() - 0.5);
+    let repeatBlocked = false;
+
+    for (const candidate of shuffled) {
+      const eventRepeated = eventRecent.includes(candidate.id);
+      const globalRepeated = globalRecent.includes(candidate.id);
+      if (eventRepeated || globalRepeated) {
+        repeatBlocked = true;
+        continue;
+      }
+      return { option: candidate, repeatBlocked };
+    }
+
+    return { option: shuffled[0] ?? fallback, repeatBlocked: true };
   }, []);
 
-  const postEventLine = useCallback((target: string, options: string[]) => {
-    const line = nextLine(options);
+  const postEventLine = useCallback((target: string, eventKey: StoryEventKey, phase: EventLinePhase) => {
+    const picked = pickEventLine(eventKey, phase);
+    const line = picked.option.text;
+    eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], picked.option.id].slice(-5);
+    globalRecentContentIdsRef.current = [...globalRecentContentIdsRef.current, picked.option.id].slice(-10);
+    updateEventDebug({
+      lastContentId: picked.option.id,
+      contentRepeatBlocked: picked.repeatBlocked,
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        lastEvent: `event:${eventKey}:${phase}`
+      }
+    });
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
       username: 'mod_live',
@@ -317,7 +439,7 @@ export default function App() {
       translation: `@${target} ${line}`,
       tagTarget: target
     });
-  }, [dispatchAudienceMessage, nextLine]);
+  }, [dispatchAudienceMessage, pickEventLine, updateEventDebug]);
 
   const playSfx = useCallback((
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
@@ -367,19 +489,20 @@ export default function App() {
       const repliedNo = /沒有/.test(raw);
       const repliedBrave = /不怕/.test(raw);
       if (pending.key === 'VOICE_CONFIRM' && repliedYes) {
+        postEventLine(pending.target, 'VOICE_CONFIRM', 'followUp');
         playSfx('ghost_female', { reason: 'event:VOICE_CONFIRM', source: 'event', delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
         triggerReactionBurst('ghost');
       }
       if (pending.key === 'GHOST_PING') {
         playSfx('ghost_female', { reason: 'event:GHOST_PING', source: 'event', delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
-        postEventLine(pending.target, ['你有聽到我的聲音嗎 我說了什麼']);
+        postEventLine(pending.target, 'GHOST_PING', 'followUp');
         triggerReactionBurst('ghost');
         cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
         lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
       }
       if (pending.key === 'TV_EVENT' && repliedNo) {
         requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop2', reason: 'event:TV_EVENT', delayMs: 2000 });
-        postEventLine(pending.target, ['你沒看到我嗎']);
+        postEventLine(pending.target, 'TV_EVENT', 'followUp');
         triggerReactionBurst(Math.random() < 0.5 ? 'light' : 'ghost');
         if (Math.random() < 0.5 && (cooldownsRef.current.ghost_female ?? 0) <= now) {
           playSfx('ghost_female', { reason: 'event:TV_EVENT_OPTIONAL_GHOST', source: 'event', delayMs: 200, startVolume: 0.9, endVolume: 1, rampSec: 0.4 });
@@ -399,7 +522,7 @@ export default function App() {
           ? playSfx('ghost_female', { reason: 'event:FEAR_CHALLENGE_GHOST', source: 'event', delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
           : playSfx('footsteps', { reason: 'event:FEAR_CHALLENGE_FOOTSTEPS', source: 'event', delayMs: 2000 });
         if (played) {
-          postEventLine(pending.target, ['太毛了啦我要下線了']);
+          postEventLine(pending.target, 'FEAR_CHALLENGE', 'followUp');
           triggerReactionBurst(chooseGhost ? 'ghost' : 'footsteps');
         }
       }
@@ -411,40 +534,40 @@ export default function App() {
     const can = (key: StoryEventKey, cooldownMs: number) => (eventCooldownsRef.current[key] ?? 0) <= now && (eventCooldownsRef.current[key] = now + cooldownMs, true);
 
     if (activeUsers.length >= 1 && Math.random() < 0.08 && can('VOICE_CONFIRM', 90_000)) {
-      postEventLine(target, ['你那邊有開聲音嗎']);
+      postEventLine(target, 'VOICE_CONFIRM', 'opener');
       pendingReplyEventRef.current = { key: 'VOICE_CONFIRM', target, expiresAt: now + 20_000 };
       return;
     }
     if (activeUsers.length >= 3 && (cooldownsRef.current.ghost_ping_actor ?? 0) <= now && Math.random() < 0.06 && can('GHOST_PING', 120_000)) {
-      postEventLine(target, ['你還在嗎']);
+      postEventLine(target, 'GHOST_PING', 'opener');
       lockStateRef.current = { isLocked: true, target, startedAt: now };
       pendingReplyEventRef.current = { key: 'GHOST_PING', target, expiresAt: now + 20_000 };
       return;
     }
     if (activeUsers.length >= 3 && (cooldownsRef.current.loop4 ?? 0) <= now && Math.random() < 0.07 && can('TV_EVENT', 90_000)) {
-      postEventLine(target, ['電視是不是動了一下啊']);
+      postEventLine(target, 'TV_EVENT', 'opener');
       pendingReplyEventRef.current = { key: 'TV_EVENT', target, expiresAt: now + 20_000 };
       cooldownsRef.current.loop4 = now + 90_000;
       return;
     }
     if (Math.random() < 0.06 && can('NAME_CALL', 90_000)) {
-      postEventLine(target, ['剛剛有人叫你名字']);
+      postEventLine(target, 'NAME_CALL', 'opener');
       pendingReplyEventRef.current = { key: 'NAME_CALL', target, expiresAt: now + 20_000 };
       return;
     }
     if (Math.random() < 0.06 && can('VIEWER_SPIKE', 90_000)) {
-      postEventLine(target, ['剛剛人數是不是跳了一下']);
+      postEventLine(target, 'VIEWER_SPIKE', 'opener');
       pendingReplyEventRef.current = { key: 'VIEWER_SPIKE', target, expiresAt: now + 20_000 };
       return;
     }
     if (Math.random() < 0.05 && can('LIGHT_GLITCH', 90_000)) {
-      postEventLine(target, ['你有看到燈怪怪的嗎']);
+      postEventLine(target, 'LIGHT_GLITCH', 'opener');
       requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: 'event:LIGHT_GLITCH' });
       triggerReactionBurst('light');
       return;
     }
     if (Math.random() < 0.06 && can('FEAR_CHALLENGE', 90_000)) {
-      postEventLine(target, ['你怕嗎']);
+      postEventLine(target, 'FEAR_CHALLENGE', 'opener');
       pendingReplyEventRef.current = { key: 'FEAR_CHALLENGE', target, expiresAt: now + 20_000 };
     }
   }, [playSfx, postEventLine, state.messages, triggerReactionBurst]);
