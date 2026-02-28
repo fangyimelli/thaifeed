@@ -81,11 +81,12 @@ npm run dev
   - 常駐：`fan_loop`
   - 事件觸發：`footsteps`、`ghost_female`
 - 已移除 per-video ambient mapping 舊邏輯，避免「影片音軌 + per-video ambient」並存導致錯誤判讀。
-- Debug 排查（`?debug=1`）：
+- Debug 排查：
   - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
   - overlay 會顯示目前正在播放的 audio elements（fan/footsteps/ghost）。
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
-  - 主頁右上角提供小型 `Debug` 按鈕，可直接進入 `/debug`；若需要 overlay 詳細欄位可再加上 `?debug=1`。
+  - 主頁影片右上角提供小型 `Debug` 按鈕，點擊後以 overlay 開啟 DebugPanel（不跳頁、不改 layout）。
+  - 若需要 SceneView 詳細診斷欄位可加上 `?debug=1`。
 
 
 ## 音效：無縫循環（fan_loop）
@@ -117,7 +118,7 @@ npm run dev
 
 ### debug=1 如何確認 fan loop 狀態
 
-進入 `/debug?debug=1` 後，可於 overlay 看到：
+開啟主頁（可加上 `?debug=1`）後，可於 overlay 看到：
 
 - `audioContext.state`
 - `fan playing/currentTime`
@@ -178,11 +179,11 @@ npm run dev
   - 目前已改為在 debug overlay 顯示 fallback 與 unavailable 原因，避免無聲退回。
 
 
-## Debug 測試控制面板（`?debug=1`）
+## Debug 測試控制面板（主畫面 overlay）
 
 - 使用方式：
-  - 從主頁右上角 `Debug` 進入 `/debug`，再開啟 `?debug=1`，畫面下方 debug overlay 會顯示測試控制按鈕。
-  - 此控制面板僅在 `debug=1` render，正式模式不會顯示。
+  - 點主畫面影片右上角 `Debug` 小按鈕即可開啟 overlay 面板（不使用 `/debug` route）。
+  - Event Tester 固定可用；`?debug=1` 仍可開啟額外 SceneView 診斷欄位。
 - 按鈕用途：
   - `▶ Force LOOP`：直接呼叫 `switchTo('oldhouse_room_loop')`。
   - `▶ Force LOOP2`：直接呼叫 `switchTo('oldhouse_room_loop2')`。
@@ -788,10 +789,10 @@ npm run dev
 - `chat_auto_paused`：追蹤 `ui.send.lastResult` / `ui.send.blockedReason`。
 - `event_tag_abort_chain`：追蹤 `event.lastEvent.starterTagSent` / `event.lastEvent.abortedReason` / `event.lastEvent.lineIds`。
 
-## DebugOn Event Tester（2026-02）
+## Debug Overlay Event Tester（2026-02）
 
-- 入口：主畫面右上角小型 `Debug` 按鈕可直接進入 `/debug`（不遮擋影片與聊天室輸入區）。
-- `/debug` 頁固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
+- 入口：主畫面影片右上角小型 `Debug` 按鈕（overlay 模式，不跳頁）。
+- DebugPanel 固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
   - Trigger VOICE_CONFIRM
   - Trigger GHOST_PING
   - Trigger TV_EVENT
@@ -800,14 +801,16 @@ npm run dev
   - Trigger LIGHT_GLITCH
   - Trigger FEAR_CHALLENGE
 - 每顆按鈕都走同一套 production 入口 `startEvent(eventKey, ctx)`，不繞過 tag/lock/gating。
-- 可選項：
-  - `simulatePlayerReply`（預設 on）：會在 800~1500ms 內以玩家流程送出對應回覆。
-  - `lowerCooldown(debug only)`（預設 off）：僅降低冷卻，不跳過 lock/tag/gating。
-
-- `/debug` 額外顯示：
-  - `route`
-  - `isDev`
-  - `eventTesterRendered`
+- DebugPanel 額外顯示：
+  - `event.registry.count`
+  - `chat.activeUsers.count`
+  - `lastEvent.key`
+  - `lastEvent.starterTagSent`
+  - `lastEvent.abortedReason`
+  - `lock.isLocked`
+  - `lock.lockTarget`
+  - `sfx.ghostCooldown`
+  - `sfx.footstepsCooldown`
 - 注意事項：Event Tester 會走正式事件流程，請先確認聊天室可送出訊息，再觸發事件以驗證 tag/lock/cooldown 行為。
 - Debug 顯示補充：
   - `event.lastEvent.waitingForReply`
