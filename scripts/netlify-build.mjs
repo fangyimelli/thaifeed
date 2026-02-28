@@ -21,6 +21,23 @@ if (appSource.includes('setChatTickRestartKey') || appSource.includes('chatTickR
 
 console.log('[netlify-build] App legacy chatTickRestartKey check passed.');
 
+
+const removedStateTokens = [
+  'appStarted',
+  'startNameInput',
+  'setStartNameInput',
+  'setActiveUser',
+  'setAppStarted'
+];
+
+const foundRemovedStateToken = removedStateTokens.find((token) => appSource.includes(token));
+if (foundRemovedStateToken) {
+  console.error(`[netlify-build] Unexpected legacy start-flow token "${foundRemovedStateToken}" found in ${appPath}.`);
+  process.exit(1);
+}
+
+console.log('[netlify-build] App legacy start-flow token check passed.');
+
 const run = (cmd, args) => spawnSync(cmd, args, { stdio: 'inherit' });
 
 const runViteBuild = () => run('node', ['./node_modules/vite/bin/vite.js', 'build']);
