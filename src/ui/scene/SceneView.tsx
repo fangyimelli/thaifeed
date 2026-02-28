@@ -232,6 +232,10 @@ declare global {
           at?: number;
           reason?: string;
           lineVariantId?: string;
+          openerLineId?: string;
+          followUpLineId?: string;
+          lineIds?: string[];
+          topic?: 'ghost' | 'footsteps' | 'light';
           state?: 'active' | 'aborted' | 'done';
           starterTagSent?: boolean;
           abortedReason?: string;
