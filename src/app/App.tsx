@@ -27,6 +27,7 @@ import { ChatEngine } from '../chat/ChatEngine';
 import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
 import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
 import { collectActiveUsers } from '../core/systems/mentionV2';
+import { createGhostLore } from '../core/systems/ghostLore';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -242,6 +243,10 @@ export default function App() {
   const [initStatusText, setInitStatusText] = useState('初始化中');
   const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
+  const [appStarted, setAppStarted] = useState(false);
+  const [activeUser, setActiveUser] = useState('');
+  const [startNameInput, setStartNameInput] = useState('');
+  const [chatTickRestartKey, setChatTickRestartKey] = useState(0);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
@@ -272,6 +277,7 @@ export default function App() {
   const eventWeightRecoverUntilRef = useRef(0);
   const lastChatMessageAtRef = useRef(Date.now());
   const chatEngineRef = useRef(new ChatEngine());
+  const ghostLoreRef = useRef(createGhostLore());
   const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number }>({ isLocked: false, target: null, startedAt: 0 });
   const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, loop4: 0, ghost_ping_actor: 0 });
   const eventCooldownsRef = useRef<Record<StoryEventKey, number>>({
@@ -468,11 +474,18 @@ export default function App() {
   const postEventLine = useCallback((target: string, eventKey: StoryEventKey, phase: EventLinePhase) => {
     markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
     const picked = pickEventLine(eventKey, phase);
-    const line = picked.option.text;
+    const loreLevel = state.curse >= 70 ? 3 : state.curse >= 40 ? 2 : 1;
+    const lore = ghostLoreRef.current.inject({
+      fragment: picked.option.text,
+      level: loreLevel,
+      activeUser
+    });
+    const line = lore.fragment;
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], picked.option.id].slice(-5);
     globalRecentContentIdsRef.current = [...globalRecentContentIdsRef.current, picked.option.id].slice(-10);
     updateEventDebug({
       lastContentId: picked.option.id,
+      lastNameInjected: lore.lastNameInjected,
       contentRepeatBlocked: picked.repeatBlocked,
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
@@ -488,7 +501,7 @@ export default function App() {
       translation: `@${target} ${line}`,
       tagTarget: target
     });
-  }, [dispatchAudienceMessage, markEventTopicBoost, pickEventLine, updateEventDebug]);
+  }, [activeUser, dispatchAudienceMessage, pickEventLine, state.curse, updateEventDebug]);
 
   const playSfx = useCallback((
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
@@ -532,6 +545,8 @@ export default function App() {
     const target = activeUsers.length > 0 ? pickOne(activeUsers) : null;
     const pending = pendingReplyEventRef.current;
     const isLocked = lockStateRef.current.isLocked && Boolean(lockStateRef.current.target);
+
+    if (!appStarted) return;
 
     if (pending && now <= pending.expiresAt) {
       const repliedYes = /有/.test(raw);
@@ -619,7 +634,7 @@ export default function App() {
       postEventLine(target, 'FEAR_CHALLENGE', 'opener');
       pendingReplyEventRef.current = { key: 'FEAR_CHALLENGE', target, expiresAt: now + 20_000 };
     }
-  }, [playSfx, postEventLine, state.messages, triggerReactionBurst]);
+  }, [appStarted, playSfx, postEventLine, state.messages, triggerReactionBurst]);
 
   useEffect(() => {
     chatEngineRef.current.syncFromMessages(state.messages);
@@ -686,7 +701,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || chatAutoPaused || !appStarted) return;
     let timer = 0;
 
     const pickNextRhythm = (): Exclude<ChatPacingMode, 'tag_slow'> => {
@@ -779,7 +794,7 @@ export default function App() {
 
     timer = window.setTimeout(tick, nextInterval());
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, getCurrentTopicWeights, isReady, state.curse, state.messages]);
+  }, [appStarted, chatAutoPaused, chatTickRestartKey, isReady]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
@@ -821,7 +836,7 @@ export default function App() {
   }, [updateEventDebug]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !appStarted) return;
 
     let timer = 0;
     const burstTimers: number[] = [];
@@ -881,10 +896,10 @@ export default function App() {
       window.clearTimeout(timer);
       burstTimers.forEach((id) => window.clearTimeout(id));
     };
-  }, [state.curse, isReady]);
+  }, [appStarted, state.curse, isReady]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !appStarted) return;
 
     let timer = 0;
 
@@ -899,11 +914,11 @@ export default function App() {
 
     timer = window.setTimeout(tick, nextLeaveDelayMs());
     return () => window.clearTimeout(timer);
-  }, [loadingState]);
+  }, [appStarted, loadingState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (!isReady) return;
+      if (!isReady || !appStarted) return;
       const now = Date.now();
       if (now - lastInputTimestamp.current <= 15_000) return;
       if (now - lastIdleCurseAt.current < 10_000) return;
@@ -912,7 +927,7 @@ export default function App() {
     }, 5_000);
 
     return () => window.clearInterval(timer);
-  }, [loadingState]);
+  }, [appStarted, loadingState]);
 
 
   useEffect(() => {
@@ -942,7 +957,7 @@ export default function App() {
   }, [loadingState]);
 
   useEffect(() => {
-    if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
+    if (!isReady || !appStarted || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
     postedOptionalAssetWarningMessage.current = true;
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
@@ -951,7 +966,7 @@ export default function App() {
       text: '部分非必要素材載入失敗，遊戲可正常進行。',
       language: 'zh'
     });
-  }, [hasOptionalAssetWarning, isReady]);
+  }, [appStarted, hasOptionalAssetWarning, isReady]);
 
 
   const hasFatalInitError = requiredAssetErrors.length > 0;
@@ -1087,6 +1102,9 @@ export default function App() {
       errorMessage: ''
     };
     const markSent = (mode: string): SendResult => {
+      if (!appStarted) {
+        return markBlocked('app_not_started');
+      }
       if (chatAutoPaused) {
         setChatAutoPaused(false);
       }
@@ -1225,7 +1243,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [chatAutoPaused, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
+  }, [appStarted, chatAutoPaused, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {
@@ -1259,17 +1277,46 @@ export default function App() {
         <header ref={headerRef} className="app-header top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
         </header>
-        <section ref={videoRef} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
+        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
           {!hasFatalInitError ? (
             <SceneView
               targetConsonant={state.currentConsonant.letter}
               curse={state.curse}
               anchor={state.currentAnchor}
               isDesktopLayout={isDesktopLayout}
+              appStarted={appStarted}
             />
           ) : (
             <div className="asset-warning scene-placeholder">
               初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
+            </div>
+          )}
+          {!appStarted && (
+            <div className="startup-overlay" role="dialog" aria-modal="true" aria-label="Enter your name">
+              <div className="startup-card">
+                <h2>Enter your name</h2>
+                <input
+                  value={startNameInput}
+                  onChange={(event) => setStartNameInput(event.target.value)}
+                  placeholder="username"
+                  maxLength={24}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = startNameInput.trim();
+                    if (!name) return;
+                    setActiveUser(name);
+                    setAppStarted(true);
+                    setChatAutoPaused(false);
+                    window.setTimeout(() => {
+                      videoRef.current?.focus();
+                    }, 0);
+                  }}
+                >
+                  Confirm
+                </button>
+              </div>
             </div>
           )}
         </section>
