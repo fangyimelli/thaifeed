@@ -183,6 +183,7 @@ declare global {
       blockedReasons?: Record<string, number>;
       chat?: {
         autoPaused?: boolean;
+        autoPausedReason?: string;
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[] };
         pacing?: {
           mode?: 'normal' | 'slightlyBusy' | 'tense' | 'quiet' | 'tag_slow' | 'slowed' | 'locked_slowed';
@@ -227,9 +228,13 @@ declare global {
         cooldowns?: Record<string, number>;
         lastEvent?: {
           key?: string;
+          eventId?: string;
           at?: number;
           reason?: string;
           lineVariantId?: string;
+          state?: 'active' | 'aborted' | 'done';
+          starterTagSent?: boolean;
+          abortedReason?: string;
         };
         lastEventLabel?: string;
       };
@@ -1594,7 +1599,7 @@ export default function SceneView({
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
           <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>
-          <div>chat.autoPaused: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)}</div>
+          <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
           <div>chat.pacing.baseRate/currentRate/jitter/nextDue: {window.__CHAT_DEBUG__?.chat?.pacing?.baseRate ?? '-'} / {window.__CHAT_DEBUG__?.chat?.pacing?.currentRate ?? '-'} / {String(window.__CHAT_DEBUG__?.chat?.pacing?.jitterEnabled ?? true)} / {window.__CHAT_DEBUG__?.chat?.pacing?.nextMessageDueInSec ?? '-'}</div>
           <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
           <div>chat.lint.lastRejectedText: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedText ?? '-'}</div>
@@ -1612,8 +1617,11 @@ export default function SceneView({
           <div>event.scheduler.cooldowns: {Object.entries(window.__CHAT_DEBUG__?.event?.scheduler?.cooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.candidates.lastComputed/count/keys: {window.__CHAT_DEBUG__?.event?.candidates?.lastComputedAt ?? '-'} / {window.__CHAT_DEBUG__?.event?.candidates?.lastCandidateCount ?? 0} / {(window.__CHAT_DEBUG__?.event?.candidates?.lastCandidateKeys ?? []).join(', ') || '-'}</div>
           <div>event.candidates.lastGateRejectSummary: {Object.entries(window.__CHAT_DEBUG__?.event?.candidates?.lastGateRejectSummary ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
-          <div>event.lastEvent.key/at/reason/variant: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.at ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.reason ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.lineVariantId ?? '-'}</div>
-          <div>event.blocking.locked/target/elapsedSec: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'} / {window.__CHAT_DEBUG__?.event?.blocking?.lockElapsedSec ?? 0}</div>
+          <div>event.lastEvent.key/eventId/state: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.eventId ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.state ?? '-'}</div>
+          <div>event.lastEvent.starterTagSent/abortedReason: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
+          <div>event.lastEvent.at/reason/variant: {window.__CHAT_DEBUG__?.event?.lastEvent?.at ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.reason ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.lineVariantId ?? '-'}</div>
+          <div>event.blocking.isLocked/lockTarget/lockReason: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'} / {window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlockedReason ?? '-'}</div>
+          <div>event.blocking.lockElapsedSec: {window.__CHAT_DEBUG__?.event?.blocking?.lockElapsedSec ?? 0}</div>
           <div>event.blocking.schedulerBlocked/reason: {String(window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlockedReason ?? '-'}</div>
           <div>event.cooldowns: {Object.entries(window.__CHAT_DEBUG__?.event?.cooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>ui.send.lastClickAt: {window.__CHAT_DEBUG__?.ui?.send?.lastClickAt ?? '-'}</div>

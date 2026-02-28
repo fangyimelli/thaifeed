@@ -133,6 +133,16 @@ type StoryEventKey =
 
 type EventLinePhase = 'opener' | 'followUp';
 type EventLineOption = { id: string; text: string };
+type StoryEventDefinition = {
+  requiresTag: true;
+  cooldownMs: number;
+  chance: number;
+  minActiveUsers: number;
+  lockOnStart?: boolean;
+  starterLine: (ctx: { activeUser: string; line: string }) => string;
+  opener: EventLineOption[];
+  followUp?: EventLineOption[];
+};
 
 const STORY_EVENT_CONTENT: Record<StoryEventKey, { opener: EventLineOption[]; followUp?: EventLineOption[] }> = {
   VOICE_CONFIRM: {
@@ -216,6 +226,16 @@ const STORY_EVENT_CONTENT: Record<StoryEventKey, { opener: EventLineOption[]; fo
   }
 };
 
+const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
+  VOICE_CONFIRM: { requiresTag: true, cooldownMs: 90_000, chance: 0.08, minActiveUsers: 1, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.VOICE_CONFIRM },
+  GHOST_PING: { requiresTag: true, cooldownMs: 120_000, chance: 0.06, minActiveUsers: 3, lockOnStart: true, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.GHOST_PING },
+  TV_EVENT: { requiresTag: true, cooldownMs: 90_000, chance: 0.07, minActiveUsers: 3, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.TV_EVENT },
+  NAME_CALL: { requiresTag: true, cooldownMs: 90_000, chance: 0.06, minActiveUsers: 1, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.NAME_CALL },
+  VIEWER_SPIKE: { requiresTag: true, cooldownMs: 90_000, chance: 0.06, minActiveUsers: 1, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.VIEWER_SPIKE },
+  LIGHT_GLITCH: { requiresTag: true, cooldownMs: 90_000, chance: 0.05, minActiveUsers: 1, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.LIGHT_GLITCH },
+  FEAR_CHALLENGE: { requiresTag: true, cooldownMs: 90_000, chance: 0.06, minActiveUsers: 1, starterLine: ({ activeUser, line }) => `@${activeUser} ${line}`, ...STORY_EVENT_CONTENT.FEAR_CHALLENGE }
+};
+
 function formatMissingAsset(asset: MissingRequiredAsset) {
   return `[${asset.type}] ${asset.name} | ${asset.relativePath} | ${asset.url} | ${asset.reason}`;
 }
@@ -291,7 +311,7 @@ export default function App() {
     LIGHT_GLITCH: 0,
     FEAR_CHALLENGE: 0
   });
-  const pendingReplyEventRef = useRef<{ key: StoryEventKey; target: string; expiresAt: number } | null>(null);
+  const pendingReplyEventRef = useRef<{ key: StoryEventKey; target: string; eventId: string; expiresAt: number } | null>(null);
   const reactionBurstTimerRef = useRef<number | null>(null);
   const eventRecentContentIdsRef = useRef<Record<StoryEventKey, string[]>>({
     VOICE_CONFIRM: [],
@@ -315,6 +335,8 @@ export default function App() {
   const eventLastAtRef = useRef(0);
   const eventNextDueAtRef = useRef(0);
 
+  const eventLifecycleRef = useRef<{ eventId: string; key: StoryEventKey; state: 'active' | 'aborted' | 'done'; starterTagSent: boolean; abortedReason?: string } | null>(null);
+  const eventSeqRef = useRef(0);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
@@ -504,7 +526,7 @@ export default function App() {
     return { option: shuffled[0] ?? fallback, repeatBlocked: true };
   }, []);
 
-  const postEventLine = useCallback((target: string, eventKey: StoryEventKey, phase: EventLinePhase) => {
+  const buildEventLine = useCallback((eventKey: StoryEventKey, phase: EventLinePhase) => {
     markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
     const picked = pickEventLine(eventKey, phase);
     eventLastVariantIdRef.current = picked.option.id;
@@ -514,7 +536,6 @@ export default function App() {
       level: loreLevel,
       activeUser
     });
-    const line = lore.fragment;
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], picked.option.id].slice(-5);
     globalRecentContentIdsRef.current = [...globalRecentContentIdsRef.current, picked.option.id].slice(-10);
     updateEventDebug({
@@ -526,20 +547,24 @@ export default function App() {
         lastEventLabel: `event:${eventKey}:${phase}`
       }
     });
+    return lore.fragment;
+  }, [activeUser, markEventTopicBoost, pickEventLine, state.curse, updateEventDebug]);
+
+  const dispatchEventLine = useCallback((line: string, target: string) => {
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
       username: 'mod_live',
       type: 'chat',
-      text: `@${target} ${line}`,
+      text: line,
       language: 'zh',
-      translation: `@${target} ${line}`,
+      translation: line,
       tagTarget: target
     });
-  }, [dispatchAudienceMessage, markEventTopicBoost, pickEventLine, updateEventDebug]);
+  }, [dispatchAudienceMessage]);
 
   const playSfx = useCallback((
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
-    options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number }
+    options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number; eventId?: string; eventKey?: StoryEventKey }
   ) => {
     const now = Date.now();
     const cooldownMin = key === 'ghost_female' ? 180_000 : key === 'footsteps' || key === 'low_rumble' ? 120_000 : 0;
@@ -548,7 +573,9 @@ export default function App() {
       if (cooldownUntil > now) return false;
       cooldownsRef.current[key] = now + cooldownMin;
     }
-    const violation = key === 'ghost_female' && options.source !== 'event';
+    const needsEventReason = key === 'ghost_female' || key === 'footsteps';
+    const reasonHasEvent = /^event:/.test(options.reason);
+    const violation = (key === 'ghost_female' && options.source !== 'event') || (needsEventReason && !reasonHasEvent);
     requestSceneAction({
       type: 'REQUEST_SFX',
       sfxKey: key === 'low_rumble' ? 'footsteps' : key,
@@ -567,11 +594,59 @@ export default function App() {
         scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), cooldowns: { ...cooldownsRef.current } },
         lastEventLabel: options.reason
       },
-      lastGhostSfxReason: key === 'ghost_female' ? options.reason : window.__CHAT_DEBUG__?.lastGhostSfxReason,
-      violation: violation ? `ghost_female source=${options.source}` : window.__CHAT_DEBUG__?.violation
+      lastGhostSfxReason: key === 'ghost_female' ? `eventKey:${options.eventKey ?? '-'}` : window.__CHAT_DEBUG__?.lastGhostSfxReason,
+      violation: violation ? `sfx_violation key=${key} reason=${options.reason}` : window.__CHAT_DEBUG__?.violation
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
     return true;
   }, [updateEventDebug]);
+
+  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { activeUser: string; source: 'user_input' | 'scheduler_tick' }) => {
+    const def = EVENT_REGISTRY[eventKey];
+    const eventId = `${eventKey}_${Date.now()}_${++eventSeqRef.current}`;
+    const baseLine = buildEventLine(eventKey, 'opener');
+    const starterLine = def.starterLine({ activeUser: ctx.activeUser, line: baseLine });
+    if (!starterLine.startsWith(`@${ctx.activeUser}`)) {
+      eventLifecycleRef.current = { eventId, key: eventKey, state: 'aborted', starterTagSent: false, abortedReason: 'starter_line_not_tagged' };
+      updateEventDebug({ violation: `starter_line_not_tagged event=${eventKey}`, event: { ...(window.__CHAT_DEBUG__?.event ?? {}), lastEvent: { key: eventKey, eventId, state: 'aborted', starterTagSent: false, abortedReason: 'starter_line_not_tagged' } } } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+      throw new Error(`Event starter line must tag active user: ${eventKey}`);
+    }
+    const blockedReason = !appStarted
+      ? 'app_not_started'
+      : chatAutoPaused
+        ? 'chat_auto_paused'
+        : (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== ctx.activeUser)
+          ? 'tagLockActive'
+          : '';
+    if (blockedReason) {
+      eventLifecycleRef.current = { eventId, key: eventKey, state: 'aborted', starterTagSent: false, abortedReason: blockedReason };
+      updateEventDebug({
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          lastEvent: { key: eventKey, eventId, state: 'aborted', starterTagSent: false, abortedReason: blockedReason }
+        },
+        violation: `event_aborted:${blockedReason}`
+      } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+      return null;
+    }
+
+    dispatchEventLine(starterLine, ctx.activeUser);
+    eventLifecycleRef.current = { eventId, key: eventKey, state: 'active', starterTagSent: true };
+    eventLastReasonRef.current = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
+    eventLastKeyRef.current = eventKey;
+    eventLastAtRef.current = Date.now();
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        lastEvent: { key: eventKey, eventId, at: eventLastAtRef.current, reason: eventLastReasonRef.current, lineVariantId: eventLastVariantIdRef.current, state: 'active', starterTagSent: true }
+      }
+    } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+    return { eventId };
+  }, [appStarted, buildEventLine, chatAutoPaused, dispatchEventLine, updateEventDebug]);
+
+  const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey) => {
+    const line = buildEventLine(eventKey, 'followUp');
+    dispatchEventLine(`@${target} ${line}`, target);
+  }, [buildEventLine, dispatchEventLine]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -583,52 +658,52 @@ export default function App() {
     if (!appStarted) return;
 
     if (source === 'user_input' && pending && now <= pending.expiresAt) {
+      const reasonBase = `event:${pending.eventId}`;
       const repliedYes = /有/.test(raw);
       const repliedNo = /沒有/.test(raw);
       const repliedBrave = /不怕/.test(raw);
       if (pending.key === 'VOICE_CONFIRM' && repliedYes) {
-        postEventLine(pending.target, 'VOICE_CONFIRM', 'followUp');
-        playSfx('ghost_female', { reason: 'event:VOICE_CONFIRM', source: 'event', delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
+        postFollowUpLine(pending.target, 'VOICE_CONFIRM');
+        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
         triggerReactionBurst('ghost');
       }
       if (pending.key === 'GHOST_PING') {
-        playSfx('ghost_female', { reason: 'event:GHOST_PING', source: 'event', delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
-        postEventLine(pending.target, 'GHOST_PING', 'followUp');
+        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
+        postFollowUpLine(pending.target, 'GHOST_PING');
         triggerReactionBurst('ghost');
         cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
         lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
       }
       if (pending.key === 'TV_EVENT' && repliedNo) {
-        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop2', reason: 'event:TV_EVENT', delayMs: 2000 });
-        postEventLine(pending.target, 'TV_EVENT', 'followUp');
+        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop2', reason: reasonBase, delayMs: 2000 });
+        postFollowUpLine(pending.target, 'TV_EVENT');
         triggerReactionBurst(Math.random() < 0.5 ? 'light' : 'ghost');
-        if (Math.random() < 0.5 && (cooldownsRef.current.ghost_female ?? 0) <= now) {
-          playSfx('ghost_female', { reason: 'event:TV_EVENT_OPTIONAL_GHOST', source: 'event', delayMs: 200, startVolume: 0.9, endVolume: 1, rampSec: 0.4 });
-        }
       }
       if (pending.key === 'NAME_CALL') {
-        playSfx('ghost_female', { reason: 'event:NAME_CALL', source: 'event', delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
+        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
         triggerReactionBurst('ghost');
       }
       if (pending.key === 'VIEWER_SPIKE') {
-        playSfx('footsteps', { reason: 'event:VIEWER_SPIKE', source: 'event' });
+        playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key });
         triggerReactionBurst('footsteps');
       }
       if (pending.key === 'FEAR_CHALLENGE' && repliedBrave) {
         const chooseGhost = Math.random() < 0.5;
         const played = chooseGhost
-          ? playSfx('ghost_female', { reason: 'event:FEAR_CHALLENGE_GHOST', source: 'event', delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
-          : playSfx('footsteps', { reason: 'event:FEAR_CHALLENGE_FOOTSTEPS', source: 'event', delayMs: 2000 });
+          ? playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
+          : playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000 });
         if (played) {
-          postEventLine(pending.target, 'FEAR_CHALLENGE', 'followUp');
+          postFollowUpLine(pending.target, 'FEAR_CHALLENGE');
           triggerReactionBurst(chooseGhost ? 'ghost' : 'footsteps');
         }
       }
+      eventLifecycleRef.current = { eventId: pending.eventId, key: pending.key, state: 'done', starterTagSent: true };
       pendingReplyEventRef.current = null;
       return;
     }
 
     if (pending && now > pending.expiresAt) {
+      eventLifecycleRef.current = { eventId: pending.eventId, key: pending.key, state: 'done', starterTagSent: true };
       pendingReplyEventRef.current = null;
     }
 
@@ -640,67 +715,30 @@ export default function App() {
     eventLastCandidateCountRef.current = target && !isLocked ? EVENT_REGISTRY_KEYS.length : 0;
     eventGateRejectSummaryRef.current = gateRejectSummary;
     if (!target || isLocked) return;
-    const can = (key: StoryEventKey, cooldownMs: number) => (eventCooldownsRef.current[key] ?? 0) <= now && (eventCooldownsRef.current[key] = now + cooldownMs, true);
 
-    if (activeUsers.length >= 1 && Math.random() < 0.08 && can('VOICE_CONFIRM', 90_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'VOICE_CONFIRM';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'VOICE_CONFIRM', 'opener');
-      pendingReplyEventRef.current = { key: 'VOICE_CONFIRM', target, expiresAt: now + 20_000 };
+    const can = (key: StoryEventKey) => (eventCooldownsRef.current[key] ?? 0) <= now;
+    for (const key of EVENT_REGISTRY_KEYS) {
+      const def = EVENT_REGISTRY[key];
+      if (activeUsers.length < def.minActiveUsers) continue;
+      if (!can(key)) continue;
+      if (key === 'GHOST_PING' && (cooldownsRef.current.ghost_ping_actor ?? 0) > now) continue;
+      if (key === 'TV_EVENT' && (cooldownsRef.current.loop4 ?? 0) > now) continue;
+      if (Math.random() >= def.chance) continue;
+      const started = startEvent(key, { activeUser: target, source });
+      eventCooldownsRef.current[key] = now + def.cooldownMs;
+      if (!started) return;
+      if (def.lockOnStart) lockStateRef.current = { isLocked: true, target, startedAt: now };
+      if (key === 'LIGHT_GLITCH') {
+        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
+        triggerReactionBurst('light');
+        eventLifecycleRef.current = { eventId: started.eventId, key, state: 'done', starterTagSent: true };
+      } else {
+        pendingReplyEventRef.current = { key, target, eventId: started.eventId, expiresAt: now + 20_000 };
+      }
+      if (key === 'TV_EVENT') cooldownsRef.current.loop4 = now + 90_000;
       return;
     }
-    if (activeUsers.length >= 3 && (cooldownsRef.current.ghost_ping_actor ?? 0) <= now && Math.random() < 0.06 && can('GHOST_PING', 120_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'GHOST_PING';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'GHOST_PING', 'opener');
-      lockStateRef.current = { isLocked: true, target, startedAt: now };
-      pendingReplyEventRef.current = { key: 'GHOST_PING', target, expiresAt: now + 20_000 };
-      return;
-    }
-    if (activeUsers.length >= 3 && (cooldownsRef.current.loop4 ?? 0) <= now && Math.random() < 0.07 && can('TV_EVENT', 90_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'TV_EVENT';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'TV_EVENT', 'opener');
-      pendingReplyEventRef.current = { key: 'TV_EVENT', target, expiresAt: now + 20_000 };
-      cooldownsRef.current.loop4 = now + 90_000;
-      return;
-    }
-    if (Math.random() < 0.06 && can('NAME_CALL', 90_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'NAME_CALL';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'NAME_CALL', 'opener');
-      pendingReplyEventRef.current = { key: 'NAME_CALL', target, expiresAt: now + 20_000 };
-      return;
-    }
-    if (Math.random() < 0.06 && can('VIEWER_SPIKE', 90_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'VIEWER_SPIKE';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'VIEWER_SPIKE', 'opener');
-      pendingReplyEventRef.current = { key: 'VIEWER_SPIKE', target, expiresAt: now + 20_000 };
-      return;
-    }
-    if (Math.random() < 0.05 && can('LIGHT_GLITCH', 90_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'LIGHT_GLITCH';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'LIGHT_GLITCH', 'opener');
-      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: 'event:LIGHT_GLITCH' });
-      triggerReactionBurst('light');
-      return;
-    }
-    if (Math.random() < 0.06 && can('FEAR_CHALLENGE', 90_000)) {
-      eventLastReasonRef.current = source === 'scheduler_tick' ? 'SCHEDULER_TICK' : 'TIMER_TICK';
-      eventLastKeyRef.current = 'FEAR_CHALLENGE';
-      eventLastAtRef.current = now;
-      postEventLine(target, 'FEAR_CHALLENGE', 'opener');
-      pendingReplyEventRef.current = { key: 'FEAR_CHALLENGE', target, expiresAt: now + 20_000 };
-    }
-  }, [appStarted, playSfx, postEventLine, state.messages, triggerReactionBurst]);
+  }, [appStarted, playSfx, postFollowUpLine, startEvent, state.messages, triggerReactionBurst]);
 
   useEffect(() => {
     chatEngineRef.current.syncFromMessages(state.messages);
@@ -1122,10 +1160,14 @@ export default function App() {
           lastGateRejectSummary: { ...eventGateRejectSummaryRef.current }
         },
         lastEvent: {
-          key: eventLastKeyRef.current,
+          key: eventLifecycleRef.current?.key ?? eventLastKeyRef.current,
+          eventId: eventLifecycleRef.current?.eventId,
           at: eventLastAtRef.current,
           reason: eventLastReasonRef.current,
-          lineVariantId: eventLastVariantIdRef.current
+          lineVariantId: eventLastVariantIdRef.current,
+          state: eventLifecycleRef.current?.state ?? 'done',
+          starterTagSent: eventLifecycleRef.current?.starterTagSent ?? false,
+          abortedReason: eventLifecycleRef.current?.abortedReason
         },
         blocking: {
           isLocked: lockStateRef.current.isLocked,
@@ -1142,6 +1184,7 @@ export default function App() {
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
           autoPaused: chatAutoPaused,
+          autoPausedReason: chatAutoPaused ? (window.__CHAT_DEBUG__?.ui?.send?.blockedReason ?? 'manual_or_unknown') : '-',
           activeUsers: {
             count: activeUsers.length,
             nameSample: activeUsers.slice(0, 6),
@@ -1417,11 +1460,8 @@ export default function App() {
       eventLastComputedAtRef.current = Date.now();
       return;
     }
-    eventLastReasonRef.current = 'DEBUG_FORCE_EVENT';
-    eventLastKeyRef.current = 'NAME_CALL';
-    eventLastAtRef.current = Date.now();
-    postEventLine(target, 'NAME_CALL', 'opener');
-  }, [postEventLine, state.messages]);
+    startEvent('NAME_CALL', { activeUser: target, source: 'scheduler_tick' });
+  }, [startEvent, state.messages]);
 
   const forceTagLock = useCallback(() => {
     const activeUsers = collectActiveUsers(state.messages);
