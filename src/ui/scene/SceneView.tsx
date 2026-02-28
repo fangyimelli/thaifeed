@@ -31,6 +31,7 @@ type Props = {
   curse: number;
   anchor: AnchorType;
   isDesktopLayout: boolean;
+  appStarted: boolean;
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
@@ -160,7 +161,6 @@ const SCENE_MAP_DIGEST: Record<OldhouseLoopKey, string> = {
 
 declare global {
   interface Window {
-    __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
     __AUDIO_DEBUG__?: AudioDebugState;
     __VIDEO_DEBUG__?: VideoDebugState;
     __CHAT_DEBUG__?: {
@@ -172,24 +172,80 @@ declare global {
       lastPersona?: string;
       lastSfxKey?: string;
       lastSfxReason?: string;
+      lastGhostSfxReason?: string;
+      lastContentId?: string;
+      lastNameInjected?: string;
+      contentRepeatBlocked?: boolean;
+      violation?: string;
       sfxCooldowns?: Record<string, number>;
       lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
       queueLength?: number;
       blockedReasons?: Record<string, number>;
       chat?: {
-        pacing?: { mode?: 'normal' | 'fast' | 'burst' | 'tag_slow'; nextModeInSec?: number };
+        autoPaused?: boolean;
+        autoPausedReason?: string;
+        activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[] };
+        pacing?: {
+          mode?: 'normal' | 'slightlyBusy' | 'tense' | 'quiet' | 'tag_slow' | 'slowed' | 'locked_slowed';
+          nextModeInSec?: number;
+          baseRate?: number;
+          currentRate?: number;
+          jitterEnabled?: boolean;
+          nextMessageDueInSec?: number;
+        };
         lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
       };
       event?: {
+        registry?: {
+          count?: number;
+          keys?: string[];
+          enabledCount?: number;
+          disabledCount?: number;
+        };
         scheduler?: {
           now?: number;
           nextDueAt?: number;
           lastFiredAt?: number;
+          tickCount?: number;
+          lastTickAt?: number;
           blocked?: boolean;
           blockedReason?: string;
           cooldowns?: Record<string, number>;
         };
-        lastEvent?: string;
+        candidates?: {
+          lastComputedAt?: number;
+          lastCandidateCount?: number;
+          lastCandidateKeys?: string[];
+          lastGateRejectSummary?: Record<string, number>;
+        };
+        blocking?: {
+          isLocked?: boolean;
+          lockTarget?: string | null;
+          lockElapsedSec?: number;
+          schedulerBlocked?: boolean;
+          schedulerBlockedReason?: string;
+        };
+        cooldowns?: Record<string, number>;
+        lastEvent?: {
+          key?: string;
+          eventId?: string;
+          at?: number;
+          reason?: string;
+          lineVariantId?: string;
+          openerLineId?: string;
+          followUpLineId?: string;
+          lineIds?: string[];
+          topic?: 'ghost' | 'footsteps' | 'light';
+          state?: 'active' | 'aborted' | 'done';
+          starterTagSent?: boolean;
+          abortedReason?: string;
+          waitingForReply?: boolean;
+        };
+        lastReactions?: {
+          count?: number;
+          lastReactionActors?: string[];
+        };
+        lastEventLabel?: string;
       };
       ui?: {
         send?: {
@@ -221,6 +277,7 @@ export default function SceneView({
   curse,
   anchor,
   isDesktopLayout,
+  appStarted,
   onNeedUserGestureChange,
   onSceneRunning,
   onSceneError
@@ -228,8 +285,6 @@ export default function SceneView({
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
-  const [hasConfirmedPlayback, setHasConfirmedPlayback] = useState(false);
-  const [hasDeclinedPlayback, setHasDeclinedPlayback] = useState(false);
   const [videoErrorDetail, setVideoErrorDetail] = useState<string | null>(null);
   const videoLayerRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
@@ -442,25 +497,54 @@ export default function SceneView({
     }
   }, [setNeedsGestureState, updateAudioDebug]);
 
-  const playRegisteredSfx = useCallback((sfxKey: SfxKey) => {
-    if (needsUserGestureToPlayRef.current) return;
-    const audio = sfxKey === 'footsteps' ? footstepsAudioRef.current : sfxKey === 'ghost_female' ? ghostAudioRef.current : null;
-    if (!audio) return;
-    audio.currentTime = 0;
-    audio.muted = false;
-    void audio.play().then(() => {
-      const t = Date.now();
-      updateAudioDebug({ started: true, lastFootstepsAt: sfxKey === 'footsteps' ? t : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0), lastGhostAt: sfxKey === 'ghost_female' ? t : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0) });
-      emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt: t });
-    }).catch((e: unknown) => {
-      setNeedsGestureState(true);
-      console.warn('[AUDIO] play blocked/failed', { key: sfxKey, errName: e instanceof Error ? e.name : 'unknown' });
-    });
+  const playSfx = useCallback((sfxKey: SfxKey, options?: { delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number }) => {
+    if (sfxKey === 'fan_loop') return;
+    const run = () => {
+      if (needsUserGestureToPlayRef.current) return;
+      const audio = sfxKey === 'footsteps' ? footstepsAudioRef.current : sfxKey === 'ghost_female' ? ghostAudioRef.current : null;
+      if (!audio) return;
+      const startVolume = options?.startVolume ?? audio.volume;
+      const endVolume = options?.endVolume ?? startVolume;
+      const rampSec = options?.rampSec ?? 0;
+      audio.currentTime = 0;
+      audio.volume = Math.max(0, Math.min(1, startVolume));
+      audio.muted = false;
+      void audio.play().then(() => {
+        const startedAt = Date.now();
+        if (rampSec > 0 && startVolume !== endVolume) {
+          const stepMs = 50;
+          const totalMs = Math.max(1, Math.floor(rampSec * 1000));
+          const diff = endVolume - startVolume;
+          const rampTimer = window.setInterval(() => {
+            const elapsed = Date.now() - startedAt;
+            const progress = Math.min(1, elapsed / totalMs);
+            audio.volume = Math.max(0, Math.min(1, startVolume + diff * progress));
+            if (progress >= 1) {
+              window.clearInterval(rampTimer);
+            }
+          }, stepMs);
+        }
+        updateAudioDebug({
+          started: true,
+          lastFootstepsAt: sfxKey === 'footsteps' ? startedAt : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0),
+          lastGhostAt: sfxKey === 'ghost_female' ? startedAt : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0)
+        });
+        emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt });
+      }).catch((e: unknown) => {
+        setNeedsGestureState(true);
+        console.warn('[AUDIO] play blocked/failed', { key: sfxKey, errName: e instanceof Error ? e.name : 'unknown' });
+      });
+    };
+    if (options?.delayMs && options.delayMs > 0) {
+      window.setTimeout(run, options.delayMs);
+      return;
+    }
+    run();
   }, [setNeedsGestureState, updateAudioDebug]);
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
-    if (!video || !hasConfirmedPlayback) return false;
+    if (!video || !appStarted) return false;
 
     const bufferVideo = getBufferVideoEl();
     if (bufferVideo) {
@@ -476,7 +560,7 @@ export default function SceneView({
       console.warn('[AUDIO] play blocked/failed', { key: 'active_media', errName: e instanceof Error ? e.name : 'unknown' });
       return false;
     }
-  }, [getBufferVideoEl, getCurrentVideoEl, hasConfirmedPlayback, setNeedsGestureState]);
+  }, [appStarted, getBufferVideoEl, getCurrentVideoEl, setNeedsGestureState]);
 
   const computeJumpIntervalMs = useCallback((curseValue: number) => {
     if (debugEnabled) {
@@ -568,14 +652,14 @@ export default function SceneView({
   const switchTo = useCallback(async (nextKey: OldhouseLoopKey) => {
     console.log('[VIDEO]', 'switchTo requested', {
       nextKey,
-      hasConfirmedPlayback,
+      hasConfirmedPlayback: appStarted,
       isSwitching: isSwitchingRef.current,
       needsUserGestureToPlay: needsUserGestureToPlayRef.current,
       currentKey: currentLoopKeyRef.current
     });
-    if (!hasConfirmedPlayback) {
+    if (!appStarted) {
       updateVideoDebug({ lastError: `switchTo skipped(no-confirm) -> ${nextKey}` });
-      console.warn('[VIDEO]', 'switchTo skipped: no playback confirmation', { nextKey });
+      console.warn('[VIDEO]', 'switchTo skipped: app not started', { nextKey });
       return;
     }
     if (isSwitchingRef.current) {
@@ -704,7 +788,7 @@ export default function SceneView({
         currentKey: currentLoopKeyRef.current
       });
     }
-  }, [collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, hasConfirmedPlayback, markActiveVideo, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
+  }, [appStarted, collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, markActiveVideo, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
 
   const computeWhyNotJumped = useCallback(() => {
     const planned = plannedJumpRef.current;
@@ -888,7 +972,7 @@ export default function SceneView({
       : JUMP_RETURN_SCHEDULE_FALLBACK_MS;
 
     jumpReturnTimerRef.current = window.setTimeout(() => {
-      if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+      if (!autoNextEnabledRef.current || !appStarted) return;
       if (isInJumpRef.current && currentLoopKeyRef.current === nextKey) {
         console.warn('[VIDEO]', 'jump fallback return to MAIN_LOOP', { fromKey: nextKey, mainLoop: MAIN_LOOP });
         isInJumpRef.current = false;
@@ -904,7 +988,7 @@ export default function SceneView({
         });
       }
     }, fallbackDelay);
-  }, [getCurrentVideoEl, hasConfirmedPlayback, scheduleNextJump, switchTo, syncPlannedJumpDebug, updateVideoDebug]);
+  }, [appStarted, getCurrentVideoEl, scheduleNextJump, switchTo, syncPlannedJumpDebug, updateVideoDebug]);
   const runDebugForceAction = useCallback(async (
     action: 'FORCE_LOOP' | 'FORCE_LOOP2' | 'FORCE_MAIN' | 'FORCE_PLANNED' | 'RESCHEDULE_JUMP',
     runner: () => Promise<void> | void
@@ -949,7 +1033,7 @@ export default function SceneView({
       videoId: endedEl?.id ?? activeVideo?.id ?? 'unknown'
     });
     updateVideoDebug({ lastEndedKey: activeKey });
-    if (!autoNextEnabledRef.current || !hasConfirmedPlayback) return;
+    if (!autoNextEnabledRef.current || !appStarted) return;
 
     if (isInJumpRef.current) {
       isInJumpRef.current = false;
@@ -970,7 +1054,7 @@ export default function SceneView({
     void switchTo(MAIN_LOOP).then(() => {
       currentLoopKeyRef.current = MAIN_LOOP;
     });
-  }, [getCurrentVideoEl, hasConfirmedPlayback, pickNextJumpKey, scheduleNextJump, switchTo, updateVideoDebug]);
+  }, [appStarted, getCurrentVideoEl, pickNextJumpKey, scheduleNextJump, switchTo, updateVideoDebug]);
 
 
   const startOldhouseCalmMode = useCallback(async () => {
@@ -1053,19 +1137,19 @@ export default function SceneView({
   }, []);
 
   useEffect(() => {
-    if (!hasConfirmedPlayback) return;
+    if (!appStarted) return;
     void startOldhouseCalmMode().catch((error) => {
       console.error('[audio-required] 啟動失敗，已阻止進入直播開始狀態', error);
     });
-  }, [hasConfirmedPlayback, startOldhouseCalmMode]);
+  }, [appStarted, startOldhouseCalmMode]);
 
   useEffect(() => {
-    if (!hasConfirmedPlayback || !autoNextEnabledRef.current || isInJumpRef.current) return;
+    if (!appStarted || !autoNextEnabledRef.current || isInJumpRef.current) return;
     scheduleNextJump();
-  }, [hasConfirmedPlayback, scheduleNextJump]);
+  }, [appStarted, scheduleNextJump]);
 
   useEffect(() => {
-    if (!hasConfirmedPlayback) return;
+    if (!appStarted) return;
     if (jumpWatchdogRef.current) {
       window.clearInterval(jumpWatchdogRef.current);
       jumpWatchdogRef.current = null;
@@ -1085,7 +1169,15 @@ export default function SceneView({
       }
       updateVideoDebug({ timers: { watchdogTimer: null } });
     };
-  }, [execPlannedJump, hasConfirmedPlayback, updateVideoDebug]);
+  }, [appStarted, execPlannedJump, updateVideoDebug]);
+
+  useEffect(() => {
+    const shouldMute = !appStarted;
+    const videoA = videoARef.current;
+    const videoB = videoBRef.current;
+    if (videoA) videoA.muted = shouldMute;
+    if (videoB) videoB.muted = shouldMute;
+  }, [appStarted]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -1221,10 +1313,23 @@ export default function SceneView({
 
   useEffect(() => {
     return onSceneRequest((payload) => {
+      if (payload.type === 'DEBUG_FORCE_JUMP_NOW') {
+        void forcePlannedJumpNow();
+        return;
+      }
+      if (payload.type === 'DEBUG_RESCHEDULE_JUMP') {
+        scheduleNextJump({ force: true });
+        return;
+      }
       const run = () => {
         if (payload.type === 'REQUEST_SFX') {
           if (payload.sfxKey === 'fan_loop') return;
-          playRegisteredSfx(payload.sfxKey);
+          playSfx(payload.sfxKey, {
+            delayMs: payload.delayMs,
+            startVolume: payload.startVolume,
+            endVolume: payload.endVolume,
+            rampSec: payload.rampSec
+          });
           return;
         }
         void switchTo(payload.sceneKey);
@@ -1235,7 +1340,7 @@ export default function SceneView({
         run();
       }
     });
-  }, [playRegisteredSfx, switchTo]);
+  }, [playSfx, switchTo]);
 
   useEffect(() => {
     return () => {
@@ -1296,6 +1401,22 @@ export default function SceneView({
   };
   const nextJumpDueInSec = videoDebug?.dueInMs != null ? Math.max(0, videoDebug.dueInMs / 1000).toFixed(1) : '-';
   const lastSwitchAgoMs = videoDebug?.lastSwitchAt ? Math.max(0, debugTick - videoDebug.lastSwitchAt) : null;
+  const eventDebug = window.__CHAT_DEBUG__?.event;
+  const chatDebug = window.__CHAT_DEBUG__?.chat;
+  const uiSendDebug = window.__CHAT_DEBUG__?.ui?.send;
+  const debugInference = (() => {
+    const reasons: string[] = [];
+    if ((eventDebug?.registry?.count ?? 0) === 0) reasons.push('EVENT_REGISTRY_EMPTY');
+    const now = eventDebug?.scheduler?.now ?? 0;
+    const nextDueAt = eventDebug?.scheduler?.nextDueAt ?? 0;
+    const tickCount = eventDebug?.scheduler?.tickCount ?? 0;
+    if (now > nextDueAt && tickCount === 0) reasons.push('SCHEDULER_NOT_TICKING');
+    if (tickCount > 0 && (eventDebug?.candidates?.lastCandidateCount ?? 0) === 0) reasons.push('NO_CANDIDATES');
+    if ((chatDebug?.activeUsers?.count ?? 0) < 3) reasons.push('INSUFFICIENT_ACTIVE_USERS');
+    if (eventDebug?.blocking?.isLocked) reasons.push('LOCK_ACTIVE');
+    if (uiSendDebug?.lastResult === 'blocked' && uiSendDebug?.blockedReason === 'chat_auto_paused') reasons.push('CHAT_AUTO_PAUSED_BLOCKING_SEND');
+    return reasons;
+  })();
 
   useEffect(() => {
     markActiveVideo();
@@ -1429,40 +1550,6 @@ export default function SceneView({
           />
         )}
 
-        {!hasConfirmedPlayback && (
-          <div className="content-warning-overlay" role="dialog" aria-modal="true" aria-label="內容警告">
-            <div className="content-warning-card">
-              <p>本影片含有驚悚內容，是否確認觀賞？</p>
-              <div className="content-warning-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasDeclinedPlayback(false);
-                    setHasConfirmedPlayback(true);
-                  }}
-                >
-                  是
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasDeclinedPlayback(true);
-                    setHasConfirmedPlayback(false);
-                    const videoA = videoARef.current;
-                    const videoB = videoBRef.current;
-                    if (videoA) videoA.pause();
-                    if (videoB) videoB.pause();
-                    stopAllNonPersistentSfx();
-                    audioEngine.stopFanLoop('declined_content_warning');
-                  }}
-                >
-                  否
-                </button>
-              </div>
-              {hasDeclinedPlayback && <small>你可以稍後按「是」開始播放。</small>}
-            </div>
-          </div>
-        )}
       </div>
 
       {!assets.videoOk && (
@@ -1474,6 +1561,7 @@ export default function SceneView({
       {debugEnabled && (
         <>
         <div className="video-debug-overlay" aria-live="polite">
+          <div>inference: {debugInference.join(' | ') || 'NONE'}</div>
           <div>currentKey: {videoDebug?.currentKey ?? '-'}</div>
           <div>currentEl: {videoDebug?.activeVideoId ?? '-'} | src: {trimSrc(videoDebug?.activeVideoSrc)}</div>
           <div>bufferEl: {videoDebug?.bufferVideoId ?? '-'} | src: {trimSrc(videoDebug?.bufferVideoSrc)}</div>
@@ -1510,21 +1598,41 @@ export default function SceneView({
           <div>event.lastEvent/reason: {window.__CHAT_DEBUG__?.lastEventKey ?? '-'} / {window.__CHAT_DEBUG__?.lastEventReason ?? '-'}</div>
           <div>event.line/variant/tone/persona: {window.__CHAT_DEBUG__?.lastLineKey ?? '-'} / {window.__CHAT_DEBUG__?.lastVariantId ?? '-'} / {window.__CHAT_DEBUG__?.lastTone ?? '-'} / {window.__CHAT_DEBUG__?.lastPersona ?? '-'}</div>
           <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
+          <div>event.lastGhostSfxReason: {window.__CHAT_DEBUG__?.lastGhostSfxReason ?? '-'}</div>
+          <div>event.lastContentId/repeatBlocked: {window.__CHAT_DEBUG__?.lastContentId ?? '-'} / {String(window.__CHAT_DEBUG__?.contentRepeatBlocked ?? false)}</div>
+          <div>event.lastNameInjected: {window.__CHAT_DEBUG__?.lastNameInjected ?? '-'}</div>
+          <div>event.violation: {window.__CHAT_DEBUG__?.violation ?? '-'}</div>
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
           <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
+          <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
+          <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>
+          <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
+          <div>chat.pacing.baseRate/currentRate/jitter/nextDue: {window.__CHAT_DEBUG__?.chat?.pacing?.baseRate ?? '-'} / {window.__CHAT_DEBUG__?.chat?.pacing?.currentRate ?? '-'} / {String(window.__CHAT_DEBUG__?.chat?.pacing?.jitterEnabled ?? true)} / {window.__CHAT_DEBUG__?.chat?.pacing?.nextMessageDueInSec ?? '-'}</div>
           <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
           <div>chat.lint.lastRejectedText: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedText ?? '-'}</div>
           <div>chat.lint.lastRejectedReason: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedReason ?? '-'}</div>
           <div>chat.lint.rerollCount: {window.__CHAT_DEBUG__?.chat?.lint?.rerollCount ?? 0}</div>
+          <div>event.registry.count: {window.__CHAT_DEBUG__?.event?.registry?.count ?? 0}</div>
+          <div>event.registry.keys: {(window.__CHAT_DEBUG__?.event?.registry?.keys ?? []).join(', ') || '-'}</div>
+          <div>event.registry.enabled/disabled: {window.__CHAT_DEBUG__?.event?.registry?.enabledCount ?? 0} / {window.__CHAT_DEBUG__?.event?.registry?.disabledCount ?? 0}</div>
           <div>event.scheduler.now: {window.__CHAT_DEBUG__?.event?.scheduler?.now ?? '-'}</div>
           <div>event.scheduler.nextDueAt: {window.__CHAT_DEBUG__?.event?.scheduler?.nextDueAt ?? '-'}</div>
           <div>event.scheduler.lastFiredAt: {window.__CHAT_DEBUG__?.event?.scheduler?.lastFiredAt ?? '-'}</div>
+          <div>event.scheduler.tickCount/lastTickAt: {window.__CHAT_DEBUG__?.event?.scheduler?.tickCount ?? 0} / {window.__CHAT_DEBUG__?.event?.scheduler?.lastTickAt ?? '-'}</div>
           <div>event.scheduler.blocked: {String(window.__CHAT_DEBUG__?.event?.scheduler?.blocked ?? false)}</div>
           <div>event.scheduler.blockedReason: {window.__CHAT_DEBUG__?.event?.scheduler?.blockedReason ?? '-'}</div>
           <div>event.scheduler.cooldowns: {Object.entries(window.__CHAT_DEBUG__?.event?.scheduler?.cooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
-          <div>event.lastEvent: {window.__CHAT_DEBUG__?.event?.lastEvent ?? '-'}</div>
+          <div>event.candidates.lastComputed/count/keys: {window.__CHAT_DEBUG__?.event?.candidates?.lastComputedAt ?? '-'} / {window.__CHAT_DEBUG__?.event?.candidates?.lastCandidateCount ?? 0} / {(window.__CHAT_DEBUG__?.event?.candidates?.lastCandidateKeys ?? []).join(', ') || '-'}</div>
+          <div>event.candidates.lastGateRejectSummary: {Object.entries(window.__CHAT_DEBUG__?.event?.candidates?.lastGateRejectSummary ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>event.lastEvent.key/eventId/state: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.eventId ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.state ?? '-'}</div>
+          <div>event.lastEvent.starterTagSent/abortedReason: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
+          <div>event.lastEvent.at/reason/variant: {window.__CHAT_DEBUG__?.event?.lastEvent?.at ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.reason ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.lineVariantId ?? '-'}</div>
+          <div>event.blocking.isLocked/lockTarget/lockReason: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'} / {window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlockedReason ?? '-'}</div>
+          <div>event.blocking.lockElapsedSec: {window.__CHAT_DEBUG__?.event?.blocking?.lockElapsedSec ?? 0}</div>
+          <div>event.blocking.schedulerBlocked/reason: {String(window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlockedReason ?? '-'}</div>
+          <div>event.cooldowns: {Object.entries(window.__CHAT_DEBUG__?.event?.cooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>ui.send.lastClickAt: {window.__CHAT_DEBUG__?.ui?.send?.lastClickAt ?? '-'}</div>
           <div>ui.send.lastSubmitAt: {window.__CHAT_DEBUG__?.ui?.send?.lastSubmitAt ?? '-'}</div>
           <div>ui.send.lastAttemptAt: {window.__CHAT_DEBUG__?.ui?.send?.lastAttemptAt ?? '-'}</div>
@@ -1541,8 +1649,6 @@ export default function SceneView({
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_MAIN', () => switchTo('oldhouse_room_loop3')); }}>▶ Force MAIN</button>
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_PLANNED', forcePlannedJumpNow); }}>⚡ Force Planned Jump Now</button>
             <button type="button" onClick={() => { void runDebugForceAction('RESCHEDULE_JUMP', () => scheduleNextJump({ force: true })); }}>🔁 Reschedule Jump</button>
-            <button type="button" onClick={() => { window.__EVENT_SCHEDULER_CONTROLS__?.forceFire(); }}>⚡ Force Fire Event</button>
-            <button type="button" onClick={() => { window.__EVENT_SCHEDULER_CONTROLS__?.resetLocks(); }}>🧹 Reset Event Locks</button>
           </div>
         </div>
         </>

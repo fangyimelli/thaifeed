@@ -4,11 +4,17 @@ import { CHAT_TYPE_META, ChatMessageType, PERSONA_IDS, type ChatEnvelope, type C
 import { PERSONA_POOLS, PERSONA_USERS, SAFE_FALLBACK_POOL, THAI_TRANSLATIONS, TYPE_FALLBACK_POOLS } from './ChatPools';
 import { applyTagTemplate, canUseTag, enforceSingleLanguage, hashText, isDeniedTone, isPersonaRepeated, normalizeText, pickTagTarget } from './ChatRules';
 import { buildReactionWindow, pickTypeForEvent, type ReactionSpec } from './ChatSelector';
-import type { EventContentPayload } from '../director/EventEngine';
 import { getChatLintReason, truncateLintText } from './ChatLint';
+
+type EventContentPayload = {
+  type: ChatMessageType;
+  text: string;
+  translation?: string;
+};
 
 type DebugState = {
   lastEvent: string;
+  lastEventAt: number;
   lastPickedType: string;
   lastPersonaId?: string;
   lastTagTarget?: string;
@@ -19,7 +25,16 @@ type DebugState = {
   };
   recentDedupHashes: string[];
   activeUsers: string[];
+  activeUsersCount: number;
   reactionWindow: { remainingSec: number; pending: number } | null;
+  pacing: {
+    mode: 'normal' | 'slowed' | 'locked_slowed';
+    baseRate: number;
+    currentRate: number;
+    jitterEnabled: boolean;
+    nextMessageDueInSec: number;
+  };
+  lastReactionActors: string[];
 };
 
 export class ChatEngine {
@@ -29,10 +44,12 @@ export class ChatEngine {
   private cooldowns = new Map<ChatMessageType, number>();
   private windows: ReactionSpec[] = [];
   private activeUsers: string[] = [];
+  private historicalUsers: string[] = [];
   private curse = 20;
   private pendingContent = new Map<ChatMessageType, EventContentPayload[]>();
   private debug: DebugState = {
     lastEvent: '-',
+    lastEventAt: 0,
     lastPickedType: '-',
     lint: {
       lastRejectedText: '-',
@@ -41,16 +58,27 @@ export class ChatEngine {
     },
     recentDedupHashes: [],
     activeUsers: [],
-    reactionWindow: null
+    activeUsersCount: 0,
+    reactionWindow: null,
+    pacing: { mode: 'normal', baseRate: 0, currentRate: 0, jitterEnabled: true, nextMessageDueInSec: 0 },
+    lastReactionActors: []
   };
 
   syncFromMessages(messages: ChatMessage[]): void {
     this.activeUsers = collectActiveUsers(messages);
+    const known = new Set(this.historicalUsers);
+    for (const message of messages) {
+      if (!message.username || ['system', 'you', 'fake_ai'].includes(message.username)) continue;
+      known.add(message.username);
+    }
+    this.historicalUsers = [...known].slice(-80);
     this.debug.activeUsers = this.activeUsers.slice(0, 20);
+    this.debug.activeUsersCount = this.activeUsers.length;
   }
 
   emit(event: ChatEvent, now = Date.now()): ChatMessage[] {
     this.debug.lastEvent = event.type;
+    this.debug.lastEventAt = now;
     if (event.type === 'CURSE_CHANGE') {
       this.curse = event.value;
       return [];
@@ -99,7 +127,7 @@ export class ChatEngine {
 
     for (let i = 0; i < 24; i += 1) {
       const personaId = meta.personaPolicy.enabled ? this.pickPersona(meta.personaPolicy.rotateWindow) : undefined;
-      const username = personaId ? PERSONA_USERS[personaId] : 'system';
+      const username = personaId ? PERSONA_USERS[personaId] : this.pickAudienceActor();
       const pool = personaId
         ? (PERSONA_POOLS[personaId][type] ?? TYPE_FALLBACK_POOLS[type])
         : TYPE_FALLBACK_POOLS[type];
@@ -144,16 +172,7 @@ export class ChatEngine {
       this.debug.lastPersonaId = personaId;
       this.debug.lastTagTarget = tagTarget;
       this.debug.lint.rerollCount = lintRerollCount;
-      return {
-        id: crypto.randomUUID(),
-        username: envelope.username,
-        text: envelope.text,
-        language: envelope.language,
-        translation: envelope.translation,
-        chatType: type,
-        personaId: envelope.personaId,
-        tagTarget: envelope.tagTarget
-      };
+      return this.sendUserMessage(envelope);
     }
 
     const fallbackNormalized = this.pickSafeFallback();
@@ -163,7 +182,7 @@ export class ChatEngine {
       text: fallbackNormalized,
       language: 'zh',
       personaId: undefined,
-      username: 'system',
+      username: this.pickAudienceActor(),
       translation: fallbackNormalized
     };
     this.remember(envelope, digest, now);
@@ -171,16 +190,43 @@ export class ChatEngine {
     this.debug.lastPersonaId = undefined;
     this.debug.lastTagTarget = undefined;
     this.debug.lint.rerollCount = Math.max(lintRerollCount, 6);
+    return this.sendUserMessage(envelope);
+  }
+
+  sendSystemMessage(text: string, reason: 'loading' | 'init' | 'error'): ChatMessage {
+    return {
+      id: crypto.randomUUID(),
+      type: 'system',
+      username: 'system',
+      text,
+      language: 'zh',
+      translation: text,
+      chatType: `system_${reason}`
+    };
+  }
+
+  private sendUserMessage(envelope: ChatEnvelope): ChatMessage {
     return {
       id: crypto.randomUUID(),
       username: envelope.username,
       text: envelope.text,
       language: envelope.language,
       translation: envelope.translation,
-      chatType: type,
+      chatType: envelope.type,
       personaId: envelope.personaId,
       tagTarget: envelope.tagTarget
     };
+  }
+
+  private pickAudienceActor(): string {
+    const activePool = [...this.activeUsers];
+    const historicalPool = this.historicalUsers.filter((user) => !activePool.includes(user));
+    const merged = [...activePool, ...historicalPool];
+    const actorPool = merged.length >= 3 ? merged : [...merged, ...historicalPool].slice(0, Math.max(3, merged.length));
+    const fallbackPool = actorPool.length > 0 ? actorPool : this.historicalUsers;
+    const selected = fallbackPool[Math.floor(Math.random() * Math.max(1, fallbackPool.length))] ?? 'ink31';
+    this.debug.lastReactionActors = [...this.debug.lastReactionActors, selected].slice(-10);
+    return selected;
   }
 
   private pickSafeFallback(): string {
@@ -220,7 +266,19 @@ export class ChatEngine {
     if (!['system', 'you', 'fake_ai'].includes(envelope.username) && !this.activeUsers.includes(envelope.username)) {
       this.activeUsers.push(envelope.username);
       this.debug.activeUsers = this.activeUsers.slice(0, 20);
+      this.debug.activeUsersCount = this.activeUsers.length;
     }
+  }
+
+
+  setPacingDebug(pacing: {
+    mode: 'normal' | 'slowed' | 'locked_slowed';
+    baseRate: number;
+    currentRate: number;
+    jitterEnabled: boolean;
+    nextMessageDueInSec: number;
+  }) {
+    this.debug.pacing = pacing;
   }
 
   private updateWindowDebug(now: number) {

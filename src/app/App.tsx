@@ -23,10 +23,16 @@ import { pickOne } from '../utils/random';
 import { MAIN_LOOP } from '../config/oldhousePlayback';
 import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
-import { EventEngine } from '../director/EventEngine';
 import { ChatEngine } from '../chat/ChatEngine';
 import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
 import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
+import { collectActiveUsers } from '../core/systems/mentionV2';
+import { createGhostLore } from '../core/systems/ghostLore';
+import { EVENT_REGISTRY, EVENT_REGISTRY_KEYS } from '../core/events/eventRegistry';
+import { pickDialog } from '../core/events/eventDialogs';
+import { pickReactionLines } from '../core/events/eventReactions';
+import { startEvent as runEventStart } from '../core/events/eventRunner';
+import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -43,9 +49,38 @@ function formatViewerCount(value: number) {
   return `${Math.floor(value / 1000)}K`;
 }
 
+function formatMissingAsset(asset: MissingRequiredAsset) {
+  return `[${asset.type}] ${asset.name} | ${asset.relativePath} | ${asset.url} | ${asset.reason}`;
+}
+
 function randomInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
+
+function pickNonRepeatingActor(pool: string[], recentActors: string[]): string {
+  if (pool.length === 0) return 'ink31';
+  const lastActor = recentActors[recentActors.length - 1];
+  const recentFive = recentActors.slice(-4);
+  const scored = pool.filter((actor) => {
+    if (actor === lastActor) return false;
+    const countInRecent = recentFive.filter((item) => item === actor).length;
+    return countInRecent < 2;
+  });
+  const source = scored.length > 0 ? scored : pool.filter((actor) => actor !== lastActor);
+  const usable = source.length > 0 ? source : pool;
+  return usable[Math.floor(Math.random() * usable.length)] ?? pool[0];
+}
+
+function isPassCommand(raw: string) {
+  const normalized = raw.trim().toLowerCase();
+  return normalized === 'pass' || raw.trim() === '跳過';
+}
+
+function nextLeaveDelayMs() {
+  return randomInt(30_000, 45_000);
+}
+
+const DESKTOP_BREAKPOINT = 1024;
 
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
@@ -96,48 +131,50 @@ function lintOutgoingMessage(message: ChatMessage): { message: ChatMessage; reje
   };
 }
 
-type ChatPacingMode = 'normal' | 'fast' | 'burst' | 'tag_slow';
-
-type EventSchedulerDebug = {
-  now: number;
-  nextDueAt: number;
-  lastFiredAt: number;
-  blocked: boolean;
-  blockedReason: string;
-  cooldowns: Record<string, number>;
-  lastEvent: string;
+type ChatPacingMode = 'normal' | 'slightlyBusy' | 'tense' | 'tag_slow';
+type TopicWeightProfile = {
+  randomComment: number;
+  videoObservation: number;
+  suspicion: number;
+  buildUp: number;
+  eventTopic: number;
 };
 
+const NORMAL_TOPIC_WEIGHT: TopicWeightProfile = {
+  randomComment: 60,
+  videoObservation: 25,
+  suspicion: 10,
+  buildUp: 5,
+  eventTopic: 0
+};
 
+const EVENT_TOPIC_WEIGHT: TopicWeightProfile = {
+  eventTopic: 70,
+  randomComment: 20,
+  suspicion: 10,
+  videoObservation: 0,
+  buildUp: 0
+};
 
-function formatMissingAsset(asset: MissingRequiredAsset) {
-  return `[${asset.type}] ${asset.name} | ${asset.relativePath} | ${asset.url} | ${asset.reason}`;
-}
+const DEBUG_SEED_USERS = ['ink31', 'mew88', 'koo_77', 'nana23'];
 
-function isPassCommand(raw: string) {
-  const normalized = raw.trim().toLowerCase();
-  return normalized === 'pass' || raw.trim() === '跳過';
-}
-
-function nextLeaveDelayMs() {
-  return randomInt(30_000, 45_000);
-}
-
-const DESKTOP_BREAKPOINT = 1024;
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const isDebugRoute = window.location.pathname.replace(/\/+$/, '').endsWith('/debug');
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
+  const [appStarted, setAppStarted] = useState(false);
+  const [, setActiveUser] = useState('');
+  const [startNameInput, setStartNameInput] = useState('');
   const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [initStatusText, setInitStatusText] = useState('初始化中');
   const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
-  const [chatTickRestartKey, setChatTickRestartKey] = useState(0);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
@@ -161,26 +198,53 @@ export default function App() {
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
   const pacingModeRef = useRef<ChatPacingMode>('normal');
   const pacingModeUntilRef = useRef(0);
-  const pacingNextModeFlipAtRef = useRef(Date.now() + randomInt(10_000, 25_000));
-  const pacingBurstRollAtRef = useRef(Date.now() + randomInt(45_000, 120_000));
+  const pacingNextModeFlipAtRef = useRef(Date.now() + randomInt(20_000, 40_000));
   const tagSlowActiveRef = useRef(false);
-  const recentAutoUserRef = useRef<{ username: string; count: number }>({ username: '', count: 0 });
-  const eventSchedulerRef = useRef<EventSchedulerDebug>({
-    now: Date.now(),
-    nextDueAt: Date.now() + randomInt(90_000, 140_000),
-    lastFiredAt: 0,
-    blocked: false,
-    blockedReason: '-',
-    cooldowns: {},
-    lastEvent: '-'
-  });
-  const eventRetryTimerRef = useRef<number | null>(null);
+  const lastPacingModeRef = useRef<Exclude<ChatPacingMode, 'tag_slow'>>('normal');
+  const eventWeightActiveUntilRef = useRef(0);
+  const eventWeightRecoverUntilRef = useRef(0);
+  const lastChatMessageAtRef = useRef(Date.now());
   const chatEngineRef = useRef(new ChatEngine());
-  const eventEngineRef = useRef(new EventEngine({
-    playSfx: (sfxKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SFX', sfxKey, reason, delayMs }),
-    requestSceneSwitch: (sceneKey, reason, delayMs) => requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey, reason, delayMs })
-  }));
+  const ghostLoreRef = useRef(createGhostLore());
+  const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number }>({ isLocked: false, target: null, startedAt: 0 });
+  const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, loop4: 0, ghost_ping_actor: 0 });
+  const eventCooldownsRef = useRef<Record<StoryEventKey, number>>({
+    VOICE_CONFIRM: 0,
+    GHOST_PING: 0,
+    TV_EVENT: 0,
+    NAME_CALL: 0,
+    VIEWER_SPIKE: 0,
+    LIGHT_GLITCH: 0,
+    FEAR_CHALLENGE: 0
+  });
+  const pendingReplyEventRef = useRef<{ key: StoryEventKey; target: string; eventId: string; expiresAt: number } | null>(null);
+  const reactionBurstTimerRef = useRef<number | null>(null);
+  const eventRecentContentIdsRef = useRef<Record<StoryEventKey, string[]>>({
+    VOICE_CONFIRM: [],
+    GHOST_PING: [],
+    TV_EVENT: [],
+    NAME_CALL: [],
+    VIEWER_SPIKE: [],
+    LIGHT_GLITCH: [],
+    FEAR_CHALLENGE: []
+  });
+  const globalRecentContentIdsRef = useRef<string[]>([]);
+  const eventTickCountRef = useRef(0);
+  const eventLastTickAtRef = useRef(0);
+  const eventLastCandidateCountRef = useRef(0);
+  const eventLastCandidateKeysRef = useRef<string[]>([]);
+  const eventGateRejectSummaryRef = useRef<Record<string, number>>({});
+  const eventLastComputedAtRef = useRef(0);
+  const eventLastReasonRef = useRef('INIT');
+  const eventLastVariantIdRef = useRef('-');
+  const eventLastKeyRef = useRef('-');
+  const eventLastAtRef = useRef(0);
+  const eventNextDueAtRef = useRef(0);
 
+  const eventLifecycleRef = useRef<EventRunRecord | null>(null);
+  const reactionRecentIdsRef = useRef<Record<EventTopic, string[]>>({ ghost: [], footsteps: [], light: [] });
+  const reactionActorHistoryRef = useRef<string[]>([]);
+  const reactionTextHistoryRef = useRef<string[]>([]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
@@ -243,12 +307,22 @@ export default function App() {
         }
       };
     }
+    lastChatMessageAtRef.current = Date.now();
     dispatch({ type: 'AUDIENCE_MESSAGE', payload: linted.message });
   };
 
-  const syncChatEngineDebug = () => {
+  const syncChatEngineDebug = useCallback(() => {
     const engineDebug = chatEngineRef.current.getDebugState() as {
       lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
+      activeUsers?: string[];
+      activeUsersCount?: number;
+      pacing?: {
+        mode?: 'normal' | 'slowed' | 'locked_slowed';
+        baseRate?: number;
+        currentRate?: number;
+        jitterEnabled?: boolean;
+        nextMessageDueInSec?: number;
+      };
     };
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
@@ -258,10 +332,21 @@ export default function App() {
           lastRejectedText: engineDebug.lint?.lastRejectedText ?? '-',
           lastRejectedReason: engineDebug.lint?.lastRejectedReason ?? '-',
           rerollCount: engineDebug.lint?.rerollCount ?? 0
+        },
+        activeUsers: {
+          count: engineDebug.activeUsersCount ?? engineDebug.activeUsers?.length ?? 0,
+          namesSample: (engineDebug.activeUsers ?? []).slice(0, 6)
+        },
+        pacing: {
+          mode: engineDebug.pacing?.mode ?? 'normal',
+          baseRate: engineDebug.pacing?.baseRate ?? 0,
+          currentRate: engineDebug.pacing?.currentRate ?? 0,
+          jitterEnabled: engineDebug.pacing?.jitterEnabled ?? true,
+          nextMessageDueInSec: engineDebug.pacing?.nextMessageDueInSec ?? 0
         }
       }
     };
-  };
+  }, []);
 
   const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
     const chats = chatEngineRef.current.emit(event, Date.now());
@@ -269,17 +354,362 @@ export default function App() {
     syncChatEngineDebug();
   };
 
-  const emitEvent = (eventKey: string, context: { tagTarget?: string; lockTarget?: string } = {}) => {
-    eventEngineRef.current.trigger(eventKey, { messages: state.messages, ...context, now: Date.now() });
-    const pendingContent = eventEngineRef.current.drainPendingContent();
-    pendingContent.forEach((payload) => chatEngineRef.current.enqueueContent(payload));
-    const eventDebug = eventEngineRef.current.getDebugState() as unknown as Window['__CHAT_DEBUG__'];
+  const updateEventDebug = useCallback((patch: Partial<NonNullable<Window['__CHAT_DEBUG__']>>) => {
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
-      ...eventDebug,
+      ...patch,
       ui: window.__CHAT_DEBUG__?.ui
     };
-  };
+  }, []);
+
+  const markEventTopicBoost = useCallback((activeMs: number) => {
+    const now = Date.now();
+    eventWeightActiveUntilRef.current = Math.max(eventWeightActiveUntilRef.current, now + activeMs);
+    eventWeightRecoverUntilRef.current = Math.max(eventWeightRecoverUntilRef.current, eventWeightActiveUntilRef.current + 5_000);
+  }, []);
+
+  const getCurrentTopicWeights = useCallback((now: number): TopicWeightProfile => {
+    if (now <= eventWeightActiveUntilRef.current) return { ...EVENT_TOPIC_WEIGHT };
+    if (now < eventWeightRecoverUntilRef.current) {
+      const span = Math.max(1, eventWeightRecoverUntilRef.current - eventWeightActiveUntilRef.current);
+      const progress = Math.min(1, Math.max(0, (now - eventWeightActiveUntilRef.current) / span));
+      return {
+        randomComment: EVENT_TOPIC_WEIGHT.randomComment + (NORMAL_TOPIC_WEIGHT.randomComment - EVENT_TOPIC_WEIGHT.randomComment) * progress,
+        videoObservation: EVENT_TOPIC_WEIGHT.videoObservation + (NORMAL_TOPIC_WEIGHT.videoObservation - EVENT_TOPIC_WEIGHT.videoObservation) * progress,
+        suspicion: EVENT_TOPIC_WEIGHT.suspicion + (NORMAL_TOPIC_WEIGHT.suspicion - EVENT_TOPIC_WEIGHT.suspicion) * progress,
+        buildUp: EVENT_TOPIC_WEIGHT.buildUp + (NORMAL_TOPIC_WEIGHT.buildUp - EVENT_TOPIC_WEIGHT.buildUp) * progress,
+        eventTopic: EVENT_TOPIC_WEIGHT.eventTopic + (NORMAL_TOPIC_WEIGHT.eventTopic - EVENT_TOPIC_WEIGHT.eventTopic) * progress
+      };
+    }
+    return { ...NORMAL_TOPIC_WEIGHT };
+  }, []);
+
+  const triggerReactionBurst = useCallback((topic: EventTopic) => {
+    markEventTopicBoost(12_000);
+    if (reactionBurstTimerRef.current) {
+      window.clearTimeout(reactionBurstTimerRef.current);
+      reactionBurstTimerRef.current = null;
+    }
+    const durationMs = randomInt(10_000, 12_000);
+    const reactionCount = randomInt(2, 5);
+    const lines = pickReactionLines(topic, reactionCount, reactionRecentIdsRef.current[topic]);
+    reactionRecentIdsRef.current[topic] = [...reactionRecentIdsRef.current[topic], ...lines.map((line) => line.id)].slice(-8);
+    const fireAt = Date.now() + randomInt(300, 1200);
+    reactionBurstTimerRef.current = window.setTimeout(() => {
+      reactionBurstTimerRef.current = null;
+      lines.forEach((line, index) => {
+        window.setTimeout(() => {
+          const activePool = collectActiveUsers(state.messages);
+          const actorPool = activePool.length >= 3
+            ? activePool
+            : Array.from(new Set([...activePool, ...reactionActorHistoryRef.current, ...DEBUG_SEED_USERS]));
+          let pickedLine = line;
+          let rerollCount = 0;
+          let rejectedReason = '-';
+          while (reactionTextHistoryRef.current.slice(-8).includes(pickedLine.text) && rerollCount < 5) {
+            const rerolled = pickReactionLines(topic, 1, reactionRecentIdsRef.current[topic])[0];
+            if (!rerolled) break;
+            pickedLine = rerolled;
+            rerollCount += 1;
+            rejectedReason = 'duplicate';
+          }
+          reactionTextHistoryRef.current = [...reactionTextHistoryRef.current, pickedLine.text].slice(-12);
+          const actor = pickNonRepeatingActor(actorPool, reactionActorHistoryRef.current);
+          reactionActorHistoryRef.current = [...reactionActorHistoryRef.current, actor].slice(-10);
+          dispatchAudienceMessage({
+            id: crypto.randomUUID(),
+            username: actor,
+            type: 'chat',
+            text: pickedLine.text,
+            language: 'zh',
+            translation: pickedLine.text
+          });
+          window.__CHAT_DEBUG__ = {
+            ...(window.__CHAT_DEBUG__ ?? {}),
+            chat: {
+              ...(window.__CHAT_DEBUG__?.chat ?? {}),
+              lint: {
+                ...(window.__CHAT_DEBUG__?.chat?.lint ?? {}),
+                rerollCount,
+                lastRejectedReason: rejectedReason,
+                lastRejectedText: rejectedReason === 'duplicate' ? pickedLine.text : '-'
+              }
+            }
+          };
+        }, Math.floor((durationMs / Math.max(1, reactionCount)) * index));
+      });
+    }, Math.max(0, fireAt - Date.now()));
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        scheduler: { ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}), lastFiredAt: fireAt, nextDueAt: fireAt + durationMs },
+        lastEventLabel: `reaction:${topic}`,
+        lastReactions: {
+          count: reactionCount,
+          lastReactionActors: reactionActorHistoryRef.current.slice(-10)
+        }
+      },
+      violation: reactionActorHistoryRef.current.some((actor) => actor === 'system') ? 'reaction_actor_system=true' : window.__CHAT_DEBUG__?.violation
+    });
+  }, [dispatchAudienceMessage, markEventTopicBoost, state.messages, updateEventDebug]);
+
+  const buildEventLine = useCallback((eventKey: StoryEventKey, phase: EventLinePhase, target: string): { line: string; lineId: string } => {
+    markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
+    const historyWindow = phase === 'opener' ? 5 : 4;
+    const recentIds = eventRecentContentIdsRef.current[eventKey].slice(-historyWindow);
+    const picked = pickDialog(eventKey, phase, target, recentIds);
+    eventLastVariantIdRef.current = picked.id;
+    const loreLevel = state.curse >= 70 ? 3 : state.curse >= 40 ? 2 : 1;
+    const lore = ghostLoreRef.current.inject({
+      fragment: picked.text,
+      level: loreLevel,
+      activeUser: target
+    });
+    eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], picked.id].slice(-5);
+    globalRecentContentIdsRef.current = [...globalRecentContentIdsRef.current, picked.id].slice(-10);
+    updateEventDebug({
+      lastContentId: picked.id,
+      lastNameInjected: lore.lastNameInjected,
+      contentRepeatBlocked: picked.repeatBlocked,
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        lastEventLabel: `event:${eventKey}:${phase}`
+      }
+    });
+    return { line: lore.fragment, lineId: picked.id };
+  }, [markEventTopicBoost, state.curse, updateEventDebug]);
+
+  const dispatchEventLine = useCallback((line: string, target: string): EventSendResult => {
+    const now = Date.now();
+    if (!line.trim()) return { ok: false, blockedReason: 'empty' };
+    if (!appStarted) return { ok: false, blockedReason: 'app_not_started' };
+    if (chatAutoPaused) return { ok: false, blockedReason: 'chat_auto_paused' };
+    if (sendCooldownUntil.current > now) return { ok: false, blockedReason: 'rate_limited' };
+    if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== target) {
+      return { ok: false, blockedReason: 'locked_target_only' };
+    }
+
+    dispatchAudienceMessage({
+      id: crypto.randomUUID(),
+      username: 'mod_live',
+      type: 'chat',
+      text: line,
+      language: 'zh',
+      translation: line,
+      tagTarget: target
+    });
+    return { ok: true };
+  }, [appStarted, chatAutoPaused, dispatchAudienceMessage]);
+
+  const playSfx = useCallback((
+    key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
+    options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number; eventId?: string; eventKey?: StoryEventKey }
+  ) => {
+    const now = Date.now();
+    const cooldownMin = key === 'ghost_female' ? 180_000 : key === 'footsteps' || key === 'low_rumble' ? 120_000 : 0;
+    if (key !== 'fan_loop') {
+      const cooldownUntil = cooldownsRef.current[key] ?? 0;
+      if (cooldownUntil > now) return false;
+      cooldownsRef.current[key] = now + cooldownMin;
+    }
+    if ((key === 'ghost_female' || key === 'footsteps') && eventLifecycleRef.current?.starterTagSent !== true) {
+      return false;
+    }
+    requestSceneAction({
+      type: 'REQUEST_SFX',
+      sfxKey: key === 'low_rumble' ? 'footsteps' : key,
+      reason: options.reason,
+      source: options.source,
+      delayMs: options.delayMs,
+      startVolume: options.startVolume,
+      endVolume: options.endVolume,
+      rampSec: options.rampSec
+    });
+    return true;
+  }, []);
+
+  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester' }) => {
+    const record = runEventStart(eventKey, {
+      activeUsers: collectActiveUsers(state.messages),
+      sendLine: (line, meta) => {
+        const result = dispatchEventLine(line, meta.actor);
+        return { ...result, lineId: meta.lineId };
+      },
+      canRunEvent: (activeUser) => {
+        if (!appStarted) return 'app_not_started';
+        if (chatAutoPaused) return 'chat_auto_paused';
+        if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUser) return 'locked_target_only';
+        return null;
+      },
+      setLock: (actor) => {
+        lockStateRef.current = { isLocked: true, target: actor, startedAt: Date.now() };
+      },
+      getRecentEventLineIds: (key) => eventRecentContentIdsRef.current[key],
+      rememberEventLineId: (key, lineId) => {
+        eventRecentContentIdsRef.current[key] = [...eventRecentContentIdsRef.current[key], lineId].slice(-5);
+      },
+      onEventRecord: (nextRecord) => {
+        eventLifecycleRef.current = nextRecord;
+      }
+    });
+
+    eventLastReasonRef.current = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
+    eventLastKeyRef.current = eventKey;
+    eventLastAtRef.current = Date.now();
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        lastEvent: {
+          key: eventKey,
+          eventId: record.eventId,
+          at: record.at,
+          reason: eventLastReasonRef.current,
+          state: record.state,
+          starterTagSent: record.starterTagSent,
+          abortedReason: record.abortedReason,
+          openerLineId: record.openerLineId,
+          followUpLineId: record.followUpLineId,
+          lineIds: record.lineIds,
+          topic: record.topic
+        }
+      },
+      violation: record.state === 'aborted' ? `event_aborted:${record.abortedReason ?? 'unknown'}` : window.__CHAT_DEBUG__?.violation
+    } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+
+    const target = lockStateRef.current.target ?? '';
+    return record.state === 'aborted' ? null : { eventId: record.eventId, target };
+  }, [appStarted, chatAutoPaused, dispatchEventLine, state.messages, updateEventDebug]);
+
+  const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
+    const built = buildEventLine(eventKey, phase, target);
+    const sent = dispatchEventLine(built.line, target);
+    if (!sent.ok) return false;
+    if (!eventLifecycleRef.current) return true;
+    eventLifecycleRef.current.followUpLineId = built.lineId;
+    eventLifecycleRef.current.lineIds = [...eventLifecycleRef.current.lineIds, built.lineId];
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        lastEvent: {
+          ...(window.__CHAT_DEBUG__?.event?.lastEvent ?? {}),
+          followUpLineId: built.lineId,
+          lineIds: eventLifecycleRef.current.lineIds
+        }
+      }
+    });
+    return true;
+  }, [buildEventLine, dispatchEventLine, updateEventDebug]);
+
+  const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
+    const now = Date.now();
+    const activeUsers = collectActiveUsers(state.messages);
+    const target = activeUsers.length > 0 ? pickOne(activeUsers) : null;
+    const pending = pendingReplyEventRef.current;
+    const isLocked = lockStateRef.current.isLocked && Boolean(lockStateRef.current.target);
+
+    if (!appStarted) return;
+
+    if (source === 'user_input' && pending && now <= pending.expiresAt) {
+      const reasonBase = `event:${pending.eventId}`;
+      const repliedYes = /有/.test(raw);
+      const repliedNo = /沒有/.test(raw);
+      const repliedBrave = /不怕/.test(raw);
+      if (pending.key === 'VOICE_CONFIRM' && repliedYes) {
+        postFollowUpLine(pending.target, 'VOICE_CONFIRM');
+        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
+        triggerReactionBurst('ghost');
+        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+      }
+      if (pending.key === 'GHOST_PING') {
+        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
+        postFollowUpLine(pending.target, 'GHOST_PING');
+        triggerReactionBurst('ghost');
+        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+        cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
+        lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+      }
+      if (pending.key === 'TV_EVENT' && repliedNo) {
+        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop2', reason: reasonBase, delayMs: 2000 });
+        postFollowUpLine(pending.target, 'TV_EVENT');
+        const topic: EventTopic = Math.random() < 0.5 ? 'light' : 'ghost';
+        triggerReactionBurst(topic);
+        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = topic;
+      }
+      if (pending.key === 'NAME_CALL') {
+        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
+        triggerReactionBurst('ghost');
+        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+      }
+      if (pending.key === 'VIEWER_SPIKE') {
+        playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key });
+        triggerReactionBurst('footsteps');
+        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'footsteps';
+      }
+      if (pending.key === 'FEAR_CHALLENGE' && repliedBrave) {
+        const chooseGhost = Math.random() < 0.5;
+        const played = chooseGhost
+          ? playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
+          : playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000 });
+        if (played) {
+          postFollowUpLine(pending.target, 'FEAR_CHALLENGE');
+          postFollowUpLine(pending.target, 'FEAR_CHALLENGE', 'closer');
+          triggerReactionBurst(chooseGhost ? 'ghost' : 'footsteps');
+          if (eventLifecycleRef.current) eventLifecycleRef.current.topic = chooseGhost ? 'ghost' : 'footsteps';
+        }
+      }
+      if (eventLifecycleRef.current) {
+        eventLifecycleRef.current.state = 'done';
+        eventLifecycleRef.current.at = Date.now();
+      }
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+      pendingReplyEventRef.current = null;
+      return;
+    }
+
+    if (pending && now > pending.expiresAt) {
+      if (eventLifecycleRef.current) {
+        eventLifecycleRef.current.state = 'done';
+        eventLifecycleRef.current.at = Date.now();
+      }
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+      pendingReplyEventRef.current = null;
+    }
+
+    const gateRejectSummary: Record<string, number> = {};
+    if (!target) gateRejectSummary.need_activeUsers = 1;
+    if (isLocked) gateRejectSummary.locked = 1;
+    eventLastComputedAtRef.current = now;
+    eventLastCandidateKeysRef.current = EVENT_REGISTRY_KEYS.slice(0, 10);
+    eventLastCandidateCountRef.current = target && !isLocked ? EVENT_REGISTRY_KEYS.length : 0;
+    eventGateRejectSummaryRef.current = gateRejectSummary;
+    if (!target || isLocked) return;
+
+    const can = (key: StoryEventKey) => (eventCooldownsRef.current[key] ?? 0) <= now;
+    for (const key of EVENT_REGISTRY_KEYS) {
+      const def = EVENT_REGISTRY[key];
+      if (activeUsers.length < def.minActiveUsers) continue;
+      if (!can(key)) continue;
+      if (key === 'GHOST_PING' && (cooldownsRef.current.ghost_ping_actor ?? 0) > now) continue;
+      if (key === 'TV_EVENT' && (cooldownsRef.current.loop4 ?? 0) > now) continue;
+      if (Math.random() >= def.chance) continue;
+      const started = startEvent(key, { source });
+      eventCooldownsRef.current[key] = now + def.cooldownMs;
+      if (!started) return;
+      if (def.lockOnStart && started.target) lockStateRef.current = { isLocked: true, target: started.target, startedAt: now };
+      if (key === 'LIGHT_GLITCH') {
+        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
+        triggerReactionBurst('light');
+        if (eventLifecycleRef.current) {
+          eventLifecycleRef.current.state = 'done';
+          eventLifecycleRef.current.topic = 'light';
+        }
+      } else {
+        pendingReplyEventRef.current = { key, target: started.target || target, eventId: started.eventId, expiresAt: now + 20_000 };
+      }
+      if (key === 'TV_EVENT') cooldownsRef.current.loop4 = now + 90_000;
+      return;
+    }
+  }, [appStarted, playSfx, postFollowUpLine, startEvent, state.messages, triggerReactionBurst]);
 
   useEffect(() => {
     chatEngineRef.current.syncFromMessages(state.messages);
@@ -346,57 +776,60 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isReady || chatAutoPaused) return;
+    if (!isReady) return;
     let timer = 0;
+
+    const pickNextRhythm = (): Exclude<ChatPacingMode, 'tag_slow'> => {
+      const options: Array<Exclude<ChatPacingMode, 'tag_slow'>> = ['normal', 'slightlyBusy', 'tense'];
+      const candidates = options.filter((mode) => mode !== lastPacingModeRef.current);
+      return pickOne(candidates.length > 0 ? candidates : options);
+    };
+
     const nextInterval = () => {
       const now = Date.now();
-      if (tagSlowActiveRef.current) {
+      if (!tagSlowActiveRef.current && now >= pacingNextModeFlipAtRef.current) {
+        const nextMode = pickNextRhythm();
+        pacingModeRef.current = nextMode;
+        lastPacingModeRef.current = nextMode;
+        pacingModeUntilRef.current = now + randomInt(10_000, 20_000);
+        pacingNextModeFlipAtRef.current = now + randomInt(20_000, 40_000);
+      }
+
+      if (!tagSlowActiveRef.current && now >= pacingModeUntilRef.current && pacingModeRef.current !== 'normal') {
+        pacingModeRef.current = 'normal';
+      }
+
+      if (tagSlowActiveRef.current || lockStateRef.current.isLocked) {
         pacingModeRef.current = 'tag_slow';
-      } else {
-        if (pacingModeRef.current !== 'burst' && now >= pacingBurstRollAtRef.current) {
-          if (Math.random() < 0.35) {
-            pacingModeRef.current = 'burst';
-            pacingModeUntilRef.current = now + randomInt(8_000, 15_000);
-          }
-          pacingBurstRollAtRef.current = now + randomInt(45_000, 120_000);
-        }
-        if (pacingModeRef.current === 'burst' && now >= pacingModeUntilRef.current) {
-          pacingModeRef.current = 'normal';
-        }
-        if (pacingModeRef.current !== 'burst' && now >= pacingNextModeFlipAtRef.current) {
-          if (pacingModeRef.current === 'fast') {
-            pacingModeRef.current = 'normal';
-            pacingNextModeFlipAtRef.current = now + randomInt(10_000, 25_000);
-          } else {
-            pacingModeRef.current = 'fast';
-            pacingModeUntilRef.current = now + randomInt(2_000, 6_000);
-            pacingNextModeFlipAtRef.current = pacingModeUntilRef.current;
-          }
-        }
-        if (pacingModeRef.current === 'fast' && now >= pacingModeUntilRef.current) {
-          pacingModeRef.current = 'normal';
-          pacingNextModeFlipAtRef.current = now + randomInt(10_000, 25_000);
-        }
       }
 
       const mode = pacingModeRef.current;
-      const base = mode === 'burst'
-        ? randomInt(80, 320)
-        : mode === 'fast'
-          ? randomInt(120, 450)
-          : randomInt(350, 1800);
-      const scaled = mode === 'tag_slow' ? Math.floor(base * (1.5 + Math.random() * 0.5)) : base;
-      const transitionAt = mode === 'tag_slow'
-        ? null
-        : mode === 'burst' || mode === 'fast'
-          ? pacingModeUntilRef.current
-          : Math.min(pacingBurstRollAtRef.current, pacingNextModeFlipAtRef.current);
+      const quietMode = !lockStateRef.current.isLocked && mode === 'normal' && state.curse <= 30;
+      const base = quietMode
+        ? randomInt(1200, 2200)
+        : mode === 'tense'
+          ? randomInt(400, 900)
+          : mode === 'slightlyBusy'
+            ? randomInt(650, 1200)
+            : randomInt(800, 1600);
+      const shouldSlowForLock = lockStateRef.current.isLocked;
+      const shouldSlowForTag = mode === 'tag_slow';
+      const slowMultiplier = shouldSlowForLock || shouldSlowForTag ? 2 : 1;
+      const scaled = Math.floor(base * slowMultiplier);
+      const transitionAt = mode === 'tag_slow' ? null : Math.min(pacingModeUntilRef.current, pacingNextModeFlipAtRef.current);
+      chatEngineRef.current.setPacingDebug({
+        mode: lockStateRef.current.isLocked ? 'locked_slowed' : (mode === 'tag_slow' ? 'slowed' : 'normal'),
+        baseRate: base,
+        currentRate: scaled,
+        jitterEnabled: true,
+        nextMessageDueInSec: Math.max(0, Math.ceil(scaled / 1000))
+      });
       window.__CHAT_DEBUG__ = {
         ...(window.__CHAT_DEBUG__ ?? {}),
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
           pacing: {
-            mode,
+            mode: quietMode ? 'quiet' : mode,
             nextModeInSec: transitionAt ? Math.max(0, Math.ceil((transitionAt - now) / 1000)) : -1
           }
         }
@@ -406,138 +839,95 @@ export default function App() {
 
     const dispatchTimedChats = (messages: ChatMessage[]) => {
       messages.forEach((message) => {
-        if (pacingModeRef.current === 'burst') {
-          const recent = recentAutoUserRef.current;
-          if (message.username === recent.username && recent.count >= 2) return;
-          recentAutoUserRef.current = message.username === recent.username
-            ? { username: message.username, count: recent.count + 1 }
-            : { username: message.username, count: 1 };
-        }
         dispatchAudienceMessage(message);
       });
     };
 
+    const dispatchForcedBaseMessage = () => {
+      const recentTexts = new Set(state.messages.slice(-40).map((message) => (message.translation ?? message.text).trim()));
+      let fallback = pickSafeFallbackText();
+      for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
+        const candidate = pickSafeFallbackText();
+        if (!recentTexts.has(candidate)) {
+          fallback = candidate;
+          break;
+        }
+      }
+      dispatchAudienceMessage({
+        id: crypto.randomUUID(),
+        username: pickOne(usernames),
+        text: fallback,
+        language: 'zh',
+        translation: fallback,
+        type: 'chat'
+      });
+    };
+
     const tick = () => {
-      const timedChats = chatEngineRef.current.tick(Date.now());
+      const now = Date.now();
+      eventTickCountRef.current += 1;
+      eventLastTickAtRef.current = now;
+      const topicWeights = getCurrentTopicWeights(now);
+      const timedChats = chatAutoPaused ? [] : chatEngineRef.current.tick(now);
       dispatchTimedChats(timedChats);
       syncChatEngineDebug();
-      emitChatEvent({ type: 'IDLE_TICK' });
-      emitEvent('IDLE_TICK');
-      timer = window.setTimeout(tick, nextInterval());
+      tryTriggerStoryEvent('', 'scheduler_tick');
+      emitChatEvent({ type: 'IDLE_TICK', topicWeights });
+      if (!chatAutoPaused && Date.now() - lastChatMessageAtRef.current > 2500) {
+        dispatchForcedBaseMessage();
+      }
+      const delay = nextInterval();
+      eventNextDueAtRef.current = Date.now() + delay;
+      timer = window.setTimeout(tick, delay);
     };
-    timer = window.setTimeout(tick, nextInterval());
+
+    const initialDelay = nextInterval();
+    eventNextDueAtRef.current = Date.now() + initialDelay;
+    timer = window.setTimeout(tick, initialDelay);
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, chatTickRestartKey, isReady, state.messages]);
+  }, [chatAutoPaused, getCurrentTopicWeights, isReady, state.curse, state.messages, syncChatEngineDebug, tryTriggerStoryEvent]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
       if (event.type === 'VIDEO_ACTIVE') {
         currentVideoKeyRef.current = event.key;
         emitChatEvent({ type: 'SCENE_SWITCH', toKey: event.key });
-        emitEvent('SCENE_SWITCH_REACT');
       }
       if (event.type === 'SFX_START') {
         const sfxKey = event.sfxKey === 'fan_loop' ? 'fan' : event.sfxKey === 'footsteps' ? 'footsteps' : 'ghost';
         emitChatEvent({ type: 'SFX_START', sfxKey });
-        const eventMap: Record<string, string> = {
-          fan_loop: 'SFX_FAN_REACT',
-          footsteps: 'SFX_FOOTSTEPS_REACT',
-          ghost_female: 'SFX_GHOST_REACT'
-        };
-        emitEvent(eventMap[event.sfxKey] ?? 'IDLE_TICK');
       }
     });
 
     return () => unsubscribe();
-  }, [state.messages]);
+  }, []);
 
   useEffect(() => {
-    if (!isReady) return;
-
-    const fireGhostEvent = (reason: string) => {
-      const now = Date.now();
-      eventSchedulerRef.current.lastFiredAt = now;
-      eventSchedulerRef.current.lastEvent = reason;
-      requestSceneAction({
-        type: 'REQUEST_SFX',
-        sfxKey: Math.random() < 0.5 ? 'ghost_female' : 'footsteps',
-        reason: `scheduler:${reason}`,
-        delayMs: 2_000
-      });
-      emitEvent('SFX_GHOST_REACT');
-      window.setTimeout(() => emitEvent('SFX_FOOTSTEPS_REACT'), randomInt(10_000, 12_000));
-      window.setTimeout(() => {
-        const sceneKey = Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2';
-        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey, reason: `scheduler:${reason}`, delayMs: 5_000 });
-      }, 0);
-      window.setTimeout(() => emitEvent('SCENE_SWITCH_REACT'), 7_000);
-      eventSchedulerRef.current.nextDueAt = now + randomInt(90_000, 140_000);
-    };
-
     const timer = window.setInterval(() => {
       const now = Date.now();
-      eventEngineRef.current.resetStaleCooldowns(now);
-      const cooldowns = eventEngineRef.current.getCooldownSnapshot();
-      const due = eventSchedulerRef.current.nextDueAt;
-      const blockedByCooldown = Object.values(cooldowns).some((until) => until > now);
-      eventSchedulerRef.current = {
-        ...eventSchedulerRef.current,
-        now,
-        cooldowns,
-        blocked: blockedByCooldown,
-        blockedReason: blockedByCooldown ? 'event_cooldown_active' : '-'
-      };
-      if (now >= due && !blockedByCooldown) {
-        fireGhostEvent('scheduled');
-      } else if (now >= due && blockedByCooldown && !eventRetryTimerRef.current) {
-        eventRetryTimerRef.current = window.setTimeout(() => {
-          eventRetryTimerRef.current = null;
-          fireGhostEvent('backoff_retry');
-        }, randomInt(5_000, 12_000));
-      }
-
-      window.__CHAT_DEBUG__ = {
-        ...(window.__CHAT_DEBUG__ ?? {}),
+      updateEventDebug({
+        lock: {
+          isLocked: lockStateRef.current.isLocked,
+          target: lockStateRef.current.target,
+          elapsed: lockStateRef.current.isLocked ? now - lockStateRef.current.startedAt : 0,
+          chatSpeedMultiplier: lockStateRef.current.isLocked ? 0.5 : 1
+        },
+        sfxCooldowns: { ...cooldownsRef.current },
         event: {
           ...(window.__CHAT_DEBUG__?.event ?? {}),
           scheduler: {
-            now: eventSchedulerRef.current.now,
-            nextDueAt: eventSchedulerRef.current.nextDueAt,
-            lastFiredAt: eventSchedulerRef.current.lastFiredAt,
-            blocked: eventSchedulerRef.current.blocked,
-            blockedReason: eventSchedulerRef.current.blockedReason,
-            cooldowns: eventSchedulerRef.current.cooldowns
-          },
-          lastEvent: eventSchedulerRef.current.lastEvent
+            ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}),
+            now,
+            cooldowns: { ...cooldownsRef.current }
+          }
         }
-      };
+      });
     }, 1000);
-
-    (window as Window & {
-      __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
-    }).__EVENT_SCHEDULER_CONTROLS__ = {
-      forceFire: () => fireGhostEvent('force_fire'),
-      resetLocks: () => {
-        eventEngineRef.current.resetLocks();
-        eventSchedulerRef.current.blocked = false;
-        eventSchedulerRef.current.blockedReason = 'manual_reset';
-      }
-    };
-
-    return () => {
-      window.clearInterval(timer);
-      if (eventRetryTimerRef.current) {
-        window.clearTimeout(eventRetryTimerRef.current);
-        eventRetryTimerRef.current = null;
-      }
-      (window as Window & {
-        __EVENT_SCHEDULER_CONTROLS__?: { forceFire: () => void; resetLocks: () => void };
-      }).__EVENT_SCHEDULER_CONTROLS__ = undefined;
-    };
-  }, [emitEvent, isReady]);
+    return () => window.clearInterval(timer);
+  }, [updateEventDebug]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !appStarted) return;
 
     let timer = 0;
     const burstTimers: number[] = [];
@@ -597,10 +987,10 @@ export default function App() {
       window.clearTimeout(timer);
       burstTimers.forEach((id) => window.clearTimeout(id));
     };
-  }, [state.curse, isReady]);
+  }, [appStarted, state.curse, isReady]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !appStarted) return;
 
     let timer = 0;
 
@@ -615,11 +1005,11 @@ export default function App() {
 
     timer = window.setTimeout(tick, nextLeaveDelayMs());
     return () => window.clearTimeout(timer);
-  }, [loadingState]);
+  }, [appStarted, loadingState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (!isReady) return;
+      if (!isReady || !appStarted) return;
       const now = Date.now();
       if (now - lastInputTimestamp.current <= 15_000) return;
       if (now - lastIdleCurseAt.current < 10_000) return;
@@ -628,7 +1018,7 @@ export default function App() {
     }, 5_000);
 
     return () => window.clearInterval(timer);
-  }, [loadingState]);
+  }, [appStarted, loadingState]);
 
 
   useEffect(() => {
@@ -658,7 +1048,7 @@ export default function App() {
   }, [loadingState]);
 
   useEffect(() => {
-    if (!isReady || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
+    if (!isReady || !appStarted || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
     postedOptionalAssetWarningMessage.current = true;
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
@@ -667,17 +1057,19 @@ export default function App() {
       text: '部分非必要素材載入失敗，遊戲可正常進行。',
       language: 'zh'
     });
-  }, [hasOptionalAssetWarning, isReady]);
+  }, [appStarted, hasOptionalAssetWarning, isReady]);
 
 
   const hasFatalInitError = requiredAssetErrors.length > 0;
   const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
   const shouldShowMainContent = true;
-  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const debugEnabled = isDebugRoute || new URLSearchParams(window.location.search).get('debug') === '1';
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [debugComposingOverride, setDebugComposingOverride] = useState<boolean | null>(null);
+  const [simulatePlayerReply, setSimulatePlayerReply] = useState(true);
+  const [debugLowerCooldown, setDebugLowerCooldown] = useState(false);
   const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
   const [sendDebug, setSendDebug] = useState({
     lastClickAt: 0,
@@ -709,6 +1101,79 @@ export default function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const activeUsers = collectActiveUsers(state.messages);
+      const nextDueAt = Math.max(now, eventNextDueAtRef.current || now);
+      const schedulerBlockedReason = !appStarted ? 'app_not_started' : (lockStateRef.current.isLocked ? 'lock_active' : '-');
+      const schedulerBlocked = schedulerBlockedReason !== '-';
+      const snapshot = {
+        registry: {
+          count: EVENT_REGISTRY_KEYS.length,
+          keys: EVENT_REGISTRY_KEYS.slice(0, 20),
+          enabledCount: EVENT_REGISTRY_KEYS.length,
+          disabledCount: 0
+        },
+        scheduler: {
+          now,
+          nextDueAt,
+          lastFiredAt: eventLastAtRef.current,
+          tickCount: eventTickCountRef.current,
+          lastTickAt: eventLastTickAtRef.current,
+          blocked: schedulerBlocked,
+          blockedReason: schedulerBlockedReason,
+          cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current }
+        },
+        candidates: {
+          lastComputedAt: eventLastComputedAtRef.current,
+          lastCandidateCount: eventLastCandidateCountRef.current,
+          lastCandidateKeys: eventLastCandidateKeysRef.current.slice(0, 10),
+          lastGateRejectSummary: { ...eventGateRejectSummaryRef.current }
+        },
+        lastEvent: {
+          key: eventLifecycleRef.current?.key ?? eventLastKeyRef.current,
+          eventId: eventLifecycleRef.current?.eventId,
+          at: eventLifecycleRef.current?.at ?? eventLastAtRef.current,
+          reason: eventLastReasonRef.current,
+          lineVariantId: eventLastVariantIdRef.current,
+          state: eventLifecycleRef.current?.state ?? 'done',
+          starterTagSent: eventLifecycleRef.current?.starterTagSent ?? false,
+          abortedReason: eventLifecycleRef.current?.abortedReason,
+          waitingForReply: Boolean(pendingReplyEventRef.current),
+          openerLineId: eventLifecycleRef.current?.openerLineId,
+          followUpLineId: eventLifecycleRef.current?.followUpLineId,
+          lineIds: eventLifecycleRef.current?.lineIds ?? [],
+          topic: eventLifecycleRef.current?.topic
+        },
+        blocking: {
+          isLocked: lockStateRef.current.isLocked,
+          lockTarget: lockStateRef.current.target,
+          lockElapsedSec: lockStateRef.current.isLocked ? Math.max(0, Math.floor((now - lockStateRef.current.startedAt) / 1000)) : 0,
+          schedulerBlocked,
+          schedulerBlockedReason
+        },
+        cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current }
+      };
+
+      updateChatDebug({
+        event: snapshot,
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          autoPaused: chatAutoPaused,
+          autoPausedReason: chatAutoPaused ? (window.__CHAT_DEBUG__?.ui?.send?.blockedReason ?? 'manual_or_unknown') : '-',
+          activeUsers: {
+            count: activeUsers.length,
+            nameSample: activeUsers.slice(0, 6),
+            namesSample: activeUsers.slice(0, 6)
+          }
+        }
+      } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+      syncChatEngineDebug();
+    }, 600);
+    return () => window.clearInterval(timer);
+  }, [appStarted, chatAutoPaused, state.messages, syncChatEngineDebug, updateChatDebug]);
 
   const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
     if (!debugEnabled) return;
@@ -803,9 +1268,11 @@ export default function App() {
       errorMessage: ''
     };
     const markSent = (mode: string): SendResult => {
+      if (!appStarted) {
+        return markBlocked('app_not_started');
+      }
       if (chatAutoPaused) {
         setChatAutoPaused(false);
-        setChatTickRestartKey((prev) => prev + 1);
       }
       const next = { ...attemptDebug, lastResult: 'sent' as const };
       setSendDebug(next);
@@ -914,9 +1381,11 @@ export default function App() {
         speechCooldownUntil.current = now + 10_000;
       }
 
-      const tagTarget = raw.match(/@([\w_]+)/)?.[1];
-      if (tagTarget) emitEvent('LOCK_START', { tagTarget, lockTarget: tagTarget });
-      emitEvent('USER_SENT', { tagTarget });
+      const tagTarget = raw.match(/@([\w_]+)/)?.[1] ?? null;
+      if (lockStateRef.current.isLocked && lockStateRef.current.target && tagTarget && tagTarget !== lockStateRef.current.target) {
+        return markBlocked('lock_target_mismatch');
+      }
+      tryTriggerStoryEvent(raw, 'user_input');
       const chats = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' }, Date.now());
       const wrongMessage = chats[0] ?? { id: crypto.randomUUID(), username: 'chat_mod', text: '這下壓力又上來了', language: 'zh', translation: '這下壓力又上來了' };
       dispatch({
@@ -940,7 +1409,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [chatAutoPaused, debugComposingOverride, emitEvent, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, updateChatDebug]);
+  }, [appStarted, chatAutoPaused, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {
@@ -960,6 +1429,70 @@ export default function App() {
     logSendDebug('click', { source: 'button' });
   }, [logSendDebug]);
 
+  const ensureDebugActiveUsers = useCallback(() => {
+    const active = collectActiveUsers(state.messages);
+    if (active.length > 0) return active;
+    DEBUG_SEED_USERS.forEach((username) => {
+      dispatchAudienceMessage({
+        id: crypto.randomUUID(),
+        type: 'chat',
+        username,
+        text: '在',
+        language: 'zh',
+        translation: '在'
+      });
+    });
+    return DEBUG_SEED_USERS;
+  }, [dispatchAudienceMessage, state.messages]);
+
+  const simulateReplyText = useCallback((key: StoryEventKey) => {
+    if (key === 'VOICE_CONFIRM') return '有';
+    if (key === 'TV_EVENT') return '沒有';
+    if (key === 'FEAR_CHALLENGE') return '我不怕';
+    return '我在';
+  }, []);
+
+  const triggerEventFromTester = useCallback((eventKey: StoryEventKey) => {
+    const activeUsers = ensureDebugActiveUsers();
+    if (activeUsers.length === 0) return;
+    const now = Date.now();
+    if (!debugLowerCooldown) {
+      const cooldown = eventCooldownsRef.current[eventKey] ?? 0;
+      if (cooldown > now) return;
+      eventCooldownsRef.current[eventKey] = now + EVENT_REGISTRY[eventKey].cooldownMs;
+    } else {
+      eventCooldownsRef.current[eventKey] = now + 5_000;
+    }
+    const started = startEvent(eventKey, { source: 'debug_tester' });
+    if (!started) return;
+    if (eventKey === 'LIGHT_GLITCH') {
+      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
+      triggerReactionBurst('light');
+      if (eventLifecycleRef.current) {
+        eventLifecycleRef.current.state = 'done';
+        eventLifecycleRef.current.topic = 'light';
+      }
+      return;
+    }
+    pendingReplyEventRef.current = { key: eventKey, target: started.target || activeUsers[0], eventId: started.eventId, expiresAt: now + 20_000 };
+    if (!simulatePlayerReply) return;
+    const delay = randomInt(800, 1500);
+    window.setTimeout(() => {
+      if (!pendingReplyEventRef.current || pendingReplyEventRef.current.eventId !== started.eventId) return;
+      const target = pendingReplyEventRef.current.target;
+      setReplyTarget(target);
+      setInput(`@${target} ${simulateReplyText(eventKey)}`);
+      void submitChat(`@${target} ${simulateReplyText(eventKey)}`, 'debug_simulate');
+    }, delay);
+  }, [debugLowerCooldown, ensureDebugActiveUsers, simulatePlayerReply, simulateReplyText, startEvent, submitChat, triggerReactionBurst]);
+
+  const forceTagLock = useCallback(() => {
+    const activeUsers = collectActiveUsers(state.messages);
+    const target = activeUsers[0] ?? null;
+    if (!target) return;
+    lockStateRef.current = { isLocked: true, target, startedAt: Date.now() };
+  }, [state.messages]);
+
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
@@ -973,18 +1506,48 @@ export default function App() {
       <main className="app-root app-layout">
         <header ref={headerRef} className="app-header top-dock">
           <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
+          {isDebugRoute && <a className="debug-route-link" href="/">Back</a>}
         </header>
-        <section ref={videoRef} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
+        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
           {!hasFatalInitError ? (
             <SceneView
               targetConsonant={state.currentConsonant.letter}
               curse={state.curse}
               anchor={state.currentAnchor}
               isDesktopLayout={isDesktopLayout}
+              appStarted={appStarted}
             />
           ) : (
             <div className="asset-warning scene-placeholder">
               初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
+            </div>
+          )}
+          {!appStarted && (
+            <div className="startup-overlay" role="dialog" aria-modal="true" aria-label="Enter your name">
+              <div className="startup-card">
+                <h2>Enter your name</h2>
+                <input
+                  value={startNameInput}
+                  onChange={(event) => setStartNameInput(event.target.value)}
+                  placeholder="username"
+                  maxLength={24}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = startNameInput.trim();
+                    if (!name) return;
+                    setActiveUser(name);
+                    setAppStarted(true);
+                    setChatAutoPaused(false);
+                    window.setTimeout(() => {
+                      videoRef.current?.focus();
+                    }, 0);
+                  }}
+                >
+                  Confirm
+                </button>
+              </div>
             </div>
           )}
         </section>
@@ -1015,6 +1578,26 @@ export default function App() {
             onSendButtonClick={handleSendButtonClick}
           />
         </section>
+        {isDebugRoute && debugEnabled && (
+          <aside className="debug-route-panel">
+            <h3>Debug Snapshot</h3>
+            <div className="debug-route-controls">
+              <button type="button" onClick={forceTagLock}>Force Tag Lock</button>
+              <label><input type="checkbox" checked={simulatePlayerReply} onChange={(event) => setSimulatePlayerReply(event.target.checked)} />simulatePlayerReply</label>
+              <label><input type="checkbox" checked={debugLowerCooldown} onChange={(event) => setDebugLowerCooldown(event.target.checked)} />lowerCooldown(debug only)</label>
+              <button type="button" onClick={() => triggerEventFromTester('VOICE_CONFIRM')}>Trigger VOICE_CONFIRM</button>
+              <button type="button" onClick={() => triggerEventFromTester('GHOST_PING')}>Trigger GHOST_PING</button>
+              <button type="button" onClick={() => triggerEventFromTester('TV_EVENT')}>Trigger TV_EVENT</button>
+              <button type="button" onClick={() => triggerEventFromTester('NAME_CALL')}>Trigger NAME_CALL</button>
+              <button type="button" onClick={() => triggerEventFromTester('VIEWER_SPIKE')}>Trigger VIEWER_SPIKE</button>
+              <button type="button" onClick={() => triggerEventFromTester('LIGHT_GLITCH')}>Trigger LIGHT_GLITCH</button>
+              <button type="button" onClick={() => triggerEventFromTester('FEAR_CHALLENGE')}>Trigger FEAR_CHALLENGE</button>
+              <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_RESCHEDULE_JUMP' })}>Reschedule</button>
+              <button type="button" onClick={() => requestSceneAction({ type: 'DEBUG_FORCE_JUMP_NOW' })}>Force Jump Now</button>
+            </div>
+            <pre>{JSON.stringify(window.__CHAT_DEBUG__ ?? {}, null, 2)}</pre>
+          </aside>
+        )}
         {!isDesktopLayout && debugEnabled && (
           <aside className="mobile-layout-debug" data-tick={layoutMetricsTick}>
             <div>visualViewport.height: {mobileViewportHeight ? Math.round(mobileViewportHeight) : 'n/a'}</div>

@@ -79,7 +79,7 @@ npm run dev
   - crossfade 結束後，舊的 current video 會 `pause()` 並維持靜音/零音量，避免殘留聲音。
 - 獨立 audio 僅保留三套：
   - 常駐：`fan_loop`
-  - 排程觸發：`footsteps`、`ghost_female`
+  - 事件觸發：`footsteps`、`ghost_female`
 - 已移除 per-video ambient mapping 舊邏輯，避免「影片音軌 + per-video ambient」並存導致錯誤判讀。
 - Debug 排查（`?debug=1`）：
   - overlay 會顯示 activeKey、兩支 video 的 `paused/muted/volume`。
@@ -246,6 +246,12 @@ npm run dev
   - 僅 active 可出聲。
   - inactive 一律 `muted=true + volume=0 + pause()`。
   - 主頁與 debug harness 必須共用同一個 `playerCore`，避免雙軌邏輯並存。
+
+## Netlify legacy token 清理（chatTickRestartKey）
+
+- `src/app/App.tsx` 已完整移除 legacy `chatTickRestartKey`（含 state/setter/props/key 殘留）。
+- 聊天室節奏/重啟不再透過 React `key` 強制 remount；改由既有聊天引擎事件流維持：`ChatEngine.emit()`、`ChatEngine.tick()`、`ChatEngine.syncFromMessages()`。
+- 送出訊息時若自動暫停中，會走既有 `setChatAutoPaused(false)` 自動恢復流程，作為 resume 機制。
 
 ## 聊天室送出穩定性
 
@@ -608,6 +614,20 @@ npm run dev
   - cooldown 若超過預期 3 倍視為 stale，會自動 reset 並記錄 debug。
   - 事件載入失敗採 backoff（5~12 秒）重排，不阻塞整體 pipeline。
 
+## chat_auto_paused 與事件排程邊界
+
+- `chat_auto_paused` 只允許影響聊天室自動訊息 pacing（`chatEngine.tick` 與強制 base message）。
+- `chat_auto_paused` 不得阻擋事件 scheduler、影片切換 scheduler、或音效播放（含 `fan_loop` 連續播放）。
+- `event.scheduler.blockedReason` 與 `event.blocking.schedulerBlockedReason` 僅允許反映事件層互斥（例如 `app_not_started`、`lock_active`），不再出現 `chat_auto_paused`。
+
+### Debug 指標（新增/強化）
+
+- `event.registry.count`
+- `event.registry.keys`
+- `chat.activeUsers.count`
+- `chat.activeUsers.nameSample`（最多 6 位）
+- `chat.autoPaused`
+
 ## Anti-Overanalysis Lint
 
 - 禁止句型：
@@ -627,3 +647,176 @@ npm run dev
     - `chat.lint.lastRejectedReason`（`timecode_phrase` / `technical_term`）
     - `chat.lint.rerollCount`
   - 當句子被擋下並重抽時，上述欄位會更新，可直接確認 lint 正在工作。
+
+## 事件：全部強制 tag（2026-02）
+
+- 定義：事件必須以 `@activeUser` 開場（`starterLine` + `requiresTag: true`），不符合會直接中止事件。
+- 事件啟動 SSOT：`startEvent(eventKey, ctx)` 固定流程：
+  1. 先生成 opener 並套用 `starterLine`
+  2. 驗證 opener 必須以 `@activeUser` 開頭（runtime assert）
+  3. starter line 送出成功後才進入 `active`
+  4. 才允許排程後續 SFX/影片切換/反應訊息
+- 若 starter line 送出階段被阻擋（例如 `chat_auto_paused` / `tagLockActive` / `app_not_started`）：
+  - 事件直接標記 `aborted`
+  - 禁止該事件的 SFX 與影片切換
+  - `debug=1` 可看到 `event.lastEvent.abortedReason`
+- `ghost_female` / `footsteps` 已改為完全事件驅動，且 reason 強制使用 `event:${eventId}`。
+- `debug=1` 驗證重點：
+  - `event.lastEvent.key/eventId/state`
+  - `event.lastEvent.starterTagSent`
+  - `event.lastEvent.abortedReason`
+  - `event.lastGhostSfxReason`（顯示 `eventKey:*`，不可為 timer）
+  - `chat.activeUsers.count/nameSample`
+  - `chat.autoPaused/reason`
+
+### 通盤檢查結果（PASS/FAIL）
+
+- PASS：播放器（build + scene/sfx 事件流程編譯通過）。
+- PASS：音效（`ghost_female`/`footsteps` 只由事件 reason 觸發）。
+- PASS：聊天室（事件 opener 強制 tag activeUser）。
+- PASS：桌機版面（layout 邏輯未改、編譯通過）。
+- PASS：Debug 面板（新增事件生命週期欄位與 autoPaused reason）。
+- FAIL（環境限制）：手機實機鍵盤行為（送出後收鍵盤/捲底/輸入欄可視）無法在此 CI 容器做真機驗證。
+
+## Ghost 事件化更新（2026-02）
+
+- 已完全移除 `ghost_female` 固定排程，鬼聲僅能由事件流程觸發。
+- 事件清單：
+  1. 聲音確認（玩家回「有」後 2 秒，鬼聲 0→1 漸強 3 秒）
+  2. 鬼偽裝 tag「你還在嗎」（回覆後 3 秒鬼聲，並追問）
+  3. 電視事件（玩家回「沒有」後切 loop2，並可選短鬼聲）
+  4. 名字被叫（回覆後短鬼聲）
+  5. 觀看人數異常（回覆後 footsteps）
+  6. 燈怪怪（立即切 loop/loop2）
+  7. 你怕嗎（玩家回「不怕」後觸發 footsteps 或 ghost）
+- 音效互斥/冷卻：
+  - `ghost_female >= 180s`
+  - `footsteps >= 120s`
+  - `low_rumble >= 120s`（保留在同一互斥冷卻規則）
+  - `fan_loop` 常駐且不受互斥影響
+- `playSfx(key, options)` 統一入口支援 `delayMs / startVolume / endVolume / rampSec`。
+- `debug=1` 驗證：
+  - 觀察 `event.lastGhostSfxReason`，必須為事件 key（如 `eventKey:VOICE_CONFIRM`）
+  - 觀察 `event.violation`，若非事件來源觸發鬼聲會顯示 violation
+  - 觀察 `event.lock` 與 `event.sfxCooldowns` 以驗證鎖定與冷卻
+
+## 事件語句內容池與防重複（2026-02）
+
+- 本次僅調整「語句內容層」，未修改節奏、頻率、使用者名稱邏輯、reactionBurst 節奏與標點風格。
+- 已整合事件語句池（opener / followUp）：
+  - 聲音確認
+  - 電視事件
+  - 燈怪怪
+  - 你怕嗎
+  - 名字被叫
+  - 人數異常
+- 既有舊硬編碼事件句已改為統一從內容池抽取，避免新舊邏輯並存。
+
+### ReactionBurst 內容池
+
+- `ghost` 反應池已擴充至 15 條。
+- `footsteps` 反應池已擴充至 12 條。
+- `light` 反應池已擴充至 10 條（沿用 `SCENE_FLICKER_REACT` 類型，不新增語氣系統）。
+
+### 防重複規則（內容層）
+
+- 同一事件最近 5 次不可重複同一句。
+- 全域最近 10 句不可重複。
+- 若抽到重複會重抽。
+- 若池不足則回退使用 shuffle 後首條，避免事件中斷。
+- `debug=1` 新增可觀察欄位：
+  - `event.lastContentId`
+  - `event.contentRepeatBlocked`
+
+### 通盤檢查結果（PASS/FAIL）
+
+- PASS：`npm run build`（TypeScript 編譯 + Vite 打包通過）。
+- PASS：事件觸發主流程仍維持原邏輯（僅改語句來源）。
+- PASS：reactionBurst 觸發時機與排程未改，只替換反應文字池。
+
+## Debug 面板欄位維護規則
+
+- 若某個問題/欄位連續 3 次 PR 未提及 → 從 debug 移除。
+- 若之後同問題再次出現 → 重新加回欄位。
+
+### 目前追蹤中的 debug 問題/欄位
+
+- `events_not_firing`：追蹤 `event.registry` / `event.candidates` / `chat.activeUsers` 與推論區塊。
+- `chat_auto_paused`：追蹤 `ui.send.lastResult` / `ui.send.blockedReason`。
+
+## Debug SSOT（單一來源）
+
+- 事件與聊天室 debug 統一由 `window.__CHAT_DEBUG__` 組裝輸出。
+- 事件排程快照在 `App.tsx` 週期性更新，欄位集中於 `event.*`。
+- 聊天快照由 `ChatEngine.getDebugState()` 提供，再回填到 `chat.*`。
+- `/debug` 頁（`/debug?debug=1`）顯示完整 snapshot 與快速推論（例如 `NO_CANDIDATES` / `INSUFFICIENT_ACTIVE_USERS` / `SCHEDULER_NOT_TICKING`）。
+
+## 事件必 tag 與事件台詞庫（2026-02）
+
+- 事件啟動 SSOT 已整合為 `src/core/events/*`：
+  - `eventRegistry.ts`：事件定義與挑選 key
+  - `eventTypes.ts`：事件型別
+  - `eventRunner.ts`：生命週期（tag -> active -> done/abort）
+  - `eventDialogs.ts`：事件台詞（opener/followUp/closer）
+  - `eventReactions.ts`：reaction topics（ghost/footsteps/light）
+  - `dedupe.ts`：短期防重複抽句
+- 所有事件都必須先送出 starter tag（`starterTagSent=true`）才允許進入後續流程。
+- 若 starter tag 送出失敗（例如 `chat_auto_paused` / `locked_target_only` / `rate_limited` / `empty`），事件會直接 `abort`，且不會觸發 SFX、影片切換、reactionBurst。
+
+### 台詞庫結構
+
+- 每個事件固定：
+  - `opener`: 8 句（全部 `@${activeUser}` 開頭）
+  - `followUp`: 6 句
+  - `closer`: 4 句（目前 FEAR_CHALLENGE 使用）
+- 防重複規則：
+  - 同一事件 opener：5 次內不重複
+  - 同一 topic reactions：8 次內不重複
+
+### debug=1 驗證「不會再有鬼聲無 tag」
+
+- 觀察 `event.lastEvent.starterTagSent`：
+  - `true` 才允許事件後續音效/影片行為
+  - `false` 代表事件已 abort，必須同時看到 `event.lastEvent.abortedReason`
+- 觀察 `event.lastEvent.lineIds` 與 `event.lastEvent.openerLineId/followUpLineId`，確認事件句子與流程對齊。
+- 觀察 `chat.activeUsers.count` + `chat.activeUsers.nameSample`，確認當前可 tag 對象。
+- 觀察 `ui.send.lastResult` + `ui.send.blockedReason`，定位 starter tag 被阻擋原因。
+
+### Debug 三次 PR 未提及就移除（追蹤清單更新）
+
+- `events_not_firing`：追蹤 `event.registry` / `event.candidates` / `event.lastEvent`。
+- `chat_auto_paused`：追蹤 `ui.send.lastResult` / `ui.send.blockedReason`。
+- `event_tag_abort_chain`：追蹤 `event.lastEvent.starterTagSent` / `event.lastEvent.abortedReason` / `event.lastEvent.lineIds`。
+
+## DebugOn Event Tester（2026-02）
+
+- 入口：移除主畫面 `Open Debug` 按鈕，改為直接使用網址進入：`/debug?debug=1`。
+- DebugOn 新增 **Event Tester**，包含 7 顆事件按鈕：
+  - Trigger VOICE_CONFIRM
+  - Trigger GHOST_PING
+  - Trigger TV_EVENT
+  - Trigger NAME_CALL
+  - Trigger VIEWER_SPIKE
+  - Trigger LIGHT_GLITCH
+  - Trigger FEAR_CHALLENGE
+- 每顆按鈕都走同一套 production 入口 `startEvent(eventKey, ctx)`，不繞過 tag/lock/gating。
+- 可選項：
+  - `simulatePlayerReply`（預設 on）：會在 800~1500ms 內以玩家流程送出對應回覆。
+  - `lowerCooldown(debug only)`（預設 off）：僅降低冷卻，不跳過 lock/tag/gating。
+- Debug 顯示補充：
+  - `event.lastEvent.waitingForReply`
+  - `event.lastReactions.count`
+  - `event.lastReactions.lastReactionActors`
+  - `violation=reaction_actor_system=true`（若反應誤用 system）
+
+## System message 使用邊界（SSOT）
+
+- `system` 僅保留給：Loading / 初始化 / 錯誤提示。
+- reactions / ambient / idle / event burst 一律視為觀眾訊息，必須使用 activeUsers（不足時由歷史使用者池補足），不得使用 `system`。
+
+## Reactions/ambient actor 規則
+
+- 事件 burst 視窗內每句都重新抽 actor。
+- 禁止同 actor 連續出現（no back-to-back）。
+- 最近 5 句內同 actor 最多 2 次。
+- 同句 8 次內不可重複；重複時最多 reroll 5 次，並在 debug 記錄 duplicate reroll。

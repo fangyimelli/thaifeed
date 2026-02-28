@@ -6,8 +6,19 @@ export type SceneEventPayload =
   | { type: 'SFX_START'; sfxKey: SfxKey; startedAt: number };
 
 export type SceneRequestPayload =
-  | { type: 'REQUEST_SFX'; sfxKey: SfxKey; reason: string; delayMs?: number }
-  | { type: 'REQUEST_SCENE_SWITCH'; sceneKey: OldhouseLoopKey; reason: string; delayMs?: number };
+  | {
+    type: 'REQUEST_SFX';
+    sfxKey: SfxKey;
+    reason: string;
+    source?: 'event' | 'system' | 'unknown';
+    delayMs?: number;
+    startVolume?: number;
+    endVolume?: number;
+    rampSec?: number;
+  }
+  | { type: 'REQUEST_SCENE_SWITCH'; sceneKey: OldhouseLoopKey; reason: string; delayMs?: number }
+  | { type: 'DEBUG_FORCE_JUMP_NOW' }
+  | { type: 'DEBUG_RESCHEDULE_JUMP' };
 
 const sceneEventTarget = new EventTarget();
 
