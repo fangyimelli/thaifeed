@@ -25,7 +25,7 @@ type Props = {
   onSendButtonClick?: () => void;
   lockTarget?: string | null;
   isLocked?: boolean;
-  lockReason?: string;
+  replyingToMessageId?: string | null;
   activeUserInitialHandle: string;
   autoScrollFrozen: boolean;
 };
@@ -55,7 +55,7 @@ export default function ChatPanel({
   onSendButtonClick,
   lockTarget,
   isLocked,
-  lockReason,
+  replyingToMessageId,
   activeUserInitialHandle,
   autoScrollFrozen
 }: Props) {
@@ -79,6 +79,21 @@ export default function ChatPanel({
     text: sanitizeMentions(message.text, activeSet),
     translation: message.translation ? sanitizeMentions(message.translation, activeSet) : message.translation
   }));
+  const originalMessage = replyingToMessageId
+    ? sanitizedMessages.find((message) => message.id === replyingToMessageId)
+    : null;
+
+  const truncateReplyText = (text: string, limit: number) => {
+    const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
+    if (!singleLine) return '';
+    const intlWithSegmenter = Intl as typeof Intl & { Segmenter?: new (locale: string, options: { granularity: 'grapheme' }) => { segment: (input: string) => Iterable<{ segment: string }> } };
+    const segmented = typeof Intl !== 'undefined' && intlWithSegmenter.Segmenter
+      ? Array.from(new intlWithSegmenter.Segmenter('zh', { granularity: 'grapheme' }).segment(singleLine), (segment) => segment.segment)
+      : Array.from(singleLine);
+    if (segmented.length <= limit) return singleLine;
+    return `${segmented.slice(0, limit).join('')}…`;
+  };
+  const replyPreviewText = originalMessage ? truncateReplyText(originalMessage.text, 40) : '（原始訊息已不存在）';
 
   const logDebugState = (reason: string) => {
     if (!debugEnabled) return;
@@ -268,9 +283,10 @@ export default function ChatPanel({
         </button>
       )}
 
-      {isLocked && (
-        <div className="chat-lock-banner" role="status" aria-live="polite">
-          你只能回覆 @{lockTarget ?? '—'}（{lockReason ?? '-' }）
+      {isLocked && lockTarget && (
+        <div className="replyPreviewBox" role="status" aria-live="polite">
+          <div className="replyPreviewHeader">↳ @{lockTarget}</div>
+          <div className="replyPreviewText">「{replyPreviewText}」</div>
         </div>
       )}
 
