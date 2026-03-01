@@ -637,16 +637,11 @@ export default function App() {
     return { line: lore.fragment, lineId: picked.id };
   }, [markEventTopicBoost, state.curse, updateEventDebug]);
 
-  const dispatchEventLine = useCallback((
-    line: string,
-    target: string,
-    source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick',
-    actor: string = target
-  ): EventSendResult => {
+  const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick'): EventSendResult => {
     const now = Date.now();
     const activeUserHandle = activeUserInitialHandleRef.current;
     const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\\s|$)`, 'u').test(line);
-    if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && actor !== eventExclusiveStateRef.current.currentLockOwner) {
+    if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && actorHandle !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
       updateEventDebug({
@@ -662,18 +657,18 @@ export default function App() {
     if (!appStarted) return { ok: false, blockedReason: 'app_not_started' };
     if (source === 'scheduler_tick' && chatAutoPaused) return { ok: false, blockedReason: 'chat_auto_paused' };
     if (sendCooldownUntil.current > now) return { ok: false, blockedReason: 'rate_limited' };
-    if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== target) {
+    if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== actorHandle) {
       return { ok: false, blockedReason: 'locked_target_only' };
     }
 
     dispatchAudienceMessage({
       id: crypto.randomUUID(),
-      username: actor,
+      username: actorHandle,
       type: 'chat',
       text: line,
       language: 'zh',
       translation: line,
-      tagTarget: target
+      tagTarget: actorHandle
     });
     return { ok: true };
   }, [appStarted, chatAutoPaused, dispatchAudienceMessage, updateEventDebug]);
@@ -841,7 +836,7 @@ export default function App() {
     const preEffectAt = Date.now();
     preEffectStateRef.current = { triggered: true, at: preEffectAt, sfxKey: preEffect.sfxKey, videoKey: preEffect.videoKey };
 
-    const sendResult = dispatchEventLine(opener.text, activeUserForTag, ctx.source, questionActor);
+    const sendResult = dispatchEventLine(opener.text, questionActor, ctx.source);
     if (!sendResult.ok) {
       const shortCooldownMs = 15_000;
       eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
@@ -971,7 +966,7 @@ export default function App() {
       }
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
 
-    return { eventId: record.eventId, target: activeUserForTag };
+    return { eventId: record.eventId, target: questionActor };
   }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, freezeChatAutoscroll, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
@@ -1004,13 +999,13 @@ export default function App() {
       return false;
     }
     const eventActiveUsers = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
-    let questionActor = pickQuestionActor(eventActiveUsers, 'mod_live');
-    if (questionActor === taggedUser) {
+    let questionActor = qnaStateRef.current.lockTarget || eventExclusiveStateRef.current.currentLockOwner;
+    if (!questionActor || questionActor === taggedUser) {
       qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:lock_target_invalid:${Date.now()}`].slice(-40);
       const actorPool = eventActiveUsers.filter((name) => name !== taggedUser);
       questionActor = pickOne(actorPool.length > 0 ? actorPool : ['mod_live']);
+      setQnaQuestionActor(qnaStateRef.current, questionActor);
     }
-    setQnaQuestionActor(qnaStateRef.current, questionActor);
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     const optionLabels = asked.options.map((option) => option.label).join(' / ');

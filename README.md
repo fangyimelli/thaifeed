@@ -58,6 +58,22 @@ npm run build
 - reactions / idle / event / random chatter 等所有自動訊息 actor 只允許來自 `audienceUsers`。
 - 若抽 actor 時誤命中 `activeUser`，需阻擋並記錄 `actorPickBlockedReason = audience_includes_activeUser`，再重新抽取。
 
+
+
+## Event Exclusive Mode
+
+- 一次只允許一個 QNA 事件主導（`event.exclusive=true`）。
+- QNA active 期間，禁止其他 actor 同時 `@activeUser`，僅 `lock.lockTarget`（當前 lockOwner）可 tag 玩家。
+- QNA 未完成前不得啟動新事件；新事件會被 `event_exclusive_active` gate 擋下。
+- 若超過 timeout（目前 45 秒）玩家仍未回覆，當前事件標記 abandoned，解除 lock，才允許下一事件。
+- 玩家回覆若開頭 `@` 指向非 lockTarget，系統會自動改寫為 `@lockTarget`（避免回錯人）。
+- Debug 面板必看欄位：
+  - `event.exclusive`
+  - `event.currentEventId`
+  - `lock.lockOwner` / `lock.lockElapsedSec`
+  - `event.foreignTagBlockedCount`
+  - `event.lastBlockedReason`
+
 ## Debug 入口
 
 - 主頁右上角 `Debug` 按鈕（overlay）
