@@ -895,3 +895,31 @@ npm run dev
 - Case 1（正常事件）：先看到 pre-effect，再於 0~1s 內送出 starter tag，且 `starterTagSent=true` 後才進後續流程。
 - Case 2（tag 失敗）：允許 pre-effect，但必須迅速回復 `loop3`，且禁止後續效果，Debug 顯示 `tag_send_failed_after_pre_effect`。
 - Case 3（阻擋條件）：必須在 pre-effect 前被擋下，且不得播放 pre-effect，Debug 顯示 blocked reason。
+
+## 事件流程/鎖定規則更新（本次）
+
+- Event Flow 固定為：**先做全部阻擋檢查**（`registry_missing / invalid_state / chat_auto_paused(auto only) / in_flight / active_users_lt_3 / no_active_user / cooldown_blocked`）→ 通過後才進 `pre-effect -> starter tag -> post-effect`。
+- `chat_auto_paused` 現在只阻擋 `source=scheduler_tick`（auto），不阻擋 debug tester / manual。
+- 若 `starter tag` 在 pre-effect 後送出失敗，會立即補救：切回 `loop3`、中止後續效果（run/followups/reactions/lock 二段）、`abortedReason=tag_send_failed_after_pre_effect`，並套用短冷卻（15s）。
+
+## Event Manifest（由 registry 自動生成）
+
+- `events/registry` 已補齊每個 event metadata：`preEffect / postEffect / cooldownMs / usesLock`。
+- 新增 `getEventManifest()`，Debug Overlay 直接顯示 manifest（可捲動，不跳頁）。
+
+## Sticky Tag Banner + Lock 強制回覆
+
+- ChatInput 上方新增半透明白底 sticky banner；當 `lock.isLocked && lockTarget` 成立時顯示「你只能回覆 @lockTarget」（含 `lastEvent.key / lockReason`）。
+- lock 期間送出訊息會強制轉成：`@lockTarget + 使用者輸入（移除所有前置 @mentions）`。
+- lock 期間只能回覆 lockTarget（防繞過）。
+- 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
+
+## activeUser immutable initial handle
+
+- 玩家第一次輸入名稱後，寫入 `activeUserInitialHandle`（immutable，只寫一次）。
+- 所有事件 starter tag 一律使用 `activeUserInitialHandle`。
+- Debug 顯示 `activeUser.handle(current)` 與 `activeUserInitialHandle(immutable)`。
+
+## Debug 規則延續
+
+- 若某問題連續 3 次 PR 未再提及，需自 Debug 面板移除；除非再次出現才可重新加入。
