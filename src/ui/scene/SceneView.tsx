@@ -208,6 +208,18 @@ declare global {
           nextMessageDueInSec?: number;
         };
         lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
+        audienceInvariant?: { removedActiveUser?: boolean; reason?: string };
+        blockedCounts?: { activeUserAutoSpeak?: number };
+        sendSourceWarning?: { at?: number; actor?: string; textPreview?: string };
+        lastBlockedSendAttempt?: {
+          actorId?: string;
+          actorHandle?: string;
+          source?: string;
+          sourceTag?: string;
+          textPreview?: string;
+          at?: number;
+          blockedReason?: string;
+        };
       };
       event?: {
         registry?: {
@@ -1735,6 +1747,10 @@ export default function SceneView({
           <div>chat.lint.lastRejectedText: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedText ?? '-'}</div>
           <div>chat.lint.lastRejectedReason: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedReason ?? '-'}</div>
           <div>chat.lint.rerollCount: {window.__CHAT_DEBUG__?.chat?.lint?.rerollCount ?? 0}</div>
+          <div>chat.audienceInvariant.removedActiveUser/reason: {String(window.__CHAT_DEBUG__?.chat?.audienceInvariant?.removedActiveUser ?? false)} / {window.__CHAT_DEBUG__?.chat?.audienceInvariant?.reason ?? '-'}</div>
+          <div>chat.blockedCounts.activeUserAutoSpeak: {window.__CHAT_DEBUG__?.chat?.blockedCounts?.activeUserAutoSpeak ?? 0}</div>
+          <div>chat.lastBlockedSendAttempt.actor/source: {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.actorHandle ?? '-'} / {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.source ?? '-'}</div>
+          <div>chat.lastBlockedSendAttempt.reason: {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.blockedReason ?? '-'}</div>
           <div>event.registry.count: {window.__CHAT_DEBUG__?.event?.registry?.count ?? 0}</div>
           <div>event.registry.keys: {(window.__CHAT_DEBUG__?.event?.registry?.keys ?? []).join(', ') || '-'}</div>
           <div>event.registry.enabled/disabled: {window.__CHAT_DEBUG__?.event?.registry?.enabledCount ?? 0} / {window.__CHAT_DEBUG__?.event?.registry?.disabledCount ?? 0}</div>
