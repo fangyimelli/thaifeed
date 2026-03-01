@@ -1,50 +1,61 @@
-# ThaiFeed（現況文件）
+# ThaiFeed 團隊維護手冊入口
 
-本文件依目前程式碼與資產狀態整理（Vite + React + TypeScript）。
+> 官方維護手冊以 `/docs` 為準。
 
-## 專案定位
+## 專案定位（短版）
 
-ThaiFeed 是一個**偽直播（Pseudo-live）**的互動 Demo，主題是**老屋沉浸式恐怖氛圍**，核心玩法是**泰文子音辨識（roguelike 式壓力循環）**。
+ThaiFeed 是以偽直播形式呈現的互動 Demo，核心是老屋恐怖氛圍與泰文子音互動循環；程式採模組分層與 SSOT 維護。
 
-## 本機啟動
+## Quick Start
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
-## 必要素材清單（程式檢查 SSOT，必須與 `public/` 相對路徑一致）
+## Required Assets（最短版）
 
-> 程式以相對路徑 `assets/...` 做檢查，部署時會自動套用 base path；請勿把素材路徑硬寫成 `/assets/...`。
+至少要有 **3 支影片 + 3 支音效**：
 
-### 必要影片（3 支）
+- 影片：
+  - `assets/scenes/oldhouse_room_loop.mp4`
+  - `assets/scenes/oldhouse_room_loop2.mp4`
+  - `assets/scenes/oldhouse_room_loop3.mp4`
+- 音效：
+  - `assets/sfx/fan_loop.wav`
+  - `assets/sfx/footsteps.wav`
+  - `assets/sfx/ghost_female.wav`
 
-- `assets/scenes/oldhouse_room_loop.mp4`
-- `assets/scenes/oldhouse_room_loop2.mp4`
-- `assets/scenes/oldhouse_room_loop3.mp4`
+請放在 `public/assets/...`；路徑一律使用相對路徑 `assets/...`，**禁止寫死 `/assets/...`**。
 
-### 必要音效（3 支）
+## Base path（部署路徑）
 
-- `assets/sfx/fan_loop.wav`
-- `assets/sfx/footsteps.wav`
-- `assets/sfx/ghost_female.wav`
+素材 URL 由統一 base path 機制解析，請勿在功能碼自行拼接絕對路徑。詳見：
 
-### 放置位置
+- [03｜Player System](./docs/03-player-system.md)
+- [02｜SSOT Map](./docs/02-ssot-map.md)
 
-- 開發時請放在 `public/assets/...`，例如：
-  - `public/assets/scenes/oldhouse_room_loop3.mp4`
-  - `public/assets/sfx/fan_loop.wav`
+## Maintenance Manual（/docs 索引）
 
-## Base path / 部署路徑說明
+- [00｜專案定位與維護哲學](./docs/00-philosophy.md)
+- [01｜架構總覽](./docs/01-architecture-overview.md)
+- [02｜SSOT Map](./docs/02-ssot-map.md)
+- [03｜Player System](./docs/03-player-system.md)
+- [04｜Audio System](./docs/04-audio-system.md)
+- [05｜Chat System](./docs/05-chat-system.md)
+- [06｜Event System](./docs/06-event-system.md)
+- [07｜Debug System](./docs/07-debug-system.md)
+- [08｜Mobile Layout](./docs/08-mobile-layout.md)
+- [09｜Troubleshooting](./docs/09-troubleshooting.md)
+- [10｜Change Log](./docs/10-change-log.md)
 
-專案已改成以單一來源 `ASSET_BASE_URL` 解析素材 URL，優先順序如下：
+## Debug 入口
 
-1. `<base href>`
-2. `import.meta.env.BASE_URL`（Vite）
-3. `document.baseURI`
-4. fallback `/`
+- 主頁右上角 `Debug` 按鈕（overlay）
+- Player 最小驗證頁：`/debug/player`
 
-所有素材 URL 都透過 `joinUrl(base, relativePath)` 組合，因此在以下環境可共用同一份程式：
+## 開發協作
 
 - localhost 根路徑
 - GitHub Pages 子路徑（例如 `/<repoName>/`）
