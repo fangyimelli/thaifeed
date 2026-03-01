@@ -1094,3 +1094,29 @@ npm run build
 - 新增 Debug-only 按鈕：`Force Show loop4 (3s)`
   - 可直接驗證播放器/資源是否可播 loop4
   - 3 秒後自動 request 回 loop3
+
+## ActiveUser 自動發言零容忍防線（本次更新）
+
+- 已統一訊息輸出入口為 `dispatchChatMessage(...)`（App 內唯一寫入聊天訊息入口）。
+- 全域 Send Guard：
+  - 若 `actor === activeUser` 且 `source !== "player_input"`，直接阻擋（不寫入訊息）。
+  - 阻擋原因固定為 `activeUser_auto_speak_blocked`。
+- Source 標記標準化：
+  - `player_input`
+  - `audience_idle`
+  - `audience_reaction`
+  - `event_dialogue`
+  - `qna_question`
+  - `system_ui`
+  - `debug_tester`
+  - `unknown`（仍受 guard 約束）
+- Actor pool 強制隔離：
+  - `activeUser` 與 `audienceUsers` 分離。
+  - 若偵測 audience 包含 activeUser，會在分離階段移除，並回報 `audience_includes_activeUser_removed`。
+- Debug 可觀測欄位新增：
+  - `chat.lastBlockedSendAttempt`
+  - `chat.blockedCounts.activeUserAutoSpeak`
+  - `chat.audienceInvariant.removedActiveUser/reason`
+- Debug Tester 防呆：
+  - Simulate Reply 走 `player_input`（視為玩家真實輸入模擬）。
+  - Event Tester 事件台詞來源會標記 `debug_tester`，但 actor 仍須經 guard 檢查，無法冒用 activeUser 自動發言。

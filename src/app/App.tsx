@@ -62,6 +62,16 @@ type EventStartBlockedReason =
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
+type ChatSendSource =
+  | 'player_input'
+  | 'audience_idle'
+  | 'audience_reaction'
+  | 'event_dialogue'
+  | 'qna_question'
+  | 'system_ui'
+  | 'debug_tester'
+  | 'unknown';
+
 export type SendResult = {
   ok: boolean;
   status: 'sent' | 'blocked' | 'error';
@@ -118,15 +128,18 @@ const EVENT_EXCLUSIVE_TIMEOUT_MS = 45_000;
 type ChatActorState = {
   activeUser: string;
   audienceUsers: string[];
+  removedActiveUserFromAudience: boolean;
 };
 
 function separateChatActorState(messages: ChatMessage[], activeUserHandle: string): ChatActorState {
   const normalizedActiveUser = normalizeHandle(activeUserHandle);
   const activeUsers = collectActiveUsers(messages);
+  const removedActiveUserFromAudience = Boolean(normalizedActiveUser) && activeUsers.includes(normalizedActiveUser);
   const audienceUsers = activeUsers.filter((name) => name && name !== 'system' && name !== normalizedActiveUser);
   return {
     activeUser: normalizedActiveUser,
-    audienceUsers
+    audienceUsers,
+    removedActiveUserFromAudience
   };
 }
 
@@ -335,6 +348,7 @@ export default function App() {
   const reactionRecentIdsRef = useRef<Record<EventTopic, string[]>>({ ghost: [], footsteps: [], light: [] });
   const reactionActorHistoryRef = useRef<string[]>([]);
   const reactionTextHistoryRef = useRef<string[]>([]);
+  const blockedActiveUserAutoSpeakCountRef = useRef(0);
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const eventRunnerStateRef = useRef<{ inFlight: boolean; currentEventId: string | null; pendingTimers: number[] }>({
     inFlight: false,
@@ -424,9 +438,56 @@ export default function App() {
     };
   }, [isDesktopLayout]);
 
-  const dispatchAudienceMessage = (message: ChatMessage) => {
+  const dispatchChatMessage = (
+    message: ChatMessage,
+    options?: { source?: ChatSendSource; sourceTag?: string }
+  ): { ok: true } | { ok: false; blockedReason: string } => {
+    const source = options?.source ?? 'unknown';
+    const sourceTag = options?.sourceTag ?? source;
+    const normalizedActiveUser = normalizeHandle(activeUserInitialHandleRef.current || '');
+    const actorHandle = normalizeHandle(message.username || '');
+    const isActiveUserActor = Boolean(normalizedActiveUser) && actorHandle === normalizedActiveUser;
+
+    if (isActiveUserActor && source !== 'player_input') {
+      blockedActiveUserAutoSpeakCountRef.current += 1;
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          lastBlockedSendAttempt: {
+            actorId: actorHandle || '-',
+            actorHandle: message.username || '-',
+            source,
+            sourceTag,
+            textPreview: truncateLintText(message.text || ''),
+            at: Date.now(),
+            blockedReason: 'activeUser_auto_speak_blocked'
+          },
+          blockedCounts: {
+            ...(window.__CHAT_DEBUG__?.chat?.blockedCounts ?? {}),
+            activeUserAutoSpeak: blockedActiveUserAutoSpeakCountRef.current
+          }
+        }
+      };
+      return { ok: false, blockedReason: 'activeUser_auto_speak_blocked' };
+    }
+
+    if (source === 'unknown') {
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          sendSourceWarning: {
+            at: Date.now(),
+            actor: actorHandle || '-',
+            textPreview: truncateLintText(message.text || '')
+          }
+        }
+      };
+    }
+
     const activeUserHandle = activeUserInitialHandleRef.current;
-    const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\\s|$)`, 'u').test(message.text);
+    const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\s|$)`, 'u').test(message.text);
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && message.username !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
@@ -437,8 +498,9 @@ export default function App() {
           lastBlockedReason: lastBlockedReasonRef.current
         }
       });
-      return;
+      return { ok: false, blockedReason: 'foreign_tag_during_exclusive' };
     }
+
     const linted = lintOutgoingMessage(message);
     if (linted.rejectedReason !== '-') {
       window.__CHAT_DEBUG__ = {
@@ -454,7 +516,9 @@ export default function App() {
       };
     }
     lastChatMessageAtRef.current = Date.now();
-    dispatch({ type: 'AUDIENCE_MESSAGE', payload: linted.message });
+    const actionType = source === 'player_input' ? 'PLAYER_MESSAGE' : 'AUDIENCE_MESSAGE';
+    dispatch({ type: actionType, payload: linted.message });
+    return { ok: true };
   };
 
   const syncChatEngineDebug = useCallback(() => {
@@ -470,6 +534,8 @@ export default function App() {
         nextMessageDueInSec?: number;
       };
     };
+    const actorState = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+    const invariantViolated = actorState.removedActiveUserFromAudience;
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
       chat: {
@@ -484,7 +550,15 @@ export default function App() {
           namesSample: (engineDebug.activeUsers ?? []).slice(0, 6)
         },
         audience: {
-          count: separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers.length
+          count: actorState.audienceUsers.length
+        },
+        audienceInvariant: {
+          removedActiveUser: invariantViolated,
+          reason: invariantViolated ? 'audience_includes_activeUser_removed' : '-'
+        },
+        blockedCounts: {
+          ...(window.__CHAT_DEBUG__?.chat?.blockedCounts ?? {}),
+          activeUserAutoSpeak: blockedActiveUserAutoSpeakCountRef.current
         },
         activeUser: {
           id: normalizeHandle(activeUserInitialHandleRef.current || '-')
@@ -506,7 +580,7 @@ export default function App() {
 
   const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
     const chats = chatEngineRef.current.emit(event, Date.now());
-    chats.forEach(dispatchAudienceMessage);
+    chats.forEach((message) => dispatchChatMessage(message, { source: 'audience_idle' }));
     syncChatEngineDebug();
   };
 
@@ -570,17 +644,17 @@ export default function App() {
             rejectedReason = 'duplicate';
           }
           reactionTextHistoryRef.current = [...reactionTextHistoryRef.current, pickedLine.text].slice(-12);
-          const pickedActor = pickAudienceActor({ activeUser: chatActors.activeUser, audienceUsers: actorPool }, reactionActorHistoryRef.current);
+          const pickedActor = pickAudienceActor({ activeUser: chatActors.activeUser, audienceUsers: actorPool, removedActiveUserFromAudience: chatActors.removedActiveUserFromAudience }, reactionActorHistoryRef.current);
           const actor = pickedActor.actor;
           reactionActorHistoryRef.current = [...reactionActorHistoryRef.current, actor].slice(-10);
-          dispatchAudienceMessage({
+          dispatchChatMessage({
             id: crypto.randomUUID(),
             username: actor,
             type: 'chat',
             text: pickedLine.text,
             language: 'zh',
             translation: pickedLine.text
-          });
+          }, { source: 'audience_reaction' });
           window.__CHAT_DEBUG__ = {
             ...(window.__CHAT_DEBUG__ ?? {}),
             chat: {
@@ -610,7 +684,7 @@ export default function App() {
       },
       violation: reactionActorHistoryRef.current.some((actor) => actor === 'system') ? 'reaction_actor_system=true' : window.__CHAT_DEBUG__?.violation
     });
-  }, [dispatchAudienceMessage, markEventTopicBoost, state.messages, updateEventDebug]);
+  }, [dispatchChatMessage, markEventTopicBoost, state.messages, updateEventDebug]);
 
   const buildEventLine = useCallback((eventKey: StoryEventKey, phase: EventLinePhase, target: string): { line: string; lineId: string } => {
     markEventTopicBoost(phase === 'opener' ? 12_000 : 8_000);
@@ -638,7 +712,7 @@ export default function App() {
     return { line: lore.fragment, lineId: picked.id };
   }, [markEventTopicBoost, state.curse, updateEventDebug]);
 
-  const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick'): EventSendResult => {
+  const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick', sendSource?: ChatSendSource): EventSendResult => {
     const now = Date.now();
     const activeUserHandle = activeUserInitialHandleRef.current;
     const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\\s|$)`, 'u').test(line);
@@ -663,7 +737,8 @@ export default function App() {
     }
 
     const messageId = crypto.randomUUID();
-    dispatchAudienceMessage({
+    const resolvedSendSource: ChatSendSource = sendSource ?? (source === 'debug_tester' ? 'debug_tester' : 'event_dialogue');
+    const sent = dispatchChatMessage({
       id: messageId,
       username: actorHandle,
       type: 'chat',
@@ -671,9 +746,10 @@ export default function App() {
       language: 'zh',
       translation: line,
       tagTarget: actorHandle
-    });
+    }, { source: resolvedSendSource, sourceTag: `event:${source}` });
+    if (!sent.ok) return { ok: false, blockedReason: sent.blockedReason };
     return { ok: true, lineId: messageId };
-  }, [appStarted, chatAutoPaused, dispatchAudienceMessage, updateEventDebug]);
+  }, [appStarted, chatAutoPaused, dispatchChatMessage, updateEventDebug]);
 
   const freezeChatAutoscroll = useCallback((reason: string) => {
     setChatAutoScrollFrozen(true);
@@ -1016,7 +1092,7 @@ export default function App() {
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
-    const sent = dispatchEventLine(line, questionActor, 'scheduler_tick');
+    const sent = dispatchEventLine(line, questionActor, 'scheduler_tick', 'qna_question');
     if (!sent.ok) return false;
     lockReplyingToMessageIdRef.current = sent.lineId ?? null;
     freezeChatAutoscroll('tagged_question');
@@ -1045,7 +1121,7 @@ export default function App() {
         const prompt = getRetryPrompt(qnaStateRef.current);
         const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
         if (taggedUser) {
-          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', 'qna_question');
         }
         sendQnaQuestion();
         return;
@@ -1058,7 +1134,7 @@ export default function App() {
         const prompt = getUnknownPrompt(qnaStateRef.current);
         const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
         if (taggedUser) {
-          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', 'qna_question');
         }
         sendQnaQuestion();
         return;
@@ -1316,7 +1392,7 @@ export default function App() {
 
     const dispatchTimedChats = (messages: ChatMessage[]) => {
       messages.forEach((message) => {
-        dispatchAudienceMessage(message);
+        dispatchChatMessage(message, { source: 'audience_idle' });
       });
     };
 
@@ -1330,14 +1406,14 @@ export default function App() {
           break;
         }
       }
-      dispatchAudienceMessage({
+      dispatchChatMessage({
         id: crypto.randomUUID(),
         username: pickOne(usernames),
         text: fallback,
         language: 'zh',
         translation: fallback,
         type: 'chat'
-      });
+      }, { source: 'audience_idle' });
     };
 
     const tick = () => {
@@ -1484,14 +1560,14 @@ export default function App() {
             const delayMs = i * randomInt(100, 200);
             const burstTimer = window.setTimeout(() => {
               const username = pickOne(usernames);
-              dispatchAudienceMessage({
+              dispatchChatMessage({
                 id: crypto.randomUUID(),
                 type: 'system',
                 subtype: 'join',
                 username: 'system',
                 text: `${username} 加入聊天室`,
                 language: 'zh'
-              });
+              }, { source: 'system_ui' });
             }, delayMs);
             burstTimers.push(burstTimer);
           }
@@ -1500,14 +1576,14 @@ export default function App() {
           const normalJoinBoost = randomInt(1, 3);
 
           setViewerCount((value) => Math.min(99_999, value + normalJoinBoost));
-          dispatchAudienceMessage({
+          dispatchChatMessage({
             id: crypto.randomUUID(),
             type: 'system',
             subtype: 'join',
             username: 'system',
             text: `${username} 加入聊天室`,
             language: 'zh'
-          });
+          }, { source: 'system_ui' });
         }
       }
 
@@ -1563,32 +1639,32 @@ export default function App() {
   useEffect(() => {
     if (loadingState !== 'RUNNING' || postedInitMessages.current) return;
     postedInitMessages.current = true;
-    dispatchAudienceMessage({
+    dispatchChatMessage({
       id: crypto.randomUUID(),
       type: 'system',
       username: 'system',
       text: '畫面已準備完成',
       language: 'zh'
-    });
-    dispatchAudienceMessage({
+    }, { source: 'system_ui' });
+    dispatchChatMessage({
       id: crypto.randomUUID(),
       type: 'system',
       username: 'system',
       text: '初始化完成',
       language: 'zh'
-    });
+    }, { source: 'system_ui' });
   }, [loadingState]);
 
   useEffect(() => {
     if (!isReady || !appStarted || !hasOptionalAssetWarning || postedOptionalAssetWarningMessage.current) return;
     postedOptionalAssetWarningMessage.current = true;
-    dispatchAudienceMessage({
+    dispatchChatMessage({
       id: crypto.randomUUID(),
       type: 'system',
       username: 'system',
       text: '部分非必要素材載入失敗，遊戲可正常進行。',
       language: 'zh'
-    });
+    }, { source: 'system_ui' });
   }, [appStarted, hasOptionalAssetWarning, isReady]);
 
 
@@ -1890,13 +1966,13 @@ export default function App() {
 
       if (!soundUnlocked.current) {
         soundUnlocked.current = true;
-        dispatchAudienceMessage({
+        dispatchChatMessage({
           id: crypto.randomUUID(),
           type: 'system',
           username: 'system',
           text: '聲音已啟用',
           language: 'zh'
-        });
+        }, { source: 'system_ui' });
       }
 
       const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
@@ -1904,7 +1980,10 @@ export default function App() {
       if (!activeUserInitialHandleRef.current) {
         return markBlocked('no_active_user');
       }
-      dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(outgoingText, activeUserInitialHandleRef.current) });
+      dispatchChatMessage(createPlayerMessage(outgoingText, activeUserInitialHandleRef.current), {
+        source: 'player_input',
+        sourceTag: source
+      });
 
       const handlePass = () => {
         markReview(playableConsonant.letter, 'pass', state.curse);
@@ -1936,7 +2015,7 @@ export default function App() {
       });
 
       if (vipReply) {
-        dispatchAudienceMessage(vipReply);
+        dispatchChatMessage(vipReply, { source: 'event_dialogue', sourceTag: 'vip_system' });
         nonVipMessagesSinceLastVip.current = 0;
       } else {
         nonVipMessagesSinceLastVip.current += 1;
@@ -2034,17 +2113,17 @@ export default function App() {
     const active = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
     if (active.length > 0) return active;
     DEBUG_SEED_USERS.forEach((username) => {
-      dispatchAudienceMessage({
+      dispatchChatMessage({
         id: crypto.randomUUID(),
         type: 'chat',
         username,
         text: '在',
         language: 'zh',
         translation: '在'
-      });
+      }, { source: 'debug_tester' });
     });
     return DEBUG_SEED_USERS;
-  }, [dispatchAudienceMessage, state.messages]);
+  }, [dispatchChatMessage, state.messages]);
 
   const simulateReplyText = useCallback((key: StoryEventKey) => {
     if (key === 'VOICE_CONFIRM') return '有';
@@ -2242,6 +2321,9 @@ export default function App() {
                 <div>chat.activeUser.id: {window.__CHAT_DEBUG__?.chat?.activeUser?.id ?? '-'}</div>
                 <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
                 <div>actorPickBlockedReason: {window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'}</div>
+                <div>chat.blockedCounts.activeUserAutoSpeak: {window.__CHAT_DEBUG__?.chat?.blockedCounts?.activeUserAutoSpeak ?? 0}</div>
+                <div>chat.lastBlockedSendAttempt.actor/source: {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.actorHandle ?? '-')} / {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.source ?? '-')}</div>
+                <div>chat.lastBlockedSendAttempt.reason: {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.blockedReason ?? '-'}</div>
                 <div>chat.autoScrollFrozen: {String(window.__CHAT_DEBUG__?.chat?.autoScrollFrozen ?? false)}</div>
                 <div>chat.autoScrollFrozenReason: {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenReason ?? '-'}</div>
                 <div>chat.autoScrollFrozenAt: {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenAt ?? 0}</div>
