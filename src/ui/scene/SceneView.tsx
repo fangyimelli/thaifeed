@@ -187,7 +187,11 @@ declare global {
         autoScrollFrozen?: boolean;
         autoScrollFrozenReason?: string;
         autoScrollFrozenAt?: number;
-        activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string };
+        activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string; renameDisabled?: boolean };
+        audience?: { count?: number };
+        activeUser?: { id?: string };
+        lastActorPicked?: { id?: string };
+        actorPickBlockedReason?: string;
         pacing?: {
           mode?: 'normal' | 'slightlyBusy' | 'tense' | 'quiet' | 'tag_slow' | 'slowed' | 'locked_slowed';
           nextModeInSec?: number;

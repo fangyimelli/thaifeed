@@ -50,6 +50,14 @@ npm run build
 - [09｜Troubleshooting](./docs/09-troubleshooting.md)
 - [10｜Change Log](./docs/10-change-log.md)
 
+
+## Actor Pool Separation
+
+- `activeUser`（玩家）只能被 tag，不可被自動發言流程抽中。
+- 觀眾池與玩家完全隔離：`state.chat.activeUser` 與 `state.chat.audienceUsers` 必須分離維護。
+- reactions / idle / event / random chatter 等所有自動訊息 actor 只允許來自 `audienceUsers`。
+- 若抽 actor 時誤命中 `activeUser`，需阻擋並記錄 `actorPickBlockedReason = audience_includes_activeUser`，再重新抽取。
+
 ## Debug 入口
 
 - 主頁右上角 `Debug` 按鈕（overlay）

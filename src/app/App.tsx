@@ -112,6 +112,32 @@ function pickQuestionActor(activeUsers: string[], fallbackActor: string): string
   return pickOne(actorPool);
 }
 
+type ChatActorState = {
+  activeUser: string;
+  audienceUsers: string[];
+};
+
+function separateChatActorState(messages: ChatMessage[], activeUserHandle: string): ChatActorState {
+  const normalizedActiveUser = normalizeHandle(activeUserHandle);
+  const activeUsers = collectActiveUsers(messages);
+  const audienceUsers = activeUsers.filter((name) => name && name !== 'system' && name !== normalizedActiveUser);
+  return {
+    activeUser: normalizedActiveUser,
+    audienceUsers
+  };
+}
+
+function pickAudienceActor(state: ChatActorState, recentActors: string[]): { actor: string; blockedReason: string | null } {
+  if (state.audienceUsers.length === 0) return { actor: 'ink31', blockedReason: 'audience_pool_empty' };
+  const picked = pickNonRepeatingActor(state.audienceUsers, recentActors);
+  if (state.activeUser && picked === state.activeUser) {
+    const repickedPool = state.audienceUsers.filter((name) => name !== state.activeUser);
+    if (repickedPool.length === 0) return { actor: 'ink31', blockedReason: 'audience_includes_activeUser' };
+    return { actor: pickNonRepeatingActor(repickedPool, recentActors), blockedReason: 'audience_includes_activeUser' };
+  }
+  return { actor: picked, blockedReason: null };
+}
+
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
@@ -432,6 +458,16 @@ export default function App() {
           count: engineDebug.activeUsersCount ?? engineDebug.activeUsers?.length ?? 0,
           namesSample: (engineDebug.activeUsers ?? []).slice(0, 6)
         },
+        audience: {
+          count: separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers.length
+        },
+        activeUser: {
+          id: normalizeHandle(activeUserInitialHandleRef.current || '-')
+        },
+        lastActorPicked: {
+          id: window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'
+        },
+        actorPickBlockedReason: window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-',
         pacing: {
           mode: engineDebug.pacing?.mode ?? 'normal',
           baseRate: engineDebug.pacing?.baseRate ?? 0,
@@ -441,7 +477,7 @@ export default function App() {
         }
       }
     };
-  }, []);
+  }, [state.messages]);
 
   const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
     const chats = chatEngineRef.current.emit(event, Date.now());
@@ -494,10 +530,10 @@ export default function App() {
       reactionBurstTimerRef.current = null;
       lines.forEach((line, index) => {
         window.setTimeout(() => {
-          const activePool = collectActiveUsers(state.messages);
-          const actorPool = activePool.length >= 3
-            ? activePool
-            : Array.from(new Set([...activePool, ...reactionActorHistoryRef.current, ...DEBUG_SEED_USERS]));
+          const chatActors = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+          const actorPool = chatActors.audienceUsers.length >= 3
+            ? chatActors.audienceUsers
+            : Array.from(new Set([...chatActors.audienceUsers, ...reactionActorHistoryRef.current, ...DEBUG_SEED_USERS]));
           let pickedLine = line;
           let rerollCount = 0;
           let rejectedReason = '-';
@@ -509,7 +545,8 @@ export default function App() {
             rejectedReason = 'duplicate';
           }
           reactionTextHistoryRef.current = [...reactionTextHistoryRef.current, pickedLine.text].slice(-12);
-          const actor = pickNonRepeatingActor(actorPool, reactionActorHistoryRef.current);
+          const pickedActor = pickAudienceActor({ activeUser: chatActors.activeUser, audienceUsers: actorPool }, reactionActorHistoryRef.current);
+          const actor = pickedActor.actor;
           reactionActorHistoryRef.current = [...reactionActorHistoryRef.current, actor].slice(-10);
           dispatchAudienceMessage({
             id: crypto.randomUUID(),
@@ -523,6 +560,8 @@ export default function App() {
             ...(window.__CHAT_DEBUG__ ?? {}),
             chat: {
               ...(window.__CHAT_DEBUG__?.chat ?? {}),
+              lastActorPicked: { id: actor },
+              actorPickBlockedReason: pickedActor.blockedReason ?? '-',
               lint: {
                 ...(window.__CHAT_DEBUG__?.chat?.lint ?? {}),
                 rerollCount,
@@ -637,14 +676,14 @@ export default function App() {
 
   const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester'; ignoreCooldowns?: boolean }) => {
     const now = Date.now();
-    const activeUsers = collectActiveUsers(state.messages);
+    const chatActors = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+    const activeUsers = chatActors.audienceUsers;
     const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
     const shouldIgnoreCooldown = Boolean(debugEnabled && ctx.source === 'debug_tester' && ctx.ignoreCooldowns);
     const eventDef = EVENT_REGISTRY[eventKey];
     const vipUsers = new Set(state.messages.filter((message) => Boolean(message.isVip)).map((message) => message.username));
-    const eligibleActiveUsers = activeUsers.filter((name) => name && name !== 'system' && !vipUsers.has(name));
-    const activeUserCurrent = eligibleActiveUsers.length > 0 ? pickOne(eligibleActiveUsers) : '';
-    const activeUserForTag = activeUserInitialHandleRef.current || activeUserCurrent;
+    const eligibleActiveUsers = activeUsers.filter((name) => name && !vipUsers.has(name));
+    const activeUserForTag = chatActors.activeUser;
     let questionActor = pickQuestionActor(eligibleActiveUsers, 'mod_live');
     if (questionActor === activeUserForTag) {
       const actorPool = eligibleActiveUsers.filter((name) => name !== activeUserForTag);
@@ -899,7 +938,7 @@ export default function App() {
       qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:no_tagged_user:${Date.now()}`].slice(-40);
       return false;
     }
-    const eventActiveUsers = collectActiveUsers(state.messages).filter((name) => name && name !== 'system');
+    const eventActiveUsers = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
     let questionActor = pickQuestionActor(eventActiveUsers, 'mod_live');
     if (questionActor === taggedUser) {
       qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:lock_target_invalid:${Date.now()}`].slice(-40);
@@ -920,8 +959,8 @@ export default function App() {
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
-    const activeUsers = collectActiveUsers(state.messages);
-    const target = activeUsers.length > 0 ? pickOne(activeUsers) : null;
+    const audienceUsers = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
+    const target = audienceUsers.length > 0 ? pickOne(audienceUsers) : null;
     const pending = pendingReplyEventRef.current;
     const isLocked = lockStateRef.current.isLocked && Boolean(lockStateRef.current.target);
 
@@ -1050,7 +1089,7 @@ export default function App() {
     const can = (key: StoryEventKey) => (eventCooldownsRef.current[key] ?? 0) <= now;
     for (const key of EVENT_REGISTRY_KEYS) {
       const def = EVENT_REGISTRY[key];
-      if (activeUsers.length < def.minActiveUsers) continue;
+      if (audienceUsers.length < def.minActiveUsers) continue;
       if (!can(key)) continue;
       if (key === 'GHOST_PING' && (cooldownsRef.current.ghost_ping_actor ?? 0) > now) continue;
       if (key === 'TV_EVENT' && (cooldownsRef.current.loop4 ?? 0) > now) continue;
@@ -1523,7 +1562,8 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
-      const activeUsers = collectActiveUsers(state.messages);
+      const chatActors = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+      const activeUsers = chatActors.audienceUsers;
       const nextDueAt = Math.max(now, eventNextDueAtRef.current || now);
       const schedulerBlockedReason = !appStarted ? 'app_not_started' : (lockStateRef.current.isLocked ? 'lock_active' : '-');
       const schedulerBlocked = schedulerBlockedReason !== '-';
@@ -1608,7 +1648,17 @@ export default function App() {
             currentHandle: activeUserInitialHandleRef.current || '-',
             initialHandle: activeUserInitialHandleRef.current || '-',
             renameDisabled: true
-          }
+          },
+          audience: {
+            count: chatActors.audienceUsers.length
+          },
+          activeUser: {
+            id: chatActors.activeUser || '-'
+          },
+          lastActorPicked: {
+            id: window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'
+          },
+          actorPickBlockedReason: window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'
         }
       } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
       syncChatEngineDebug();
@@ -1881,7 +1931,7 @@ export default function App() {
   }, [logSendDebug]);
 
   const ensureDebugActiveUsers = useCallback(() => {
-    const active = collectActiveUsers(state.messages);
+    const active = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
     if (active.length > 0) return active;
     DEBUG_SEED_USERS.forEach((username) => {
       dispatchAudienceMessage({
@@ -2079,6 +2129,10 @@ export default function App() {
                   ))}
                 </div>
                 <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
+                <div>chat.audience.count: {window.__CHAT_DEBUG__?.chat?.audience?.count ?? 0}</div>
+                <div>chat.activeUser.id: {window.__CHAT_DEBUG__?.chat?.activeUser?.id ?? '-'}</div>
+                <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
+                <div>actorPickBlockedReason: {window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'}</div>
                 <div>chat.autoScrollFrozen: {String(window.__CHAT_DEBUG__?.chat?.autoScrollFrozen ?? false)}</div>
                 <div>chat.autoScrollFrozenReason: {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenReason ?? '-'}</div>
                 <div>chat.autoScrollFrozenAt: {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenAt ?? 0}</div>
