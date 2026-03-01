@@ -332,6 +332,8 @@ declare global {
         replyPreviewVisible?: boolean;
         replyPreviewDelayMs?: number;
         replyPreviewSuppressed?: string;
+        replyPreviewLocation?: string;
+        legacyReplyQuoteEnabled?: boolean;
         send?: {
           lastClickAt?: number;
           lastSubmitAt?: number;
@@ -1750,6 +1752,7 @@ export default function SceneView({
           <div>qna.lastQuestionMessageHasTag/lastBlockedReason: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
           <div>event.blocking.pinned/replyPreview/delay: {window.__CHAT_DEBUG__?.event?.blocking?.pinnedMessageId ?? '-'} / {String(window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewDelayMs ?? 0}</div>
           <div>ui.replyPreview.visible/delay/suppressed: {String(window.__CHAT_DEBUG__?.ui?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.ui?.replyPreviewDelayMs ?? 0} / {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
+          <div>ui.replyPreview.location/legacyQuote: {window.__CHAT_DEBUG__?.ui?.replyPreviewLocation ?? '-'} / {String(window.__CHAT_DEBUG__?.ui?.legacyReplyQuoteEnabled ?? false)}</div>
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
           <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>

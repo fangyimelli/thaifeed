@@ -261,9 +261,9 @@ export default function ChatPanel({
 
 
       {pinnedMessage && (
-        <div className="replyPreviewBox" role="status" aria-live="polite">
-          <div className="replyPreviewHeader">📌 {pinnedMessage.username}</div>
-          <div className="replyPreviewText">「{pinnedPreviewText}」</div>
+        <div className="pinnedMessagePreview" role="status" aria-live="polite">
+          <div className="pinnedMessagePreviewHeader">📌 {pinnedMessage.username}</div>
+          <div className="pinnedMessagePreviewText">「{pinnedPreviewText}」</div>
         </div>
       )}
 
@@ -306,7 +306,7 @@ export default function ChatPanel({
       )}
 
       {shouldRenderReplyPreview && (
-        <div className="replyPreviewBox" role="status" aria-live="polite">
+        <div className="replyPreviewBox composerReplyPreview" role="status" aria-live="polite">
           <div className="replyPreviewHeader">↳ @{lockTarget}</div>
           <div className="replyPreviewText">「{replyPreviewText}」</div>
         </div>

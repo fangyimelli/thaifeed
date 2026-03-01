@@ -948,6 +948,8 @@ npm run build
 - Reply Preview UI 不再顯示 `event type / lockReason / flowId`。
 - lock 期間送出訊息會強制轉成：`@lockTarget + 使用者輸入（移除所有前置 @mentions）`。
 - lock 期間只能回覆 lockTarget（防繞過）。
+- Reply Preview 只允許出現在 `ChatComposer`（輸入框正上方），並固定為單一來源（`state.lock.replyingToMessageId` + `state.lock.lockTarget`）。
+- 既有/legacy 的下方引用回覆欄已完全移除（不 hide、不保留第二套 render）。
 - 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
 
 
@@ -976,6 +978,8 @@ npm run build
   - `event.blocking.replyPreviewVisible`
   - `event.blocking.replyPreviewDelayMs`
   - `ui.replyPreviewVisible / ui.replyPreviewDelayMs / ui.replyPreviewSuppressed`
+  - `ui.replyPreviewLocation = composer_top`
+  - `ui.legacyReplyQuoteEnabled = false`
 
 ## Reply Preview Design
 
