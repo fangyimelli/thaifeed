@@ -825,7 +825,7 @@ npm run dev
   - `cooldown_blocked`：事件仍在 cooldown。
   - `in_flight`：上一個事件流程尚未釋放。
   - `chat_auto_paused`：聊天處於 auto-pause。
-  - `no_active_users`：沒有可 tag 的活躍觀眾。
+  - `no_active_user` / `active_users_lt_3`：沒有足夠可 tag 的活躍觀眾。
   - `sfx_busy`：音效忙碌（保留給 SFX gate 訊號）。
   - `invalid_state`：狀態不合法（例如 app 未完成可觸發條件）。
 - 注意事項：Event Tester 會走正式事件流程，請先確認聊天室可送出訊息，再觸發事件以驗證 tag/lock/cooldown 行為。
@@ -846,3 +846,52 @@ npm run dev
 - 禁止同 actor 連續出現（no back-to-back）。
 - 最近 5 句內同 actor 最多 2 次。
 - 同句 8 次內不可重複；重複時最多 reroll 5 次，並在 debug 記錄 duplicate reroll。
+
+## 事件啟動改版：pre-effect → starter tag（2026-03）
+
+- 事件啟動流程已改為兩段式：
+  1. 先檢查阻擋條件（`inFlight` / `cooldown` / `registry` / `activeUser` / `activeUsers<3` / `chat_auto_paused`）
+  2. 設定 `event.inFlight=true`
+  3. 觸發 pre-effect（僅允許一段、可回復）：
+     - 影片切換（`loop` / `loop2`）或
+     - 音效播放（`ghost_female` / `footsteps`）
+  4. 送出 starter tag（`@activeUser + opener`）
+  5. starter tag 成功（`starterTagSent=true`）後，才允許後續 `followUp/reactions/lock`。
+
+### 事件狀態定義（更新）
+
+- 「啟動」：`event.inFlight=true` 且 `preEffectTriggered=true`。
+- 「成立」：`starterTagSent=true`。
+- 「失敗」：starter tag 送出失敗或前置 gate 被阻擋。
+
+### starter tag 失敗後補救（更新）
+
+- 允許 pre-effect 已發生（因為其設計在 tag 前合法）。
+- 但會立即執行回復：
+  - 強制切回 `loop3`
+  - 中止後續效果（`run/followups/reactions/lock/二次音效`）
+  - Debug 寫入 `abortedReason="tag_send_failed_after_pre_effect"`
+  - 套用短冷卻（目前 15 秒）避免連續誤觸。
+
+### 音效/影片硬規則（更新）
+
+- 允許 pre-effect 在 starter tag 前觸發。
+- 除 pre-effect 之外，所有後續效果仍必須等待 `starterTagSent=true`。
+- pre-effect 僅允許一段且需可回復。
+
+### Debug Overlay 欄位（更新）
+
+- `event.inFlight`
+- `event.lastStartAttemptBlockedReason`
+- `event.lastEvent.preEffectTriggered`
+- `event.lastEvent.preEffectAt`
+- `event.lastEvent.preEffect.sfxKey`
+- `event.lastEvent.preEffect.videoKey`
+- `event.lastEvent.starterTagSent`
+- `event.lastEvent.abortedReason`
+
+### 驗收方式
+
+- Case 1（正常事件）：先看到 pre-effect，再於 0~1s 內送出 starter tag，且 `starterTagSent=true` 後才進後續流程。
+- Case 2（tag 失敗）：允許 pre-effect，但必須迅速回復 `loop3`，且禁止後續效果，Debug 顯示 `tag_send_failed_after_pre_effect`。
+- Case 3（阻擋條件）：必須在 pre-effect 前被擋下，且不得播放 pre-effect，Debug 顯示 blocked reason。

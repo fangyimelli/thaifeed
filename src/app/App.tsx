@@ -31,7 +31,6 @@ import { createGhostLore } from '../core/systems/ghostLore';
 import { EVENT_REGISTRY, EVENT_REGISTRY_KEYS } from '../core/events/eventRegistry';
 import { pickDialog } from '../core/events/eventDialogs';
 import { pickReactionLines } from '../core/events/eventReactions';
-import { startEvent as runEventStart } from '../core/events/eventRunner';
 import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
 
 type EventStartBlockedReason =
@@ -39,8 +38,10 @@ type EventStartBlockedReason =
   | 'cooldown_blocked'
   | 'in_flight'
   | 'chat_auto_paused'
-  | 'no_active_users'
-  | 'sfx_busy'
+  | 'no_active_user'
+  | 'active_users_lt_3'
+  | 'registry_missing'
+  | 'vip_target'
   | 'invalid_state';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
@@ -252,6 +253,7 @@ export default function App() {
   const eventNextDueAtRef = useRef(0);
 
   const eventLifecycleRef = useRef<EventRunRecord | null>(null);
+  const preEffectStateRef = useRef<{ triggered: boolean; at: number; sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop'; videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' }>({ triggered: false, at: 0 });
   const reactionRecentIdsRef = useRef<Record<EventTopic, string[]>>({ ghost: [], footsteps: [], light: [] });
   const reactionActorHistoryRef = useRef<string[]>([]);
   const reactionTextHistoryRef = useRef<string[]>([]);
@@ -555,7 +557,7 @@ export default function App() {
 
   const playSfx = useCallback((
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
-    options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number; eventId?: string; eventKey?: StoryEventKey }
+    options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number; eventId?: string; eventKey?: StoryEventKey; allowBeforeStarterTag?: boolean }
   ) => {
     const now = Date.now();
     const cooldownMin = key === 'ghost_female' ? 180_000 : key === 'footsteps' || key === 'low_rumble' ? 120_000 : 0;
@@ -564,7 +566,7 @@ export default function App() {
       if (cooldownUntil > now) return false;
       cooldownsRef.current[key] = now + cooldownMin;
     }
-    if ((key === 'ghost_female' || key === 'footsteps') && eventLifecycleRef.current?.starterTagSent !== true) {
+    if (!options.allowBeforeStarterTag && (key === 'ghost_female' || key === 'footsteps') && eventLifecycleRef.current?.starterTagSent !== true) {
       return false;
     }
     requestSceneAction({
@@ -585,13 +587,19 @@ export default function App() {
     const activeUsers = collectActiveUsers(state.messages);
     const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
     const shouldIgnoreCooldown = Boolean(debugEnabled && ctx.source === 'debug_tester' && ctx.ignoreCooldowns);
-    let blockedReason: EventStartBlockedReason | null = null;
+    const eventDef = EVENT_REGISTRY[eventKey];
+    const vipUsers = new Set(state.messages.filter((message) => Boolean(message.isVip)).map((message) => message.username));
+    const eligibleActiveUsers = activeUsers.filter((name) => name && name !== 'system' && !vipUsers.has(name));
+    const activeUser = eligibleActiveUsers.length > 0 ? pickOne(eligibleActiveUsers) : '';
 
-    if (!appStarted) blockedReason = 'invalid_state';
+    let blockedReason: EventStartBlockedReason | null = null;
+    if (!eventDef) blockedReason = 'registry_missing';
+    else if (!appStarted) blockedReason = 'invalid_state';
     else if (chatAutoPaused) blockedReason = 'chat_auto_paused';
     else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
-    else if (activeUsers.length === 0) blockedReason = 'no_active_users';
-    else if (lockStateRef.current.isLocked && Boolean(lockStateRef.current.target) && !activeUsers.includes(lockStateRef.current.target as string)) blockedReason = 'locked_active';
+    else if (activeUsers.length < 3) blockedReason = 'active_users_lt_3';
+    else if (!activeUser) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
+    else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUser) blockedReason = 'locked_active';
     else if (!shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
 
     setEventAttemptDebug(eventKey, blockedReason);
@@ -599,51 +607,155 @@ export default function App() {
       eventLastReasonRef.current = sourceReason;
       eventLastKeyRef.current = eventKey;
       eventLastAtRef.current = now;
+      preEffectStateRef.current = { triggered: false, at: 0 };
       updateEventDebug({
         event: {
           ...(window.__CHAT_DEBUG__?.event ?? {}),
+          inFlight: false,
+          lastStartAttemptBlockedReason: blockedReason,
           test: {
             ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
             ...eventTestDebugRef.current
+          },
+          lastEvent: {
+            ...(window.__CHAT_DEBUG__?.event?.lastEvent ?? {}),
+            preEffectTriggered: false,
+            preEffectAt: 0,
+            preEffect: {},
+            starterTagSent: false,
+            abortedReason: blockedReason
           }
         }
       });
       return null;
     }
 
-    let record: EventRunRecord;
-    eventRunnerStateRef.current.inFlight = true;
-    try {
-      record = runEventStart(eventKey, {
-        activeUsers,
-        sendLine: (line, meta) => {
-          const result = dispatchEventLine(line, meta.actor);
-          return { ...result, lineId: meta.lineId };
-        },
-        canRunEvent: (activeUser) => {
-          if (!appStarted) return 'invalid_state';
-          if (chatAutoPaused) return 'chat_auto_paused';
-          if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUser) return 'locked_active';
-          return null;
-        },
-        setLock: (actor) => {
-          lockStateRef.current = { isLocked: true, target: actor, startedAt: Date.now() };
-        },
-        getRecentEventLineIds: (key) => eventRecentContentIdsRef.current[key],
-        rememberEventLineId: (key, lineId) => {
-          eventRecentContentIdsRef.current[key] = [...eventRecentContentIdsRef.current[key], lineId].slice(-5);
-        },
-        onEventRecord: (nextRecord) => {
-          eventLifecycleRef.current = nextRecord;
+    const eventId = `${eventKey}_${Date.now()}`;
+    const opener = pickDialog(eventKey, 'opener', activeUser, eventRecentContentIdsRef.current[eventKey]);
+    if (!opener.text.startsWith(`@${activeUser}`)) {
+      const record: EventRunRecord = {
+        eventId,
+        key: eventKey,
+        state: 'aborted',
+        at: Date.now(),
+        starterTagSent: false,
+        abortedReason: 'starter_line_not_tagged',
+        lineIds: [opener.id],
+        openerLineId: opener.id,
+        preEffectTriggered: false
+      };
+      eventLifecycleRef.current = record;
+      updateEventDebug({
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          inFlight: false,
+          lastStartAttemptBlockedReason: '-',
+          lastEvent: {
+            key: eventKey,
+            eventId: record.eventId,
+            at: record.at,
+            reason: sourceReason,
+            state: record.state,
+            starterTagSent: false,
+            abortedReason: record.abortedReason,
+            openerLineId: record.openerLineId,
+            lineIds: record.lineIds,
+            preEffectTriggered: false,
+            preEffectAt: 0,
+            preEffect: {}
+          }
         }
       });
-      eventRunnerStateRef.current.currentEventId = record.eventId;
-    } catch {
-      setEventAttemptDebug(eventKey, 'invalid_state');
       return null;
-    } finally {
-      clearEventRunnerState();
     }
+
+    eventRunnerStateRef.current.inFlight = true;
+    eventRunnerStateRef.current.currentEventId = eventId;
+
+    const preEffect = { sfxKey: undefined as 'ghost_female' | 'footsteps' | 'fan_loop' | undefined, videoKey: undefined as 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | undefined };
+    if (eventKey === 'LIGHT_GLITCH' || eventKey === 'TV_EVENT') {
+      preEffect.videoKey = Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2';
+      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: preEffect.videoKey, reason: `event:pre_effect:${eventId}` });
+    } else if (eventKey === 'VIEWER_SPIKE' || eventKey === 'FEAR_CHALLENGE') {
+      preEffect.sfxKey = 'footsteps';
+      playSfx('footsteps', { reason: `event:pre_effect:${eventId}`, source: 'event', eventId, eventKey, allowBeforeStarterTag: true });
+    } else {
+      preEffect.sfxKey = 'ghost_female';
+      playSfx('ghost_female', { reason: `event:pre_effect:${eventId}`, source: 'event', eventId, eventKey, delayMs: 150, allowBeforeStarterTag: true });
+    }
+    const preEffectAt = Date.now();
+    preEffectStateRef.current = { triggered: true, at: preEffectAt, sfxKey: preEffect.sfxKey, videoKey: preEffect.videoKey };
+
+    const sendResult = dispatchEventLine(opener.text, activeUser);
+    if (!sendResult.ok) {
+      const shortCooldownMs = 15_000;
+      eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
+      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop3', reason: `event:recover:${eventId}` });
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+      pendingReplyEventRef.current = null;
+      const record: EventRunRecord = {
+        eventId,
+        key: eventKey,
+        state: 'aborted',
+        at: Date.now(),
+        starterTagSent: false,
+        abortedReason: 'tag_send_failed_after_pre_effect',
+        lineIds: [opener.id],
+        openerLineId: opener.id,
+        preEffectTriggered: true,
+        preEffectAt,
+        preEffect: { ...preEffect }
+      };
+      eventLifecycleRef.current = record;
+      clearEventRunnerState();
+      eventLastReasonRef.current = sourceReason;
+      eventLastKeyRef.current = eventKey;
+      eventLastAtRef.current = Date.now();
+      updateEventDebug({
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          inFlight: false,
+          lastStartAttemptBlockedReason: '-',
+          test: {
+            ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
+            ...eventTestDebugRef.current
+          },
+          lastEvent: {
+            key: eventKey,
+            eventId: record.eventId,
+            at: record.at,
+            reason: sourceReason,
+            state: record.state,
+            starterTagSent: false,
+            abortedReason: record.abortedReason,
+            openerLineId: record.openerLineId,
+            lineIds: record.lineIds,
+            preEffectTriggered: true,
+            preEffectAt,
+            preEffect: { ...preEffect }
+          }
+        },
+        violation: 'event_aborted:tag_send_failed_after_pre_effect'
+      });
+      return null;
+    }
+
+    eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
+    lockStateRef.current = { isLocked: true, target: activeUser, startedAt: Date.now() };
+    const record: EventRunRecord = {
+      eventId,
+      key: eventKey,
+      state: 'active',
+      at: Date.now(),
+      starterTagSent: true,
+      openerLineId: opener.id,
+      lineIds: [opener.id],
+      preEffectTriggered: true,
+      preEffectAt,
+      preEffect: { ...preEffect }
+    };
+    eventLifecycleRef.current = record;
+    clearEventRunnerState();
 
     eventLastReasonRef.current = sourceReason;
     eventLastKeyRef.current = eventKey;
@@ -651,6 +763,8 @@ export default function App() {
     updateEventDebug({
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
+        inFlight: false,
+        lastStartAttemptBlockedReason: '-',
         test: {
           ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
           ...eventTestDebugRef.current
@@ -659,22 +773,23 @@ export default function App() {
           key: eventKey,
           eventId: record.eventId,
           at: record.at,
-          reason: eventLastReasonRef.current,
+          reason: sourceReason,
           state: record.state,
           starterTagSent: record.starterTagSent,
           abortedReason: record.abortedReason,
           openerLineId: record.openerLineId,
           followUpLineId: record.followUpLineId,
           lineIds: record.lineIds,
-          topic: record.topic
+          topic: record.topic,
+          preEffectTriggered: true,
+          preEffectAt,
+          preEffect: { ...preEffect }
         }
-      },
-      violation: record.state === 'aborted' ? `event_aborted:${record.abortedReason ?? 'unknown'}` : window.__CHAT_DEBUG__?.violation
+      }
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
 
-    const target = lockStateRef.current.target ?? '';
-    return record.state === 'aborted' ? null : { eventId: record.eventId, target };
-  }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, setEventAttemptDebug, state.messages, updateEventDebug]);
+    return { eventId: record.eventId, target: activeUser };
+  }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
@@ -789,8 +904,8 @@ export default function App() {
       if (key === 'TV_EVENT' && (cooldownsRef.current.loop4 ?? 0) > now) continue;
       if (Math.random() >= def.chance) continue;
       const started = startEvent(key, { source });
-      eventCooldownsRef.current[key] = now + def.cooldownMs;
       if (!started) return;
+      eventCooldownsRef.current[key] = now + def.cooldownMs;
       if (def.lockOnStart && started.target) lockStateRef.current = { isLocked: true, target: started.target, startedAt: now };
       if (key === 'LIGHT_GLITCH') {
         requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
@@ -1238,6 +1353,9 @@ export default function App() {
           lineVariantId: eventLastVariantIdRef.current,
           state: eventLifecycleRef.current?.state ?? 'done',
           starterTagSent: eventLifecycleRef.current?.starterTagSent ?? false,
+          preEffectTriggered: eventLifecycleRef.current?.preEffectTriggered ?? preEffectStateRef.current.triggered,
+          preEffectAt: eventLifecycleRef.current?.preEffectAt ?? preEffectStateRef.current.at,
+          preEffect: eventLifecycleRef.current?.preEffect ?? { sfxKey: preEffectStateRef.current.sfxKey, videoKey: preEffectStateRef.current.videoKey },
           abortedReason: eventLifecycleRef.current?.abortedReason,
           waitingForReply: Boolean(pendingReplyEventRef.current),
           openerLineId: eventLifecycleRef.current?.openerLineId,
@@ -1254,6 +1372,7 @@ export default function App() {
         },
         cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
         inFlight: eventRunnerStateRef.current.inFlight,
+        lastStartAttemptBlockedReason: eventTestDebugRef.current.lastStartAttemptBlockedReason,
         test: {
           ...eventTestDebugRef.current
         }
@@ -1557,8 +1676,8 @@ export default function App() {
   const triggerEventFromTester = useCallback((eventKey: StoryEventKey) => {
     const activeUsers = ensureDebugActiveUsers();
     if (activeUsers.length === 0) {
-      setEventAttemptDebug(eventKey, 'no_active_users');
-      setEventTesterStatus({ key: eventKey, blockedReason: 'no_active_users' });
+      setEventAttemptDebug(eventKey, 'no_active_user');
+      setEventTesterStatus({ key: eventKey, blockedReason: 'no_active_user' });
       return;
     }
 
@@ -1725,6 +1844,8 @@ export default function App() {
                 <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
                 <div>lastEvent.key: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'}</div>
                 <div>lastEvent.starterTagSent: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)}</div>
+                <div>lastEvent.preEffectTriggered/preEffectAt: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectTriggered ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectAt ?? '-'}</div>
+                <div>lastEvent.preEffect.sfxKey/videoKey: {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.sfxKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.videoKey ?? '-'}</div>
                 <div>lastEvent.abortedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
                 <div>lock.isLocked: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)}</div>
                 <div>lock.lockTarget: {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'}</div>
@@ -1732,6 +1853,7 @@ export default function App() {
                 <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
                 <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
                 <div>event.test.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptBlockedReason ?? '-'}</div>
+                <div>event.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
                 <div>sfx.ghostCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.ghost_female ?? 0}</div>
                 <div>sfx.footstepsCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.footsteps ?? 0}</div>
               </div>
