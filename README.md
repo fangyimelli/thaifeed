@@ -944,10 +944,22 @@ npm run build
 
 ## Sticky Tag Banner + Lock 強制回覆
 
-- ChatInput 上方新增半透明白底 sticky banner；當 `lock.isLocked` 成立時顯示「你只能回覆 @lockTarget（lockReason）」；若 `lockTarget` 缺失則顯示 `@—` 並在 Debug 記錄 `lockTarget_missing`。
+- ChatInput 上方改為沉浸式 `Reply Preview`；當 `lock.isLocked` 且 `lockTarget` 存在時顯示兩行：`↳ @lockTarget` 與被回覆的原始訊息摘錄。
+- Reply Preview UI 不再顯示 `event type / lockReason / flowId`。
 - lock 期間送出訊息會強制轉成：`@lockTarget + 使用者輸入（移除所有前置 @mentions）`。
 - lock 期間只能回覆 lockTarget（防繞過）。
 - 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
+
+
+## Reply Preview Design
+
+- `state.lock.replyingToMessageId`：每次 QNA `askQuestion` 成功送出時，記住該題訊息 `message.id`；新題目會直接覆蓋舊值。
+- Reply Preview 只渲染「回覆對象 + 原始訊息文字」：
+  - Header：`↳ @lockTarget`
+  - Text：`「originalMessage.text」`（單行、40 字截斷、超過補 `…`、移除換行）
+- UI 層明確不顯示 `event type / lockReason / flowId`，避免把事件內部細節帶進沉浸視圖。
+- Debug Overlay 仍保留 `eventKey` 與事件追蹤資訊，遵守 Debug 與 UI 分離原則。
+- lock 解除時，`state.lock.replyingToMessageId = null`，Reply Preview 同步消失。
 
 ## Autoscroll Freeze
 
