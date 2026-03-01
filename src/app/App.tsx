@@ -72,6 +72,9 @@ type ChatSendSource =
   | 'debug_tester'
   | 'unknown';
 
+type ChatAutoScrollMode = 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
+const FREEZE_AFTER_MESSAGE_COUNT = 10;
+
 export type SendResult = {
   ok: boolean;
   status: 'sent' | 'blocked' | 'error';
@@ -262,9 +265,12 @@ export default function App() {
   const [initStatusText, setInitStatusText] = useState('初始化中');
   const [requiredAssetErrors, setRequiredAssetErrors] = useState<MissingRequiredAsset[]>([]);
   const [chatAutoPaused, setChatAutoPaused] = useState(false);
-  const [chatAutoScrollFrozen, setChatAutoScrollFrozen] = useState(false);
-  const [chatAutoScrollFrozenReason, setChatAutoScrollFrozenReason] = useState<string | null>(null);
-  const [chatAutoScrollFrozenAt, setChatAutoScrollFrozenAt] = useState<number | null>(null);
+  const [chatAutoScrollMode, setChatAutoScrollMode] = useState<ChatAutoScrollMode>('FOLLOW');
+  const [chatFreezeAfterNMessages, setChatFreezeAfterNMessages] = useState(FREEZE_AFTER_MESSAGE_COUNT);
+  const [chatFreezeCountdownRemaining, setChatFreezeCountdownRemaining] = useState(0);
+  const [chatFreezeCountdownStartedAt, setChatFreezeCountdownStartedAt] = useState<number | null>(null);
+  const [chatLastMessageActorIdCounted, setChatLastMessageActorIdCounted] = useState<string | null>(null);
+  const [chatLastCountdownDecrementAt, setChatLastCountdownDecrementAt] = useState<number | null>(null);
   const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
   const [isPinnedActive, setIsPinnedActive] = useState(false);
   const [replyPreviewVisible, setReplyPreviewVisible] = useState(false);
@@ -527,7 +533,22 @@ export default function App() {
         }
       };
     }
-    lastChatMessageAtRef.current = Date.now();
+    const now = Date.now();
+    const shouldCountDownForFreeze =
+      chatAutoScrollMode === 'COUNTDOWN_FREEZE'
+      && actorHandle !== normalizeHandle(activeUserInitialHandleRef.current || '')
+      && source !== 'system_ui'
+      && (linted.message as ChatMessage & { isPinnedLayer?: boolean }).isPinnedLayer !== true;
+    if (shouldCountDownForFreeze) {
+      const nextRemaining = Math.max(0, chatFreezeCountdownRemaining - 1);
+      setChatFreezeCountdownRemaining(nextRemaining);
+      setChatLastMessageActorIdCounted(actorHandle || '-');
+      setChatLastCountdownDecrementAt(now);
+      if (nextRemaining <= 0) {
+        setChatAutoScrollMode('FROZEN');
+      }
+    }
+    lastChatMessageAtRef.current = now;
     const actionType = source === 'player_input' ? 'PLAYER_MESSAGE' : 'AUDIENCE_MESSAGE';
     dispatch({ type: actionType, payload: linted.message });
     return { ok: true };
@@ -763,16 +784,22 @@ export default function App() {
     return { ok: true, lineId: messageId };
   }, [appStarted, chatAutoPaused, dispatchChatMessage, updateEventDebug]);
 
-  const freezeChatAutoscroll = useCallback((reason: string) => {
-    setChatAutoScrollFrozen(true);
-    setChatAutoScrollFrozenReason(reason);
-    setChatAutoScrollFrozenAt(Date.now());
+  const startChatFreezeCountdown = useCallback((count = FREEZE_AFTER_MESSAGE_COUNT) => {
+    const now = Date.now();
+    setChatAutoScrollMode('COUNTDOWN_FREEZE');
+    setChatFreezeAfterNMessages(count);
+    setChatFreezeCountdownRemaining(count);
+    setChatFreezeCountdownStartedAt(now);
+    setChatLastMessageActorIdCounted(null);
+    setChatLastCountdownDecrementAt(null);
   }, []);
 
-  const unfreezeChatAutoscroll = useCallback(() => {
-    setChatAutoScrollFrozen(false);
-    setChatAutoScrollFrozenReason(null);
-    setChatAutoScrollFrozenAt(null);
+  const resetChatAutoScrollFollow = useCallback(() => {
+    setChatAutoScrollMode('FOLLOW');
+    setChatFreezeCountdownRemaining(0);
+    setChatFreezeCountdownStartedAt(null);
+    setChatLastMessageActorIdCounted(null);
+    setChatLastCountdownDecrementAt(null);
   }, []);
 
   const resetQnaUiState = useCallback(() => {
@@ -993,8 +1020,6 @@ export default function App() {
       return null;
     }
 
-    freezeChatAutoscroll('starter_tag');
-
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: null };
     eventExclusiveStateRef.current = {
@@ -1069,7 +1094,7 @@ export default function App() {
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
 
     return { eventId: record.eventId, target: questionActor };
-  }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, freezeChatAutoscroll, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
+  }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
@@ -1135,7 +1160,10 @@ export default function App() {
     setIsPinnedActive(true);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
-    freezeChatAutoscroll('tagged_question');
+    const taggedUserPattern = new RegExp(`@${taggedUser}(?:\\s|$)`, 'u');
+    if (taggedUserPattern.test(line)) {
+      startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
+    }
 
     if (replyPreviewDelayMs <= 0) {
       setReplyPreviewVisible(true);
@@ -1150,7 +1178,7 @@ export default function App() {
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
     return true;
-  }, [dispatchEventLine, freezeChatAutoscroll, registerEventRunnerTimer, replyPreviewDelayMs, resetQnaUiState, state.messages]);
+  }, [dispatchEventLine, registerEventRunnerTimer, replyPreviewDelayMs, resetQnaUiState, startChatFreezeCountdown, state.messages]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -1874,9 +1902,12 @@ export default function App() {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
           autoPaused: chatAutoPaused,
           autoPausedReason: chatAutoPaused ? (window.__CHAT_DEBUG__?.ui?.send?.blockedReason ?? 'manual_or_unknown') : '-',
-          autoScrollFrozen: chatAutoScrollFrozen,
-          autoScrollFrozenReason: chatAutoScrollFrozenReason ?? '-',
-          autoScrollFrozenAt: chatAutoScrollFrozenAt ?? 0,
+          autoScrollMode: chatAutoScrollMode,
+          freezeCountdownRemaining: chatFreezeCountdownRemaining,
+          freezeAfterNMessages: chatFreezeAfterNMessages,
+          freezeCountdownStartedAt: chatFreezeCountdownStartedAt ?? 0,
+          lastMessageActorIdCounted: chatLastMessageActorIdCounted ?? '-',
+          lastCountdownDecrementAt: chatLastCountdownDecrementAt ?? 0,
           activeUsers: {
             count: activeUsers.length,
             nameSample: activeUsers.slice(0, 6),
@@ -1900,7 +1931,7 @@ export default function App() {
       syncChatEngineDebug();
     }, 600);
     return () => window.clearInterval(timer);
-  }, [appStarted, chatAutoPaused, chatAutoScrollFrozen, chatAutoScrollFrozenAt, chatAutoScrollFrozenReason, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, pinnedMessageId, replyPreviewDelayMs, replyPreviewVisible, state.messages, syncChatEngineDebug, updateChatDebug]);
+  }, [appStarted, chatAutoPaused, chatAutoScrollMode, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, pinnedMessageId, replyPreviewDelayMs, replyPreviewVisible, state.messages, syncChatEngineDebug, updateChatDebug]);
 
   const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
     if (!debugEnabled) return;
@@ -2011,12 +2042,10 @@ export default function App() {
       if (chatAutoPaused) {
         setChatAutoPaused(false);
       }
-      if (chatAutoScrollFrozen) {
-        unfreezeChatAutoscroll();
-      }
+      resetChatAutoScrollFollow();
       const next = { ...attemptDebug, lastResult: 'sent' as const };
       setSendDebug(next);
-      logSendDebug('sent', { source, mode, autoResumed: chatAutoPaused, autoScrollUnfrozen: chatAutoScrollFrozen });
+      logSendDebug('sent', { source, mode, autoResumed: chatAutoPaused, autoScrollMode: chatAutoScrollMode });
       return { ok: true, status: 'sent' };
     };
     setSendDebug(attemptDebug);
@@ -2155,7 +2184,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [appStarted, chatAutoPaused, chatAutoScrollFrozen, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, sendDebug, state, tryTriggerStoryEvent, unfreezeChatAutoscroll, updateChatDebug]);
+  }, [appStarted, chatAutoPaused, chatAutoScrollMode, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {
@@ -2390,9 +2419,12 @@ export default function App() {
                 <div>chat.blockedCounts.activeUserAutoSpeak: {window.__CHAT_DEBUG__?.chat?.blockedCounts?.activeUserAutoSpeak ?? 0}</div>
                 <div>chat.lastBlockedSendAttempt.actor/source: {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.actorHandle ?? '-')} / {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.source ?? '-')}</div>
                 <div>chat.lastBlockedSendAttempt.reason: {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.blockedReason ?? '-'}</div>
-                <div>chat.autoScrollFrozen: {String(window.__CHAT_DEBUG__?.chat?.autoScrollFrozen ?? false)}</div>
-                <div>chat.autoScrollFrozenReason: {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenReason ?? '-'}</div>
-                <div>chat.autoScrollFrozenAt: {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenAt ?? 0}</div>
+                <div>chat.autoScrollMode: {window.__CHAT_DEBUG__?.chat?.autoScrollMode ?? '-'}</div>
+                <div>chat.freezeCountdownRemaining: {window.__CHAT_DEBUG__?.chat?.freezeCountdownRemaining ?? 0}</div>
+                <div>chat.freezeAfterNMessages: {window.__CHAT_DEBUG__?.chat?.freezeAfterNMessages ?? 0}</div>
+                <div>chat.freezeCountdownStartedAt: {window.__CHAT_DEBUG__?.chat?.freezeCountdownStartedAt ?? 0}</div>
+                <div>chat.lastMessageActorIdCounted: {window.__CHAT_DEBUG__?.chat?.lastMessageActorIdCounted ?? '-'}</div>
+                <div>chat.lastCountdownDecrementAt: {window.__CHAT_DEBUG__?.chat?.lastCountdownDecrementAt ?? 0}</div>
                 <div>lastEvent.key: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'}</div>
                 <div>lastEvent.starterTagSent: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)}</div>
                 <div>lastEvent.preEffectTriggered/preEffectAt: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectTriggered ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectAt ?? '-'}</div>
@@ -2474,7 +2506,7 @@ export default function App() {
             isReplyPreviewVisible={replyPreviewVisible}
             replyPreviewSuppressedReason={replyPreviewSuppressedReason}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
-            autoScrollFrozen={chatAutoScrollFrozen}
+            autoScrollMode={chatAutoScrollMode}
           />
         </section>
         {!isDesktopLayout && debugEnabled && (
