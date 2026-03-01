@@ -920,7 +920,7 @@ npm run build
 
 ## Sticky Tag Banner + Lock 強制回覆
 
-- ChatInput 上方新增半透明白底 sticky banner；當 `lock.isLocked && lockTarget` 成立時顯示「你只能回覆 @lockTarget」（含 `lastEvent.key / lockReason`）。
+- ChatInput 上方新增半透明白底 sticky banner；當 `lock.isLocked` 成立時顯示「你只能回覆 @lockTarget（lockReason）」；若 `lockTarget` 缺失則顯示 `@—` 並在 Debug 記錄 `lockTarget_missing`。
 - lock 期間送出訊息會強制轉成：`@lockTarget + 使用者輸入（移除所有前置 @mentions）`。
 - lock 期間只能回覆 lockTarget（防繞過）。
 - 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
@@ -946,17 +946,28 @@ npm run build
 
 ## QNA Flow（Keyword + 不知道）
 
-- 事件成立後若該事件有 `qnaFlowId`，系統會啟動 QNA，並且每題都強制以 `@activeUserInitialHandle` 出題。
+- 事件成立後若該事件有 `qnaFlowId`，系統會啟動 QNA，並且每題都以 `@taggedUserHandle`（`activeUserInitialHandle`）出題；`lockTarget` 另行指向 `questionActor.handle`。
 - Keyword Router 規則：玩家回覆只要「包含」選項 keyword 即命中；比對順序固定為 `UNKNOWN(不知道)` 優先，再比對其他選項。
 - 每題會自動注入 UNKNOWN 選項（`label=不知道`；keywords：`不知道/不清楚/不確定/不曉得/idk/不知道欸`）。命中 UNKNOWN 時會給提示並重問，不會直接結束流程。
-- QNA 與 lock：QNA 期間 lock 會持續鎖定到出題 actor，玩家送出會自動補上 `@lockTarget`，流程結束才解鎖。
+- QNA 與 lock：QNA 期間 lock 會持續鎖定到出題 actor（`lockTarget`），玩家送出會自動補上 `@lockTarget`，流程結束才解鎖。
+- 若 `lockTarget === taggedUser`（自問自答）視為錯誤：Debug 會記錄 `blockedReason=lock_target_invalid`，並立即重抽非 `system` 且不等於 `taggedUser` 的 actor。
 - Chain Event queue：QNA 選項可攜帶 `nextEventKey`，觸發時會先進 `event.queue`，只有在 `event.inFlight=false` 時才會取出啟動，避免撞車。
 - Debug Overlay 會顯示：
   - `qna.isActive / flowId / eventKey / stepId`
   - `qna.awaitingReply / lastAskedAt / attempts / lockTarget`
+  - `qna.taggedUserHandle / qna.lockTargetHandle / qna.lastQuestionActor.handle`
+  - `qna.lastAskedTextPreview`
+  - `qna.lockTargetInvalidError`
   - `qna.matched.optionId/keyword/at`
   - `qna.pendingChain.eventKey`
   - `event.queue.length`
+
+## Tag vs LockTarget
+
+- **Tag 的對象（被點名）**：`taggedUserHandle = activeUserInitialHandle`。
+- **回覆鎖定對象（要回覆誰）**：`lockTargetHandle = questionActor.handle`。
+- 每題 QNA 一律 `@taggedUserHandle` 出題，但 Sticky banner 與送出前綴都以 `lockTargetHandle` 為準。
+- ChatInput 送出前會移除既有前置 mentions，強制替換為 `@${lockTargetHandle}`。
 
 ### 驗收步驟
 

@@ -44,7 +44,10 @@ export type QnaState = {
   awaitingReply: boolean;
   lastAskedAt: number;
   attempts: number;
+  taggedUser: string | null;
   lockTarget: string | null;
+  lastQuestionActor: string | null;
+  lastAskedTextPreview: string;
   matched: QnaMatched | null;
   pendingChain: QnaPendingChain | null;
   history: string[];

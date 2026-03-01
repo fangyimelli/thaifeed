@@ -232,6 +232,7 @@ declare global {
           schedulerBlocked?: boolean;
           schedulerBlockedReason?: string;
           lockReason?: string;
+          lockTargetMissing?: boolean;
         };
         cooldowns?: Record<string, number>;
         inFlight?: boolean;
@@ -247,7 +248,11 @@ declare global {
           awaitingReply?: boolean;
           lastAskedAt?: number;
           attempts?: number;
+          taggedUser?: string | null;
           lockTarget?: string | null;
+          lastQuestionActor?: string | null;
+          lastAskedTextPreview?: string;
+          lockTargetInvalid?: boolean;
           matched?: { optionId?: string; keyword?: string; at?: number } | null;
           pendingChain?: { eventKey?: string } | null;
         };
