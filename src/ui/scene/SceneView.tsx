@@ -244,6 +244,13 @@ declare global {
         cooldowns?: Record<string, number>;
         inFlight?: boolean;
         lastStartAttemptBlockedReason?: string;
+        exclusive?: boolean;
+        currentEventId?: string | null;
+        currentLockOwner?: string | null;
+        lockTarget?: string | null;
+        lockElapsedSec?: number;
+        foreignTagBlockedCount?: number;
+        lastBlockedReason?: string;
         queue?: {
           length?: number;
         };

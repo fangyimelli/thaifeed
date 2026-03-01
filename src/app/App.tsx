@@ -53,6 +53,7 @@ type EventStartBlockedReason =
   | 'cooldown_blocked'
   | 'in_flight'
   | 'chat_auto_paused'
+  | 'event_exclusive_active'
   | 'no_active_user'
   | 'active_users_lt_3'
   | 'registry_missing'
@@ -111,6 +112,8 @@ function pickQuestionActor(activeUsers: string[], fallbackActor: string): string
   if (actorPool.length === 0) return fallbackActor;
   return pickOne(actorPool);
 }
+
+const EVENT_EXCLUSIVE_TIMEOUT_MS = 45_000;
 
 type ChatActorState = {
   activeUser: string;
@@ -318,6 +321,13 @@ export default function App() {
 
   const qnaStateRef = useRef(createInitialQnaState());
   const eventQueueRef = useRef<{ key: StoryEventKey; source: 'qna' }[]>([]);
+  const eventExclusiveStateRef = useRef<{ exclusive: boolean; currentEventId: string | null; currentLockOwner: string | null }>({
+    exclusive: false,
+    currentEventId: null,
+    currentLockOwner: null
+  });
+  const foreignTagBlockedCountRef = useRef(0);
+  const lastBlockedReasonRef = useRef('-');
 
   const eventLifecycleRef = useRef<EventRunRecord | null>(null);
   const preEffectStateRef = useRef<{ triggered: boolean; at: number; sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop'; videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' }>({ triggered: false, at: 0 });
@@ -414,6 +424,13 @@ export default function App() {
   }, [isDesktopLayout]);
 
   const dispatchAudienceMessage = (message: ChatMessage) => {
+    const activeUserHandle = activeUserInitialHandleRef.current;
+    const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\\s|$)`, 'u').test(message.text);
+    if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && message.username !== eventExclusiveStateRef.current.currentLockOwner) {
+      foreignTagBlockedCountRef.current += 1;
+      lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
+      return;
+    }
     const linted = lintOutgoingMessage(message);
     if (linted.rejectedReason !== '-') {
       window.__CHAT_DEBUG__ = {
@@ -615,6 +632,20 @@ export default function App() {
 
   const dispatchEventLine = useCallback((line: string, target: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick'): EventSendResult => {
     const now = Date.now();
+    const activeUserHandle = activeUserInitialHandleRef.current;
+    const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\\s|$)`, 'u').test(line);
+    if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && target !== eventExclusiveStateRef.current.currentLockOwner) {
+      foreignTagBlockedCountRef.current += 1;
+      lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
+      updateEventDebug({
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          foreignTagBlockedCount: foreignTagBlockedCountRef.current,
+          lastBlockedReason: lastBlockedReasonRef.current
+        }
+      });
+      return { ok: false, blockedReason: 'foreign_tag_during_exclusive' };
+    }
     if (!line.trim()) return { ok: false, blockedReason: 'empty' };
     if (!appStarted) return { ok: false, blockedReason: 'app_not_started' };
     if (source === 'scheduler_tick' && chatAutoPaused) return { ok: false, blockedReason: 'chat_auto_paused' };
@@ -633,7 +664,7 @@ export default function App() {
       tagTarget: target
     });
     return { ok: true };
-  }, [appStarted, chatAutoPaused, dispatchAudienceMessage]);
+  }, [appStarted, chatAutoPaused, dispatchAudienceMessage, updateEventDebug]);
 
   const freezeChatAutoscroll = useCallback((reason: string) => {
     setChatAutoScrollFrozen(true);
@@ -691,10 +722,23 @@ export default function App() {
     }
 
     let blockedReason: EventStartBlockedReason | null = null;
+    const lockElapsedMs = lockStateRef.current.isLocked && lockStateRef.current.startedAt > 0 ? now - lockStateRef.current.startedAt : 0;
+    const exclusiveTimeoutReached = lockElapsedMs >= EVENT_EXCLUSIVE_TIMEOUT_MS;
+    if (eventExclusiveStateRef.current.exclusive && exclusiveTimeoutReached) {
+      lastBlockedReasonRef.current = 'event_abandoned_timeout';
+      if (qnaStateRef.current.isActive) {
+        qnaStateRef.current.history = [...qnaStateRef.current.history, `abandoned:timeout:${now}`].slice(-40);
+        stopQnaFlow(qnaStateRef.current, 'timeout_abandon');
+      }
+      eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+      pendingReplyEventRef.current = null;
+    }
     if (!eventDef) blockedReason = 'registry_missing';
     else if (!appStarted) blockedReason = 'invalid_state';
     else if (ctx.source === 'scheduler_tick' && chatAutoPaused) blockedReason = 'chat_auto_paused';
     else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
+    else if (eventExclusiveStateRef.current.exclusive && !exclusiveTimeoutReached) blockedReason = 'event_exclusive_active';
     else if (activeUsers.length < 3) blockedReason = 'active_users_lt_3';
     else if (!activeUserForTag) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
     else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUserForTag) blockedReason = 'locked_active';
@@ -789,6 +833,7 @@ export default function App() {
       const shortCooldownMs = 15_000;
       eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
       requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop3', reason: `event:recover:${eventId}` });
+      eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
       lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
       pendingReplyEventRef.current = null;
       const record: EventRunRecord = {
@@ -842,6 +887,11 @@ export default function App() {
 
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
+    eventExclusiveStateRef.current = {
+      exclusive: true,
+      currentEventId: eventId,
+      currentLockOwner: questionActor
+    };
     const record: EventRunRecord = {
       eventId,
       key: eventKey,
@@ -870,6 +920,7 @@ export default function App() {
       });
       if (startedQna) {
         lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
+        eventExclusiveStateRef.current.currentLockOwner = questionActor;
       }
     }
 
@@ -947,6 +998,7 @@ export default function App() {
     }
     setQnaQuestionActor(qnaStateRef.current, questionActor);
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
+    eventExclusiveStateRef.current.currentLockOwner = questionActor;
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
     const sent = dispatchEventLine(line, questionActor);
@@ -1006,6 +1058,7 @@ export default function App() {
       }
       if (result.type === 'end') {
         stopQnaFlow(qnaStateRef.current, 'flow_end');
+        eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
         lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
         return;
       }
@@ -1063,6 +1116,7 @@ export default function App() {
         eventLifecycleRef.current.state = 'done';
         eventLifecycleRef.current.at = Date.now();
       }
+      eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
       lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
       pendingReplyEventRef.current = null;
       return;
@@ -1073,6 +1127,7 @@ export default function App() {
         eventLifecycleRef.current.state = 'done';
         eventLifecycleRef.current.at = Date.now();
       }
+      eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
       lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
       pendingReplyEventRef.current = null;
     }
@@ -1275,6 +1330,16 @@ export default function App() {
       syncChatEngineDebug();
       tryTriggerStoryEvent('', 'scheduler_tick');
       if (qnaStateRef.current.isActive) {
+        const lockElapsedMs = lockStateRef.current.isLocked && lockStateRef.current.startedAt > 0 ? now - lockStateRef.current.startedAt : 0;
+        if (lockElapsedMs >= EVENT_EXCLUSIVE_TIMEOUT_MS) {
+          qnaStateRef.current.history = [...qnaStateRef.current.history, `abandoned:tick_timeout:${now}`].slice(-40);
+          stopQnaFlow(qnaStateRef.current, 'timeout_abandon');
+          eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
+          lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+          pendingReplyEventRef.current = null;
+          lastBlockedReasonRef.current = 'event_abandoned_timeout';
+          return;
+        }
         const pressure = handleTimeoutPressure(qnaStateRef.current);
         if (pressure === 'low_rumble') {
           playSfx('low_rumble', { reason: 'qna:pressure40', source: 'event' });
@@ -1358,7 +1423,14 @@ export default function App() {
           },
           qna: {
             ...qnaStateRef.current
-          }
+          },
+          exclusive: eventExclusiveStateRef.current.exclusive,
+          currentEventId: eventExclusiveStateRef.current.currentEventId,
+          currentLockOwner: eventExclusiveStateRef.current.currentLockOwner,
+          lockTarget: lockStateRef.current.target,
+          lockElapsedSec: lockStateRef.current.isLocked ? Math.max(0, Math.floor((now - lockStateRef.current.startedAt) / 1000)) : 0,
+          foreignTagBlockedCount: foreignTagBlockedCountRef.current,
+          lastBlockedReason: lastBlockedReasonRef.current
         }
       });
     }, 1000);
@@ -1735,6 +1807,12 @@ export default function App() {
     const outgoingText = lockStateRef.current.isLocked && lockStateRef.current.target
       ? `@${lockStateRef.current.target} ${stripLeadingMentions(raw)}`.trim()
       : raw;
+    if (lockStateRef.current.isLocked && lockStateRef.current.target) {
+      const explicitReplyTarget = raw.match(/^\s*@([\w_]+)/u)?.[1] ?? null;
+      if (explicitReplyTarget && explicitReplyTarget !== lockStateRef.current.target) {
+        lastBlockedReasonRef.current = 'player_reply_target_rewritten';
+      }
+    }
 
     let nextReplyTarget = replyTarget;
     let nextMentionTarget = mentionTarget;
@@ -2024,6 +2102,7 @@ export default function App() {
   }, [clearEventRunnerState, updateEventDebug]);
 
   const forceUnlockDebug = useCallback(() => {
+    eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
     lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
   }, []);
 
@@ -2162,6 +2241,12 @@ export default function App() {
                 <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
                 <div>event.test.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptBlockedReason ?? '-'}</div>
                 <div>event.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
+                <div>event.exclusive: {String(window.__CHAT_DEBUG__?.event?.exclusive ?? false)}</div>
+                <div>event.currentEventId: {window.__CHAT_DEBUG__?.event?.currentEventId ?? '-'}</div>
+                <div>lock.lockOwner: {window.__CHAT_DEBUG__?.event?.currentLockOwner ?? '-'}</div>
+                <div>lock.lockElapsedSec: {window.__CHAT_DEBUG__?.event?.lockElapsedSec ?? 0}</div>
+                <div>event.foreignTagBlockedCount: {window.__CHAT_DEBUG__?.event?.foreignTagBlockedCount ?? 0}</div>
+                <div>event.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.lastBlockedReason ?? '-'}</div>
                 <div>sfx.ghostCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.ghost_female ?? 0}</div>
                 <div>sfx.footstepsCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.footsteps ?? 0}</div>
               </div>
