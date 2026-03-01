@@ -184,6 +184,9 @@ declare global {
       chat?: {
         autoPaused?: boolean;
         autoPausedReason?: string;
+        autoScrollFrozen?: boolean;
+        autoScrollFrozenReason?: string;
+        autoScrollFrozenAt?: number;
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string };
         pacing?: {
           mode?: 'normal' | 'slightlyBusy' | 'tense' | 'quiet' | 'tag_slow' | 'slowed' | 'locked_slowed';
@@ -1642,6 +1645,7 @@ export default function SceneView({
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>
           <div>chat.activeUser.handle/initial: {window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'} / {window.__CHAT_DEBUG__?.chat?.activeUsers?.initialHandle ?? '-'}</div>
           <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
+          <div>chat.autoScrollFrozen/reason/at: {String(window.__CHAT_DEBUG__?.chat?.autoScrollFrozen ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenReason ?? '-'} / {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenAt ?? 0}</div>
           <div>chat.pacing.baseRate/currentRate/jitter/nextDue: {window.__CHAT_DEBUG__?.chat?.pacing?.baseRate ?? '-'} / {window.__CHAT_DEBUG__?.chat?.pacing?.currentRate ?? '-'} / {String(window.__CHAT_DEBUG__?.chat?.pacing?.jitterEnabled ?? true)} / {window.__CHAT_DEBUG__?.chat?.pacing?.nextMessageDueInSec ?? '-'}</div>
           <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
           <div>chat.lint.lastRejectedText: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedText ?? '-'}</div>

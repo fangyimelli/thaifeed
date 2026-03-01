@@ -27,6 +27,7 @@ type Props = {
   isLocked?: boolean;
   lockReason?: string;
   activeUserInitialHandle: string;
+  autoScrollFrozen: boolean;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -55,7 +56,8 @@ export default function ChatPanel({
   lockTarget,
   isLocked,
   lockReason,
-  activeUserInitialHandle
+  activeUserInitialHandle,
+  autoScrollFrozen
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -108,6 +110,10 @@ export default function ChatPanel({
   };
 
   const conditionalScrollToBottom = () => {
+    if (autoScrollFrozen) {
+      logDebugState('scroll-skipped:autoScrollFrozen');
+      return;
+    }
     const el = messageListRef.current;
     if (!el) return;
 
