@@ -5,12 +5,16 @@ import { resolveAssetUrl } from '../../config/assetUrls';
 type Props = {
   message: ChatMessageType;
   onToggleTranslation: (id: string) => void;
+  activeUserInitialHandle: string;
 };
 
-export default function ChatMessage({ message, onToggleTranslation }: Props) {
+export default function ChatMessage({ message, onToggleTranslation, activeUserInitialHandle }: Props) {
   const isSystemJoin = message.type === 'system' && message.subtype === 'join';
   const isSystemInfo = message.type === 'system' && message.subtype !== 'join';
   const isDonate = message.type === 'donate';
+
+  const isPlayerMessage = Boolean(activeUserInitialHandle) && (message.isSelf || message.username === activeUserInitialHandle);
+  const displayName = isPlayerMessage ? activeUserInitialHandle : message.username;
 
   return (
     <article
@@ -20,7 +24,8 @@ export default function ChatMessage({ message, onToggleTranslation }: Props) {
         {!isSystemJoin && !isSystemInfo && (
           <span className="name">
             {message.isVip && <img src={resolveAssetUrl('assets/icons/icon_crown.svg')} alt="vip" className="crown" />}
-            {message.username}
+            {displayName}
+            {isPlayerMessage && <span className="you-badge">You</span>}
           </span>
         )}
         {isSystemInfo && <span className="system-tag">[系統]</span>}

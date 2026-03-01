@@ -1,9 +1,9 @@
 import type { ChatMessage } from '../state/types';
 
-export function createPlayerMessage(raw: string): ChatMessage {
+export function createPlayerMessage(raw: string, username: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
-    username: 'you',
+    username,
     text: raw,
     language: 'zh',
     isSelf: true

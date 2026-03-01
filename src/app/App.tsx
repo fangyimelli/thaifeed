@@ -53,6 +53,16 @@ export type SendResult = {
   errorMessage?: string;
 };
 
+type LegacyRenameBlocker = (nextHandle: string) => false;
+
+declare global {
+  interface Window {
+    __THAIFEED_RENAME_ACTIVE_USER__?: LegacyRenameBlocker;
+    __THAIFEED_CHANGE_NAME__?: LegacyRenameBlocker;
+    __THAIFEED_SET_NAME__?: LegacyRenameBlocker;
+  }
+}
+
 function formatViewerCount(value: number) {
   if (value < 1000) return `${value}`;
   if (value < 10_000) return `${(value / 1000).toFixed(1)}K`;
@@ -84,6 +94,10 @@ function pickNonRepeatingActor(pool: string[], recentActors: string[]): string {
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
+}
+
+function normalizeHandle(raw: string): string {
+  return raw.trim().replace(/^@+/, '');
 }
 
 function nextLeaveDelayMs() {
@@ -177,7 +191,6 @@ export default function App() {
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
   const [appStarted, setAppStarted] = useState(false);
-  const [activeUserHandle, setActiveUserHandle] = useState('');
   const activeUserInitialHandleRef = useRef('');
   const [startNameInput, setStartNameInput] = useState('');
   const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
@@ -601,7 +614,7 @@ export default function App() {
     else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
     else if (activeUsers.length < 3) blockedReason = 'active_users_lt_3';
     else if (!activeUserForTag) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
-    else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUserCurrent) blockedReason = 'locked_active';
+    else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUserForTag) blockedReason = 'locked_active';
     else if (!shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
 
     setEventAttemptDebug(eventKey, blockedReason);
@@ -688,7 +701,7 @@ export default function App() {
     const preEffectAt = Date.now();
     preEffectStateRef.current = { triggered: true, at: preEffectAt, sfxKey: preEffect.sfxKey, videoKey: preEffect.videoKey };
 
-    const sendResult = dispatchEventLine(opener.text, activeUserCurrent || activeUserForTag, ctx.source);
+    const sendResult = dispatchEventLine(opener.text, activeUserForTag, ctx.source);
     if (!sendResult.ok) {
       const shortCooldownMs = 15_000;
       eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
@@ -743,7 +756,7 @@ export default function App() {
     }
 
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
-    lockStateRef.current = { isLocked: true, target: activeUserCurrent || activeUserForTag, startedAt: Date.now() };
+    lockStateRef.current = { isLocked: true, target: activeUserForTag, startedAt: Date.now() };
     const record: EventRunRecord = {
       eventId,
       key: eventKey,
@@ -790,7 +803,7 @@ export default function App() {
       }
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
 
-    return { eventId: record.eventId, target: activeUserCurrent || activeUserForTag };
+    return { eventId: record.eventId, target: activeUserForTag };
   }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
@@ -1317,6 +1330,22 @@ export default function App() {
     };
   }, []);
 
+  const blockRenameAttempt = useCallback((_nextHandle: string): false => {
+    updateChatDebug({ ui: { send: { blockedReason: 'rename_disabled' } } });
+    return false;
+  }, [updateChatDebug]);
+
+  useEffect(() => {
+    window.__THAIFEED_RENAME_ACTIVE_USER__ = blockRenameAttempt;
+    window.__THAIFEED_CHANGE_NAME__ = blockRenameAttempt;
+    window.__THAIFEED_SET_NAME__ = blockRenameAttempt;
+    return () => {
+      delete window.__THAIFEED_RENAME_ACTIVE_USER__;
+      delete window.__THAIFEED_CHANGE_NAME__;
+      delete window.__THAIFEED_SET_NAME__;
+    };
+  }, [blockRenameAttempt]);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
@@ -1392,8 +1421,9 @@ export default function App() {
             count: activeUsers.length,
             nameSample: activeUsers.slice(0, 6),
             namesSample: activeUsers.slice(0, 6),
-            currentHandle: activeUserHandle || '-',
-            initialHandle: activeUserInitialHandleRef.current || '-'
+            currentHandle: activeUserInitialHandleRef.current || '-',
+            initialHandle: activeUserInitialHandleRef.current || '-',
+            renameDisabled: true
           }
         }
       } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
@@ -1534,7 +1564,10 @@ export default function App() {
 
       const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
 
-      dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(outgoingText) });
+      if (!activeUserInitialHandleRef.current) {
+        return markBlocked('no_active_user');
+      }
+      dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(outgoingText, activeUserInitialHandleRef.current) });
 
       const handlePass = () => {
         markReview(playableConsonant.letter, 'pass', state.curse);
@@ -1804,11 +1837,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    const name = startNameInput.trim();
-                    if (!name) return;
-                    setActiveUserHandle(name);
+                    const normalizedName = normalizeHandle(startNameInput);
+                    if (!normalizedName) return;
                     if (!activeUserInitialHandleRef.current) {
-                      activeUserInitialHandleRef.current = name;
+                      activeUserInitialHandleRef.current = normalizedName;
                     }
                     setAppStarted(true);
                     setChatAutoPaused(false);
@@ -1867,8 +1899,8 @@ export default function App() {
                 <div>lastEvent.abortedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
                 <div>lock.isLocked: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)}</div>
                 <div>lock.lockTarget: {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'}</div>
-                <div>activeUser.handle: {window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'}</div>
                 <div>activeUserInitialHandle: {window.__CHAT_DEBUG__?.chat?.activeUsers?.initialHandle ?? '-'}</div>
+                <div>renameDisabled: {String((window.__CHAT_DEBUG__?.chat?.activeUsers as { renameDisabled?: boolean } | undefined)?.renameDisabled ?? true)}</div>
                 <div>event.inFlight: {String(window.__CHAT_DEBUG__?.event?.inFlight ?? false)}</div>
                 <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
                 <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
@@ -1909,6 +1941,7 @@ export default function App() {
             lockTarget={lockStateRef.current.target}
             lastEventKey={eventLifecycleRef.current?.key ?? '-'}
             lockReason={eventLifecycleRef.current?.key ?? '-'}
+            activeUserInitialHandle={activeUserInitialHandleRef.current}
           />
         </section>
         {!isDesktopLayout && debugEnabled && (
