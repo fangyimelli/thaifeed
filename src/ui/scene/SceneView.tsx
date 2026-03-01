@@ -259,6 +259,9 @@ declare global {
           schedulerBlockedReason?: string;
           lockReason?: string;
           lockTargetMissing?: boolean;
+          pinnedMessageId?: string | null;
+          replyPreviewVisible?: boolean;
+          replyPreviewDelayMs?: number;
         };
         cooldowns?: Record<string, number>;
         inFlight?: boolean;
@@ -288,6 +291,10 @@ declare global {
           lockTargetInvalid?: boolean;
           matched?: { optionId?: string; keyword?: string; at?: number } | null;
           pendingChain?: { eventKey?: string } | null;
+          taggedUserHandle?: string | null;
+          lastQuestionMessageId?: string | null;
+          lastQuestionMessageHasTag?: boolean;
+          lastBlockedReason?: string | null;
         };
         test?: {
           lastStartAttemptAt?: number;
@@ -322,6 +329,9 @@ declare global {
         lastEventLabel?: string;
       };
       ui?: {
+        replyPreviewVisible?: boolean;
+        replyPreviewDelayMs?: number;
+        replyPreviewSuppressed?: string;
         send?: {
           lastClickAt?: number;
           lastSubmitAt?: number;
@@ -1736,6 +1746,10 @@ export default function SceneView({
           <div>qna.awaiting/attempts/lastAskedAt: {String(window.__CHAT_DEBUG__?.event?.qna?.awaitingReply ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.attempts ?? 0} / {window.__CHAT_DEBUG__?.event?.qna?.lastAskedAt ?? 0}</div>
           <div>qna.lockTarget/match: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'} / {(window.__CHAT_DEBUG__?.event?.qna?.matched?.optionId ?? '-') + ':' + (window.__CHAT_DEBUG__?.event?.qna?.matched?.keyword ?? '-')}</div>
           <div>qna.pendingChain: {window.__CHAT_DEBUG__?.event?.qna?.pendingChain?.eventKey ?? '-'}</div>
+          <div>qna.taggedUserHandle/lastQuestionMessageId: {window.__CHAT_DEBUG__?.event?.qna?.taggedUserHandle ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageId ?? '-'}</div>
+          <div>qna.lastQuestionMessageHasTag/lastBlockedReason: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
+          <div>event.blocking.pinned/replyPreview/delay: {window.__CHAT_DEBUG__?.event?.blocking?.pinnedMessageId ?? '-'} / {String(window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewDelayMs ?? 0}</div>
+          <div>ui.replyPreview.visible/delay/suppressed: {String(window.__CHAT_DEBUG__?.ui?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.ui?.replyPreviewDelayMs ?? 0} / {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
           <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>

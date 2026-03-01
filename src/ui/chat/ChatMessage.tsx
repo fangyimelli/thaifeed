@@ -6,19 +6,22 @@ type Props = {
   message: ChatMessageType;
   onToggleTranslation: (id: string) => void;
   activeUserInitialHandle: string;
+  pinnedMessageId?: string | null;
 };
 
-export default function ChatMessage({ message, onToggleTranslation, activeUserInitialHandle }: Props) {
+export default function ChatMessage({ message, onToggleTranslation, activeUserInitialHandle, pinnedMessageId = null }: Props) {
   const isSystemJoin = message.type === 'system' && message.subtype === 'join';
   const isSystemInfo = message.type === 'system' && message.subtype !== 'join';
   const isDonate = message.type === 'donate';
 
   const isPlayerMessage = Boolean(activeUserInitialHandle) && (message.isSelf || message.username === activeUserInitialHandle);
   const displayName = isPlayerMessage ? activeUserInitialHandle : message.username;
+  const hasActiveUserMention = Boolean(activeUserInitialHandle) && message.text.includes(`@${activeUserInitialHandle}`);
+  const isPinned = Boolean(pinnedMessageId) && message.id === pinnedMessageId;
 
   return (
     <article
-      className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''} ${message.isSelf ? 'self' : ''} ${isSystemJoin ? 'system join' : ''} ${isSystemInfo ? 'system info' : ''} ${isDonate ? 'donate' : ''}`}
+      className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''} ${message.isSelf ? 'self' : ''} ${isSystemJoin ? 'system join' : ''} ${isSystemInfo ? 'system info' : ''} ${isDonate ? 'donate' : ''} ${isPinned ? 'is-pinned' : ''} ${hasActiveUserMention ? 'is-mention-highlight' : ''}`}
     >
       <div className="chat-line">
         {!isSystemJoin && !isSystemInfo && (

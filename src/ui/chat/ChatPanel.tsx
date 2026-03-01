@@ -28,6 +28,9 @@ type Props = {
   replyingToMessageId?: string | null;
   activeUserInitialHandle: string;
   autoScrollFrozen: boolean;
+  pinnedMessageId?: string | null;
+  isReplyPreviewVisible?: boolean;
+  replyPreviewSuppressedReason?: string | null;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -57,7 +60,10 @@ export default function ChatPanel({
   isLocked,
   replyingToMessageId,
   activeUserInitialHandle,
-  autoScrollFrozen
+  autoScrollFrozen,
+  pinnedMessageId = null,
+  isReplyPreviewVisible = false,
+  replyPreviewSuppressedReason = null
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -83,6 +89,12 @@ export default function ChatPanel({
     ? sanitizedMessages.find((message) => message.id === replyingToMessageId)
     : null;
 
+  const originalMessageHasActiveUserTag = Boolean(originalMessage && activeUserInitialHandle && originalMessage.text.includes(`@${activeUserInitialHandle}`));
+  const shouldRenderReplyPreview = Boolean(isLocked && lockTarget && isReplyPreviewVisible && originalMessageHasActiveUserTag);
+  const pinnedMessage = pinnedMessageId
+    ? sanitizedMessages.find((message) => message.id === pinnedMessageId)
+    : null;
+
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
     if (!singleLine) return '';
@@ -94,6 +106,7 @@ export default function ChatPanel({
     return `${segmented.slice(0, limit).join('')}…`;
   };
   const replyPreviewText = originalMessage ? truncateReplyText(originalMessage.text, 40) : '（原始訊息已不存在）';
+  const pinnedPreviewText = pinnedMessage ? truncateReplyText(pinnedMessage.text, 60) : '';
 
   const logDebugState = (reason: string) => {
     if (!debugEnabled) return;
@@ -246,6 +259,14 @@ export default function ChatPanel({
         <strong>聊天室</strong>
       </header>
 
+
+      {pinnedMessage && (
+        <div className="replyPreviewBox" role="status" aria-live="polite">
+          <div className="replyPreviewHeader">📌 {pinnedMessage.username}</div>
+          <div className="replyPreviewText">「{pinnedPreviewText}」</div>
+        </div>
+      )}
+
       <div
         ref={messageListRef}
         className="chat-messages chat-list"
@@ -264,6 +285,7 @@ export default function ChatPanel({
               message={message}
               onToggleTranslation={onToggleTranslation}
               activeUserInitialHandle={activeUserInitialHandle}
+              pinnedMessageId={pinnedMessageId}
             />
           ))}
           <div ref={messageEndRef} />
@@ -283,11 +305,15 @@ export default function ChatPanel({
         </button>
       )}
 
-      {isLocked && lockTarget && (
+      {shouldRenderReplyPreview && (
         <div className="replyPreviewBox" role="status" aria-live="polite">
           <div className="replyPreviewHeader">↳ @{lockTarget}</div>
           <div className="replyPreviewText">「{replyPreviewText}」</div>
         </div>
+      )}
+
+      {debugEnabled && isLocked && lockTarget && !shouldRenderReplyPreview && (
+        <div className="chat-send-feedback">Reply Preview suppressed: {replyPreviewSuppressedReason ?? 'not_visible_or_missing_tag'}</div>
       )}
 
       <form

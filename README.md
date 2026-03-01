@@ -951,6 +951,32 @@ npm run build
 - 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
 
 
+## QNA Tag + Pin/ReplyPreview 時序修正（本次）
+
+- QNA `askQuestion` 現在強制題目格式：`@${taggedUserHandle} ${prompt}`；若組字後未包含 tag，直接 abort，並記錄 `lastBlockedReason=qna_question_missing_tag`。
+- abort 時不會進 lock，也不會建立 `replyingToMessageId / pinnedMessageId / replyPreview`。
+- Reply Preview 與 Pin 的資料來源統一為「實際送出的題目訊息」：
+  - `replyingToMessageId = sent.message.id`
+  - `pinnedMessageId = sent.message.id`
+  - UI 只讀取該 message text 節錄。
+- 時序固定為：`sendQuestionMessage -> set replyingTo/pinned/freeze`；不允許 Reply Preview 早於題目訊息出現。
+- 新增 `replyPreviewDelayMs`（預設 `2000`）：
+  - `0ms`：題目與 Reply Preview 同時顯示。
+  - `2000ms`：題目先出現，Reply Preview 延後 2 秒。
+- Pinned message 規則：
+  - 顯示發話者（actor）與題目內容（含 `@activeUserInitialHandle`）。
+  - 被 pin 的訊息同時支援 mention highlight（包含 `@activeUserInitialHandle` 時生效）。
+- UI Guard：若 lock 存在但 `replyingToMessageId` 對應訊息不含 `@taggedUserHandle`，Reply Preview 會被 suppress，並記錄 `ui.replyPreviewSuppressed=missing_tag_in_message`。
+- Debug Overlay 新增欄位：
+  - `qna.taggedUserHandle`
+  - `qna.lastQuestionMessageId`
+  - `qna.lastQuestionMessageHasTag`
+  - `qna.lastBlockedReason`
+  - `event.blocking.pinnedMessageId`
+  - `event.blocking.replyPreviewVisible`
+  - `event.blocking.replyPreviewDelayMs`
+  - `ui.replyPreviewVisible / ui.replyPreviewDelayMs / ui.replyPreviewSuppressed`
+
 ## Reply Preview Design
 
 - `state.lock.replyingToMessageId`：每次 QNA `askQuestion` 成功送出時，記住該題訊息 `message.id`；新題目會直接覆蓋舊值。
