@@ -807,10 +807,27 @@ npm run dev
   - `lastEvent.key`
   - `lastEvent.starterTagSent`
   - `lastEvent.abortedReason`
+  - `event.inFlight`
+  - `event.test.lastStartAttemptAt`
+  - `event.test.lastStartAttemptKey`
+  - `event.test.lastStartAttemptBlockedReason`
   - `lock.isLocked`
   - `lock.lockTarget`
   - `sfx.ghostCooldown`
   - `sfx.footstepsCooldown`
+- Event Tester debug controls（僅 overlay 生效）：
+  - `Ignore Cooldowns (debug only)`：只跳過 cooldown gate，不跳過 production `startEvent` 流程。
+  - `Simulate Player Reply`：自動送出玩家回覆字串，便於重複驗證需要 reply 的事件鏈。
+  - `Reset Test State`：清除 eventRunner 測試暫存（inFlight/currentEventId/pending timers 與 last blocked reason），不會自動解鎖 production lock。
+  - `Force Unlock`：僅 debug 手動解鎖。
+- blockedReason 說明（Debug Event Tester）：
+  - `locked_active`：目前 lock 仍有效。
+  - `cooldown_blocked`：事件仍在 cooldown。
+  - `in_flight`：上一個事件流程尚未釋放。
+  - `chat_auto_paused`：聊天處於 auto-pause。
+  - `no_active_users`：沒有可 tag 的活躍觀眾。
+  - `sfx_busy`：音效忙碌（保留給 SFX gate 訊號）。
+  - `invalid_state`：狀態不合法（例如 app 未完成可觸發條件）。
 - 注意事項：Event Tester 會走正式事件流程，請先確認聊天室可送出訊息，再觸發事件以驗證 tag/lock/cooldown 行為。
 - Debug 顯示補充：
   - `event.lastEvent.waitingForReply`

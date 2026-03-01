@@ -226,6 +226,12 @@ declare global {
           schedulerBlockedReason?: string;
         };
         cooldowns?: Record<string, number>;
+        inFlight?: boolean;
+        test?: {
+          lastStartAttemptAt?: number;
+          lastStartAttemptKey?: string;
+          lastStartAttemptBlockedReason?: string;
+        };
         lastEvent?: {
           key?: string;
           eventId?: string;
