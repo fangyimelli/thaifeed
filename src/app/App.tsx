@@ -297,8 +297,12 @@ export default function App() {
   const lastChatMessageAtRef = useRef(Date.now());
   const chatEngineRef = useRef(new ChatEngine());
   const ghostLoreRef = useRef(createGhostLore());
-  const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number }>({ isLocked: false, target: null, startedAt: 0 });
-  const lockReplyingToMessageIdRef = useRef<string | null>(null);
+  const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number; replyingToMessageId: string | null }>({
+    isLocked: false,
+    target: null,
+    startedAt: 0,
+    replyingToMessageId: null
+  });
   const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, tv_event: 0, ghost_ping_actor: 0 });
   const eventCooldownsRef = useRef<Record<StoryEventKey, number>>({
     VOICE_CONFIRM: 0,
@@ -816,8 +820,7 @@ export default function App() {
         stopQnaFlow(qnaStateRef.current, 'timeout_abandon');
       }
       eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-      lockReplyingToMessageIdRef.current = null;
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
       pendingReplyEventRef.current = null;
     }
     if (!eventDef) blockedReason = 'registry_missing';
@@ -924,8 +927,7 @@ export default function App() {
       eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
       requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop3', reason: `event:recover:${eventId}`, sourceEventKey: eventKey });
       eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-      lockReplyingToMessageIdRef.current = null;
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
       pendingReplyEventRef.current = null;
       const record: EventRunRecord = {
         eventId,
@@ -977,7 +979,7 @@ export default function App() {
     freezeChatAutoscroll('starter_tag');
 
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
-    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
+    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: null };
     eventExclusiveStateRef.current = {
       exclusive: true,
       currentEventId: eventId,
@@ -1010,7 +1012,7 @@ export default function App() {
         questionActor
       });
       if (startedQna) {
-        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
+        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: null };
         eventExclusiveStateRef.current.currentLockOwner = questionActor;
       }
     }
@@ -1088,13 +1090,13 @@ export default function App() {
       questionActor = pickOne(actorPool.length > 0 ? actorPool : ['mod_live']);
       setQnaQuestionActor(qnaStateRef.current, questionActor);
     }
-    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
+    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: null };
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
     const sent = dispatchEventLine(line, questionActor, 'scheduler_tick', 'qna_question');
     if (!sent.ok) return false;
-    lockReplyingToMessageIdRef.current = sent.lineId ?? null;
+    lockStateRef.current.replyingToMessageId = sent.lineId ?? null;
     freezeChatAutoscroll('tagged_question');
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
@@ -1113,7 +1115,7 @@ export default function App() {
     if (source === 'user_input' && qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply) {
       const lockTarget = qnaStateRef.current.lockTarget;
       if (lockTarget && lockStateRef.current.target !== lockTarget) {
-        lockStateRef.current = { isLocked: true, target: lockTarget, startedAt: Date.now() };
+        lockStateRef.current = { isLocked: true, target: lockTarget, startedAt: Date.now(), replyingToMessageId: lockStateRef.current.replyingToMessageId };
       }
       const stripped = raw.replace(/^\s*@[^\s]+\s*/u, '').trim();
       const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
@@ -1151,8 +1153,7 @@ export default function App() {
       if (result.type === 'end') {
         stopQnaFlow(qnaStateRef.current, 'flow_end');
         eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-        lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-        lockReplyingToMessageIdRef.current = null;
+        lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
         return;
       }
     }
@@ -1174,8 +1175,7 @@ export default function App() {
         triggerReactionBurst('ghost');
         if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
         cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
-        lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-        lockReplyingToMessageIdRef.current = null;
+        lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
       }
       if (pending.key === 'TV_EVENT' && repliedNo) {
         requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: reasonBase, sourceEventKey: 'TV_EVENT', delayMs: 2000 });
@@ -1211,8 +1211,7 @@ export default function App() {
         eventLifecycleRef.current.at = Date.now();
       }
       eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-      lockReplyingToMessageIdRef.current = null;
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
       pendingReplyEventRef.current = null;
       return;
     }
@@ -1223,8 +1222,7 @@ export default function App() {
         eventLifecycleRef.current.at = Date.now();
       }
       eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-      lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-      lockReplyingToMessageIdRef.current = null;
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
       pendingReplyEventRef.current = null;
     }
 
@@ -1248,7 +1246,7 @@ export default function App() {
       const started = startEvent(key, { source });
       if (!started) return;
       eventCooldownsRef.current[key] = now + def.cooldownMs;
-      if (def.lockOnStart && started.target) lockStateRef.current = { isLocked: true, target: started.target, startedAt: now };
+      if (def.lockOnStart && started.target) lockStateRef.current = { isLocked: true, target: started.target, startedAt: now, replyingToMessageId: null };
       if (key === 'LIGHT_GLITCH') {
         requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop2', reason: `event:${started.eventId}`, sourceEventKey: 'LIGHT_GLITCH' });
         triggerReactionBurst('light');
@@ -1431,8 +1429,7 @@ export default function App() {
           qnaStateRef.current.history = [...qnaStateRef.current.history, `abandoned:tick_timeout:${now}`].slice(-40);
           stopQnaFlow(qnaStateRef.current, 'timeout_abandon');
           eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-          lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-          lockReplyingToMessageIdRef.current = null;
+          lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
           pendingReplyEventRef.current = null;
           lastBlockedReasonRef.current = 'event_abandoned_timeout';
           return;
@@ -1787,7 +1784,7 @@ export default function App() {
           lockReason: qnaStateRef.current.isActive
             ? `${qnaStateRef.current.eventKey ?? '-'} / ${qnaStateRef.current.flowId || '-'} / ${qnaStateRef.current.stepId || '-'}`
             : (eventLifecycleRef.current?.key ?? '-'),
-          replyingToMessageId: lockReplyingToMessageIdRef.current,
+          replyingToMessageId: lockStateRef.current.replyingToMessageId,
           lockTargetMissing: lockStateRef.current.isLocked && !lockStateRef.current.target
         },
         cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
@@ -2204,8 +2201,7 @@ export default function App() {
 
   const forceUnlockDebug = useCallback(() => {
     eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-    lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
-    lockReplyingToMessageIdRef.current = null;
+    lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
   }, []);
 
   const forceShowLoop4Debug = useCallback(() => {
@@ -2396,7 +2392,7 @@ export default function App() {
             onSendButtonClick={handleSendButtonClick}
             isLocked={lockStateRef.current.isLocked}
             lockTarget={lockStateRef.current.target}
-            replyingToMessageId={lockReplyingToMessageIdRef.current}
+            replyingToMessageId={lockStateRef.current.replyingToMessageId}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
             autoScrollFrozen={chatAutoScrollFrozen}
           />
