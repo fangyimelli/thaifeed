@@ -925,6 +925,23 @@ npm run build
 - lock 期間只能回覆 lockTarget（防繞過）。
 - 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
 
+## Autoscroll Freeze
+
+- 觸發時機：
+  - 事件 starter tag 成功送出後（`pre-effect -> starter tag` 成功）立即凍結聊天室自動捲動。
+  - QNA `askQuestion` 成功送出且包含 `@taggedUserHandle` 後，立即凍結聊天室自動捲動。
+- frozen 期間：
+  - 新訊息進來不會自動 `scrollToBottom`。
+  - 仍允許使用者手動捲動檢視歷史訊息。
+  - 若畫面有「最新訊息 / 跳到底」按鈕，手動點擊仍可立即捲到底。
+- 解除時機：
+  - activeUser 只要成功送出一則回覆（本版採「送出成功即可」而非 keyword 命中）即解除 freeze。
+  - 解除 freeze 後，延續既有手機送出規格：收鍵盤 + 自動捲到底。
+- Debug Overlay：
+  - `chat.autoScrollFrozen`
+  - `chat.autoScrollFrozenReason`
+  - `chat.autoScrollFrozenAt`
+
 ## activeUser immutable initial handle
 
 - 玩家第一次輸入名稱後，寫入 `activeUserInitialHandle`（immutable，只寫一次）。
