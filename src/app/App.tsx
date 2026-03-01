@@ -1866,7 +1866,9 @@ export default function App() {
           ...(window.__CHAT_DEBUG__?.ui ?? {}),
           replyPreviewVisible,
           replyPreviewDelayMs,
-          replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-'
+          replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-',
+          replyPreviewLocation: 'composer_top',
+          legacyReplyQuoteEnabled: false
         },
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
@@ -2417,6 +2419,7 @@ export default function App() {
                 <div>lock.pinnedMessageId: {window.__CHAT_DEBUG__?.event?.blocking?.pinnedMessageId ?? '-'}</div>
                 <div>ui.replyPreviewVisible/delayMs: {String(window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewDelayMs ?? 0}</div>
                 <div>ui.replyPreviewSuppressed: {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
+                <div>ui.replyPreviewLocation/legacyReplyQuoteEnabled: {(window.__CHAT_DEBUG__?.ui as { replyPreviewLocation?: string; legacyReplyQuoteEnabled?: boolean } | undefined)?.replyPreviewLocation ?? '-'} / {String((window.__CHAT_DEBUG__?.ui as { legacyReplyQuoteEnabled?: boolean } | undefined)?.legacyReplyQuoteEnabled ?? false)}</div>
                 <div>qna.lockTargetHandle: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'}</div>
                 <div>qna.lastQuestionActor.handle: {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionActor ?? '-'}</div>
                 <div>qna.lastAskedTextPreview: {window.__CHAT_DEBUG__?.event?.qna?.lastAskedTextPreview ?? '-'}</div>

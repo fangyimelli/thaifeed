@@ -201,29 +201,35 @@ body {
 .jump-bottom { position: absolute; right: 14px; bottom: 72px; border: none; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: #2f6eff; color: #fff; cursor: pointer; z-index: 2; }
 
 
+.pinnedMessagePreview,
 .replyPreviewBox {
-  position: sticky;
-  bottom: calc(env(safe-area-inset-bottom) + 62px);
   margin: 4px 12px 0;
   background: rgba(255, 255, 255, 0.06);
   border-left: 2px solid rgba(180, 220, 255, 0.8);
   padding: 6px 10px;
   margin-bottom: 6px;
   backdrop-filter: blur(2px);
-  z-index: 121;
 }
 
+.pinnedMessagePreviewHeader,
 .replyPreviewHeader {
   font-size: 12px;
   opacity: 0.8;
 }
 
+.pinnedMessagePreviewText,
 .replyPreviewText {
   font-size: 13px;
   opacity: 0.9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.composerReplyPreview {
+  flex-shrink: 0;
+  min-height: 38px;
+  max-height: 44px;
 }
 .chat-input {
   flex-shrink: 0;
