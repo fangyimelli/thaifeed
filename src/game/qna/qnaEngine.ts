@@ -1,0 +1,172 @@
+import type { StoryEventKey } from '../../core/events/eventTypes';
+import { pickOne } from '../../utils/random';
+import { QNA_FLOWS } from './qnaFlows';
+import { matchOptions } from './qnaKeyword';
+import { nextQnaAskAt } from './qnaSchedule';
+import type { QnaOption, QnaParseResult, QnaState } from './qnaTypes';
+
+const UNKNOWN_OPTION: QnaOption = {
+  id: 'UNKNOWN',
+  label: '不知道',
+  keywords: ['不知道', '不清楚', '不確定', '不曉得', 'idk', '不知道欸']
+};
+
+export const createInitialQnaState = (): QnaState => ({
+  isActive: false,
+  flowId: '',
+  eventKey: null,
+  stepId: '',
+  awaitingReply: false,
+  lastAskedAt: 0,
+  attempts: 0,
+  lockTarget: null,
+  matched: null,
+  pendingChain: null,
+  history: [],
+  askedQuestionHistory: [],
+  askedPromptHistory: [],
+  nextAskAt: 0,
+  startedAt: 0,
+  pressure40Triggered: false,
+  pressure60Triggered: false
+});
+
+function getFlow(flowId: string) {
+  return QNA_FLOWS[flowId];
+}
+
+function getStep(state: QnaState) {
+  const flow = getFlow(state.flowId);
+  return flow?.steps.find((step) => step.id === state.stepId) ?? null;
+}
+
+function pickVariant(variants: string[], recent: string[]): string {
+  const nonRepeat = variants.filter((line) => !recent.slice(-3).includes(line));
+  return pickOne(nonRepeat.length > 0 ? nonRepeat : variants);
+}
+
+export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey; flowId: string; starterActor: string }) {
+  const flow = getFlow(payload.flowId);
+  if (!flow) return false;
+  const now = Date.now();
+  state.isActive = true;
+  state.flowId = flow.id;
+  state.eventKey = payload.eventKey;
+  state.stepId = flow.initialStepId;
+  state.awaitingReply = false;
+  state.lastAskedAt = 0;
+  state.attempts = 0;
+  state.lockTarget = payload.starterActor;
+  state.matched = null;
+  state.pendingChain = null;
+  state.history = [...state.history, `start:${payload.eventKey}:${flow.id}:${now}`].slice(-40);
+  state.askedPromptHistory = [];
+  state.askedQuestionHistory = [];
+  state.nextAskAt = now;
+  state.startedAt = now;
+  state.pressure40Triggered = false;
+  state.pressure60Triggered = false;
+  return true;
+}
+
+export function askCurrentQuestion(state: QnaState): { text: string; options: QnaOption[] } | null {
+  const step = getStep(state);
+  if (!step) return null;
+  const question = pickVariant(step.questionVariants, state.askedQuestionHistory);
+  state.askedQuestionHistory = [...state.askedQuestionHistory, question].slice(-8);
+  state.awaitingReply = true;
+  state.lastAskedAt = Date.now();
+  state.attempts += 1;
+  state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
+  const options = [...step.options, UNKNOWN_OPTION];
+  return { text: question, options };
+}
+
+export function parsePlayerReplyToOption(state: QnaState, playerText: string): QnaParseResult {
+  const step = getStep(state);
+  if (!step) return null;
+  const options = [...step.options, UNKNOWN_OPTION];
+  const matched = matchOptions(playerText, options);
+  if (!matched) return null;
+  return { optionId: matched.option.id, matchedKeyword: matched.keyword };
+}
+
+export function applyOptionResult(state: QnaState, option: QnaOption): { type: 'next' | 'retry' | 'chain' | 'end'; nextStepId?: string } {
+  if (option.id === 'UNKNOWN') {
+    state.history = [...state.history, `unknown:${state.stepId}:${Date.now()}`].slice(-40);
+    state.awaitingReply = false;
+    state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
+    return { type: 'retry' };
+  }
+  if (option.nextEventKey) {
+    state.pendingChain = {
+      eventKey: option.nextEventKey,
+      fromStepId: state.stepId,
+      fromOptionId: option.id
+    };
+    state.awaitingReply = false;
+    return { type: 'chain' };
+  }
+  if (option.nextStepId) {
+    state.stepId = option.nextStepId;
+    state.awaitingReply = false;
+    state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
+    return { type: 'next', nextStepId: option.nextStepId };
+  }
+  if (option.end) {
+    state.awaitingReply = false;
+    return { type: 'end' };
+  }
+  state.awaitingReply = false;
+  return { type: 'retry' };
+}
+
+export function handleTimeoutPressure(state: QnaState): 'low_rumble' | 'ghost_ping' | null {
+  if (!state.isActive || !state.awaitingReply || !state.lastAskedAt) return null;
+  const elapsed = Date.now() - state.lastAskedAt;
+  if (elapsed >= 60_000 && !state.pressure60Triggered) {
+    state.pressure60Triggered = true;
+    state.history = [...state.history, `pressure60:${Date.now()}`].slice(-40);
+    return 'ghost_ping';
+  }
+  if (elapsed >= 40_000 && !state.pressure40Triggered) {
+    state.pressure40Triggered = true;
+    state.history = [...state.history, `pressure40:${Date.now()}`].slice(-40);
+    return 'low_rumble';
+  }
+  return null;
+}
+
+export function getCurrentStepOptions(state: QnaState): QnaOption[] {
+  const step = getStep(state);
+  if (!step) return [];
+  return [...step.options, UNKNOWN_OPTION];
+}
+
+export function getUnknownPrompt(state: QnaState): string {
+  const step = getStep(state);
+  if (!step) return '先想一下，我們再試一次。';
+  const variants = step.unknownPromptVariants ?? ['先想一下，我們再試一次。'];
+  const picked = pickVariant(variants, state.askedPromptHistory);
+  state.askedPromptHistory = [...state.askedPromptHistory, picked].slice(-8);
+  return picked;
+}
+
+export function getRetryPrompt(state: QnaState): string {
+  const step = getStep(state);
+  if (!step) return '我沒抓到關鍵字，再選一次。';
+  const variants = step.retryPromptVariants ?? ['我沒抓到關鍵字，再選一次。'];
+  const picked = pickVariant(variants, state.askedPromptHistory);
+  state.askedPromptHistory = [...state.askedPromptHistory, picked].slice(-8);
+  return picked;
+}
+
+export function getOptionById(state: QnaState, optionId: string): QnaOption | null {
+  return getCurrentStepOptions(state).find((option) => option.id === optionId) ?? null;
+}
+
+export function stopQnaFlow(state: QnaState, reason: string) {
+  state.history = [...state.history, `stop:${reason}:${Date.now()}`].slice(-40);
+  const reset = createInitialQnaState();
+  Object.assign(state, reset);
+}
