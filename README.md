@@ -932,3 +932,25 @@ npm run dev
 - 聊天室顯示為「輸入名 + You badge」，badge 為輕量半透明樣式；玩家名稱本身不會被替換成 `You`。
 - 所有事件 starter tag 固定使用 `@${activeUserInitialHandle}`；若不存在則於 pre-effect 前直接 blocked（`no_active_user`）。
 - 改名入口已停用；若呼叫舊改名函式會 no-op 並在 Debug 記錄 `blockedReason=rename_disabled`。
+
+## QNA Flow（Keyword + 不知道）
+
+- 事件成立後若該事件有 `qnaFlowId`，系統會啟動 QNA，並且每題都強制以 `@activeUserInitialHandle` 出題。
+- Keyword Router 規則：玩家回覆只要「包含」選項 keyword 即命中；比對順序固定為 `UNKNOWN(不知道)` 優先，再比對其他選項。
+- 每題會自動注入 UNKNOWN 選項（`label=不知道`；keywords：`不知道/不清楚/不確定/不曉得/idk/不知道欸`）。命中 UNKNOWN 時會給提示並重問，不會直接結束流程。
+- QNA 與 lock：QNA 期間 lock 會持續鎖定到出題 actor，玩家送出會自動補上 `@lockTarget`，流程結束才解鎖。
+- Chain Event queue：QNA 選項可攜帶 `nextEventKey`，觸發時會先進 `event.queue`，只有在 `event.inFlight=false` 時才會取出啟動，避免撞車。
+- Debug Overlay 會顯示：
+  - `qna.isActive / flowId / eventKey / stepId`
+  - `qna.awaitingReply / lastAskedAt / attempts / lockTarget`
+  - `qna.matched.optionId/keyword/at`
+  - `qna.pendingChain.eventKey`
+  - `event.queue.length`
+
+### 驗收步驟
+
+1. 啟動事件（可用 Debug Event Tester）後，確認事件成立後出現連續 QNA 題目，且每題都 `@activeUser`。
+2. 回覆任一選項 keyword，確認可立刻命中並進下一題/結束。
+3. 回覆 `不知道`（或 UNKNOWN keywords），確認會提示並重問、且 lock 不解除。
+4. 選擇帶 `nextEventKey` 的選項，確認 chain event 先入 queue，再於非 inFlight 時啟動。
+5. 開 `?debug=1` 檢查 overlay 的 QNA / queue 欄位是否完整更新。

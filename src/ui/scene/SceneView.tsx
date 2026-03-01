@@ -236,6 +236,21 @@ declare global {
         cooldowns?: Record<string, number>;
         inFlight?: boolean;
         lastStartAttemptBlockedReason?: string;
+        queue?: {
+          length?: number;
+        };
+        qna?: {
+          isActive?: boolean;
+          flowId?: string;
+          eventKey?: string | null;
+          stepId?: string;
+          awaitingReply?: boolean;
+          lastAskedAt?: number;
+          attempts?: number;
+          lockTarget?: string | null;
+          matched?: { optionId?: string; keyword?: string; at?: number } | null;
+          pendingChain?: { eventKey?: string } | null;
+        };
         test?: {
           lastStartAttemptAt?: number;
           lastStartAttemptKey?: string;
@@ -1612,7 +1627,11 @@ export default function SceneView({
           <div>event.violation: {window.__CHAT_DEBUG__?.violation ?? '-'}</div>
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
-          <div>event.queue/blocked: {window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>event.queue/blocked: {window.__CHAT_DEBUG__?.event?.queue?.length ?? window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>qna.active/flow/step: {String(window.__CHAT_DEBUG__?.event?.qna?.isActive ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.flowId ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.stepId ?? '-'}</div>
+          <div>qna.awaiting/attempts/lastAskedAt: {String(window.__CHAT_DEBUG__?.event?.qna?.awaitingReply ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.attempts ?? 0} / {window.__CHAT_DEBUG__?.event?.qna?.lastAskedAt ?? 0}</div>
+          <div>qna.lockTarget/match: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'} / {(window.__CHAT_DEBUG__?.event?.qna?.matched?.optionId ?? '-') + ':' + (window.__CHAT_DEBUG__?.event?.qna?.matched?.keyword ?? '-')}</div>
+          <div>qna.pendingChain: {window.__CHAT_DEBUG__?.event?.qna?.pendingChain?.eventKey ?? '-'}</div>
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
           <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>

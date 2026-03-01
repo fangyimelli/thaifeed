@@ -32,6 +32,19 @@ import { EVENT_REGISTRY, EVENT_REGISTRY_KEYS, getEventManifest } from '../core/e
 import { pickDialog } from '../core/events/eventDialogs';
 import { pickReactionLines } from '../core/events/eventReactions';
 import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
+import { QNA_FLOW_BY_EVENT } from '../game/qna/qnaFlows';
+import {
+  applyOptionResult,
+  askCurrentQuestion,
+  createInitialQnaState,
+  getOptionById,
+  getRetryPrompt,
+  getUnknownPrompt,
+  handleTimeoutPressure,
+  parsePlayerReplyToOption,
+  startQnaFlow,
+  stopQnaFlow
+} from '../game/qna/qnaEngine';
 
 type EventStartBlockedReason =
   | 'locked_active'
@@ -265,6 +278,9 @@ export default function App() {
   const eventLastKeyRef = useRef('-');
   const eventLastAtRef = useRef(0);
   const eventNextDueAtRef = useRef(0);
+
+  const qnaStateRef = useRef(createInitialQnaState());
+  const eventQueueRef = useRef<{ key: StoryEventKey; source: 'qna' }[]>([]);
 
   const eventLifecycleRef = useRef<EventRunRecord | null>(null);
   const preEffectStateRef = useRef<{ triggered: boolean; at: number; sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop'; videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' }>({ triggered: false, at: 0 });
@@ -775,6 +791,14 @@ export default function App() {
     eventLastReasonRef.current = sourceReason;
     eventLastKeyRef.current = eventKey;
     eventLastAtRef.current = Date.now();
+    const qnaFlowId = eventDef?.qnaFlowId ?? QNA_FLOW_BY_EVENT[eventKey];
+    if (qnaFlowId && activeUserForTag) {
+      const startedQna = startQnaFlow(qnaStateRef.current, { eventKey, flowId: qnaFlowId, starterActor: activeUserForTag });
+      if (startedQna) {
+        lockStateRef.current = { isLocked: true, target: activeUserForTag, startedAt: Date.now() };
+      }
+    }
+
     updateEventDebug({
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
@@ -799,6 +823,12 @@ export default function App() {
           preEffectTriggered: true,
           preEffectAt,
           preEffect: { ...preEffect }
+        },
+        queue: {
+          length: eventQueueRef.current.length
+        },
+        qna: {
+          ...qnaStateRef.current
         }
       }
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
@@ -826,6 +856,18 @@ export default function App() {
     return true;
   }, [buildEventLine, dispatchEventLine, updateEventDebug]);
 
+  const sendQnaQuestion = useCallback((qnaTarget: string) => {
+    const asked = askCurrentQuestion(qnaStateRef.current);
+    if (!asked) return false;
+    const optionLabels = asked.options.map((option) => option.label).join(' / ');
+    const activeHandle = activeUserInitialHandleRef.current;
+    const line = `@${activeHandle} ${asked.text}（選項：${optionLabels}）`;
+    const sent = dispatchEventLine(line, qnaTarget);
+    if (!sent.ok) return false;
+    qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
+    return true;
+  }, [dispatchEventLine]);
+
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
     const activeUsers = collectActiveUsers(state.messages);
@@ -834,6 +876,45 @@ export default function App() {
     const isLocked = lockStateRef.current.isLocked && Boolean(lockStateRef.current.target);
 
     if (!appStarted) return;
+
+    if (source === 'user_input' && qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply) {
+      const lockTarget = qnaStateRef.current.lockTarget;
+      if (lockTarget && lockStateRef.current.target !== lockTarget) {
+        lockStateRef.current = { isLocked: true, target: lockTarget, startedAt: Date.now() };
+      }
+      const stripped = raw.replace(/^\s*@[^\s]+\s*/u, '').trim();
+      const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
+      if (!parsed) {
+        const prompt = getRetryPrompt(qnaStateRef.current);
+        dispatchEventLine(`@${activeUserInitialHandleRef.current} ${prompt}`, lockTarget ?? activeUserInitialHandleRef.current, 'user_input');
+        sendQnaQuestion(lockTarget ?? activeUserInitialHandleRef.current);
+        return;
+      }
+      qnaStateRef.current.matched = { optionId: parsed.optionId, keyword: parsed.matchedKeyword, at: Date.now() };
+      const option = getOptionById(qnaStateRef.current, parsed.optionId);
+      if (!option) return;
+      const result = applyOptionResult(qnaStateRef.current, option);
+      if (result.type === 'retry' && parsed.optionId === 'UNKNOWN') {
+        const prompt = getUnknownPrompt(qnaStateRef.current);
+        dispatchEventLine(`@${activeUserInitialHandleRef.current} ${prompt}`, lockTarget ?? activeUserInitialHandleRef.current, 'user_input');
+        sendQnaQuestion(lockTarget ?? activeUserInitialHandleRef.current);
+        return;
+      }
+      if (result.type === 'next') {
+        sendQnaQuestion(lockTarget ?? activeUserInitialHandleRef.current);
+        return;
+      }
+      if (result.type === 'chain' && qnaStateRef.current.pendingChain) {
+        eventQueueRef.current = [...eventQueueRef.current, { key: qnaStateRef.current.pendingChain.eventKey, source: 'qna' }];
+        qnaStateRef.current.history = [...qnaStateRef.current.history, `chain_enqueued:${qnaStateRef.current.pendingChain.eventKey}:${Date.now()}`].slice(-40);
+        return;
+      }
+      if (result.type === 'end') {
+        stopQnaFlow(qnaStateRef.current, 'flow_end');
+        lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+        return;
+      }
+    }
 
     if (source === 'user_input' && pending && now <= pending.expiresAt) {
       const reasonBase = `event:${pending.eventId}`;
@@ -1098,6 +1179,40 @@ export default function App() {
       dispatchTimedChats(timedChats);
       syncChatEngineDebug();
       tryTriggerStoryEvent('', 'scheduler_tick');
+      if (qnaStateRef.current.isActive) {
+        const pressure = handleTimeoutPressure(qnaStateRef.current);
+        if (pressure === 'low_rumble') {
+          playSfx('low_rumble', { reason: 'qna:pressure40', source: 'event' });
+        }
+        if (pressure === 'ghost_ping') {
+          const played = playSfx('ghost_female', { reason: 'qna:pressure60', source: 'event', allowBeforeStarterTag: true });
+          if (!played) {
+            triggerReactionBurst('ghost');
+          }
+        }
+        if (!qnaStateRef.current.awaitingReply && Date.now() >= qnaStateRef.current.nextAskAt) {
+          const target = qnaStateRef.current.lockTarget ?? activeUserInitialHandleRef.current;
+          if (target) {
+            lockStateRef.current = { isLocked: true, target, startedAt: lockStateRef.current.startedAt || Date.now() };
+            sendQnaQuestion(target);
+          }
+        }
+      }
+      if (!eventRunnerStateRef.current.inFlight && eventQueueRef.current.length > 0) {
+        const next = eventQueueRef.current.shift();
+        if (next) {
+          const started = startEvent(next.key, { source: 'scheduler_tick' });
+          if (!started) {
+            qnaStateRef.current.history = [...qnaStateRef.current.history, `chain_failed:${next.key}:${Date.now()}`].slice(-40);
+            qnaStateRef.current.pendingChain = null;
+            qnaStateRef.current.awaitingReply = false;
+            qnaStateRef.current.nextAskAt = Date.now() + 500;
+          } else {
+            qnaStateRef.current.history = [...qnaStateRef.current.history, `chain_started:${next.key}:${Date.now()}`].slice(-40);
+            qnaStateRef.current.pendingChain = null;
+          }
+        }
+      }
       emitChatEvent({ type: 'IDLE_TICK', topicWeights });
       if (!chatAutoPaused && Date.now() - lastChatMessageAtRef.current > 2500) {
         dispatchForcedBaseMessage();
@@ -1145,6 +1260,13 @@ export default function App() {
             ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}),
             now,
             cooldowns: { ...cooldownsRef.current }
+          },
+          queue: {
+            ...(window.__CHAT_DEBUG__?.event?.queue ?? {}),
+            length: eventQueueRef.current.length
+          },
+          qna: {
+            ...qnaStateRef.current
           }
         }
       });
@@ -1902,6 +2024,13 @@ export default function App() {
                 <div>activeUserInitialHandle: {window.__CHAT_DEBUG__?.chat?.activeUsers?.initialHandle ?? '-'}</div>
                 <div>renameDisabled: {String((window.__CHAT_DEBUG__?.chat?.activeUsers as { renameDisabled?: boolean } | undefined)?.renameDisabled ?? true)}</div>
                 <div>event.inFlight: {String(window.__CHAT_DEBUG__?.event?.inFlight ?? false)}</div>
+                <div>event.queue.length: {window.__CHAT_DEBUG__?.event?.queue?.length ?? 0}</div>
+                <div>qna.isActive: {String(window.__CHAT_DEBUG__?.event?.qna?.isActive ?? false)}</div>
+                <div>qna.flowId/eventKey/stepId: {window.__CHAT_DEBUG__?.event?.qna?.flowId ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.eventKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.stepId ?? '-'}</div>
+                <div>qna.awaitingReply/attempts: {String(window.__CHAT_DEBUG__?.event?.qna?.awaitingReply ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.attempts ?? 0}</div>
+                <div>qna.lastAskedAt/lockTarget: {window.__CHAT_DEBUG__?.event?.qna?.lastAskedAt ?? 0} / {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'}</div>
+                <div>qna.matched.optionId/keyword/at: {window.__CHAT_DEBUG__?.event?.qna?.matched?.optionId ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.matched?.keyword ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.matched?.at ?? '-'}</div>
+                <div>qna.pendingChain.eventKey: {window.__CHAT_DEBUG__?.event?.qna?.pendingChain?.eventKey ?? '-'}</div>
                 <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
                 <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
                 <div>event.test.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptBlockedReason ?? '-'}</div>

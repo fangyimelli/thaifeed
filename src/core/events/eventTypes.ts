@@ -30,6 +30,7 @@ export type StoryEventDefinition = {
   minActiveUsers: number;
   lockOnStart?: boolean;
   usesLock?: boolean;
+  qnaFlowId?: string;
   preEffect?: {
     sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
     videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
