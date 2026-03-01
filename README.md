@@ -1030,6 +1030,9 @@ npm run build
 
 - 2026-03-01：移除 `src/app/App.tsx` 中 `cooldownsRef.loop4` 的 legacy debug/cooldown 欄位，改用語意一致的 `cooldownsRef.tv_event`。影響：`TV_EVENT` gate 與 cooldown 行為不變，只是移除舊命名避免與已移除的 `loop4` 場景語意衝突。
 
+- 2026-03-01：修正 Event Exclusive 與 QNA actor 身分一致性衝突。舊邏輯中事件台詞發送者固定為 `mod_live`，會與「僅 lockOwner 可 tag activeUser」規則互相打架；現改為事件 opener / followUp / QNA 提示均以當前 `lockOwner` 作為發言 actor，並保留舊有 lock/timeout gate，不再新舊並存。
+- 2026-03-01：補齊 blocked reason 可觀測性：當事件因 `event_exclusive_active`（或其他 start gate）被擋時，同步更新 `event.lastBlockedReason`；foreign tag 被攔截時即時回填 `event.foreignTagBlockedCount` 與 `event.lastBlockedReason`。
+
 ## 近期衝突整合（2026-03-01）
 
 - 通盤檢查 `loop4` 舊命名與現行 `oldhouse_room_loop / loop2 / loop3` 播放策略的衝突點。
