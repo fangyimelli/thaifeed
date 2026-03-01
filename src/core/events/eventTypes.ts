@@ -39,6 +39,12 @@ export type EventRunRecord = {
   state: EventLifecycleState;
   at: number;
   starterTagSent: boolean;
+  preEffectTriggered?: boolean;
+  preEffectAt?: number;
+  preEffect?: {
+    sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
+    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+  };
   abortedReason?: string;
   openerLineId?: string;
   followUpLineId?: string;

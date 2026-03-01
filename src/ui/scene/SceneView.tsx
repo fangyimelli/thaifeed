@@ -227,6 +227,7 @@ declare global {
         };
         cooldowns?: Record<string, number>;
         inFlight?: boolean;
+        lastStartAttemptBlockedReason?: string;
         test?: {
           lastStartAttemptAt?: number;
           lastStartAttemptKey?: string;
@@ -244,6 +245,12 @@ declare global {
           topic?: 'ghost' | 'footsteps' | 'light';
           state?: 'active' | 'aborted' | 'done';
           starterTagSent?: boolean;
+          preEffectTriggered?: boolean;
+          preEffectAt?: number;
+          preEffect?: {
+            sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
+            videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+          };
           abortedReason?: string;
           waitingForReply?: boolean;
         };
@@ -1621,6 +1628,9 @@ export default function SceneView({
           <div>event.candidates.lastGateRejectSummary: {Object.entries(window.__CHAT_DEBUG__?.event?.candidates?.lastGateRejectSummary ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lastEvent.key/eventId/state: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.eventId ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.state ?? '-'}</div>
           <div>event.lastEvent.starterTagSent/abortedReason: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
+          <div>event.lastEvent.preEffectTriggered/preEffectAt: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectTriggered ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectAt ?? '-'}</div>
+          <div>event.lastEvent.preEffect.sfxKey/videoKey: {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.sfxKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.videoKey ?? '-'}</div>
+          <div>event.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
           <div>event.lastEvent.at/reason/variant: {window.__CHAT_DEBUG__?.event?.lastEvent?.at ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.reason ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.lineVariantId ?? '-'}</div>
           <div>event.blocking.isLocked/lockTarget/lockReason: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'} / {window.__CHAT_DEBUG__?.event?.blocking?.schedulerBlockedReason ?? '-'}</div>
           <div>event.blocking.lockElapsedSec: {window.__CHAT_DEBUG__?.event?.blocking?.lockElapsedSec ?? 0}</div>
