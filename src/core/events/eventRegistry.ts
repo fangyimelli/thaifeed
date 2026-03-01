@@ -13,6 +13,7 @@ export const EVENT_REGISTRY_KEYS: StoryEventKey[] = [
 export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   VOICE_CONFIRM: {
     key: 'VOICE_CONFIRM',
+    qnaFlowId: 'voice_confirm_flow',
     requiresTag: true,
     cooldownMs: 90_000,
     chance: 0.08,
@@ -23,6 +24,7 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   },
   GHOST_PING: {
     key: 'GHOST_PING',
+    qnaFlowId: 'ghost_ping_flow',
     requiresTag: true,
     cooldownMs: 120_000,
     chance: 0.06,
@@ -34,6 +36,7 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   },
   TV_EVENT: {
     key: 'TV_EVENT',
+    qnaFlowId: 'tv_event_flow',
     requiresTag: true,
     cooldownMs: 90_000,
     chance: 0.07,
@@ -44,6 +47,7 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   },
   NAME_CALL: {
     key: 'NAME_CALL',
+    qnaFlowId: 'name_call_flow',
     requiresTag: true,
     cooldownMs: 90_000,
     chance: 0.06,
@@ -54,6 +58,7 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   },
   VIEWER_SPIKE: {
     key: 'VIEWER_SPIKE',
+    qnaFlowId: 'viewer_spike_flow',
     requiresTag: true,
     cooldownMs: 90_000,
     chance: 0.06,
@@ -64,6 +69,7 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   },
   LIGHT_GLITCH: {
     key: 'LIGHT_GLITCH',
+    qnaFlowId: 'light_glitch_flow',
     requiresTag: true,
     cooldownMs: 90_000,
     chance: 0.05,
@@ -74,6 +80,7 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
   },
   FEAR_CHALLENGE: {
     key: 'FEAR_CHALLENGE',
+    qnaFlowId: 'fear_challenge_flow',
     requiresTag: true,
     cooldownMs: 90_000,
     chance: 0.06,
