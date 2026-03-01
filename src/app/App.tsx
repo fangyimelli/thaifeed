@@ -245,7 +245,7 @@ export default function App() {
   const chatEngineRef = useRef(new ChatEngine());
   const ghostLoreRef = useRef(createGhostLore());
   const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number }>({ isLocked: false, target: null, startedAt: 0 });
-  const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, loop4: 0, ghost_ping_actor: 0 });
+  const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, tv_event: 0, ghost_ping_actor: 0 });
   const eventCooldownsRef = useRef<Record<StoryEventKey, number>>({
     VOICE_CONFIRM: 0,
     GHOST_PING: 0,
@@ -997,7 +997,7 @@ export default function App() {
       if (activeUsers.length < def.minActiveUsers) continue;
       if (!can(key)) continue;
       if (key === 'GHOST_PING' && (cooldownsRef.current.ghost_ping_actor ?? 0) > now) continue;
-      if (key === 'TV_EVENT' && (cooldownsRef.current.loop4 ?? 0) > now) continue;
+      if (key === 'TV_EVENT' && (cooldownsRef.current.tv_event ?? 0) > now) continue;
       if (Math.random() >= def.chance) continue;
       const started = startEvent(key, { source });
       if (!started) return;
@@ -1013,7 +1013,7 @@ export default function App() {
       } else {
         pendingReplyEventRef.current = { key, target: started.target || target, eventId: started.eventId, expiresAt: now + 20_000 };
       }
-      if (key === 'TV_EVENT') cooldownsRef.current.loop4 = now + 90_000;
+      if (key === 'TV_EVENT') cooldownsRef.current.tv_event = now + 90_000;
       return;
     }
   }, [appStarted, playSfx, postFollowUpLine, startEvent, state.messages, triggerReactionBurst]);

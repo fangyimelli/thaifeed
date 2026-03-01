@@ -954,3 +954,14 @@ npm run dev
 3. 回覆 `不知道`（或 UNKNOWN keywords），確認會提示並重問、且 lock 不解除。
 4. 選擇帶 `nextEventKey` 的選項，確認 chain event 先入 queue，再於非 inFlight 時啟動。
 5. 開 `?debug=1` 檢查 overlay 的 QNA / queue 欄位是否完整更新。
+
+## Removed / Deprecated Log
+
+- 2026-03-01：移除 `src/app/App.tsx` 中 `cooldownsRef.loop4` 的 legacy debug/cooldown 欄位，改用語意一致的 `cooldownsRef.tv_event`。影響：`TV_EVENT` gate 與 cooldown 行為不變，只是移除舊命名避免與已移除的 `loop4` 場景語意衝突。
+
+## 近期衝突整合（2026-03-01）
+
+- 通盤檢查 `loop4` 舊命名與現行 `oldhouse_room_loop / loop2 / loop3` 播放策略的衝突點。
+- 判斷舊邏輯仍有保留必要（TV_EVENT 需要獨立 cooldown gate），因此採「整合」而非移除：
+  - 保留 gate 行為與 90 秒冷卻值。
+  - 將鍵名由 `loop4` 改為 `tv_event`，與事件語意對齊並避免誤導。
