@@ -19,7 +19,10 @@ export const createInitialQnaState = (): QnaState => ({
   awaitingReply: false,
   lastAskedAt: 0,
   attempts: 0,
+  taggedUser: null,
   lockTarget: null,
+  lastQuestionActor: null,
+  lastAskedTextPreview: '',
   matched: null,
   pendingChain: null,
   history: [],
@@ -45,7 +48,7 @@ function pickVariant(variants: string[], recent: string[]): string {
   return pickOne(nonRepeat.length > 0 ? nonRepeat : variants);
 }
 
-export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey; flowId: string; starterActor: string }) {
+export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey; flowId: string; taggedUser: string; questionActor: string }) {
   const flow = getFlow(payload.flowId);
   if (!flow) return false;
   const now = Date.now();
@@ -56,7 +59,10 @@ export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey
   state.awaitingReply = false;
   state.lastAskedAt = 0;
   state.attempts = 0;
-  state.lockTarget = payload.starterActor;
+  state.taggedUser = payload.taggedUser;
+  state.lockTarget = payload.questionActor;
+  state.lastQuestionActor = payload.questionActor;
+  state.lastAskedTextPreview = '';
   state.matched = null;
   state.pendingChain = null;
   state.history = [...state.history, `start:${payload.eventKey}:${flow.id}:${now}`].slice(-40);
@@ -80,6 +86,15 @@ export function askCurrentQuestion(state: QnaState): { text: string; options: Qn
   state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
   const options = [...step.options, UNKNOWN_OPTION];
   return { text: question, options };
+}
+
+export function setQnaQuestionActor(state: QnaState, questionActor: string) {
+  state.lockTarget = questionActor;
+  state.lastQuestionActor = questionActor;
+}
+
+export function updateLastAskedPreview(state: QnaState, line: string) {
+  state.lastAskedTextPreview = line.slice(0, 30);
 }
 
 export function parsePlayerReplyToOption(state: QnaState, playerText: string): QnaParseResult {

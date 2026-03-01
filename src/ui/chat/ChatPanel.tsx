@@ -25,7 +25,6 @@ type Props = {
   onSendButtonClick?: () => void;
   lockTarget?: string | null;
   isLocked?: boolean;
-  lastEventKey?: string;
   lockReason?: string;
   activeUserInitialHandle: string;
 };
@@ -55,7 +54,6 @@ export default function ChatPanel({
   onSendButtonClick,
   lockTarget,
   isLocked,
-  lastEventKey,
   lockReason,
   activeUserInitialHandle
 }: Props) {
@@ -264,9 +262,9 @@ export default function ChatPanel({
         </button>
       )}
 
-      {isLocked && lockTarget && (
+      {isLocked && (
         <div className="chat-lock-banner" role="status" aria-live="polite">
-          你只能回覆 @{lockTarget}（{lastEventKey ?? '-'} / {lockReason ?? '-' }）
+          你只能回覆 @{lockTarget ?? '—'}（{lockReason ?? '-' }）
         </div>
       )}
 

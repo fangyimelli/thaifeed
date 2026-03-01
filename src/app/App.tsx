@@ -42,8 +42,10 @@ import {
   getUnknownPrompt,
   handleTimeoutPressure,
   parsePlayerReplyToOption,
+  setQnaQuestionActor,
   startQnaFlow,
-  stopQnaFlow
+  stopQnaFlow,
+  updateLastAskedPreview
 } from '../game/qna/qnaEngine';
 
 type EventStartBlockedReason =
@@ -102,6 +104,12 @@ function pickNonRepeatingActor(pool: string[], recentActors: string[]): string {
   const source = scored.length > 0 ? scored : pool.filter((actor) => actor !== lastActor);
   const usable = source.length > 0 ? source : pool;
   return usable[Math.floor(Math.random() * usable.length)] ?? pool[0];
+}
+
+function pickQuestionActor(activeUsers: string[], fallbackActor: string): string {
+  const actorPool = activeUsers.filter((name) => name && name !== 'system');
+  if (actorPool.length === 0) return fallbackActor;
+  return pickOne(actorPool);
 }
 
 function isPassCommand(raw: string) {
@@ -622,6 +630,11 @@ export default function App() {
     const eligibleActiveUsers = activeUsers.filter((name) => name && name !== 'system' && !vipUsers.has(name));
     const activeUserCurrent = eligibleActiveUsers.length > 0 ? pickOne(eligibleActiveUsers) : '';
     const activeUserForTag = activeUserInitialHandleRef.current || activeUserCurrent;
+    let questionActor = pickQuestionActor(eligibleActiveUsers, 'mod_live');
+    if (questionActor === activeUserForTag) {
+      const actorPool = eligibleActiveUsers.filter((name) => name !== activeUserForTag);
+      questionActor = pickOne(actorPool.length > 0 ? actorPool : ['mod_live']);
+    }
 
     let blockedReason: EventStartBlockedReason | null = null;
     if (!eventDef) blockedReason = 'registry_missing';
@@ -772,7 +785,7 @@ export default function App() {
     }
 
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
-    lockStateRef.current = { isLocked: true, target: activeUserForTag, startedAt: Date.now() };
+    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
     const record: EventRunRecord = {
       eventId,
       key: eventKey,
@@ -793,9 +806,14 @@ export default function App() {
     eventLastAtRef.current = Date.now();
     const qnaFlowId = eventDef?.qnaFlowId ?? QNA_FLOW_BY_EVENT[eventKey];
     if (qnaFlowId && activeUserForTag) {
-      const startedQna = startQnaFlow(qnaStateRef.current, { eventKey, flowId: qnaFlowId, starterActor: activeUserForTag });
+      const startedQna = startQnaFlow(qnaStateRef.current, {
+        eventKey,
+        flowId: qnaFlowId,
+        taggedUser: activeUserForTag,
+        questionActor
+      });
       if (startedQna) {
-        lockStateRef.current = { isLocked: true, target: activeUserForTag, startedAt: Date.now() };
+        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
       }
     }
 
@@ -856,17 +874,31 @@ export default function App() {
     return true;
   }, [buildEventLine, dispatchEventLine, updateEventDebug]);
 
-  const sendQnaQuestion = useCallback((qnaTarget: string) => {
+  const sendQnaQuestion = useCallback(() => {
     const asked = askCurrentQuestion(qnaStateRef.current);
     if (!asked) return false;
+    const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
+    if (!taggedUser) {
+      qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:no_tagged_user:${Date.now()}`].slice(-40);
+      return false;
+    }
+    const eventActiveUsers = collectActiveUsers(state.messages).filter((name) => name && name !== 'system');
+    let questionActor = pickQuestionActor(eventActiveUsers, 'mod_live');
+    if (questionActor === taggedUser) {
+      qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:lock_target_invalid:${Date.now()}`].slice(-40);
+      const actorPool = eventActiveUsers.filter((name) => name !== taggedUser);
+      questionActor = pickOne(actorPool.length > 0 ? actorPool : ['mod_live']);
+    }
+    setQnaQuestionActor(qnaStateRef.current, questionActor);
+    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now() };
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
-    const activeHandle = activeUserInitialHandleRef.current;
-    const line = `@${activeHandle} ${asked.text}（選項：${optionLabels}）`;
-    const sent = dispatchEventLine(line, qnaTarget);
+    const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
+    const sent = dispatchEventLine(line, questionActor);
     if (!sent.ok) return false;
+    updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
     return true;
-  }, [dispatchEventLine]);
+  }, [dispatchEventLine, state.messages]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -886,8 +918,11 @@ export default function App() {
       const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
       if (!parsed) {
         const prompt = getRetryPrompt(qnaStateRef.current);
-        dispatchEventLine(`@${activeUserInitialHandleRef.current} ${prompt}`, lockTarget ?? activeUserInitialHandleRef.current, 'user_input');
-        sendQnaQuestion(lockTarget ?? activeUserInitialHandleRef.current);
+        const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
+        if (taggedUser) {
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
+        }
+        sendQnaQuestion();
         return;
       }
       qnaStateRef.current.matched = { optionId: parsed.optionId, keyword: parsed.matchedKeyword, at: Date.now() };
@@ -896,12 +931,15 @@ export default function App() {
       const result = applyOptionResult(qnaStateRef.current, option);
       if (result.type === 'retry' && parsed.optionId === 'UNKNOWN') {
         const prompt = getUnknownPrompt(qnaStateRef.current);
-        dispatchEventLine(`@${activeUserInitialHandleRef.current} ${prompt}`, lockTarget ?? activeUserInitialHandleRef.current, 'user_input');
-        sendQnaQuestion(lockTarget ?? activeUserInitialHandleRef.current);
+        const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
+        if (taggedUser) {
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
+        }
+        sendQnaQuestion();
         return;
       }
       if (result.type === 'next') {
-        sendQnaQuestion(lockTarget ?? activeUserInitialHandleRef.current);
+        sendQnaQuestion();
         return;
       }
       if (result.type === 'chain' && qnaStateRef.current.pendingChain) {
@@ -1191,11 +1229,7 @@ export default function App() {
           }
         }
         if (!qnaStateRef.current.awaitingReply && Date.now() >= qnaStateRef.current.nextAskAt) {
-          const target = qnaStateRef.current.lockTarget ?? activeUserInitialHandleRef.current;
-          if (target) {
-            lockStateRef.current = { isLocked: true, target, startedAt: lockStateRef.current.startedAt || Date.now() };
-            sendQnaQuestion(target);
-          }
+          sendQnaQuestion();
         }
       }
       if (!eventRunnerStateRef.current.inFlight && eventQueueRef.current.length > 0) {
@@ -1523,13 +1557,20 @@ export default function App() {
           lockElapsedSec: lockStateRef.current.isLocked ? Math.max(0, Math.floor((now - lockStateRef.current.startedAt) / 1000)) : 0,
           schedulerBlocked,
           schedulerBlockedReason,
-          lockReason: eventLifecycleRef.current?.key ?? '-'
+          lockReason: qnaStateRef.current.isActive
+            ? `${qnaStateRef.current.eventKey ?? '-'} / ${qnaStateRef.current.flowId || '-'} / ${qnaStateRef.current.stepId || '-'}`
+            : (eventLifecycleRef.current?.key ?? '-'),
+          lockTargetMissing: lockStateRef.current.isLocked && !lockStateRef.current.target
         },
         cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
         inFlight: eventRunnerStateRef.current.inFlight,
         lastStartAttemptBlockedReason: eventTestDebugRef.current.lastStartAttemptBlockedReason,
         test: {
           ...eventTestDebugRef.current
+        },
+        qna: {
+          ...qnaStateRef.current,
+          lockTargetInvalid: Boolean(qnaStateRef.current.lockTarget && qnaStateRef.current.taggedUser && qnaStateRef.current.lockTarget === qnaStateRef.current.taggedUser)
         }
       };
 
@@ -2029,6 +2070,11 @@ export default function App() {
                 <div>qna.flowId/eventKey/stepId: {window.__CHAT_DEBUG__?.event?.qna?.flowId ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.eventKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.stepId ?? '-'}</div>
                 <div>qna.awaitingReply/attempts: {String(window.__CHAT_DEBUG__?.event?.qna?.awaitingReply ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.attempts ?? 0}</div>
                 <div>qna.lastAskedAt/lockTarget: {window.__CHAT_DEBUG__?.event?.qna?.lastAskedAt ?? 0} / {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'}</div>
+                <div>qna.taggedUserHandle: {window.__CHAT_DEBUG__?.event?.qna?.taggedUser ?? '-'}</div>
+                <div>qna.lockTargetHandle: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'}</div>
+                <div>qna.lastQuestionActor.handle: {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionActor ?? '-'}</div>
+                <div>qna.lastAskedTextPreview: {window.__CHAT_DEBUG__?.event?.qna?.lastAskedTextPreview ?? '-'}</div>
+                <div>qna.lockTargetInvalidError: {String(window.__CHAT_DEBUG__?.event?.qna?.lockTargetInvalid ?? false)}</div>
                 <div>qna.matched.optionId/keyword/at: {window.__CHAT_DEBUG__?.event?.qna?.matched?.optionId ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.matched?.keyword ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.matched?.at ?? '-'}</div>
                 <div>qna.pendingChain.eventKey: {window.__CHAT_DEBUG__?.event?.qna?.pendingChain?.eventKey ?? '-'}</div>
                 <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
@@ -2068,8 +2114,9 @@ export default function App() {
             onSendButtonClick={handleSendButtonClick}
             isLocked={lockStateRef.current.isLocked}
             lockTarget={lockStateRef.current.target}
-            lastEventKey={eventLifecycleRef.current?.key ?? '-'}
-            lockReason={eventLifecycleRef.current?.key ?? '-'}
+            lockReason={qnaStateRef.current.isActive
+              ? `${qnaStateRef.current.eventKey ?? '-'} / ${qnaStateRef.current.flowId || '-'} / ${qnaStateRef.current.stepId || '-'}`
+              : (eventLifecycleRef.current?.key ?? '-')}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
           />
         </section>
