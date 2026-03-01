@@ -191,9 +191,12 @@ declare global {
       chat?: {
         autoPaused?: boolean;
         autoPausedReason?: string;
-        autoScrollFrozen?: boolean;
-        autoScrollFrozenReason?: string;
-        autoScrollFrozenAt?: number;
+        autoScrollMode?: 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
+        freezeCountdownRemaining?: number;
+        freezeAfterNMessages?: number;
+        freezeCountdownStartedAt?: number;
+        lastMessageActorIdCounted?: string;
+        lastCountdownDecrementAt?: number;
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string; renameDisabled?: boolean };
         audience?: { count?: number };
         activeUser?: { id?: string };
@@ -1758,7 +1761,8 @@ export default function SceneView({
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>
           <div>chat.activeUser.handle/initial: {window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'} / {window.__CHAT_DEBUG__?.chat?.activeUsers?.initialHandle ?? '-'}</div>
           <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
-          <div>chat.autoScrollFrozen/reason/at: {String(window.__CHAT_DEBUG__?.chat?.autoScrollFrozen ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenReason ?? '-'} / {window.__CHAT_DEBUG__?.chat?.autoScrollFrozenAt ?? 0}</div>
+          <div>chat.autoScrollMode/remain/after/startAt: {window.__CHAT_DEBUG__?.chat?.autoScrollMode ?? '-'} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownRemaining ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeAfterNMessages ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownStartedAt ?? 0}</div>
+          <div>chat.lastMessageActorIdCounted/lastCountdownDecrementAt: {window.__CHAT_DEBUG__?.chat?.lastMessageActorIdCounted ?? '-'} / {window.__CHAT_DEBUG__?.chat?.lastCountdownDecrementAt ?? 0}</div>
           <div>chat.pacing.baseRate/currentRate/jitter/nextDue: {window.__CHAT_DEBUG__?.chat?.pacing?.baseRate ?? '-'} / {window.__CHAT_DEBUG__?.chat?.pacing?.currentRate ?? '-'} / {String(window.__CHAT_DEBUG__?.chat?.pacing?.jitterEnabled ?? true)} / {window.__CHAT_DEBUG__?.chat?.pacing?.nextMessageDueInSec ?? '-'}</div>
           <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
           <div>chat.lint.lastRejectedText: {window.__CHAT_DEBUG__?.chat?.lint?.lastRejectedText ?? '-'}</div>

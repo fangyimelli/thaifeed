@@ -27,7 +27,7 @@ type Props = {
   isLocked?: boolean;
   replyingToMessageId?: string | null;
   activeUserInitialHandle: string;
-  autoScrollFrozen: boolean;
+  autoScrollMode: 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
   pinnedMessageId?: string | null;
   isReplyPreviewVisible?: boolean;
   replyPreviewSuppressedReason?: string | null;
@@ -60,7 +60,7 @@ export default function ChatPanel({
   isLocked,
   replyingToMessageId,
   activeUserInitialHandle,
-  autoScrollFrozen,
+  autoScrollMode,
   pinnedMessageId = null,
   isReplyPreviewVisible = false,
   replyPreviewSuppressedReason = null
@@ -138,8 +138,8 @@ export default function ChatPanel({
   };
 
   const conditionalScrollToBottom = () => {
-    if (autoScrollFrozen) {
-      logDebugState('scroll-skipped:autoScrollFrozen');
+    if (autoScrollMode === 'FROZEN') {
+      logDebugState('scroll-skipped:autoScrollMode:FROZEN');
       return;
     }
     const el = messageListRef.current;
