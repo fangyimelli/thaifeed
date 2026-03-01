@@ -918,8 +918,17 @@ npm run dev
 
 - 玩家第一次輸入名稱後，寫入 `activeUserInitialHandle`（immutable，只寫一次）。
 - 所有事件 starter tag 一律使用 `activeUserInitialHandle`。
-- Debug 顯示 `activeUser.handle(current)` 與 `activeUserInitialHandle(immutable)`。
+- Debug 顯示 `activeUserInitialHandle(immutable)` 與 `renameDisabled=true`。
 
 ## Debug 規則延續
 
 - 若某問題連續 3 次 PR 未再提及，需自 Debug 面板移除；除非再次出現才可重新加入。
+
+
+## Player Naming
+
+- 玩家名稱只允許首次輸入一次，系統會做 normalize：`trim` + 移除前導 `@`；空字串會被阻擋。
+- `activeUserInitialHandle` 為 immutable，後續流程不得覆寫，聊天室玩家名稱與事件 tag 都以此為唯一來源。
+- 聊天室顯示為「輸入名 + You badge」，badge 為輕量半透明樣式；玩家名稱本身不會被替換成 `You`。
+- 所有事件 starter tag 固定使用 `@${activeUserInitialHandle}`；若不存在則於 pre-effect 前直接 blocked（`no_active_user`）。
+- 改名入口已停用；若呼叫舊改名函式會 no-op 並在 Debug 記錄 `blockedReason=rename_disabled`。

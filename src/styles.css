@@ -176,6 +176,7 @@ body {
 .vip.VIP_STILL_HERE .name { color: #c9b8ff; }
 .chat-message.self .name { color: #8cffc4; }
 .chat-message.self .msg { color: #dfffea; }
+.you-badge { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 999px; font-size: 10px; line-height: 1.2; color: rgba(224, 252, 238, 0.95); background: rgba(108, 220, 165, 0.28); border: 1px solid rgba(128, 232, 182, 0.35); }
 .chat-message.system.join { padding: 2px 0; }
 .chat-message.system.join .chat-line { justify-content: center; }
 .chat-message.system.join .msg { color: #9ca3af; font-size: 12px; }

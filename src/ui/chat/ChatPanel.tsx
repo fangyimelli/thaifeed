@@ -27,6 +27,7 @@ type Props = {
   isLocked?: boolean;
   lastEventKey?: string;
   lockReason?: string;
+  activeUserInitialHandle: string;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -55,7 +56,8 @@ export default function ChatPanel({
   lockTarget,
   isLocked,
   lastEventKey,
-  lockReason
+  lockReason,
+  activeUserInitialHandle
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -238,7 +240,12 @@ export default function ChatPanel({
         <div className="chat-items">
           {!isReady && <div className="chat-loading-banner">{loadingStatusText || '初始化中'}</div>}
           {sanitizedMessages.slice(-MAX_RENDER_COUNT).map((message) => (
-            <ChatMessage key={message.id} message={message} onToggleTranslation={onToggleTranslation} />
+            <ChatMessage
+              key={message.id}
+              message={message}
+              onToggleTranslation={onToggleTranslation}
+              activeUserInitialHandle={activeUserInitialHandle}
+            />
           ))}
           <div ref={messageEndRef} />
         </div>
