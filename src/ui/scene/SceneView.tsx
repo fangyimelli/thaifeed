@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FAN_LOOP_PATH,
   JUMP_LOOPS,
+  LOOP_KEY_ALIASES,
   MAIN_LOOP,
+  type LoopRequestKey,
   type OldhouseLoopKey,
   VIDEO_PATH_BY_KEY
 } from '../../config/oldhousePlayback';
@@ -135,6 +137,10 @@ type VideoDebugState = {
   lastFallback: { fromKey: OldhouseLoopKey | null; toKey: OldhouseLoopKey | null; reason: string } | null;
   unavailableJumps: Array<{ key: OldhouseLoopKey; reason: string }>;
   sceneMapDigest: Record<OldhouseLoopKey, string>;
+  lastPlayRequest: { requestedKey: string; at: number; reason: string; sourceEventKey?: string } | null;
+  lastSwitch: { fromKey: string | null; toKey: string; at: number; reason: string; sourceEventKey?: string } | null;
+  lastDenied: { requestedKey: string; at: number; denyReason: string; sourceEventKey?: string } | null;
+  priorityLock: { lockedUntil: number; lockedByEventKey: string | null };
   timers: { jumpTimer: number | null; watchdogTimer: number | null };
 };
 
@@ -156,7 +162,8 @@ type PlannedJumpState = {
 const SCENE_MAP_DIGEST: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: VIDEO_PATH_BY_KEY.oldhouse_room_loop,
   oldhouse_room_loop2: VIDEO_PATH_BY_KEY.oldhouse_room_loop2,
-  oldhouse_room_loop3: VIDEO_PATH_BY_KEY.oldhouse_room_loop3
+  oldhouse_room_loop3: VIDEO_PATH_BY_KEY.oldhouse_room_loop3,
+  oldhouse_room_loop4: VIDEO_PATH_BY_KEY.oldhouse_room_loop4
 };
 
 declare global {
@@ -291,7 +298,7 @@ declare global {
           preEffectAt?: number;
           preEffect?: {
             sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
-            videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+            videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
           };
           abortedReason?: string;
           waitingForReply?: boolean;
@@ -362,6 +369,7 @@ export default function SceneView({
   const nextJumpAtRef = useRef<number | null>(null);
   const plannedJumpRef = useRef<PlannedJumpState | null>(null);
   const jumpWatchdogRef = useRef<number | null>(null);
+  const priorityLockRef = useRef<{ lockedUntil: number; lockedByEventKey: string | null }>({ lockedUntil: 0, lockedByEventKey: null });
   const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
@@ -441,6 +449,10 @@ export default function SceneView({
       lastFallback: null,
       unavailableJumps: [],
       sceneMapDigest: SCENE_MAP_DIGEST,
+      lastPlayRequest: null,
+      lastSwitch: null,
+      lastDenied: null,
+      priorityLock: { ...priorityLockRef.current },
       timers: { jumpTimer: null, watchdogTimer: null }
     };
 
@@ -453,6 +465,10 @@ export default function SceneView({
 
   const getVideoUrlForKey = useCallback((key: OldhouseLoopKey) => {
     return VIDEO_PATH_BY_KEY[key];
+  }, []);
+
+  const resolveLoopKey = useCallback((key: LoopRequestKey): OldhouseLoopKey | null => {
+    return LOOP_KEY_ALIASES[key] ?? null;
   }, []);
 
   const setNeedsGestureState = useCallback((value: boolean) => {
@@ -813,7 +829,7 @@ export default function SceneView({
         updateVideoDebug({ lastFallback: { fromKey: nextKey, toKey: MAIN_LOOP, reason } });
         isInJumpRef.current = false;
         updateVideoDebug({ isInJump: false });
-        await switchTo(MAIN_LOOP);
+        await requestVideoSwitch({ key: 'loop3', reason, sourceEventKey: 'SYSTEM_RETURN' });
       } else {
         setAssets((prev) => ({ ...prev, videoOk: false }));
         onSceneError?.({
@@ -831,6 +847,53 @@ export default function SceneView({
       });
     }
   }, [appStarted, collectAudioDebugSnapshot, debugEnabled, getBufferVideoEl, getCurrentVideoEl, getVideoUrlForKey, markActiveVideo, stopAllNonPersistentSfx, updateAudioDebug, updateVideoDebug]);
+
+  const requestVideoSwitch = useCallback(async ({ key, reason, sourceEventKey }: { key: LoopRequestKey; reason: string; sourceEventKey?: string }) => {
+    const requestedKey = resolveLoopKey(key);
+    const now = Date.now();
+    updateVideoDebug({
+      lastPlayRequest: { requestedKey: String(key), at: now, reason, sourceEventKey },
+      priorityLock: { ...priorityLockRef.current }
+    });
+    if (!requestedKey) {
+      updateVideoDebug({
+        lastDenied: { requestedKey: String(key), at: now, denyReason: 'unknown_video_key', sourceEventKey }
+      });
+      return false;
+    }
+
+    const lock = priorityLockRef.current;
+    if (lock.lockedUntil > now && sourceEventKey !== lock.lockedByEventKey) {
+      const denyReason = `priority_lock_active:${lock.lockedByEventKey ?? '-'}:${Math.max(0, lock.lockedUntil - now)}ms`;
+      updateVideoDebug({
+        lastDenied: { requestedKey: String(key), at: now, denyReason, sourceEventKey },
+        priorityLock: { ...lock }
+      });
+      return false;
+    }
+
+    const fromKey = currentLoopKeyRef.current;
+    await switchTo(requestedKey);
+    const switched = currentLoopKeyRef.current === requestedKey;
+    if (!switched) {
+      updateVideoDebug({
+        lastDenied: { requestedKey: String(key), at: Date.now(), denyReason: 'switch_not_applied', sourceEventKey }
+      });
+      return false;
+    }
+
+    if (sourceEventKey === 'TV_EVENT' && requestedKey === 'oldhouse_room_loop4') {
+      const lockMs = randomMs(3000, 6000);
+      priorityLockRef.current = { lockedUntil: Date.now() + lockMs, lockedByEventKey: 'TV_EVENT' };
+    }
+
+    updateVideoDebug({
+      lastSwitch: { fromKey, toKey: requestedKey, at: Date.now(), reason, sourceEventKey },
+      priorityLock: { ...priorityLockRef.current }
+    });
+
+    return true;
+  }, [resolveLoopKey, switchTo, updateVideoDebug]);
 
   const computeWhyNotJumped = useCallback(() => {
     const planned = plannedJumpRef.current;
@@ -985,7 +1048,7 @@ export default function SceneView({
 
     const nextKey = planned.key;
     try {
-      await switchTo(nextKey);
+      await requestVideoSwitch({ key: nextKey, reason: `planned_jump:${reason}`, sourceEventKey: 'SYSTEM_JUMP' });
       planned.lastExecResult = currentLoopKeyRef.current === nextKey ? 'ok' : 'switch_mismatch';
     } catch (error) {
       planned.lastExecResult = 'switch_error';
@@ -1024,16 +1087,16 @@ export default function SceneView({
           lastFallback: { fromKey: nextKey, toKey: MAIN_LOOP, reason: 'jump-return-timeout-fallback' }
         });
         jumpReturnTimerRef.current = null;
-        void switchTo(MAIN_LOOP).then(() => {
+        void requestVideoSwitch({ key: 'loop3', reason: 'jump-return-timeout-fallback', sourceEventKey: 'SYSTEM_RETURN' }).then(() => {
           currentLoopKeyRef.current = MAIN_LOOP;
           scheduleNextJump({ force: true });
         });
       }
     }, fallbackDelay);
-  }, [appStarted, getCurrentVideoEl, scheduleNextJump, switchTo, syncPlannedJumpDebug, updateVideoDebug]);
+  }, [appStarted, getCurrentVideoEl, requestVideoSwitch, scheduleNextJump, syncPlannedJumpDebug, updateVideoDebug]);
   const runDebugForceAction = useCallback(async (
-    action: 'FORCE_LOOP' | 'FORCE_LOOP2' | 'FORCE_MAIN' | 'FORCE_PLANNED' | 'RESCHEDULE_JUMP',
-    runner: () => Promise<void> | void
+    action: 'FORCE_LOOP' | 'FORCE_LOOP2' | 'FORCE_MAIN' | 'FORCE_LOOP4_3S' | 'FORCE_PLANNED' | 'RESCHEDULE_JUMP',
+    runner: () => Promise<unknown> | void
   ) => {
     const bufferBefore = getBufferVideoEl()?.currentSrc || getBufferVideoEl()?.src || null;
     const currentKey = currentLoopKeyRef.current;
@@ -1085,7 +1148,7 @@ export default function SceneView({
       }
       updateVideoDebug({ isInJump: false });
       console.log('[VIDEO]', 'ended while in jump; switching back to MAIN_LOOP', { mainLoop: MAIN_LOOP });
-      void switchTo(MAIN_LOOP).then(() => {
+      void requestVideoSwitch({ key: 'loop3', reason: 'video-ended-in-jump', sourceEventKey: 'SYSTEM_RETURN' }).then(() => {
         currentLoopKeyRef.current = MAIN_LOOP;
         scheduleNextJump({ force: true });
       });
@@ -1093,7 +1156,7 @@ export default function SceneView({
     }
 
     console.log('[VIDEO]', 'ended on main/non-jump; enforce MAIN_LOOP', { mainLoop: MAIN_LOOP });
-    void switchTo(MAIN_LOOP).then(() => {
+    void requestVideoSwitch({ key: 'loop3', reason: 'video-ended-main-enforce', sourceEventKey: 'SYSTEM_RETURN' }).then(() => {
       currentLoopKeyRef.current = MAIN_LOOP;
     });
   }, [appStarted, getCurrentVideoEl, pickNextJumpKey, scheduleNextJump, switchTo, updateVideoDebug]);
@@ -1119,7 +1182,7 @@ export default function SceneView({
 
     }
 
-    await switchTo(MAIN_LOOP);
+    await requestVideoSwitch({ key: 'loop3', reason: 'start_oldhouse_calm_mode', sourceEventKey: 'SYSTEM_BOOT' });
     const started = await tryPlayMedia();
     if (!started) {
       setNeedsGestureState(true);
@@ -1296,6 +1359,10 @@ export default function SceneView({
       lastFallback: null,
       unavailableJumps: [],
       sceneMapDigest: SCENE_MAP_DIGEST,
+      lastPlayRequest: null,
+      lastSwitch: null,
+      lastDenied: null,
+      priorityLock: { ...priorityLockRef.current },
       timers: { jumpTimer: null, watchdogTimer: null }
     };
 
@@ -1374,7 +1441,11 @@ export default function SceneView({
           });
           return;
         }
-        void switchTo(payload.sceneKey);
+        if (payload.type === 'REQUEST_VIDEO_SWITCH') {
+          void requestVideoSwitch({ key: payload.key, reason: payload.reason, sourceEventKey: payload.sourceEventKey });
+          return;
+        }
+        void requestVideoSwitch({ key: payload.sceneKey, reason: payload.reason, sourceEventKey: 'SCENE_REQUEST' });
       };
       if (payload.delayMs && payload.delayMs > 0) {
         window.setTimeout(run, payload.delayMs);
@@ -1382,7 +1453,7 @@ export default function SceneView({
         run();
       }
     });
-  }, [playSfx, switchTo]);
+  }, [forcePlannedJumpNow, playSfx, requestVideoSwitch, scheduleNextJump]);
 
   useEffect(() => {
     return () => {
@@ -1604,7 +1675,9 @@ export default function SceneView({
         <>
         <div className="video-debug-overlay" aria-live="polite">
           <div>inference: {debugInference.join(' | ') || 'NONE'}</div>
-          <div>currentKey: {videoDebug?.currentKey ?? '-'}</div>
+          <div>video.currentKey: {videoDebug?.currentKey ?? '-'}</div>
+          <div>video.lastSwitch.toKey: {videoDebug?.lastSwitch?.toKey ?? '-'}</div>
+          <div>video.lastDenied.denyReason: {videoDebug?.lastDenied?.denyReason ?? '-'}</div>
           <div>currentEl: {videoDebug?.activeVideoId ?? '-'} | src: {trimSrc(videoDebug?.activeVideoSrc)}</div>
           <div>bufferEl: {videoDebug?.bufferVideoId ?? '-'} | src: {trimSrc(videoDebug?.bufferVideoSrc)}</div>
           <div>currentActive/bufferActive: {String(videoDebug?.currentActive ?? false)} / {String(videoDebug?.bufferActive ?? false)}</div>
@@ -1696,9 +1769,15 @@ export default function SceneView({
 
         <div className="video-debug-controls-panel">
           <div className="video-debug-controls">
-            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP', () => switchTo('oldhouse_room_loop')); }}>▶ Force LOOP</button>
-            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP2', () => switchTo('oldhouse_room_loop2')); }}>▶ Force LOOP2</button>
-            <button type="button" onClick={() => { void runDebugForceAction('FORCE_MAIN', () => switchTo('oldhouse_room_loop3')); }}>▶ Force MAIN</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP', async () => { await requestVideoSwitch({ key: 'loop1', reason: 'debug_force_loop', sourceEventKey: 'DEBUG' }); }); }}>▶ Force LOOP</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP2', async () => { await requestVideoSwitch({ key: 'loop2', reason: 'debug_force_loop2', sourceEventKey: 'DEBUG' }); }); }}>▶ Force LOOP2</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_MAIN', async () => { await requestVideoSwitch({ key: 'loop3', reason: 'debug_force_main', sourceEventKey: 'DEBUG' }); }); }}>▶ Force MAIN</button>
+            <button type="button" onClick={() => { void runDebugForceAction('FORCE_LOOP4_3S', async () => {
+              await requestVideoSwitch({ key: 'loop4', reason: 'debug_force_loop4_3s', sourceEventKey: 'TV_EVENT' });
+              window.setTimeout(() => {
+                void requestVideoSwitch({ key: 'loop3', reason: 'debug_force_loop4_3s_return', sourceEventKey: 'DEBUG' });
+              }, 3000);
+            }); }}>▶ Force Show loop4 (3s)</button>
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_PLANNED', forcePlannedJumpNow); }}>⚡ Force Planned Jump Now</button>
             <button type="button" onClick={() => { void runDebugForceAction('RESCHEDULE_JUMP', () => scheduleNextJump({ force: true })); }}>🔁 Reschedule Jump</button>
           </div>

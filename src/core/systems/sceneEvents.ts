@@ -1,5 +1,5 @@
 import type { SfxKey } from '../../audio/SfxRegistry';
-import type { OldhouseLoopKey } from '../../config/oldhousePlayback';
+import type { LoopRequestKey, OldhouseLoopKey } from '../../config/oldhousePlayback';
 
 export type SceneEventPayload =
   | { type: 'VIDEO_ACTIVE'; key: OldhouseLoopKey; startedAt: number }
@@ -15,6 +15,13 @@ export type SceneRequestPayload =
     startVolume?: number;
     endVolume?: number;
     rampSec?: number;
+  }
+  | {
+    type: 'REQUEST_VIDEO_SWITCH';
+    key: LoopRequestKey;
+    reason: string;
+    sourceEventKey?: string;
+    delayMs?: number;
   }
   | { type: 'REQUEST_SCENE_SWITCH'; sceneKey: OldhouseLoopKey; reason: string; delayMs?: number }
   | { type: 'DEBUG_FORCE_JUMP_NOW' }

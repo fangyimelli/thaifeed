@@ -33,11 +33,15 @@ export type StoryEventDefinition = {
   qnaFlowId?: string;
   preEffect?: {
     sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
-    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
   };
   postEffect?: {
     sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
-    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
+  };
+  video?: {
+    key: 'loop1' | 'loop2' | 'loop3' | 'loop4';
+    mode: 'CUT';
   };
 };
 
@@ -53,7 +57,7 @@ export type EventRunRecord = {
   preEffectAt?: number;
   preEffect?: {
     sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
-    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
   };
   abortedReason?: string;
   openerLineId?: string;

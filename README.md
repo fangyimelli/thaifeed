@@ -1067,3 +1067,30 @@ npm run build
 - 判斷舊邏輯仍有保留必要（TV_EVENT 需要獨立 cooldown gate），因此採「整合」而非移除：
   - 保留 gate 行為與 90 秒冷卻值。
   - 將鍵名由 `loop4` 改為 `tv_event`，與事件語意對齊並避免誤導。
+
+## TV_EVENT → loop4（單一來源）與 Video Priority Lock
+
+- `TV_EVENT` 現在在事件定義中明確宣告：`video: { key: "loop4", mode: "CUT" }`，pre/post effect 也統一為 loop4，避免 key 漂移。  
+- 所有影片切換請求改走同一入口：`REQUEST_VIDEO_SWITCH` → `requestVideoSwitch({ key, reason, sourceEventKey })`。  
+- `requestVideoSwitch` 會在 debug state 記錄：
+  - `video.currentKey`
+  - `video.lastPlayRequest`
+  - `video.lastSwitch`
+  - `video.lastDenied`
+- TV_EVENT 成功切到 loop4 後會啟用短暫 `priorityLock`（3~6 秒）：
+  - lock 期間會拒絕全域 jump / 回 loop3 的覆蓋切換
+  - 拒絕原因會寫入 `video.lastDenied.denyReason`
+  - lock 到期後恢復原本可回 loop3 的規格
+
+### Debug 驗證（TV_EVENT / loop4）
+
+- 開啟主頁 Debug Panel：
+  - 使用 `Trigger TV_EVENT`
+  - 觀察：
+    - `video.lastPlayRequest.requestedKey` 應為 `loop4`
+    - `video.currentKey` 最終應為 `oldhouse_room_loop4`
+    - `video.lastSwitch.toKey` 應為 `oldhouse_room_loop4`
+    - 若失敗，`video.lastDenied.denyReason` 會顯示被拒原因
+- 新增 Debug-only 按鈕：`Force Show loop4 (3s)`
+  - 可直接驗證播放器/資源是否可播 loop4
+  - 3 秒後自動 request 回 loop3

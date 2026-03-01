@@ -331,7 +331,7 @@ export default function App() {
   const lastBlockedReasonRef = useRef('-');
 
   const eventLifecycleRef = useRef<EventRunRecord | null>(null);
-  const preEffectStateRef = useRef<{ triggered: boolean; at: number; sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop'; videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' }>({ triggered: false, at: 0 });
+  const preEffectStateRef = useRef<{ triggered: boolean; at: number; sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop'; videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4' }>({ triggered: false, at: 0 });
   const reactionRecentIdsRef = useRef<Record<EventTopic, string[]>>({ ghost: [], footsteps: [], light: [] });
   const reactionActorHistoryRef = useRef<string[]>([]);
   const reactionTextHistoryRef = useRef<string[]>([]);
@@ -825,10 +825,13 @@ export default function App() {
     eventRunnerStateRef.current.inFlight = true;
     eventRunnerStateRef.current.currentEventId = eventId;
 
-    const preEffect = { sfxKey: undefined as 'ghost_female' | 'footsteps' | 'fan_loop' | undefined, videoKey: undefined as 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | undefined };
-    if (eventKey === 'LIGHT_GLITCH' || eventKey === 'TV_EVENT') {
-      preEffect.videoKey = Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2';
-      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: preEffect.videoKey, reason: `event:pre_effect:${eventId}` });
+    const preEffect = { sfxKey: undefined as 'ghost_female' | 'footsteps' | 'fan_loop' | undefined, videoKey: undefined as 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4' | undefined };
+    if (eventKey === 'TV_EVENT') {
+      preEffect.videoKey = 'oldhouse_room_loop4';
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: `event:pre_effect:${eventId}`, sourceEventKey: 'TV_EVENT' });
+    } else if (eventKey === 'LIGHT_GLITCH') {
+      preEffect.videoKey = 'oldhouse_room_loop2';
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop2', reason: `event:pre_effect:${eventId}`, sourceEventKey: 'LIGHT_GLITCH' });
     } else if (eventKey === 'VIEWER_SPIKE' || eventKey === 'FEAR_CHALLENGE') {
       preEffect.sfxKey = 'footsteps';
       playSfx('footsteps', { reason: `event:pre_effect:${eventId}`, source: 'event', eventId, eventKey, allowBeforeStarterTag: true });
@@ -843,7 +846,7 @@ export default function App() {
     if (!sendResult.ok) {
       const shortCooldownMs = 15_000;
       eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
-      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop3', reason: `event:recover:${eventId}` });
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop3', reason: `event:recover:${eventId}`, sourceEventKey: eventKey });
       eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
       lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
       lockReplyingToMessageIdRef.current = null;
@@ -975,8 +978,7 @@ export default function App() {
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
-    const actor = eventExclusiveStateRef.current.currentLockOwner ?? lockStateRef.current.target ?? 'mod_live';
-    const sent = dispatchEventLine(built.line, target, 'scheduler_tick', actor);
+    const sent = dispatchEventLine(built.line, target, 'scheduler_tick');
     if (!sent.ok) return false;
     if (!eventLifecycleRef.current) return true;
     eventLifecycleRef.current.followUpLineId = built.lineId;
@@ -1014,7 +1016,7 @@ export default function App() {
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
-    const sent = dispatchEventLine(line, questionActor, 'scheduler_tick', questionActor);
+    const sent = dispatchEventLine(line, questionActor, 'scheduler_tick');
     if (!sent.ok) return false;
     lockReplyingToMessageIdRef.current = sent.lineId ?? null;
     freezeChatAutoscroll('tagged_question');
@@ -1043,7 +1045,7 @@ export default function App() {
         const prompt = getRetryPrompt(qnaStateRef.current);
         const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
         if (taggedUser) {
-          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', lockTarget ?? 'mod_live');
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
         }
         sendQnaQuestion();
         return;
@@ -1056,7 +1058,7 @@ export default function App() {
         const prompt = getUnknownPrompt(qnaStateRef.current);
         const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
         if (taggedUser) {
-          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', lockTarget ?? 'mod_live');
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
         }
         sendQnaQuestion();
         return;
@@ -1100,7 +1102,7 @@ export default function App() {
         lockReplyingToMessageIdRef.current = null;
       }
       if (pending.key === 'TV_EVENT' && repliedNo) {
-        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: 'oldhouse_room_loop2', reason: reasonBase, delayMs: 2000 });
+        requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: reasonBase, sourceEventKey: 'TV_EVENT', delayMs: 2000 });
         postFollowUpLine(pending.target, 'TV_EVENT');
         const topic: EventTopic = Math.random() < 0.5 ? 'light' : 'ghost';
         triggerReactionBurst(topic);
@@ -1172,7 +1174,7 @@ export default function App() {
       eventCooldownsRef.current[key] = now + def.cooldownMs;
       if (def.lockOnStart && started.target) lockStateRef.current = { isLocked: true, target: started.target, startedAt: now };
       if (key === 'LIGHT_GLITCH') {
-        requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
+        requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop2', reason: `event:${started.eventId}`, sourceEventKey: 'LIGHT_GLITCH' });
         triggerReactionBurst('light');
         if (eventLifecycleRef.current) {
           eventLifecycleRef.current.state = 'done';
@@ -2083,7 +2085,7 @@ export default function App() {
     setEventTesterStatus({ key: eventKey, blockedReason: null });
 
     if (eventKey === 'LIGHT_GLITCH') {
-      requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop2', reason: `event:${started.eventId}`, sourceEventKey: 'LIGHT_GLITCH' });
       triggerReactionBurst('light');
       if (eventLifecycleRef.current) {
         eventLifecycleRef.current.state = 'done';
@@ -2127,6 +2129,12 @@ export default function App() {
     lockReplyingToMessageIdRef.current = null;
   }, []);
 
+  const forceShowLoop4Debug = useCallback(() => {
+    requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: 'debug_force_show_loop4_3s', sourceEventKey: 'TV_EVENT' });
+    window.setTimeout(() => {
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop3', reason: 'debug_force_show_loop4_return', sourceEventKey: 'DEBUG' });
+    }, 3000);
+  }, []);
 
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
@@ -2219,6 +2227,7 @@ export default function App() {
                 <div className="debug-route-controls">
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
                   <button type="button" onClick={forceUnlockDebug}>Force Unlock</button>
+                  <button type="button" onClick={forceShowLoop4Debug}>Force Show loop4 (3s)</button>
                 </div>
               </div>
               <div className="debug-route-meta">
@@ -2240,6 +2249,10 @@ export default function App() {
                 <div>lastEvent.starterTagSent: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)}</div>
                 <div>lastEvent.preEffectTriggered/preEffectAt: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectTriggered ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectAt ?? '-'}</div>
                 <div>lastEvent.preEffect.sfxKey/videoKey: {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.sfxKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.videoKey ?? '-'}</div>
+                <div>video.lastPlayRequest.requestedKey: {window.__VIDEO_DEBUG__?.lastPlayRequest?.requestedKey ?? '-'}</div>
+                <div>video.currentKey: {window.__VIDEO_DEBUG__?.currentKey ?? '-'}</div>
+                <div>video.lastSwitch.toKey: {window.__VIDEO_DEBUG__?.lastSwitch?.toKey ?? '-'}</div>
+                <div>video.lastDenied.denyReason: {window.__VIDEO_DEBUG__?.lastDenied?.denyReason ?? '-'}</div>
                 <div>lastEvent.abortedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
                 <div>lock.isLocked: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)}</div>
                 <div>lock.lockTarget: {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'}</div>

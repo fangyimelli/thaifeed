@@ -42,8 +42,9 @@ export const EVENT_REGISTRY: Record<StoryEventKey, StoryEventDefinition> = {
     chance: 0.07,
     minActiveUsers: 3,
     usesLock: true,
-    preEffect: { videoKey: 'oldhouse_room_loop' },
-    postEffect: { videoKey: 'oldhouse_room_loop2' }
+    preEffect: { videoKey: 'oldhouse_room_loop4' },
+    postEffect: { videoKey: 'oldhouse_room_loop4' },
+    video: { key: 'loop4', mode: 'CUT' }
   },
   NAME_CALL: {
     key: 'NAME_CALL',

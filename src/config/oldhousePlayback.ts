@@ -1,20 +1,26 @@
 import { resolveAssetUrl } from './assetUrls';
 
-export type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+export type OldhouseLoopKey = 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4';
+
+export type PublicLoopKey = 'loop1' | 'loop2' | 'loop3' | 'loop4';
+export type LoopRequestKey = OldhouseLoopKey | PublicLoopKey;
 
 export const LOOP_KEY_ALIASES: Record<string, OldhouseLoopKey> = {
   oldhouse_room_loop: 'oldhouse_room_loop',
   oldhouse_room_loop2: 'oldhouse_room_loop2',
   oldhouse_room_loop3: 'oldhouse_room_loop3',
+  oldhouse_room_loop4: 'oldhouse_room_loop4',
   loop1: 'oldhouse_room_loop',
   loop2: 'oldhouse_room_loop2',
-  loop3: 'oldhouse_room_loop3'
+  loop3: 'oldhouse_room_loop3',
+  loop4: 'oldhouse_room_loop4'
 };
 
 export const VIDEO_KEYS: OldhouseLoopKey[] = [
   'oldhouse_room_loop',
   'oldhouse_room_loop2',
-  'oldhouse_room_loop3'
+  'oldhouse_room_loop3',
+  'oldhouse_room_loop4'
 ];
 
 export const MAIN_LOOP: OldhouseLoopKey = 'oldhouse_room_loop3';
@@ -23,13 +29,15 @@ export const JUMP_LOOPS: OldhouseLoopKey[] = ['oldhouse_room_loop', 'oldhouse_ro
 export const VIDEO_RELATIVE_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: 'assets/scenes/oldhouse_room_loop.mp4',
   oldhouse_room_loop2: 'assets/scenes/oldhouse_room_loop2.mp4',
-  oldhouse_room_loop3: 'assets/scenes/oldhouse_room_loop3.mp4'
+  oldhouse_room_loop3: 'assets/scenes/oldhouse_room_loop3.mp4',
+  oldhouse_room_loop4: 'assets/scenes/oldhouse_room_loop4.mp4'
 };
 
 export const VIDEO_PATH_BY_KEY: Record<OldhouseLoopKey, string> = {
   oldhouse_room_loop: resolveAssetUrl(VIDEO_RELATIVE_PATH_BY_KEY.oldhouse_room_loop),
   oldhouse_room_loop2: resolveAssetUrl(VIDEO_RELATIVE_PATH_BY_KEY.oldhouse_room_loop2),
-  oldhouse_room_loop3: resolveAssetUrl(VIDEO_RELATIVE_PATH_BY_KEY.oldhouse_room_loop3)
+  oldhouse_room_loop3: resolveAssetUrl(VIDEO_RELATIVE_PATH_BY_KEY.oldhouse_room_loop3),
+  oldhouse_room_loop4: resolveAssetUrl(VIDEO_RELATIVE_PATH_BY_KEY.oldhouse_room_loop4)
 };
 
 export const FAN_LOOP_RELATIVE_PATH = 'assets/sfx/fan_loop.wav';
