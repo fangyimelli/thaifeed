@@ -429,6 +429,13 @@ export default function App() {
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && message.username !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
+      updateEventDebug({
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          foreignTagBlockedCount: foreignTagBlockedCountRef.current,
+          lastBlockedReason: lastBlockedReasonRef.current
+        }
+      });
       return;
     }
     const linted = lintOutgoingMessage(message);
@@ -746,6 +753,7 @@ export default function App() {
 
     setEventAttemptDebug(eventKey, blockedReason);
     if (blockedReason) {
+      lastBlockedReasonRef.current = blockedReason;
       eventLastReasonRef.current = sourceReason;
       eventLastKeyRef.current = eventKey;
       eventLastAtRef.current = now;
@@ -963,7 +971,8 @@ export default function App() {
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
-    const sent = dispatchEventLine(built.line, target);
+    const actor = eventExclusiveStateRef.current.currentLockOwner ?? lockStateRef.current.target ?? 'mod_live';
+    const sent = dispatchEventLine(built.line, target, 'scheduler_tick', actor);
     if (!sent.ok) return false;
     if (!eventLifecycleRef.current) return true;
     eventLifecycleRef.current.followUpLineId = built.lineId;
@@ -1001,7 +1010,7 @@ export default function App() {
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
-    const sent = dispatchEventLine(line, questionActor);
+    const sent = dispatchEventLine(line, questionActor, 'scheduler_tick', questionActor);
     if (!sent.ok) return false;
     freezeChatAutoscroll('tagged_question');
     updateLastAskedPreview(qnaStateRef.current, line);
@@ -1029,7 +1038,7 @@ export default function App() {
         const prompt = getRetryPrompt(qnaStateRef.current);
         const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
         if (taggedUser) {
-          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', lockTarget ?? 'mod_live');
         }
         sendQnaQuestion();
         return;
@@ -1042,7 +1051,7 @@ export default function App() {
         const prompt = getUnknownPrompt(qnaStateRef.current);
         const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
         if (taggedUser) {
-          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input');
+          dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', lockTarget ?? 'mod_live');
         }
         sendQnaQuestion();
         return;
