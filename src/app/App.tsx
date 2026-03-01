@@ -34,6 +34,15 @@ import { pickReactionLines } from '../core/events/eventReactions';
 import { startEvent as runEventStart } from '../core/events/eventRunner';
 import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
 
+type EventStartBlockedReason =
+  | 'locked_active'
+  | 'cooldown_blocked'
+  | 'in_flight'
+  | 'chat_auto_paused'
+  | 'no_active_users'
+  | 'sfx_busy'
+  | 'invalid_state';
+
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
 export type SendResult = {
@@ -246,6 +255,48 @@ export default function App() {
   const reactionRecentIdsRef = useRef<Record<EventTopic, string[]>>({ ghost: [], footsteps: [], light: [] });
   const reactionActorHistoryRef = useRef<string[]>([]);
   const reactionTextHistoryRef = useRef<string[]>([]);
+  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const eventRunnerStateRef = useRef<{ inFlight: boolean; currentEventId: string | null; pendingTimers: number[] }>({
+    inFlight: false,
+    currentEventId: null,
+    pendingTimers: []
+  });
+  const eventTestDebugRef = useRef<{ lastStartAttemptAt: number; lastStartAttemptKey: string; lastStartAttemptBlockedReason: EventStartBlockedReason | '-' }>({
+    lastStartAttemptAt: 0,
+    lastStartAttemptKey: '-',
+    lastStartAttemptBlockedReason: '-'
+  });
+
+  const clearEventRunnerPendingTimers = useCallback(() => {
+    eventRunnerStateRef.current.pendingTimers.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    eventRunnerStateRef.current.pendingTimers = [];
+  }, []);
+
+  const registerEventRunnerTimer = useCallback((timerId: number) => {
+    eventRunnerStateRef.current.pendingTimers = [...eventRunnerStateRef.current.pendingTimers, timerId];
+  }, []);
+
+  const clearEventRunnerState = useCallback(() => {
+    clearEventRunnerPendingTimers();
+    eventRunnerStateRef.current.inFlight = false;
+    eventRunnerStateRef.current.currentEventId = null;
+  }, [clearEventRunnerPendingTimers]);
+
+  const setEventAttemptDebug = useCallback((eventKey: StoryEventKey, blockedReason: EventStartBlockedReason | null) => {
+    eventTestDebugRef.current = {
+      lastStartAttemptAt: Date.now(),
+      lastStartAttemptKey: eventKey,
+      lastStartAttemptBlockedReason: blockedReason ?? '-'
+    };
+  }, []);
+
+
+  useEffect(() => () => {
+    clearEventRunnerState();
+  }, [clearEventRunnerState]);
+
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
@@ -529,37 +580,81 @@ export default function App() {
     return true;
   }, []);
 
-  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester' }) => {
-    const record = runEventStart(eventKey, {
-      activeUsers: collectActiveUsers(state.messages),
-      sendLine: (line, meta) => {
-        const result = dispatchEventLine(line, meta.actor);
-        return { ...result, lineId: meta.lineId };
-      },
-      canRunEvent: (activeUser) => {
-        if (!appStarted) return 'app_not_started';
-        if (chatAutoPaused) return 'chat_auto_paused';
-        if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUser) return 'locked_target_only';
-        return null;
-      },
-      setLock: (actor) => {
-        lockStateRef.current = { isLocked: true, target: actor, startedAt: Date.now() };
-      },
-      getRecentEventLineIds: (key) => eventRecentContentIdsRef.current[key],
-      rememberEventLineId: (key, lineId) => {
-        eventRecentContentIdsRef.current[key] = [...eventRecentContentIdsRef.current[key], lineId].slice(-5);
-      },
-      onEventRecord: (nextRecord) => {
-        eventLifecycleRef.current = nextRecord;
-      }
-    });
+  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester'; ignoreCooldowns?: boolean }) => {
+    const now = Date.now();
+    const activeUsers = collectActiveUsers(state.messages);
+    const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
+    const shouldIgnoreCooldown = Boolean(debugEnabled && ctx.source === 'debug_tester' && ctx.ignoreCooldowns);
+    let blockedReason: EventStartBlockedReason | null = null;
 
-    eventLastReasonRef.current = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
+    if (!appStarted) blockedReason = 'invalid_state';
+    else if (chatAutoPaused) blockedReason = 'chat_auto_paused';
+    else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
+    else if (activeUsers.length === 0) blockedReason = 'no_active_users';
+    else if (lockStateRef.current.isLocked && Boolean(lockStateRef.current.target) && !activeUsers.includes(lockStateRef.current.target as string)) blockedReason = 'locked_active';
+    else if (!shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
+
+    setEventAttemptDebug(eventKey, blockedReason);
+    if (blockedReason) {
+      eventLastReasonRef.current = sourceReason;
+      eventLastKeyRef.current = eventKey;
+      eventLastAtRef.current = now;
+      updateEventDebug({
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          test: {
+            ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
+            ...eventTestDebugRef.current
+          }
+        }
+      });
+      return null;
+    }
+
+    let record: EventRunRecord;
+    eventRunnerStateRef.current.inFlight = true;
+    try {
+      record = runEventStart(eventKey, {
+        activeUsers,
+        sendLine: (line, meta) => {
+          const result = dispatchEventLine(line, meta.actor);
+          return { ...result, lineId: meta.lineId };
+        },
+        canRunEvent: (activeUser) => {
+          if (!appStarted) return 'invalid_state';
+          if (chatAutoPaused) return 'chat_auto_paused';
+          if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUser) return 'locked_active';
+          return null;
+        },
+        setLock: (actor) => {
+          lockStateRef.current = { isLocked: true, target: actor, startedAt: Date.now() };
+        },
+        getRecentEventLineIds: (key) => eventRecentContentIdsRef.current[key],
+        rememberEventLineId: (key, lineId) => {
+          eventRecentContentIdsRef.current[key] = [...eventRecentContentIdsRef.current[key], lineId].slice(-5);
+        },
+        onEventRecord: (nextRecord) => {
+          eventLifecycleRef.current = nextRecord;
+        }
+      });
+      eventRunnerStateRef.current.currentEventId = record.eventId;
+    } catch {
+      setEventAttemptDebug(eventKey, 'invalid_state');
+      return null;
+    } finally {
+      clearEventRunnerState();
+    }
+
+    eventLastReasonRef.current = sourceReason;
     eventLastKeyRef.current = eventKey;
     eventLastAtRef.current = Date.now();
     updateEventDebug({
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
+        test: {
+          ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
+          ...eventTestDebugRef.current
+        },
         lastEvent: {
           key: eventKey,
           eventId: record.eventId,
@@ -579,7 +674,7 @@ export default function App() {
 
     const target = lockStateRef.current.target ?? '';
     return record.state === 'aborted' ? null : { eventId: record.eventId, target };
-  }, [appStarted, chatAutoPaused, dispatchEventLine, state.messages, updateEventDebug]);
+  }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, setEventAttemptDebug, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
@@ -1064,13 +1159,16 @@ export default function App() {
   const hasFatalInitError = requiredAssetErrors.length > 0;
   const isLoading = !hasFatalInitError && (!isReady || !isRendererReady);
   const shouldShowMainContent = true;
-  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [mentionTarget, setMentionTarget] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [debugComposingOverride, setDebugComposingOverride] = useState<boolean | null>(null);
-  const [simulatePlayerReply] = useState(true);
-  const [debugLowerCooldown] = useState(false);
+  const [simulatePlayerReply, setSimulatePlayerReply] = useState(true);
+  const [ignoreCooldownsDebug, setIgnoreCooldownsDebug] = useState(false);
+  const [eventTesterStatus, setEventTesterStatus] = useState<{ key: StoryEventKey | null; blockedReason: EventStartBlockedReason | null }>({
+    key: null,
+    blockedReason: null
+  });
   const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
   const [sendDebug, setSendDebug] = useState({
     lastClickAt: 0,
@@ -1080,7 +1178,6 @@ export default function App() {
     blockedReason: '',
     errorMessage: ''
   });
-
   const containerHeight = shellRef.current?.getBoundingClientRect().height ?? null;
   const headerHeight = headerRef.current?.getBoundingClientRect().height ?? null;
   const videoHeight = videoRef.current?.getBoundingClientRect().height ?? null;
@@ -1155,7 +1252,11 @@ export default function App() {
           schedulerBlocked,
           schedulerBlockedReason
         },
-        cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current }
+        cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
+        inFlight: eventRunnerStateRef.current.inFlight,
+        test: {
+          ...eventTestDebugRef.current
+        }
       };
 
       updateChatDebug({
@@ -1455,17 +1556,35 @@ export default function App() {
 
   const triggerEventFromTester = useCallback((eventKey: StoryEventKey) => {
     const activeUsers = ensureDebugActiveUsers();
-    if (activeUsers.length === 0) return;
-    const now = Date.now();
-    if (!debugLowerCooldown) {
-      const cooldown = eventCooldownsRef.current[eventKey] ?? 0;
-      if (cooldown > now) return;
-      eventCooldownsRef.current[eventKey] = now + EVENT_REGISTRY[eventKey].cooldownMs;
-    } else {
-      eventCooldownsRef.current[eventKey] = now + 5_000;
+    if (activeUsers.length === 0) {
+      setEventAttemptDebug(eventKey, 'no_active_users');
+      setEventTesterStatus({ key: eventKey, blockedReason: 'no_active_users' });
+      return;
     }
-    const started = startEvent(eventKey, { source: 'debug_tester' });
-    if (!started) return;
+
+    const now = Date.now();
+    const cooldown = eventCooldownsRef.current[eventKey] ?? 0;
+    if (!ignoreCooldownsDebug && cooldown > now) {
+      setEventAttemptDebug(eventKey, 'cooldown_blocked');
+      setEventTesterStatus({ key: eventKey, blockedReason: 'cooldown_blocked' });
+      return;
+    }
+
+    if (ignoreCooldownsDebug) {
+      eventCooldownsRef.current[eventKey] = now + 5_000;
+    } else {
+      eventCooldownsRef.current[eventKey] = now + EVENT_REGISTRY[eventKey].cooldownMs;
+    }
+
+    const started = startEvent(eventKey, { source: 'debug_tester', ignoreCooldowns: ignoreCooldownsDebug });
+    if (!started) {
+      const blockedReason = eventTestDebugRef.current.lastStartAttemptBlockedReason;
+      setEventTesterStatus({ key: eventKey, blockedReason: blockedReason === '-' ? 'invalid_state' : blockedReason });
+      return;
+    }
+
+    setEventTesterStatus({ key: eventKey, blockedReason: null });
+
     if (eventKey === 'LIGHT_GLITCH') {
       requestSceneAction({ type: 'REQUEST_SCENE_SWITCH', sceneKey: Math.random() < 0.5 ? 'oldhouse_room_loop' : 'oldhouse_room_loop2', reason: `event:${started.eventId}` });
       triggerReactionBurst('light');
@@ -1475,17 +1594,40 @@ export default function App() {
       }
       return;
     }
+
     pendingReplyEventRef.current = { key: eventKey, target: started.target || activeUsers[0], eventId: started.eventId, expiresAt: now + 20_000 };
     if (!simulatePlayerReply) return;
+
     const delay = randomInt(800, 1500);
-    window.setTimeout(() => {
+    const timerId = window.setTimeout(() => {
       if (!pendingReplyEventRef.current || pendingReplyEventRef.current.eventId !== started.eventId) return;
       const target = pendingReplyEventRef.current.target;
       setReplyTarget(target);
       setInput(`@${target} ${simulateReplyText(eventKey)}`);
       void submitChat(`@${target} ${simulateReplyText(eventKey)}`, 'debug_simulate');
     }, delay);
-  }, [debugLowerCooldown, ensureDebugActiveUsers, simulatePlayerReply, simulateReplyText, startEvent, submitChat, triggerReactionBurst]);
+    registerEventRunnerTimer(timerId);
+  }, [ensureDebugActiveUsers, ignoreCooldownsDebug, registerEventRunnerTimer, setEventAttemptDebug, simulatePlayerReply, simulateReplyText, startEvent, submitChat, triggerReactionBurst]);
+
+  const resetEventTestState = useCallback(() => {
+    clearEventRunnerState();
+    eventTestDebugRef.current.lastStartAttemptBlockedReason = '-';
+    setEventTesterStatus({ key: null, blockedReason: null });
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        test: {
+          ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
+          ...eventTestDebugRef.current
+        }
+      }
+    });
+  }, [clearEventRunnerState, updateEventDebug]);
+
+  const forceUnlockDebug = useCallback(() => {
+    lockStateRef.current = { isLocked: false, target: null, startedAt: 0 };
+  }, []);
+
 
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
@@ -1555,10 +1697,27 @@ export default function App() {
                 <h4>Event Tester</h4>
                 <div className="debug-route-controls">
                   {EVENT_TESTER_KEYS.map((eventKey) => (
-                    <button key={eventKey} type="button" onClick={() => triggerEventFromTester(eventKey)}>
-                      Trigger {eventKey}
-                    </button>
+                    <div key={eventKey} className="debug-event-button-row">
+                      <button type="button" onClick={() => triggerEventFromTester(eventKey)}>
+                        Trigger {eventKey}
+                      </button>
+                      {eventTesterStatus.key === eventKey && eventTesterStatus.blockedReason && (
+                        <small>Blocked: {eventTesterStatus.blockedReason}</small>
+                      )}
+                    </div>
                   ))}
+                </div>
+                <label>
+                  <input type="checkbox" checked={ignoreCooldownsDebug} onChange={(event) => setIgnoreCooldownsDebug(event.target.checked)} />
+                  Ignore Cooldowns (debug only)
+                </label>
+                <label>
+                  <input type="checkbox" checked={simulatePlayerReply} onChange={(event) => setSimulatePlayerReply(event.target.checked)} />
+                  Simulate Player Reply
+                </label>
+                <div className="debug-route-controls">
+                  <button type="button" onClick={resetEventTestState}>Reset Test State</button>
+                  <button type="button" onClick={forceUnlockDebug}>Force Unlock</button>
                 </div>
               </div>
               <div className="debug-route-meta">
@@ -1569,6 +1728,10 @@ export default function App() {
                 <div>lastEvent.abortedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
                 <div>lock.isLocked: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)}</div>
                 <div>lock.lockTarget: {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'}</div>
+                <div>event.inFlight: {String(window.__CHAT_DEBUG__?.event?.inFlight ?? false)}</div>
+                <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
+                <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
+                <div>event.test.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptBlockedReason ?? '-'}</div>
                 <div>sfx.ghostCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.ghost_female ?? 0}</div>
                 <div>sfx.footstepsCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.footsteps ?? 0}</div>
               </div>
