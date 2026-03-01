@@ -29,6 +29,15 @@ export type StoryEventDefinition = {
   chance: number;
   minActiveUsers: number;
   lockOnStart?: boolean;
+  usesLock?: boolean;
+  preEffect?: {
+    sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
+    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+  };
+  postEffect?: {
+    sfxKey?: 'ghost_female' | 'footsteps' | 'fan_loop';
+    videoKey?: 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3';
+  };
 };
 
 export type EventLifecycleState = 'active' | 'aborted' | 'done';

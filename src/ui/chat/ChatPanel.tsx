@@ -23,6 +23,10 @@ type Props = {
   onDebugToggleSelfTag?: () => void;
   onDebugToggleComposing?: () => void;
   onSendButtonClick?: () => void;
+  lockTarget?: string | null;
+  isLocked?: boolean;
+  lastEventKey?: string;
+  lockReason?: string;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -47,7 +51,11 @@ export default function ChatPanel({
   onDebugSimulateSend,
   onDebugToggleSelfTag,
   onDebugToggleComposing,
-  onSendButtonClick
+  onSendButtonClick,
+  lockTarget,
+  isLocked,
+  lastEventKey,
+  lockReason
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -247,6 +255,12 @@ export default function ChatPanel({
         >
           最新訊息
         </button>
+      )}
+
+      {isLocked && lockTarget && (
+        <div className="chat-lock-banner" role="status" aria-live="polite">
+          你只能回覆 @{lockTarget}（{lastEventKey ?? '-'} / {lockReason ?? '-' }）
+        </div>
       )}
 
       <form

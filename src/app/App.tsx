@@ -28,7 +28,7 @@ import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
 import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
 import { collectActiveUsers } from '../core/systems/mentionV2';
 import { createGhostLore } from '../core/systems/ghostLore';
-import { EVENT_REGISTRY, EVENT_REGISTRY_KEYS } from '../core/events/eventRegistry';
+import { EVENT_REGISTRY, EVENT_REGISTRY_KEYS, getEventManifest } from '../core/events/eventRegistry';
 import { pickDialog } from '../core/events/eventDialogs';
 import { pickReactionLines } from '../core/events/eventReactions';
 import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
@@ -177,7 +177,8 @@ export default function App() {
   const [isReady, setIsReady] = useState(false);
   const [isRendererReady, setIsRendererReady] = useState(false);
   const [appStarted, setAppStarted] = useState(false);
-  const [, setActiveUser] = useState('');
+  const [activeUserHandle, setActiveUserHandle] = useState('');
+  const activeUserInitialHandleRef = useRef('');
   const [startNameInput, setStartNameInput] = useState('');
   const [loadingState, setLoadingState] = useState<LoadingState>('BOOT_START');
   const [hasOptionalAssetWarning, setHasOptionalAssetWarning] = useState(false);
@@ -533,11 +534,11 @@ export default function App() {
     return { line: lore.fragment, lineId: picked.id };
   }, [markEventTopicBoost, state.curse, updateEventDebug]);
 
-  const dispatchEventLine = useCallback((line: string, target: string): EventSendResult => {
+  const dispatchEventLine = useCallback((line: string, target: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick'): EventSendResult => {
     const now = Date.now();
     if (!line.trim()) return { ok: false, blockedReason: 'empty' };
     if (!appStarted) return { ok: false, blockedReason: 'app_not_started' };
-    if (chatAutoPaused) return { ok: false, blockedReason: 'chat_auto_paused' };
+    if (source === 'scheduler_tick' && chatAutoPaused) return { ok: false, blockedReason: 'chat_auto_paused' };
     if (sendCooldownUntil.current > now) return { ok: false, blockedReason: 'rate_limited' };
     if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== target) {
       return { ok: false, blockedReason: 'locked_target_only' };
@@ -590,16 +591,17 @@ export default function App() {
     const eventDef = EVENT_REGISTRY[eventKey];
     const vipUsers = new Set(state.messages.filter((message) => Boolean(message.isVip)).map((message) => message.username));
     const eligibleActiveUsers = activeUsers.filter((name) => name && name !== 'system' && !vipUsers.has(name));
-    const activeUser = eligibleActiveUsers.length > 0 ? pickOne(eligibleActiveUsers) : '';
+    const activeUserCurrent = eligibleActiveUsers.length > 0 ? pickOne(eligibleActiveUsers) : '';
+    const activeUserForTag = activeUserInitialHandleRef.current || activeUserCurrent;
 
     let blockedReason: EventStartBlockedReason | null = null;
     if (!eventDef) blockedReason = 'registry_missing';
     else if (!appStarted) blockedReason = 'invalid_state';
-    else if (chatAutoPaused) blockedReason = 'chat_auto_paused';
+    else if (ctx.source === 'scheduler_tick' && chatAutoPaused) blockedReason = 'chat_auto_paused';
     else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
     else if (activeUsers.length < 3) blockedReason = 'active_users_lt_3';
-    else if (!activeUser) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
-    else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUser) blockedReason = 'locked_active';
+    else if (!activeUserForTag) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
+    else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUserCurrent) blockedReason = 'locked_active';
     else if (!shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
 
     setEventAttemptDebug(eventKey, blockedReason);
@@ -631,8 +633,8 @@ export default function App() {
     }
 
     const eventId = `${eventKey}_${Date.now()}`;
-    const opener = pickDialog(eventKey, 'opener', activeUser, eventRecentContentIdsRef.current[eventKey]);
-    if (!opener.text.startsWith(`@${activeUser}`)) {
+    const opener = pickDialog(eventKey, 'opener', activeUserForTag, eventRecentContentIdsRef.current[eventKey]);
+    if (!opener.text.startsWith(`@${activeUserForTag}`)) {
       const record: EventRunRecord = {
         eventId,
         key: eventKey,
@@ -686,7 +688,7 @@ export default function App() {
     const preEffectAt = Date.now();
     preEffectStateRef.current = { triggered: true, at: preEffectAt, sfxKey: preEffect.sfxKey, videoKey: preEffect.videoKey };
 
-    const sendResult = dispatchEventLine(opener.text, activeUser);
+    const sendResult = dispatchEventLine(opener.text, activeUserCurrent || activeUserForTag, ctx.source);
     if (!sendResult.ok) {
       const shortCooldownMs = 15_000;
       eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
@@ -741,7 +743,7 @@ export default function App() {
     }
 
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
-    lockStateRef.current = { isLocked: true, target: activeUser, startedAt: Date.now() };
+    lockStateRef.current = { isLocked: true, target: activeUserCurrent || activeUserForTag, startedAt: Date.now() };
     const record: EventRunRecord = {
       eventId,
       key: eventKey,
@@ -788,7 +790,7 @@ export default function App() {
       }
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
 
-    return { eventId: record.eventId, target: activeUser };
+    return { eventId: record.eventId, target: activeUserCurrent || activeUserForTag };
   }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
@@ -1327,7 +1329,8 @@ export default function App() {
           count: EVENT_REGISTRY_KEYS.length,
           keys: EVENT_REGISTRY_KEYS.slice(0, 20),
           enabledCount: EVENT_REGISTRY_KEYS.length,
-          disabledCount: 0
+          disabledCount: 0,
+          manifest: getEventManifest()
         },
         scheduler: {
           now,
@@ -1368,7 +1371,8 @@ export default function App() {
           lockTarget: lockStateRef.current.target,
           lockElapsedSec: lockStateRef.current.isLocked ? Math.max(0, Math.floor((now - lockStateRef.current.startedAt) / 1000)) : 0,
           schedulerBlocked,
-          schedulerBlockedReason
+          schedulerBlockedReason,
+          lockReason: eventLifecycleRef.current?.key ?? '-'
         },
         cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
         inFlight: eventRunnerStateRef.current.inFlight,
@@ -1387,7 +1391,9 @@ export default function App() {
           activeUsers: {
             count: activeUsers.length,
             nameSample: activeUsers.slice(0, 6),
-            namesSample: activeUsers.slice(0, 6)
+            namesSample: activeUsers.slice(0, 6),
+            currentHandle: activeUserHandle || '-',
+            initialHandle: activeUserInitialHandleRef.current || '-'
           }
         }
       } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
@@ -1461,6 +1467,10 @@ export default function App() {
     const raw = rawText.trim();
     if (!raw) return markBlocked('empty_input');
     if (debugComposingOverride ?? isComposing) return markBlocked('is_composing');
+    const stripLeadingMentions = (text: string) => text.replace(/^\s*(?:@[\w_]+\s*)+/, '').trim();
+    const outgoingText = lockStateRef.current.isLocked && lockStateRef.current.target
+      ? `@${lockStateRef.current.target} ${stripLeadingMentions(raw)}`.trim()
+      : raw;
 
     let nextReplyTarget = replyTarget;
     let nextMentionTarget = mentionTarget;
@@ -1524,7 +1534,7 @@ export default function App() {
 
       const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
 
-      dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(raw) });
+      dispatch({ type: 'PLAYER_MESSAGE', payload: createPlayerMessage(outgoingText) });
 
       const handlePass = () => {
         markReview(playableConsonant.letter, 'pass', state.curse);
@@ -1602,12 +1612,12 @@ export default function App() {
         speechCooldownUntil.current = now + 10_000;
       }
 
-      const tagTarget = raw.match(/@([\w_]+)/)?.[1] ?? null;
-      if (lockStateRef.current.isLocked && lockStateRef.current.target && tagTarget && tagTarget !== lockStateRef.current.target) {
+      const tagTarget = outgoingText.match(/@([\w_]+)/)?.[1] ?? null;
+      if (lockStateRef.current.isLocked && lockStateRef.current.target && tagTarget !== lockStateRef.current.target) {
         return markBlocked('lock_target_mismatch');
       }
-      tryTriggerStoryEvent(raw, 'user_input');
-      const chats = chatEngineRef.current.emit({ type: 'USER_SENT', text: raw, user: 'you' }, Date.now());
+      tryTriggerStoryEvent(outgoingText, 'user_input');
+      const chats = chatEngineRef.current.emit({ type: 'USER_SENT', text: outgoingText, user: 'you' }, Date.now());
       const wrongMessage = chats[0] ?? { id: crypto.randomUUID(), username: 'chat_mod', text: '這下壓力又上來了', language: 'zh', translation: '這下壓力又上來了' };
       dispatch({
         type: 'ANSWER_WRONG',
@@ -1796,7 +1806,10 @@ export default function App() {
                   onClick={() => {
                     const name = startNameInput.trim();
                     if (!name) return;
-                    setActiveUser(name);
+                    setActiveUserHandle(name);
+                    if (!activeUserInitialHandleRef.current) {
+                      activeUserInitialHandleRef.current = name;
+                    }
                     setAppStarted(true);
                     setChatAutoPaused(false);
                     window.setTimeout(() => {
@@ -1841,6 +1854,11 @@ export default function App() {
               </div>
               <div className="debug-route-meta">
                 <div>event.registry.count: {window.__CHAT_DEBUG__?.event?.registry?.count ?? 0}</div>
+                <div className="debug-event-manifest">
+                  {(window.__CHAT_DEBUG__?.event?.registry?.manifest ?? []).map((entry) => (
+                    <div key={entry.key}>[{entry.key}] pre({entry.preEffect?.sfxKey ?? '-'} / {entry.preEffect?.videoKey ?? '-'}) post({entry.postEffect?.sfxKey ?? '-'} / {entry.postEffect?.videoKey ?? '-'}) cd={entry.cooldownMs} lock={String(entry.usesLock)}</div>
+                  ))}
+                </div>
                 <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
                 <div>lastEvent.key: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'}</div>
                 <div>lastEvent.starterTagSent: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)}</div>
@@ -1849,6 +1867,8 @@ export default function App() {
                 <div>lastEvent.abortedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
                 <div>lock.isLocked: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)}</div>
                 <div>lock.lockTarget: {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'}</div>
+                <div>activeUser.handle: {window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'}</div>
+                <div>activeUserInitialHandle: {window.__CHAT_DEBUG__?.chat?.activeUsers?.initialHandle ?? '-'}</div>
                 <div>event.inFlight: {String(window.__CHAT_DEBUG__?.event?.inFlight ?? false)}</div>
                 <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
                 <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
@@ -1885,6 +1905,10 @@ export default function App() {
               setDebugComposingOverride((prev) => (prev == null ? true : !prev));
             }}
             onSendButtonClick={handleSendButtonClick}
+            isLocked={lockStateRef.current.isLocked}
+            lockTarget={lockStateRef.current.target}
+            lastEventKey={eventLifecycleRef.current?.key ?? '-'}
+            lockReason={eventLifecycleRef.current?.key ?? '-'}
           />
         </section>
         {!isDesktopLayout && debugEnabled && (
