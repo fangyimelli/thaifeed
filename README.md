@@ -994,6 +994,30 @@ npm run build
 - 每題 QNA 一律 `@taggedUserHandle` 出題，但 Sticky banner 與送出前綴都以 `lockTargetHandle` 為準。
 - ChatInput 送出前會移除既有前置 mentions，強制替換為 `@${lockTargetHandle}`。
 
+## Event Exclusive Mode
+
+- 一次只允許一個 QNA 事件主導（`event.exclusive=true`）。
+- 當 QNA active 時，禁止其他事件進場；`startEvent()` 會直接 blocked：`event_exclusive_active`。
+- 當 QNA active 時，只有 `lockOwner` 可以 tag `@activeUser`；其他 actor 嘗試 tag 會被阻擋並累計 `foreignTagBlockedCount`，`lastBlockedReason=foreign_tag_during_exclusive`。
+- 玩家回覆若 tag 錯對象，送出前會強制改寫成 `@lockTarget`（不再允許回覆未鎖定對象）。
+- 只有兩種情況可換事件：
+  1. QNA 正常結束（flow_end）。
+  2. 玩家超時未回（`lockElapsedSec >= 45`）後標記 abandon，解除 lock/exclusive，才允許下一事件。
+- Debug 面板新增/維護欄位：
+  - `event.exclusive`
+  - `event.currentEventId`
+  - `lock.lockOwner`（`event.currentLockOwner`）
+  - `lock.lockElapsedSec`
+  - `event.foreignTagBlockedCount`
+  - `event.lastBlockedReason`
+
+### Event Exclusive 驗收（手動）
+
+1. Case 1：事件進入 QNA 後，僅 lockTarget 能 tag 玩家；其他 actor tag 應被阻擋。
+2. Case 2：QNA 未完成前，不會再起第二個 tag 事件。
+3. Case 3：超時（45s）未回覆時，當前事件 abandon，之後才可切換下一事件。
+4. Case 4：玩家回錯人時，送出文字會被改寫為 `@lockTarget ...`。
+
 ### 驗收步驟
 
 1. 啟動事件（可用 Debug Event Tester）後，確認事件成立後出現連續 QNA 題目，且每題都 `@activeUser`。
