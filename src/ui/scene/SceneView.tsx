@@ -366,6 +366,15 @@ declare global {
           };
           abortedReason?: string;
           waitingForReply?: boolean;
+          questionMessageId?: string | null;
+          commitBlockedReason?: string;
+        };
+        lastEventCommitBlockedReason?: string;
+        lastEffects?: {
+          sfxPlayed?: Array<{ key: string; startedAt: number }>;
+          videoSwitchedTo?: { key?: string; src?: string } | null;
+          blackoutStartedAt?: number | null;
+          mode?: string;
         };
         lastReactions?: {
           count?: number;
@@ -1841,8 +1850,13 @@ export default function SceneView({
           <div>event.candidates.lastGateRejectSummary: {Object.entries(window.__CHAT_DEBUG__?.event?.candidates?.lastGateRejectSummary ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lastEvent.key/eventId/state: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.eventId ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.state ?? '-'}</div>
           <div>event.lastEvent.starterTagSent/abortedReason: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.starterTagSent ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.abortedReason ?? '-'}</div>
+          <div>event.lastEvent.questionMessageId/commitBlockedReason: {window.__CHAT_DEBUG__?.event?.lastEvent?.questionMessageId ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.commitBlockedReason ?? '-'}</div>
+          <div>event.lastEventCommitBlockedReason: {window.__CHAT_DEBUG__?.event?.lastEventCommitBlockedReason ?? '-'}</div>
           <div>event.lastEvent.preEffectTriggered/preEffectAt: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectTriggered ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectAt ?? '-'}</div>
           <div>event.lastEvent.preEffect.sfxKey/videoKey: {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.sfxKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.videoKey ?? '-'}</div>
+          <div>event.lastEffects.sfxPlayed: {(window.__CHAT_DEBUG__?.event?.lastEffects?.sfxPlayed ?? []).map((item: { key?: string; startedAt?: number }) => `${item.key ?? '-'}@${item.startedAt ?? '-'}`).join(', ') || '-'}</div>
+          <div>event.lastEffects.videoSwitchedTo: {(window.__CHAT_DEBUG__?.event?.lastEffects?.videoSwitchedTo?.key ?? '-')} / {(window.__CHAT_DEBUG__?.event?.lastEffects?.videoSwitchedTo?.src ?? '-')}</div>
+          <div>event.lastEffects.blackoutStartedAt/mode: {window.__CHAT_DEBUG__?.event?.lastEffects?.blackoutStartedAt ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEffects?.mode ?? '-'}</div>
           <div>event.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
           <div>event.lastEvent.at/reason/variant: {window.__CHAT_DEBUG__?.event?.lastEvent?.at ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.reason ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.lineVariantId ?? '-'}</div>
           <div>event.blocking.isLocked/lockTarget/lockReason: {String(window.__CHAT_DEBUG__?.event?.blocking?.isLocked ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.lockTarget ?? '-'} / {window.__CHAT_DEBUG__?.event?.blocking?.lockReason ?? '-'}</div>
