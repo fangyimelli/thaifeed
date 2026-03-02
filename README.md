@@ -1189,3 +1189,11 @@ npm run build
   - 以 `mod_live` 送出包含 `@activeUser.handle` 的題目
   - 直接觸發 lock/pin/reply preview 流程，驗證「未發言也可被 tag」
 
+
+
+## QNA 同步機制（questionMessageId 單一真相）
+
+- QNA active state 以 `questionMessageId` 作為 Reply Bar / lock / debug 的唯一來源。
+- 出題流程改為 transaction：先送出題目訊息並拿到 messageId，再切到 `AWAITING_REPLY` 並顯示 Reply Bar。
+- 聊天訊息新增 `createdAtMs + seq`，渲染前用穩定排序，避免題目晚插到玩家回覆下方。
+- 玩家成功送出訊息後，若 QNA 正在等待回覆，立即標記 resolved、關閉 lock、恢復 FOLLOW 自動捲動。
