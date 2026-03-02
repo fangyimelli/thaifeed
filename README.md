@@ -1159,37 +1159,37 @@ npm run build
 
 ### 衝突點全面排查（activeUser 註冊時機）
 
-- `activeUserInitialHandleRef` 原本只在 startup Confirm 寫入名稱；玩家送出前不會建立可查詢的使用者 registry。  
-- mention/tag 判定原先多處直接用 `new RegExp(@handle...)`，且 `handle` 來自 `activeUserInitialHandleRef`；缺少初始化 registry 的一致保證。  
-- QNA `taggedUser` 先前會 fallback 至 `qnaState.taggedUser || activeUserInitialHandleRef`，但未強制驗證 activeUser 是否已完成註冊。  
-- audience/active users 仍維持隔離（`separateChatActorState`），activeUser 不會進 audience 抽樣池，該舊邏輯保留必要性。  
+- startup Confirm 前後存在多種 gate 名稱（`hasSpoken / readyForEvents` 等歷史殘留描述），容易誤判「必須先發言」。
+- QNA / event / pin 的可用性已改為 bootstrap 單一來源，不再依賴玩家訊息數。
+- audience/active users 隔離邏輯保留（必要）：activeUser 不進 audience 抽樣池。
 
-### 整合策略（保留必要舊邏輯、移除不必要耦合）
+### 單一真相
 
-- 新增 `ActiveUserProfile` 與 app 內 registry：`usersByIdRef / usersByHandleRef`。  
-- 在 startup Confirm 直接 `registerActiveUser(...)`：
-  - `id = "activeUser"`（固定穩定）
-  - `handle = 玩家輸入名稱`
-  - `displayName = 玩家輸入名稱`
-  - `roleLabel = "You"`
-  - `hasSpoken` 初值可為 false（但不影響 tag 判定）
-- mention/tag 判定改為共用 `hasHandleMention(text, handle)`，只看 `@handle` 命中，不依賴 hasSpoken/lastMessage。  
-- QNA 出題強制 `taggedUser = activeUser.handle`，且在送題前驗證 `usersByHandle` 已註冊，避免「未註冊仍出題」隱性錯誤。  
-- 玩家首次送出訊息時僅更新 `hasSpoken=true`（沿用既有 send guard，不允許 activeUser 自動發言）。
+- `state.system.bootstrap`（在 app 內對應為 `bootstrapRef.current`）：
+  - `isReady`
+  - `activatedAt`
+  - `activatedBy` (`username_submit` / `debug`)
+- 事件與 QNA gate 統一檢查 `bootstrap.isReady`。
 
-### Debug 可觀測性補強
+### Username Submit 啟動流程
 
-- 新增欄位：
-  - `chat.activeUser.id`
-  - `chat.activeUser.handle`
-  - `chat.activeUser.registered`
-  - `chat.activeUser.hasSpoken`
-  - `chat.mention.lastMessageMentionsActiveUser`
-- 新增 Debug-only 按鈕：`Emit NPC Tag @You`
-  - 以 `mod_live` 送出包含 `@activeUser.handle` 的題目
-  - 直接觸發 lock/pin/reply preview 流程，驗證「未發言也可被 tag」
+- startup Confirm 同一手勢執行 `bootstrapAfterUsernameSubmit(name)`：
+  1. `registerActiveUser(name)`（upsert `usersById/usersByHandle`，activeUser 固定 id）
+  2. `ensureAudioUnlockedFromUserGesture()`
+  3. 寫入 `bootstrap = { isReady: true, activatedAt, activatedBy }`
+  4. `emitAudioEnabledSystemMessageOnce()`（`[系統] 聲音已啟用`，僅一次）
 
+### QNA / Tag / Pin 規則
 
+- QNA/event 未 ready 時一律 `bootstrap_not_ready` 並中止。
+- 只要 `bootstrap.isReady=true`，出題訊息必須可 `@activeUser`。
+- pinned reply 顯示只看：`qnaStatus === "AWAITING_REPLY" && questionMessageId != null`。
+- 不再以 `hasSpoken` / `messages.length` 作為 pin/tag gate。
+
+### Debug Overlay
+
+- 可觀測：`bootstrap.isReady / activatedAt / activatedBy`、`activeUser.registered`、`canTagActiveUser`。
+- 新增 debug-only 按鈕：`Simulate Username Submit (debug)`（僅未 ready 顯示）。
 
 ## QNA 同步機制（questionMessageId 單一真相）
 
@@ -1197,42 +1197,3 @@ npm run build
 - 出題流程改為 transaction：先送出題目訊息並拿到 messageId，再切到 `AWAITING_REPLY` 並顯示 Reply Bar。
 - 聊天訊息新增 `createdAtMs + seq`，渲染前用穩定排序，避免題目晚插到玩家回覆下方。
 - 玩家成功送出訊息後，若 QNA 正在等待回覆，立即標記 resolved、關閉 lock、恢復 FOLLOW 自動捲動。
-
-## Username Submit 即完成互動 bootstrap（本次 PR）
-
-### 首次互動 gate 盤點（全 repo）
-
-- `hasInteracted`：未使用。
-- `firstInteraction`：未使用。
-- `audioUnlocked`：未使用（現行為 `soundUnlocked`）。
-- `enableAudio`：未使用。
-- `「聲音已啟用」`：原本綁在 `submitChat` 的首次送出路徑。
-- `initAudio`：未使用。
-- `onFirstMessage / afterFirstSend`：未使用。
-- `hasSpoken`：存在於 `activeUserProfile`，但不再作為 QNA / event / tag gate。
-- `bootstrapAfterChat`：未使用。
-
-### 本次調整
-
-- 新增單一入口 `bootstrapAfterUsernameSubmit(name)`，在 startup Confirm（使用者手勢）時立即執行：
-  1. `registerActiveUser(name)`（立刻 upsert `usersById/usersByHandle`）
-  2. `ensureAudioUnlockedFromUserGesture()`（`resumeFromGesture` + `startFanLoop` + 預載 footsteps/ghost）
-  3. `systemReadyForEventsRef.current = true`
-  4. `emitAudioEnabledSystemMessageOnce()` 送出 `[系統] 聲音已啟用`（僅一次）
-  5. debug stamp：`chat.system.buildStamp = bootstrap_after_username_submit_v1`
-- 移除舊 gate：不再在 `submitChat` 首次發言時才解鎖音效/送系統訊息。
-- QNA / 事件 gate 改為檢查 `readyForEvents`：
-  - `startEvent()` 若未 ready，blocked reason 固定 `not_ready_for_events`。
-  - `sendQnaQuestion()` 若未 ready，直接 abort 並記錄 `lastBlockedReason=not_ready_for_events`。
-- activeUser send guard 維持不變：`dispatchChatMessage` 仍禁止任何 `source !== player_input` 的 activeUser 自動發言。
-
-### Debug Overlay 新增可觀測欄位
-
-- `activeUser.handle`
-- `activeUser.registered`
-- `system.readyForEvents`
-- `audio.unlocked`
-- `audio.enabledSystemMessageSent`
-- `audio.unlockFailedReason`
-- `lastBlockedReason`
-- Debug-only 按鈕：`Run bootstrapAfterUsernameSubmit (debug)`（僅 not ready 時顯示）

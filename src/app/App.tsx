@@ -63,7 +63,7 @@ type EventStartBlockedReason =
   | 'registry_missing'
   | 'vip_target'
   | 'invalid_state'
-  | 'not_ready_for_events';
+  | 'bootstrap_not_ready';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -79,6 +79,14 @@ type ChatSendSource =
 
 type ChatAutoScrollMode = 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
 const FREEZE_AFTER_MESSAGE_COUNT = 10;
+
+type BootstrapActivatedBy = 'username_submit' | 'debug' | null;
+
+type BootstrapState = {
+  isReady: boolean;
+  activatedAt: number | null;
+  activatedBy: BootstrapActivatedBy;
+};
 
 export type SendResult = {
   ok: boolean;
@@ -144,7 +152,6 @@ type ActiveUserProfile = {
   handle: string;
   displayName: string;
   roleLabel: 'You';
-  hasSpoken: boolean;
 };
 
 function separateChatActorState(messages: ChatMessage[], activeUserHandle: string): ChatActorState {
@@ -320,7 +327,11 @@ export default function App() {
   const soundUnlocked = useRef(false);
   const audioEnabledSystemMessageSentRef = useRef(false);
   const audioUnlockFailedReasonRef = useRef<string | null>(null);
-  const systemReadyForEventsRef = useRef(false);
+  const bootstrapRef = useRef<BootstrapState>({
+    isReady: false,
+    activatedAt: null,
+    activatedBy: null
+  });
   const nonVipMessagesSinceLastVip = useRef(2);
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
   const pacingModeRef = useRef<ChatPacingMode>('normal');
@@ -629,8 +640,7 @@ export default function App() {
         activeUser: {
           id: activeUserProfileRef.current?.id ?? '-',
           handle: activeUserProfileRef.current?.handle ?? '-',
-          registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
-          hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
+          registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle))
         },
         mention: {
           lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
@@ -918,7 +928,7 @@ export default function App() {
     }
     if (!eventDef) blockedReason = 'registry_missing';
     else if (!appStarted) blockedReason = 'invalid_state';
-    else if (!systemReadyForEventsRef.current) blockedReason = 'not_ready_for_events';
+    else if (!bootstrapRef.current.isReady) blockedReason = 'bootstrap_not_ready';
     else if (ctx.source === 'scheduler_tick' && chatAutoPaused) blockedReason = 'chat_auto_paused';
     else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
     else if (eventExclusiveStateRef.current.exclusive && !exclusiveTimeoutReached) blockedReason = 'event_exclusive_active';
@@ -1168,8 +1178,8 @@ export default function App() {
   }, [buildEventLine, dispatchEventLine, updateEventDebug]);
 
   const sendQnaQuestion = useCallback(() => {
-    if (!systemReadyForEventsRef.current) {
-      setLastBlockedReason('not_ready_for_events');
+    if (!bootstrapRef.current.isReady) {
+      setLastBlockedReason('bootstrap_not_ready');
       return false;
     }
     if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
@@ -1988,16 +1998,15 @@ export default function App() {
           activeUser: {
             id: activeUserProfileRef.current?.id ?? '-',
             handle: activeUserProfileRef.current?.handle ?? '-',
-            registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
-            hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
+            registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle))
           },
           system: {
-            readyForEvents: systemReadyForEventsRef.current,
-            audioUnlocked: soundUnlocked.current,
+            bootstrap: { ...bootstrapRef.current },
             audioEnabledSystemMessageSent: audioEnabledSystemMessageSentRef.current,
             audioUnlockFailedReason: audioUnlockFailedReasonRef.current ?? '-',
             lastBlockedReason: lastBlockedReasonRef.current
           },
+          canTagActiveUser: Boolean(bootstrapRef.current.isReady && activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
           mention: {
             lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
           },
@@ -2274,8 +2283,7 @@ export default function App() {
       id: 'activeUser',
       handle: normalizedHandle,
       displayName: normalizedHandle,
-      roleLabel: 'You',
-      hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
+      roleLabel: 'You'
     };
     activeUserInitialHandleRef.current = normalizedHandle;
     activeUserProfileRef.current = nextProfile;
@@ -2315,11 +2323,15 @@ export default function App() {
     }
   }, []);
 
-  const bootstrapAfterUsernameSubmit = useCallback(async (rawHandle: string) => {
+  const bootstrapAfterUsernameSubmit = useCallback(async (rawHandle: string, activatedBy: Exclude<BootstrapActivatedBy, null> = 'username_submit') => {
     const registered = registerActiveUser(rawHandle);
     if (!registered) return false;
     await ensureAudioUnlockedFromUserGesture();
-    systemReadyForEventsRef.current = true;
+    bootstrapRef.current = {
+      isReady: true,
+      activatedAt: Date.now(),
+      activatedBy
+    };
     emitAudioEnabledSystemMessageOnce();
     updateChatDebug({
       chat: {
@@ -2327,8 +2339,7 @@ export default function App() {
         system: {
           buildStamp: 'bootstrap_after_username_submit_v1',
           at: Date.now(),
-          readyForEvents: systemReadyForEventsRef.current,
-          audioUnlocked: soundUnlocked.current,
+          bootstrap: { ...bootstrapRef.current },
           audioUnlockFailedReason: audioUnlockFailedReasonRef.current ?? '-'
         }
       }
@@ -2568,12 +2579,12 @@ export default function App() {
                   Simulate Player Reply
                 </label>
                 <div className="debug-route-controls">
-                  {!systemReadyForEventsRef.current && (
+                  {!bootstrapRef.current.isReady && (
                     <button type="button" onClick={() => {
                       const name = normalizeHandle(startNameInput) || normalizeHandle(activeUserInitialHandleRef.current || '') || 'you';
-                      void bootstrapAfterUsernameSubmit(name);
+                      void bootstrapAfterUsernameSubmit(name, 'debug');
                     }}>
-                      Run bootstrapAfterUsernameSubmit (debug)
+                      Simulate Username Submit (debug)
                     </button>
                   )}
                   <button type="button" onClick={emitNpcTagToActiveUser}>Emit NPC Tag @You</button>
@@ -2594,9 +2605,9 @@ export default function App() {
                 <div>chat.activeUser.id: {window.__CHAT_DEBUG__?.chat?.activeUser?.id ?? '-'}</div>
                 <div>chat.activeUser.handle: {window.__CHAT_DEBUG__?.chat?.activeUser?.handle ?? '-'}</div>
                 <div>chat.activeUser.registered: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.registered ?? false)}</div>
-                <div>chat.activeUser.hasSpoken: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.hasSpoken ?? false)}</div>
-                <div>system.readyForEvents: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.readyForEvents ?? false)}</div>
-                <div>audio.unlocked: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.audioUnlocked ?? false)}</div>
+                <div>system.bootstrap.isReady: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.bootstrap?.isReady ?? false)}</div>
+                <div>system.bootstrap.activatedAt/by: {(window.__CHAT_DEBUG__?.chat as any)?.system?.bootstrap?.activatedAt ?? '-'} / {(window.__CHAT_DEBUG__?.chat as any)?.system?.bootstrap?.activatedBy ?? '-'}</div>
+                <div>chat.canTagActiveUser: {String((window.__CHAT_DEBUG__?.chat as any)?.canTagActiveUser ?? false)}</div>
                 <div>audio.enabledSystemMessageSent: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.audioEnabledSystemMessageSent ?? false)}</div>
                 <div>audio.unlockFailedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.audioUnlockFailedReason ?? '-'}</div>
                 <div>lastBlockedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastBlockedReason ?? '-'}</div>
@@ -2656,6 +2667,8 @@ export default function App() {
                 <div>event.test.lastStartAttemptAt: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptAt ?? 0}</div>
                 <div>event.test.lastStartAttemptKey: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptKey ?? '-'}</div>
                 <div>event.test.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.test?.lastStartAttemptBlockedReason ?? '-'}</div>
+                <div>event.lastEventStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
+                <div>event.lastQnaStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
                 <div>event.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
                 <div>event.exclusive: {String(window.__CHAT_DEBUG__?.event?.exclusive ?? false)}</div>
                 <div>event.currentEventId: {window.__CHAT_DEBUG__?.event?.currentEventId ?? '-'}</div>

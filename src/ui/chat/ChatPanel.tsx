@@ -86,8 +86,7 @@ export default function ChatPanel({
     ? sanitizedMessages.find((message) => message.id === questionMessageId)
     : null;
 
-  const originalMessageHasActiveUserTag = Boolean(originalMessage && activeUserInitialHandle && originalMessage.text.includes(`@${activeUserInitialHandle}`));
-  const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId && isLocked && lockTarget && originalMessageHasActiveUserTag);
+  const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId);
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
