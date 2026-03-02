@@ -21,6 +21,7 @@ import { preloadAssets, verifyRequiredAssets, type MissingRequiredAsset } from '
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
 import { FAN_LOOP_PATH, FOOTSTEPS_PATH, GHOST_FEMALE_PATH, MAIN_LOOP } from '../config/oldhousePlayback';
+import { VIDEO_PATH_BY_KEY } from '../config/oldhousePlayback';
 import { audioEngine } from '../audio/AudioEngine';
 import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
@@ -34,6 +35,7 @@ import { pickDialog } from '../core/events/eventDialogs';
 import { pickReactionLines } from '../core/events/eventReactions';
 import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
 import { QNA_FLOW_BY_EVENT } from '../game/qna/qnaFlows';
+import { EVENT_EFFECTS } from '../events/eventEffectsRegistry';
 import {
   applyOptionResult,
   askCurrentQuestion,
@@ -64,6 +66,28 @@ type EventStartBlockedReason =
   | 'vip_target'
   | 'invalid_state'
   | 'bootstrap_not_ready';
+
+type EventCommitBlockedReason =
+  | 'paused'
+  | 'audio_locked'
+  | 'assets_missing'
+  | 'sfx_cooldown_active'
+  | 'video_src_empty'
+  | 'video_not_ready'
+  | 'tag_not_sent'
+  | 'question_send_failed'
+  | 'unknown';
+
+type EventTxn = {
+  eventKey: StoryEventKey;
+  actorId: string;
+  taggedUserId: string;
+  questionMessageId: string | null;
+  starterTagSent: boolean;
+  status: 'PREPARED' | 'COMMITTED' | 'ABORTED';
+  abortReason: EventCommitBlockedReason | null;
+  committedAt: number | null;
+};
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -1125,6 +1149,7 @@ export default function App() {
     const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
     const shouldIgnoreCooldown = Boolean(debugEnabled && ctx.source === 'debug_tester' && ctx.ignoreCooldowns);
     const eventDef = EVENT_REGISTRY[eventKey];
+    const effects = EVENT_EFFECTS[eventKey];
     const vipUsers = new Set(state.messages.filter((message) => Boolean(message.isVip)).map((message) => message.username));
     const eligibleActiveUsers = activeUsers.filter((name) => name && !vipUsers.has(name));
     const activeUserForTag = chatActors.activeUser;
@@ -1148,7 +1173,8 @@ export default function App() {
       resetQnaUiState();
       pendingReplyEventRef.current = null;
     }
-    if (!eventDef) blockedReason = 'registry_missing';
+
+    if (!eventDef || !effects) blockedReason = 'registry_missing';
     else if (!appStarted) blockedReason = 'invalid_state';
     else if (!bootstrapRef.current.isReady) blockedReason = 'bootstrap_not_ready';
     else if (ctx.source === 'scheduler_tick' && chatAutoPaused) blockedReason = 'chat_auto_paused';
@@ -1165,219 +1191,157 @@ export default function App() {
       eventLastReasonRef.current = sourceReason;
       eventLastKeyRef.current = eventKey;
       eventLastAtRef.current = now;
-      preEffectStateRef.current = { triggered: false, at: 0 };
-      updateEventDebug({
-        event: {
-          ...(window.__CHAT_DEBUG__?.event ?? {}),
-          inFlight: false,
-          lastStartAttemptBlockedReason: blockedReason,
-          test: {
-            ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
-            ...eventTestDebugRef.current
-          },
-          lastEvent: {
-            ...(window.__CHAT_DEBUG__?.event?.lastEvent ?? {}),
-            preEffectTriggered: false,
-            preEffectAt: 0,
-            preEffect: {},
-            starterTagSent: false,
-            abortedReason: blockedReason
-          }
-        }
-      });
+      updateEventDebug({ event: { ...(window.__CHAT_DEBUG__?.event ?? {}), lastStartAttemptBlockedReason: blockedReason } });
       return null;
     }
 
     const eventId = `${eventKey}_${Date.now()}`;
     const opener = pickDialog(eventKey, 'opener', activeUserForTag, eventRecentContentIdsRef.current[eventKey]);
+    let txn: EventTxn = {
+      eventKey,
+      actorId: questionActor,
+      taggedUserId: activeUserForTag,
+      questionMessageId: null,
+      starterTagSent: false,
+      status: 'PREPARED',
+      abortReason: null,
+      committedAt: null
+    };
     if (!opener.text.startsWith(`@${activeUserForTag}`)) {
-      const record: EventRunRecord = {
-        eventId,
-        key: eventKey,
-        state: 'aborted',
-        at: Date.now(),
-        starterTagSent: false,
-        abortedReason: 'starter_line_not_tagged',
-        lineIds: [opener.id],
-        openerLineId: opener.id,
-        preEffectTriggered: false
-      };
-      eventLifecycleRef.current = record;
+      txn = { ...txn, status: 'ABORTED', abortReason: 'tag_not_sent' };
+    }
+
+    if (txn.status !== 'ABORTED') {
+      const sendResult = dispatchEventLine(opener.text, questionActor, ctx.source);
+      if (!sendResult.ok || !sendResult.lineId) {
+        txn = { ...txn, status: 'ABORTED', abortReason: 'question_send_failed' };
+      } else {
+        txn = { ...txn, questionMessageId: sendResult.lineId, starterTagSent: true, status: 'PREPARED' };
+      }
+    }
+
+    const commitBlocked = (reason: EventCommitBlockedReason) => {
+      txn = { ...txn, status: 'ABORTED', abortReason: reason };
       updateEventDebug({
         event: {
           ...(window.__CHAT_DEBUG__?.event ?? {}),
-          inFlight: false,
-          lastStartAttemptBlockedReason: '-',
+          lastEventCommitBlockedReason: reason,
           lastEvent: {
+            ...(window.__CHAT_DEBUG__?.event?.lastEvent ?? {}),
             key: eventKey,
-            eventId: record.eventId,
-            at: record.at,
-            reason: sourceReason,
-            state: record.state,
-            starterTagSent: false,
-            abortedReason: record.abortedReason,
-            openerLineId: record.openerLineId,
-            lineIds: record.lineIds,
-            preEffectTriggered: false,
-            preEffectAt: 0,
-            preEffect: {}
+            state: 'aborted',
+            starterTagSent: txn.starterTagSent,
+            questionMessageId: txn.questionMessageId,
+            commitBlockedReason: reason
           }
         }
       });
-      return null;
+      if (debugEnabled) console.log('[EVENT] commit blocked reason=' + reason, { eventKey, eventId });
+    };
+
+    if (txn.status === 'ABORTED') commitBlocked(txn.abortReason ?? 'unknown');
+    else if (chatAutoPaused || chatFreeze.isFrozen) commitBlocked('paused');
+    else if (!soundUnlocked.current) commitBlocked('audio_locked');
+    else if (requiredAssetErrors.length > 0) commitBlocked('assets_missing');
+    else if ((effects.sfx ?? []).some((sfxKey) => (cooldownsRef.current[sfxKey] ?? 0) > Date.now())) commitBlocked('sfx_cooldown_active');
+    else if (effects.video && !VIDEO_PATH_BY_KEY[`oldhouse_room_${effects.video}` as keyof typeof VIDEO_PATH_BY_KEY]) commitBlocked('video_src_empty');
+    else if (effects.video && effects.video === 'loop4' && !VIDEO_PATH_BY_KEY.oldhouse_room_loop4) commitBlocked('video_not_ready');
+    else {
+      txn = { ...txn, status: 'COMMITTED', committedAt: Date.now() };
+      if (debugEnabled) console.log('[EVENT] commit ok key=' + eventKey, { eventId, txn });
     }
 
-    eventRunnerStateRef.current.inFlight = true;
-    eventRunnerStateRef.current.currentEventId = eventId;
-
-    const preEffect = { sfxKey: undefined as 'ghost_female' | 'footsteps' | 'fan_loop' | undefined, videoKey: undefined as 'oldhouse_room_loop' | 'oldhouse_room_loop2' | 'oldhouse_room_loop3' | 'oldhouse_room_loop4' | undefined };
-    if (eventKey === 'TV_EVENT') {
-      preEffect.videoKey = 'oldhouse_room_loop4';
-      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: `event:pre_effect:${eventId}`, sourceEventKey: 'TV_EVENT' });
-    } else if (eventKey === 'LIGHT_GLITCH') {
-      preEffect.videoKey = 'oldhouse_room_loop2';
-      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop2', reason: `event:pre_effect:${eventId}`, sourceEventKey: 'LIGHT_GLITCH' });
-    } else if (eventKey === 'VIEWER_SPIKE' || eventKey === 'FEAR_CHALLENGE') {
-      preEffect.sfxKey = 'footsteps';
-      playSfx('footsteps', { reason: `event:pre_effect:${eventId}`, source: 'event', eventId, eventKey, allowBeforeStarterTag: true });
-    } else {
-      preEffect.sfxKey = 'ghost_female';
-      playSfx('ghost_female', { reason: `event:pre_effect:${eventId}`, source: 'event', eventId, eventKey, delayMs: 150, allowBeforeStarterTag: true });
-    }
-    const preEffectAt = Date.now();
-    preEffectStateRef.current = { triggered: true, at: preEffectAt, sfxKey: preEffect.sfxKey, videoKey: preEffect.videoKey };
-
-    const sendResult = dispatchEventLine(opener.text, questionActor, ctx.source);
-    if (!sendResult.ok) {
-      const shortCooldownMs = 15_000;
-      eventCooldownsRef.current[eventKey] = Date.now() + shortCooldownMs;
-      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop3', reason: `event:recover:${eventId}`, sourceEventKey: eventKey });
-      eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
-      resetQnaUiState();
-      pendingReplyEventRef.current = null;
+    if (txn.status === 'ABORTED') {
       const record: EventRunRecord = {
         eventId,
         key: eventKey,
         state: 'aborted',
         at: Date.now(),
-        starterTagSent: false,
-        abortedReason: 'tag_send_failed_after_pre_effect',
+        starterTagSent: txn.starterTagSent,
+        abortedReason: txn.abortReason ?? 'unknown',
         lineIds: [opener.id],
-        openerLineId: opener.id,
-        preEffectTriggered: true,
-        preEffectAt,
-        preEffect: { ...preEffect }
+        openerLineId: opener.id
       };
       eventLifecycleRef.current = record;
-      clearEventRunnerState();
-      eventLastReasonRef.current = sourceReason;
-      eventLastKeyRef.current = eventKey;
-      eventLastAtRef.current = Date.now();
-      updateEventDebug({
-        event: {
-          ...(window.__CHAT_DEBUG__?.event ?? {}),
-          inFlight: false,
-          lastStartAttemptBlockedReason: '-',
-          test: {
-            ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
-            ...eventTestDebugRef.current
-          },
-          lastEvent: {
-            key: eventKey,
-            eventId: record.eventId,
-            at: record.at,
-            reason: sourceReason,
-            state: record.state,
-            starterTagSent: false,
-            abortedReason: record.abortedReason,
-            openerLineId: record.openerLineId,
-            lineIds: record.lineIds,
-            preEffectTriggered: true,
-            preEffectAt,
-            preEffect: { ...preEffect }
-          }
-        },
-        violation: 'event_aborted:tag_send_failed_after_pre_effect'
-      });
       return null;
     }
 
+    const sfxPlayed: Array<{ key: string; startedAt: number }> = [];
+    for (const sfxKey of effects.sfx) {
+      const startedAt = Date.now();
+      const played = playSfx(sfxKey, { reason: `event:effect:${eventId}`, source: 'event', eventId, eventKey, allowBeforeStarterTag: true });
+      if (played) {
+        sfxPlayed.push({ key: sfxKey, startedAt });
+        if (debugEnabled) console.log('[EFFECT] sfx start key=' + sfxKey, { eventKey, eventId });
+      }
+    }
+
+    let videoSwitchedTo: { key: string; src: string } | null = null;
+    if (effects.video) {
+      const src = effects.video === 'loop4' ? VIDEO_PATH_BY_KEY.oldhouse_room_loop4 : effects.video === 'loop2' ? VIDEO_PATH_BY_KEY.oldhouse_room_loop2 : VIDEO_PATH_BY_KEY.oldhouse_room_loop3;
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: effects.video, reason: `event:effect:${eventId}`, sourceEventKey: eventKey });
+      videoSwitchedTo = { key: effects.video, src };
+      if (debugEnabled) console.log('[EFFECT] video switch key=' + effects.video + ' src=' + src, { eventKey, eventId });
+    }
+
+    if (effects.blackout) {
+      if (debugEnabled) console.log('[EFFECT] blackout scheduled delay=1000ms', { eventKey, eventId });
+      scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
+    }
+
     eventRecentContentIdsRef.current[eventKey] = [...eventRecentContentIdsRef.current[eventKey], opener.id].slice(-5);
-    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: null };
-    eventExclusiveStateRef.current = {
-      exclusive: true,
-      currentEventId: eventId,
-      currentLockOwner: questionActor
-    };
+    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: txn.questionMessageId };
+    eventExclusiveStateRef.current = { exclusive: true, currentEventId: eventId, currentLockOwner: questionActor };
     const record: EventRunRecord = {
       eventId,
       key: eventKey,
       state: 'active',
       at: Date.now(),
-      starterTagSent: true,
+      starterTagSent: txn.starterTagSent,
       openerLineId: opener.id,
       lineIds: [opener.id],
       preEffectTriggered: true,
-      preEffectAt,
-      preEffect: { ...preEffect }
+      preEffectAt: txn.committedAt ?? Date.now(),
+      preEffect: { sfxKey: (effects.sfx[0] as 'ghost_female' | 'footsteps' | 'fan_loop' | undefined), videoKey: undefined }
     };
     eventLifecycleRef.current = record;
-    clearEventRunnerState();
 
-    eventLastReasonRef.current = sourceReason;
-    eventLastKeyRef.current = eventKey;
-    eventLastAtRef.current = Date.now();
     const qnaFlowId = eventDef?.qnaFlowId ?? QNA_FLOW_BY_EVENT[eventKey];
     if (qnaFlowId && activeUserForTag) {
-      const startedQna = startQnaFlow(qnaStateRef.current, {
-        eventKey,
-        flowId: qnaFlowId,
-        taggedUser: activeUserForTag,
-        questionActor
-      });
-      if (startedQna) {
-        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: Date.now(), replyingToMessageId: null };
-        eventExclusiveStateRef.current.currentLockOwner = questionActor;
-      }
+      startQnaFlow(qnaStateRef.current, { eventKey, flowId: qnaFlowId, taggedUser: activeUserForTag, questionActor });
     }
 
     updateEventDebug({
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
-        inFlight: false,
-        lastStartAttemptBlockedReason: '-',
-        test: {
-          ...(window.__CHAT_DEBUG__?.event?.test ?? {}),
-          ...eventTestDebugRef.current
-        },
+        lastEventCommitBlockedReason: '-',
         lastEvent: {
           key: eventKey,
-          eventId: record.eventId,
-          at: record.at,
-          reason: sourceReason,
-          state: record.state,
-          starterTagSent: record.starterTagSent,
-          abortedReason: record.abortedReason,
-          openerLineId: record.openerLineId,
-          followUpLineId: record.followUpLineId,
-          lineIds: record.lineIds,
-          topic: record.topic,
+          eventId,
+          at: Date.now(),
+          state: 'active',
+          starterTagSent: txn.starterTagSent,
+          questionMessageId: txn.questionMessageId,
+          commitBlockedReason: '-',
           preEffectTriggered: true,
-          preEffectAt,
-          preEffect: { ...preEffect }
+          preEffectAt: txn.committedAt ?? undefined,
+          preEffect: { sfxKey: effects.sfx[0] === 'ghost_female' || effects.sfx[0] === 'footsteps' ? effects.sfx[0] : undefined, videoKey: effects.video === 'loop4' ? 'oldhouse_room_loop4' : effects.video === 'loop2' ? 'oldhouse_room_loop2' : undefined }
         },
-        queue: {
-          length: eventQueueRef.current.length
-        },
-        qna: {
-          ...qnaStateRef.current
+        lastEffects: {
+          sfxPlayed,
+          videoSwitchedTo,
+          blackoutStartedAt: effects.blackout ? Date.now() + 1000 : null,
+          mode: effects.blackout ? 'flicker' : '-'
         }
       }
-    } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+    });
+
+    if (txn.questionMessageId && txn.starterTagSent) {
+      void scrollThenPauseForTaggedQuestion({ questionMessageId: txn.questionMessageId });
+    }
 
     return { eventId: record.eventId, target: questionActor };
-  }, [appStarted, chatAutoPaused, clearEventRunnerState, debugEnabled, dispatchEventLine, playSfx, setEventAttemptDebug, state.messages, updateEventDebug]);
+  }, [appStarted, chatAutoPaused, chatFreeze.isFrozen, debugEnabled, dispatchEventLine, playSfx, requiredAssetErrors.length, scheduleBlackoutFlicker, scrollThenPauseForTaggedQuestion, setEventAttemptDebug, sortedMessages, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);

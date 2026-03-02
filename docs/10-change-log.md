@@ -84,3 +84,16 @@
 ### Docs
 - README 補充事件驅動「由遠到近」音效與 blackout flicker 行為、debug 觀測方式。
 - PR_NOTES 更新 audio/player/events/debug/docs 影響範圍與驗收結果。
+
+## 2026-03-02（event prepare/commit/effects transaction）
+
+### Changed
+- [events] 事件流程改為 `Prepare → Commit → Effects` 三段式：只有 commit 成功才允許播放 SFX/切影片/blackout，且 commit 成功必定立即進入 effects（同 call chain，避免 silent）。
+- [events/audio/player] 新增事件效果 registry SSOT：`src/events/eventEffectsRegistry.ts`，集中管理 `VOICE_CONFIRM/GHOST_PING/TV_EVENT/NAME_CALL/VIEWER_SPIKE/LIGHT_GLITCH/FEAR_CHALLENGE` 的 SFX/Video/Blackout 映射。
+- [tv_event] `TV_EVENT` 明確映射 `loop4`，commit 時加入 `video_src_empty/video_not_ready` gate，阻擋時寫入 debug blockedReason。
+- [pause/freeze] tagged question 流程順序調整為「事件 effects 先執行，再 scrollToBottom + pause」，避免出現「有 tag 但效果沒播」。
+- [debug] 新增事件交易觀測欄位：`lastEvent.questionMessageId`、`lastEvent.commitBlockedReason`、`lastEventCommitBlockedReason`、`lastEffects.sfxPlayed[]`、`lastEffects.videoSwitchedTo`、`lastEffects.blackoutStartedAt/mode`。
+
+### Docs
+- README 補充事件交易化流程、registry SSOT 與新 debug 欄位。
+- PR_NOTES 更新本次 events/audio/player/debug/docs 影響範圍與驗收。

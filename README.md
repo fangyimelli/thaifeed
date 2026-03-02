@@ -74,6 +74,23 @@ npm run build
   - `event.foreignTagBlockedCount`
   - `event.lastBlockedReason`
 
+
+## Event Transaction Pipeline（Prepare → Commit → Effects）
+
+- 事件改為三段式交易：
+  1) `Prepare`：送出含 `@activeUser` 的題目訊息（未含 tag 或送出失敗直接 abort）。
+  2) `Commit`：一次檢查 gate（paused / audio unlocked / assets / sfx cooldown / video src），只要任一失敗就 abort 並寫入 `commitBlockedReason`。
+  3) `Effects`：僅在 commit 成功後、同一 call chain 立即執行 SFX / 影片切換 / blackout（禁止 silent fail）。
+- 事件效果 SSOT 由 `src/events/eventEffectsRegistry.ts` 統一管理，避免散落 if/else 造成邏輯分叉。
+- `TV_EVENT` 固定映射 `loop4`，commit 會先驗證 `loop4` 的 resolved src 非空。
+- Debug overlay 新增：
+  - `event.lastEvent.questionMessageId`
+  - `event.lastEvent.commitBlockedReason`
+  - `event.lastEventCommitBlockedReason`
+  - `event.lastEffects.sfxPlayed[]`
+  - `event.lastEffects.videoSwitchedTo`
+  - `event.lastEffects.blackoutStartedAt/mode`
+
 ## Debug 入口
 
 - 主頁右上角 `Debug` 按鈕（overlay）
