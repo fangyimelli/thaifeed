@@ -289,10 +289,6 @@ export default function App() {
   const [chatFreezeCountdownStartedAt, setChatFreezeCountdownStartedAt] = useState<number | null>(null);
   const [chatLastMessageActorIdCounted, setChatLastMessageActorIdCounted] = useState<string | null>(null);
   const [chatLastCountdownDecrementAt, setChatLastCountdownDecrementAt] = useState<number | null>(null);
-  const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
-  const [isPinnedActive, setIsPinnedActive] = useState(false);
-  const [replyPreviewVisible, setReplyPreviewVisible] = useState(false);
-  const [replyPreviewDelayMs] = useState(2000);
   const [lastQuestionMessageId, setLastQuestionMessageId] = useState<string | null>(null);
   const [lastQuestionMessageHasTag, setLastQuestionMessageHasTag] = useState(false);
   const [replyPreviewSuppressedReason, setReplyPreviewSuppressedReason] = useState<string | null>(null);
@@ -828,9 +824,6 @@ export default function App() {
   }, []);
 
   const resetQnaUiState = useCallback(() => {
-    setPinnedMessageId(null);
-    setIsPinnedActive(false);
-    setReplyPreviewVisible(false);
     setReplyPreviewSuppressedReason(null);
   }, []);
 
@@ -1187,28 +1180,17 @@ export default function App() {
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     setLastQuestionMessageId(sent.lineId);
     setLastQuestionMessageHasTag(true);
-    setPinnedMessageId(sent.lineId);
-    setIsPinnedActive(true);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
     if (hasHandleMention(line, taggedUser)) {
       startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
     }
 
-    if (replyPreviewDelayMs <= 0) {
-      setReplyPreviewVisible(true);
-    } else {
-      setReplyPreviewVisible(false);
-      const timerId = window.setTimeout(() => {
-        setReplyPreviewVisible(true);
-      }, replyPreviewDelayMs);
-      registerEventRunnerTimer(timerId);
-    }
 
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
     return true;
-  }, [dispatchEventLine, registerEventRunnerTimer, replyPreviewDelayMs, resetQnaUiState, startChatFreezeCountdown, state.messages]);
+  }, [dispatchEventLine, resetQnaUiState, startChatFreezeCountdown, state.messages]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -1901,9 +1883,6 @@ export default function App() {
             ? `${qnaStateRef.current.eventKey ?? '-'} / ${qnaStateRef.current.flowId || '-'} / ${qnaStateRef.current.stepId || '-'}`
             : (eventLifecycleRef.current?.key ?? '-'),
           replyingToMessageId: lockStateRef.current.replyingToMessageId,
-          pinnedMessageId,
-          replyPreviewVisible,
-          replyPreviewDelayMs,
           lockTargetMissing: lockStateRef.current.isLocked && !lockStateRef.current.target
         },
         cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
@@ -1926,10 +1905,11 @@ export default function App() {
         event: snapshot,
         ui: {
           ...(window.__CHAT_DEBUG__?.ui ?? {}),
-          replyPreviewVisible,
-          replyPreviewDelayMs,
           replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-',
-          replyPreviewLocation: 'composer_top',
+          replyPinMounted: Boolean(lockStateRef.current.replyingToMessageId),
+          replyPinContainerLocation: 'above_input',
+          replyPinInsideChatList: false,
+          replyPreviewLocation: 'above_input',
           legacyReplyQuoteEnabled: false
         },
         chat: {
@@ -1971,7 +1951,7 @@ export default function App() {
       syncChatEngineDebug();
     }, 600);
     return () => window.clearInterval(timer);
-  }, [appStarted, chatAutoPaused, chatAutoScrollMode, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, pinnedMessageId, replyPreviewDelayMs, replyPreviewVisible, state.messages, syncChatEngineDebug, updateChatDebug]);
+  }, [appStarted, chatAutoPaused, chatAutoScrollMode, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, state.messages, syncChatEngineDebug, updateChatDebug]);
 
   const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
     if (!debugEnabled) return;
@@ -2275,23 +2255,12 @@ export default function App() {
     const now = Date.now();
     lockStateRef.current = { isLocked: true, target: 'mod_live', startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = 'mod_live';
-    setPinnedMessageId(sent.lineId);
-    setIsPinnedActive(true);
     setLastQuestionMessageId(sent.lineId);
     setLastQuestionMessageHasTag(true);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
     startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
-    if (replyPreviewDelayMs <= 0) {
-      setReplyPreviewVisible(true);
-    } else {
-      setReplyPreviewVisible(false);
-      const timerId = window.setTimeout(() => {
-        setReplyPreviewVisible(true);
-      }, replyPreviewDelayMs);
-      registerEventRunnerTimer(timerId);
-    }
-  }, [dispatchEventLine, registerEventRunnerTimer, replyPreviewDelayMs, startChatFreezeCountdown]);
+  }, [dispatchEventLine, startChatFreezeCountdown]);
 
 
   useEffect(() => {
@@ -2551,9 +2520,10 @@ export default function App() {
                 <div>qna.lastQuestionMessageId: {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageId ?? '-'}</div>
                 <div>qna.lastQuestionMessageHasTag: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)}</div>
                 <div>qna.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
-                <div>lock.pinnedMessageId: {window.__CHAT_DEBUG__?.event?.blocking?.pinnedMessageId ?? '-'}</div>
-                <div>ui.replyPreviewVisible/delayMs: {String(window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewDelayMs ?? 0}</div>
                 <div>ui.replyPreviewSuppressed: {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
+                <div>ui.replyPinMounted: {String((window.__CHAT_DEBUG__?.ui as { replyPinMounted?: boolean } | undefined)?.replyPinMounted ?? false)}</div>
+                <div>ui.replyPinContainerLocation: {(window.__CHAT_DEBUG__?.ui as { replyPinContainerLocation?: string } | undefined)?.replyPinContainerLocation ?? '-'}</div>
+                <div>ui.replyPinInsideChatList: {String((window.__CHAT_DEBUG__?.ui as { replyPinInsideChatList?: boolean } | undefined)?.replyPinInsideChatList ?? false)}</div>
                 <div>ui.replyPreviewLocation/legacyReplyQuoteEnabled: {(window.__CHAT_DEBUG__?.ui as { replyPreviewLocation?: string; legacyReplyQuoteEnabled?: boolean } | undefined)?.replyPreviewLocation ?? '-'} / {String((window.__CHAT_DEBUG__?.ui as { legacyReplyQuoteEnabled?: boolean } | undefined)?.legacyReplyQuoteEnabled ?? false)}</div>
                 <div>qna.lockTargetHandle: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'}</div>
                 <div>qna.lastQuestionActor.handle: {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionActor ?? '-'}</div>
@@ -2605,8 +2575,6 @@ export default function App() {
             isLocked={lockStateRef.current.isLocked}
             lockTarget={lockStateRef.current.target}
             replyingToMessageId={lockStateRef.current.replyingToMessageId}
-            pinnedMessageId={isPinnedActive ? pinnedMessageId : null}
-            isReplyPreviewVisible={replyPreviewVisible}
             replyPreviewSuppressedReason={replyPreviewSuppressedReason}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
             autoScrollMode={chatAutoScrollMode}
