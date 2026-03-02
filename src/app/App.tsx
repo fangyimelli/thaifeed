@@ -69,6 +69,8 @@ type EventStartBlockedReason =
 
 type EventCommitBlockedReason =
   | 'paused'
+  | 'cooldown'
+  | 'no_tag'
   | 'audio_locked'
   | 'assets_missing'
   | 'sfx_cooldown_active'
@@ -87,6 +89,18 @@ type EventTxn = {
   status: 'PREPARED' | 'COMMITTED' | 'ABORTED';
   abortReason: EventCommitBlockedReason | null;
   committedAt: number | null;
+  meta?: {
+    forcedByDebug?: boolean;
+    ignoreCooldown?: boolean;
+    ignorePause?: boolean;
+    skipTagRequirement?: boolean;
+  };
+};
+
+type DebugForceExecuteOptions = {
+  ignoreCooldown?: boolean;
+  ignorePause?: boolean;
+  skipTagRequirement?: boolean;
 };
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
@@ -142,6 +156,7 @@ declare global {
     __THAIFEED_RENAME_ACTIVE_USER__?: LegacyRenameBlocker;
     __THAIFEED_CHANGE_NAME__?: LegacyRenameBlocker;
     __THAIFEED_SET_NAME__?: LegacyRenameBlocker;
+    __THAIFEED_DEBUG_FORCE_EVENT__?: (eventKey: StoryEventKey, options?: DebugForceExecuteOptions) => void;
   }
 }
 
@@ -965,7 +980,7 @@ export default function App() {
     return { line: lore.fragment, lineId: picked.id };
   }, [markEventTopicBoost, state.curse, updateEventDebug]);
 
-  const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick', sendSource?: ChatSendSource): EventSendResult => {
+  const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' | 'debug_force' = 'scheduler_tick', sendSource?: ChatSendSource): EventSendResult => {
     const now = Date.now();
     const activeUserHandle = activeUserInitialHandleRef.current;
     const textHasActiveUserTag = hasHandleMention(line, activeUserHandle);
@@ -990,7 +1005,7 @@ export default function App() {
     }
 
     const messageId = crypto.randomUUID();
-    const resolvedSendSource: ChatSendSource = sendSource ?? (source === 'debug_tester' ? 'debug_tester' : 'event_dialogue');
+    const resolvedSendSource: ChatSendSource = sendSource ?? ((source === 'debug_tester' || source === 'debug_force') ? 'debug_tester' : 'event_dialogue');
     const sent = dispatchChatMessage({
       id: messageId,
       username: actorHandle,
@@ -1142,12 +1157,18 @@ export default function App() {
     return true;
   }, [chatAutoPaused, chatFreeze.isFrozen]);
 
-  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester'; ignoreCooldowns?: boolean }) => {
+  const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester' | 'debug_force'; ignoreCooldowns?: boolean; forceOptions?: DebugForceExecuteOptions }) => {
     const now = Date.now();
     const chatActors = separateChatActorState(sortedMessages, activeUserInitialHandleRef.current || '');
     const activeUsers = chatActors.audienceUsers;
-    const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
+    const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : ctx.source === 'debug_force' ? 'DEBUG_FORCE' : 'TIMER_TICK';
     const shouldIgnoreCooldown = Boolean(debugEnabled && ctx.source === 'debug_tester' && ctx.ignoreCooldowns);
+    const forceOptions: DebugForceExecuteOptions = ctx.source === 'debug_force' ? {
+      ignoreCooldown: Boolean(ctx.forceOptions?.ignoreCooldown),
+      ignorePause: Boolean(ctx.forceOptions?.ignorePause),
+      skipTagRequirement: Boolean(ctx.forceOptions?.skipTagRequirement)
+    } : {};
+    const forcedByDebug = ctx.source === 'debug_force';
     const eventDef = EVENT_REGISTRY[eventKey];
     const effects = EVENT_EFFECTS[eventKey];
     const vipUsers = new Set(state.messages.filter((message) => Boolean(message.isVip)).map((message) => message.username));
@@ -1183,7 +1204,7 @@ export default function App() {
     else if (activeUsers.length < 3) blockedReason = 'active_users_lt_3';
     else if (!activeUserForTag) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
     else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUserForTag) blockedReason = 'locked_active';
-    else if (!shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
+    else if (!forcedByDebug && !shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
 
     setEventAttemptDebug(eventKey, blockedReason);
     if (blockedReason) {
@@ -1206,9 +1227,24 @@ export default function App() {
       status: 'PREPARED',
       abortReason: null,
       committedAt: null
+      ,
+      meta: forcedByDebug ? {
+        forcedByDebug: true,
+        ignoreCooldown: forceOptions.ignoreCooldown,
+        ignorePause: forceOptions.ignorePause,
+        skipTagRequirement: forceOptions.skipTagRequirement
+      } : undefined
     };
-    if (!opener.text.startsWith(`@${activeUserForTag}`)) {
-      txn = { ...txn, status: 'ABORTED', abortReason: 'tag_not_sent' };
+    const hasStarterTag = opener.text.startsWith(`@${activeUserForTag}`);
+
+    if (!forcedByDebug || !forceOptions.ignorePause) {
+      if (chatAutoPaused || chatFreeze.isFrozen) txn = { ...txn, status: 'ABORTED', abortReason: 'paused' };
+    }
+    if (txn.status !== 'ABORTED' && (!forcedByDebug || !forceOptions.ignoreCooldown) && (eventCooldownsRef.current[eventKey] ?? 0) > now) {
+      txn = { ...txn, status: 'ABORTED', abortReason: 'cooldown' };
+    }
+    if (txn.status !== 'ABORTED' && (!forcedByDebug || !forceOptions.skipTagRequirement) && !hasStarterTag) {
+      txn = { ...txn, status: 'ABORTED', abortReason: 'no_tag' };
     }
 
     if (txn.status !== 'ABORTED') {
@@ -1226,6 +1262,7 @@ export default function App() {
         event: {
           ...(window.__CHAT_DEBUG__?.event ?? {}),
           lastEventCommitBlockedReason: reason,
+          lastCommitBlockedReason: reason,
           lastEvent: {
             ...(window.__CHAT_DEBUG__?.event?.lastEvent ?? {}),
             key: eventKey,
@@ -1240,7 +1277,9 @@ export default function App() {
     };
 
     if (txn.status === 'ABORTED') commitBlocked(txn.abortReason ?? 'unknown');
-    else if (chatAutoPaused || chatFreeze.isFrozen) commitBlocked('paused');
+    else if ((!forcedByDebug || !forceOptions.ignorePause) && (chatAutoPaused || chatFreeze.isFrozen)) commitBlocked('paused');
+    else if ((!forcedByDebug || !forceOptions.ignoreCooldown) && (eventCooldownsRef.current[eventKey] ?? 0) > now) commitBlocked('cooldown');
+    else if ((!forcedByDebug || !forceOptions.skipTagRequirement) && !txn.starterTagSent) commitBlocked('no_tag');
     else if (!soundUnlocked.current) commitBlocked('audio_locked');
     else if (requiredAssetErrors.length > 0) commitBlocked('assets_missing');
     else if ((effects.sfx ?? []).some((sfxKey) => (cooldownsRef.current[sfxKey] ?? 0) > Date.now())) commitBlocked('sfx_cooldown_active');
@@ -1248,7 +1287,10 @@ export default function App() {
     else if (effects.video && effects.video === 'loop4' && !VIDEO_PATH_BY_KEY.oldhouse_room_loop4) commitBlocked('video_not_ready');
     else {
       txn = { ...txn, status: 'COMMITTED', committedAt: Date.now() };
-      if (debugEnabled) console.log('[EVENT] commit ok key=' + eventKey, { eventId, txn });
+      if (debugEnabled) {
+        if (forcedByDebug) console.log('[DEBUG FORCE] eventKey=' + eventKey, { eventId, txn });
+        console.log('[EVENT] commit ok key=' + eventKey, { eventId, txn });
+      }
     }
 
     if (txn.status === 'ABORTED') {
@@ -1315,6 +1357,7 @@ export default function App() {
       event: {
         ...(window.__CHAT_DEBUG__?.event ?? {}),
         lastEventCommitBlockedReason: '-',
+        lastCommitBlockedReason: '-',
         lastEvent: {
           key: eventKey,
           eventId,
@@ -1325,7 +1368,9 @@ export default function App() {
           commitBlockedReason: '-',
           preEffectTriggered: true,
           preEffectAt: txn.committedAt ?? undefined,
-          preEffect: { sfxKey: effects.sfx[0] === 'ghost_female' || effects.sfx[0] === 'footsteps' ? effects.sfx[0] : undefined, videoKey: effects.video === 'loop4' ? 'oldhouse_room_loop4' : effects.video === 'loop2' ? 'oldhouse_room_loop2' : undefined }
+          preEffect: { sfxKey: effects.sfx[0] === 'ghost_female' || effects.sfx[0] === 'footsteps' ? effects.sfx[0] : undefined, videoKey: effects.video === 'loop4' ? 'oldhouse_room_loop4' : effects.video === 'loop2' ? 'oldhouse_room_loop2' : undefined },
+          forcedByDebug,
+          forceOptions: forcedByDebug ? forceOptions : null
         },
         lastEffects: {
           sfxPlayed,
@@ -1336,7 +1381,7 @@ export default function App() {
       }
     });
 
-    if (txn.questionMessageId && txn.starterTagSent) {
+    if (txn.questionMessageId && txn.starterTagSent && !(forcedByDebug && forceOptions.ignorePause)) {
       void scrollThenPauseForTaggedQuestion({ questionMessageId: txn.questionMessageId });
     }
 
@@ -2019,9 +2064,17 @@ export default function App() {
   const [debugComposingOverride, setDebugComposingOverride] = useState<boolean | null>(null);
   const [simulatePlayerReply, setSimulatePlayerReply] = useState(true);
   const [ignoreCooldownsDebug, setIgnoreCooldownsDebug] = useState(false);
+  const [ignorePauseDebug, setIgnorePauseDebug] = useState(false);
+  const [skipTagRequirementDebug, setSkipTagRequirementDebug] = useState(false);
   const [eventTesterStatus, setEventTesterStatus] = useState<{ key: StoryEventKey | null; blockedReason: EventStartBlockedReason | null }>({
     key: null,
     blockedReason: null
+  });
+  const forcedDebugRef = useRef<{ lastForcedEventKey: StoryEventKey | null; lastForcedAt: number | null; lastForcedOptions: DebugForceExecuteOptions | null; forcedEventCount: number }>({
+    lastForcedEventKey: null,
+    lastForcedAt: null,
+    lastForcedOptions: null,
+    forcedEventCount: 0
   });
   const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
   const activeUserProfileRef = useRef<ActiveUserProfile | null>(null);
@@ -2664,6 +2717,34 @@ export default function App() {
     return '我在';
   }, []);
 
+  const debugForceExecuteEvent = useCallback((eventKey: StoryEventKey, options?: DebugForceExecuteOptions) => {
+    const now = Date.now();
+    const resolvedOptions: DebugForceExecuteOptions = {
+      ignoreCooldown: Boolean(options?.ignoreCooldown),
+      ignorePause: Boolean(options?.ignorePause),
+      skipTagRequirement: Boolean(options?.skipTagRequirement)
+    };
+    forcedDebugRef.current = {
+      lastForcedEventKey: eventKey,
+      lastForcedAt: now,
+      lastForcedOptions: resolvedOptions,
+      forcedEventCount: forcedDebugRef.current.forcedEventCount + 1
+    };
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        debug: { ...forcedDebugRef.current }
+      }
+    });
+    const started = startEvent(eventKey, { source: 'debug_force', forceOptions: resolvedOptions });
+    if (!started) {
+      const blockedReason = (window.__CHAT_DEBUG__?.event?.lastEventCommitBlockedReason as EventStartBlockedReason | null) ?? eventTestDebugRef.current.lastStartAttemptBlockedReason;
+      setEventTesterStatus({ key: eventKey, blockedReason: blockedReason === '-' ? 'invalid_state' : blockedReason });
+      return;
+    }
+    setEventTesterStatus({ key: eventKey, blockedReason: null });
+  }, [startEvent, updateEventDebug]);
+
   const triggerEventFromTester = useCallback((eventKey: StoryEventKey) => {
     const activeUsers = ensureDebugActiveUsers();
     if (activeUsers.length === 0) {
@@ -2718,6 +2799,15 @@ export default function App() {
     }, delay);
     registerEventRunnerTimer(timerId);
   }, [ensureDebugActiveUsers, ignoreCooldownsDebug, registerEventRunnerTimer, setEventAttemptDebug, simulatePlayerReply, simulateReplyText, startEvent, submitChat, triggerReactionBurst]);
+
+  useEffect(() => {
+    window.__THAIFEED_DEBUG_FORCE_EVENT__ = (eventKey: StoryEventKey, options?: DebugForceExecuteOptions) => {
+      debugForceExecuteEvent(eventKey, options);
+    };
+    return () => {
+      delete window.__THAIFEED_DEBUG_FORCE_EVENT__;
+    };
+  }, [debugForceExecuteEvent]);
 
   const resetEventTestState = useCallback(() => {
     clearEventRunnerState();
@@ -2817,11 +2907,15 @@ export default function App() {
               <button type="button" className="video-debug-close" onClick={() => setDebugOpen(false)} aria-label="Close debug panel">×</button>
               <div className="debug-event-tester" aria-label="Event Tester">
                 <h4>Event Tester</h4>
+                <div><strong>Events</strong></div>
                 <div className="debug-route-controls">
                   {EVENT_TESTER_KEYS.map((eventKey) => (
                     <div key={eventKey} className="debug-event-button-row">
                       <button type="button" onClick={() => triggerEventFromTester(eventKey)}>
                         Trigger {eventKey}
+                      </button>
+                      <button type="button" onClick={() => debugForceExecuteEvent(eventKey, { ignoreCooldown: ignoreCooldownsDebug, ignorePause: ignorePauseDebug, skipTagRequirement: skipTagRequirementDebug })}>
+                        Force {eventKey}
                       </button>
                       {eventTesterStatus.key === eventKey && eventTesterStatus.blockedReason && (
                         <small>Blocked: {eventTesterStatus.blockedReason}</small>
@@ -2832,6 +2926,14 @@ export default function App() {
                 <label>
                   <input type="checkbox" checked={ignoreCooldownsDebug} onChange={(event) => setIgnoreCooldownsDebug(event.target.checked)} />
                   Ignore Cooldowns (debug only)
+                </label>
+                <label>
+                  <input type="checkbox" checked={ignorePauseDebug} onChange={(event) => setIgnorePauseDebug(event.target.checked)} />
+                  Ignore Pause (debug force)
+                </label>
+                <label>
+                  <input type="checkbox" checked={skipTagRequirementDebug} onChange={(event) => setSkipTagRequirementDebug(event.target.checked)} />
+                  Skip Tag Requirement (debug force)
                 </label>
                 <label>
                   <input type="checkbox" checked={simulatePlayerReply} onChange={(event) => setSimulatePlayerReply(event.target.checked)} />
@@ -2874,6 +2976,11 @@ export default function App() {
                 <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
                 <div>actorPickBlockedReason: {window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'}</div>
                 <div>event.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.lastBlockedReason ?? '-'}</div>
+                <div>event.debug.lastForcedEventKey: {window.__CHAT_DEBUG__?.event?.debug?.lastForcedEventKey ?? '-'}</div>
+                <div>event.debug.lastForcedAt: {window.__CHAT_DEBUG__?.event?.debug?.lastForcedAt ?? '-'}</div>
+                <div>event.debug.lastForcedOptions: {JSON.stringify(window.__CHAT_DEBUG__?.event?.debug?.lastForcedOptions ?? null)}</div>
+                <div>event.debug.forcedEventCount: {window.__CHAT_DEBUG__?.event?.debug?.forcedEventCount ?? 0}</div>
+                <div>event.lastCommitBlockedReason: {window.__CHAT_DEBUG__?.event?.lastCommitBlockedReason ?? '-'}</div>
                 <div>chat.blockedCounts.activeUserAutoSpeak: {window.__CHAT_DEBUG__?.chat?.blockedCounts?.activeUserAutoSpeak ?? 0}</div>
                 <div>chat.lastBlockedSendAttempt.actor/source: {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.actorHandle ?? '-')} / {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.source ?? '-')}</div>
                 <div>chat.lastBlockedSendAttempt.reason: {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.blockedReason ?? '-'}</div>

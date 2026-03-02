@@ -368,8 +368,25 @@ declare global {
           waitingForReply?: boolean;
           questionMessageId?: string | null;
           commitBlockedReason?: string;
+          forcedByDebug?: boolean;
+          forceOptions?: {
+            ignoreCooldown?: boolean;
+            ignorePause?: boolean;
+            skipTagRequirement?: boolean;
+          } | null;
         };
         lastEventCommitBlockedReason?: string;
+        lastCommitBlockedReason?: string;
+        debug?: {
+          lastForcedEventKey?: string | null;
+          lastForcedAt?: number | null;
+          lastForcedOptions?: {
+            ignoreCooldown?: boolean;
+            ignorePause?: boolean;
+            skipTagRequirement?: boolean;
+          } | null;
+          forcedEventCount?: number;
+        };
         lastEffects?: {
           sfxPlayed?: Array<{ key: string; startedAt: number }>;
           videoSwitchedTo?: { key?: string; src?: string } | null;

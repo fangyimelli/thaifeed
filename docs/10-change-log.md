@@ -97,3 +97,16 @@
 ### Docs
 - README 補充事件交易化流程、registry SSOT 與新 debug 欄位。
 - PR_NOTES 更新本次 events/audio/player/debug/docs 影響範圍與驗收。
+
+## 2026-03-02（debug force execute events）
+
+### Changed
+- [events/debug] 新增公開 debug 入口 `debugForceExecuteEvent(eventKey, options)`；強制事件仍走 `Prepare → Commit → Effects` 全流程，不直接呼叫私有 effect。
+- [events] commit gate 新增 force 選項判斷：`ignorePause`、`ignoreCooldown`、`skipTagRequirement`，並回填 `paused/cooldown/no_tag` blocked reason。
+- [qna/pause] force + `ignorePause=true` 時會跳過 `scrollThenPauseForTaggedQuestion`，避免 forced QNA 造成 freeze 卡住。
+- [debug ui] Debug Panel Events 清單新增每個事件的 `Force` 按鈕與 override 勾選（Ignore Cooldown / Ignore Pause / Skip Tag Requirement）。
+- [debug] 新增觀測欄位：`event.debug.lastForcedEventKey`、`event.debug.lastForcedAt`、`event.debug.lastForcedOptions`、`event.debug.forcedEventCount`、`event.lastCommitBlockedReason`，並在 `lastEvent` 顯示 `forcedByDebug/forceOptions`。
+
+### Docs
+- README Debug 區段補充 Force Execute 使用規則與「僅限開發使用」警示。
+- PR_NOTES 同步更新影響範圍、SSOT、debug 欄位與驗收結果。

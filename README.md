@@ -96,6 +96,22 @@ npm run build
 - 主頁右上角 `Debug` 按鈕（overlay）
 - Player 最小驗證頁：`/debug/player`
 
+### Debug Event Force Execute（僅開發測試）
+
+- Debug 面板 Events 區塊會列出所有 `eventKey`，每列提供 `Force` 按鈕。
+- `Force` 會走完整事件交易管線：`Prepare → Commit → Effects`，不允許繞過 commit gate 直接播音效/切影片。
+- 預設仍遵守 pause/cooldown/tag 規則，可勾選以下 override：
+  - `Ignore Cooldowns`
+  - `Ignore Pause`
+  - `Skip Tag Requirement`
+- Force 執行會在 debug 中標示 `forcedByDebug=true`，並同步更新：
+  - `event.debug.lastForcedEventKey`
+  - `event.debug.lastForcedAt`
+  - `event.debug.lastForcedOptions`
+  - `event.debug.forcedEventCount`
+  - `event.lastCommitBlockedReason`
+- **注意：Force Execute 僅限開發/驗收使用，禁止作為正式流程入口。**
+
 ## 開發協作
 
 - localhost 根路徑
