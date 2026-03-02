@@ -1,33 +1,53 @@
-# 修正 pinned reply 出現時未先置底就 pause 的時序問題
+# Event-driven distance SFX + blackout flicker integration
 
 ## Changed
-- 將 tagged QNA 的 freeze 入口統一為 `scrollThenPauseForTaggedQuestion`：
-  - 等待 `questionMessageId` 對應訊息 render（最多 500ms，每幀檢查）
-  - 等待 ReplyPinBar mount 後再 double-force 置底
-  - 完成置底後才 `pause=true`（hard freeze）
-- `ChatMessage` 新增 `data-message-id`，供 `waitForMessageRendered` 精準判定 DOM 已落地。
-- `ChatPanel` 新增 force-scroll debug 回傳與 reply-pin mount 回報，並輸出 debug only log：
-  - `[SCROLL] forceBottom reason=... top=... height=... client=...`
-- debug 面板同步新增：
-  - `chat.scroll.lastForceToBottomReason`
-  - `chat.scroll.lastForceToBottomAt`
-  - `chat.scroll.scrollTop / scrollHeight / clientHeight`
-  - `ui.qnaQuestionMessageIdRendered`
-  - `ui.replyPinMounted`
-  - `chat.pause.isPaused`
+- Audio pipeline (`footsteps` / `ghost_female`) upgraded to WebAudio distance-approach playback via new module `src/audio/distanceApproach.ts`:
+  - node chain per play: `BufferSource -> Gain -> Lowpass -> StereoPanner -> masterGain`
+  - automation: gain / LPF / pan / playbackRate ramp for far-to-near feel
+  - randomization: `startPan` in `[-0.35, 0.35]`, duration `±15%`, end pan converges toward center
+  - limiter guard: `endGain <= 0.9`
+- Event flow now couples SFX success with blackout scheduling:
+  - only when event成立且 SFX 實際播放成功才會啟動
+  - `delay=1000ms`, `duration=12000ms`, mode random(`full`/`dim75`)
+  - flicker with seeded jitter + pulse at `4000ms` for `180ms`
+- Pause/freeze integration:
+  - `chat.pause.isPaused=true` blocks new SFX + blackout
+  - if pause enters during blackout, blackout is immediately stopped
+- Scene overlay integration:
+  - added `#blackoutOverlay` on video layer top without changing video aspect ratio
+  - opacity controlled by blackout SSOT state + rAF flicker loop
 
 ## Removed
-- 移除 tagged question 的 countdown-then-freeze 舊邏輯（先 COUNTDOWN 再 FROZEN）。
-- 移除「一出現 pinned reply 就先關自動置底」舊時序；改為 pause 之前仍可 force scroll。
+- Removed legacy `<audio>` element playback path for one-shot scare SFX (`footsteps` / `ghost_female`) inside `SceneView`; these two now use one WebAudio approach pipeline to avoid mixed dual-output behavior.
 
-## SSOT Impact
-- 無 SSOT 檔案變更（`docs/02-ssot-map.md` 未修改）。
-- 本次屬於 App/QNA/ChatPanel 時序整合與 debug 可觀測性補強。
+## Debug fields changed + 3-PR rule check
+新增 debug 欄位：
+- `audio.lastApproach.key`
+- `audio.lastApproach.startedAt`
+- `audio.lastApproach.durationMs`
+- `audio.lastApproach.startGain`
+- `audio.lastApproach.endGain`
+- `audio.lastApproach.startLPF`
+- `audio.lastApproach.endLPF`
+- `fx.blackout.isActive`
+- `fx.blackout.mode`
+- `fx.blackout.endsInMs`
 
-## Debug 欄位變更 + 3 次 PR 規則
-- 新增 debug 欄位（見 Changed 區塊）已完整列出。
-- 這些欄位將依規則至少保留 3 次 PR 觀測週期後再評估移除。
+3 次 PR 規則檢查：
+1. 已在本 PR 完整列出新增欄位。  
+2. 已接入 debug overlay，實際可觀測。  
+3. 後續至少保留 3 次 PR 驗證後才可提議移除。
 
-## 驗收
-- `npm run build` 通過（TypeScript + Vite build）。
-- 已提供桌機畫面截圖（含 debug overlay）。
+## SSOT impact
+- No SSOT file modified.
+- Existing SSOT behavior respected: event-driven trigger + cooldown gate + pause/freeze gate retained, and integrated with new audio/blackout behavior.
+
+## Scope
+- audio: `src/audio/distanceApproach.ts`, `src/ui/scene/SceneView.tsx`
+- events/pause: `src/app/App.tsx`
+- visual overlay: `src/ui/scene/SceneView.tsx`, `src/styles.css`
+- docs: `README.md`, `docs/10-change-log.md`, `PR_NOTES.md`
+
+## Validation
+- `npm run build` passed.
+- Playwright screenshot attempt failed in container due to browser crash (`SIGSEGV`), so no artifact generated in this run.
