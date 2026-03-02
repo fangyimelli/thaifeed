@@ -31,7 +31,19 @@ export const createInitialQnaState = (): QnaState => ({
   nextAskAt: 0,
   startedAt: 0,
   pressure40Triggered: false,
-  pressure60Triggered: false
+  pressure60Triggered: false,
+  active: {
+    id: '',
+    eventKey: '',
+    askerActorId: '',
+    taggedUserId: '',
+    taggedUserHandle: '',
+    status: 'IDLE',
+    questionMessageId: null,
+    askedAt: null,
+    resolvedAt: null,
+    abortReason: null
+  }
 });
 
 function getFlow(flowId: string) {
@@ -72,6 +84,18 @@ export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey
   state.startedAt = now;
   state.pressure40Triggered = false;
   state.pressure60Triggered = false;
+  state.active = {
+    id: crypto.randomUUID(),
+    eventKey: payload.eventKey,
+    askerActorId: payload.questionActor,
+    taggedUserId: payload.taggedUser,
+    taggedUserHandle: payload.taggedUser,
+    status: 'ASKING',
+    questionMessageId: null,
+    askedAt: null,
+    resolvedAt: null,
+    abortReason: null
+  };
   return true;
 }
 
@@ -82,6 +106,7 @@ export function askCurrentQuestion(state: QnaState): { text: string; options: Qn
   state.askedQuestionHistory = [...state.askedQuestionHistory, question].slice(-8);
   state.awaitingReply = true;
   state.lastAskedAt = Date.now();
+  state.active.status = 'ASKING';
   state.attempts += 1;
   state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
   const options = [...step.options, UNKNOWN_OPTION];
@@ -91,6 +116,7 @@ export function askCurrentQuestion(state: QnaState): { text: string; options: Qn
 export function setQnaQuestionActor(state: QnaState, questionActor: string) {
   state.lockTarget = questionActor;
   state.lastQuestionActor = questionActor;
+  state.active.askerActorId = questionActor;
 }
 
 export function updateLastAskedPreview(state: QnaState, line: string) {
@@ -110,6 +136,8 @@ export function applyOptionResult(state: QnaState, option: QnaOption): { type: '
   if (option.id === 'UNKNOWN') {
     state.history = [...state.history, `unknown:${state.stepId}:${Date.now()}`].slice(-40);
     state.awaitingReply = false;
+    state.active.status = 'ABORTED';
+    state.active.abortReason = 'unknown_retry';
     state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
     return { type: 'retry' };
   }
@@ -120,19 +148,27 @@ export function applyOptionResult(state: QnaState, option: QnaOption): { type: '
       fromOptionId: option.id
     };
     state.awaitingReply = false;
+    state.active.status = 'RESOLVED';
+    state.active.resolvedAt = Date.now();
     return { type: 'chain' };
   }
   if (option.nextStepId) {
     state.stepId = option.nextStepId;
     state.awaitingReply = false;
+    state.active.status = 'RESOLVED';
+    state.active.resolvedAt = Date.now();
     state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
     return { type: 'next', nextStepId: option.nextStepId };
   }
   if (option.end) {
     state.awaitingReply = false;
+    state.active.status = 'RESOLVED';
+    state.active.resolvedAt = Date.now();
     return { type: 'end' };
   }
   state.awaitingReply = false;
+  state.active.status = 'ABORTED';
+  state.active.abortReason = 'retry';
   return { type: 'retry' };
 }
 
@@ -178,6 +214,29 @@ export function getRetryPrompt(state: QnaState): string {
 
 export function getOptionById(state: QnaState, optionId: string): QnaOption | null {
   return getCurrentStepOptions(state).find((option) => option.id === optionId) ?? null;
+}
+
+
+
+export function markQnaQuestionCommitted(state: QnaState, payload: { messageId: string; askedAt: number }) {
+  state.active.questionMessageId = payload.messageId;
+  state.active.askedAt = payload.askedAt;
+  state.active.abortReason = null;
+  state.active.resolvedAt = null;
+  state.active.status = 'AWAITING_REPLY';
+}
+
+export function markQnaResolved(state: QnaState, at: number) {
+  if (state.active.status === 'AWAITING_REPLY' || state.active.status === 'ASKING') {
+    state.active.status = 'RESOLVED';
+    state.active.resolvedAt = at;
+  }
+}
+
+export function markQnaAborted(state: QnaState, reason: string, at: number) {
+  state.active.status = 'ABORTED';
+  state.active.abortReason = reason;
+  state.active.resolvedAt = at;
 }
 
 export function stopQnaFlow(state: QnaState, reason: string) {

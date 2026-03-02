@@ -41,6 +41,9 @@ import {
   getRetryPrompt,
   getUnknownPrompt,
   handleTimeoutPressure,
+  markQnaAborted,
+  markQnaQuestionCommitted,
+  markQnaResolved,
   parsePlayerReplyToOption,
   setQnaQuestionActor,
   startQnaFlow,
@@ -366,6 +369,7 @@ export default function App() {
   const eventNextDueAtRef = useRef(0);
 
   const qnaStateRef = useRef(createInitialQnaState());
+  const messageSeqRef = useRef(0);
   const eventQueueRef = useRef<{ key: StoryEventKey; source: 'qna' }[]>([]);
   const eventExclusiveStateRef = useRef<{ exclusive: boolean; currentEventId: string | null; currentLockOwner: string | null }>({
     exclusive: false,
@@ -564,8 +568,17 @@ export default function App() {
       }
     }
     lastChatMessageAtRef.current = now;
+    const seq = ++messageSeqRef.current;
     const actionType = source === 'player_input' ? 'PLAYER_MESSAGE' : 'AUDIENCE_MESSAGE';
-    dispatch({ type: actionType, payload: linted.message });
+    dispatch({
+      type: actionType,
+      payload: {
+        ...linted.message,
+        createdAtMs: now,
+        seq,
+        source
+      }
+    });
     return { ok: true };
   };
 
@@ -646,6 +659,20 @@ export default function App() {
     };
   }, []);
 
+  const sortedMessages = useMemo(() => {
+    const withIndex = state.messages.map((message, idx) => ({ message, idx }));
+    return withIndex
+      .sort((a, b) => {
+        const at = a.message.createdAtMs ?? 0;
+        const bt = b.message.createdAtMs ?? 0;
+        if (at !== bt) return at - bt;
+        const as = a.message.seq ?? a.idx;
+        const bs = b.message.seq ?? b.idx;
+        return as - bs;
+      })
+      .map((item) => item.message);
+  }, [state.messages]);
+
   const markEventTopicBoost = useCallback((activeMs: number) => {
     const now = Date.now();
     eventWeightActiveUntilRef.current = Math.max(eventWeightActiveUntilRef.current, now + activeMs);
@@ -683,7 +710,7 @@ export default function App() {
       reactionBurstTimerRef.current = null;
       lines.forEach((line, index) => {
         window.setTimeout(() => {
-          const chatActors = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+          const chatActors = separateChatActorState(sortedMessages, activeUserInitialHandleRef.current || '');
           const actorPool = chatActors.audienceUsers.length >= 3
             ? chatActors.audienceUsers
             : Array.from(new Set([...chatActors.audienceUsers, ...reactionActorHistoryRef.current, ...DEBUG_SEED_USERS]));
@@ -856,7 +883,7 @@ export default function App() {
 
   const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester'; ignoreCooldowns?: boolean }) => {
     const now = Date.now();
-    const chatActors = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+    const chatActors = separateChatActorState(sortedMessages, activeUserInitialHandleRef.current || '');
     const activeUsers = chatActors.audienceUsers;
     const sourceReason = ctx.source === 'scheduler_tick' ? 'SCHEDULER_TICK' : ctx.source === 'debug_tester' ? 'DEBUG_TESTER' : 'TIMER_TICK';
     const shouldIgnoreCooldown = Boolean(debugEnabled && ctx.source === 'debug_tester' && ctx.ignoreCooldowns);
@@ -1135,6 +1162,10 @@ export default function App() {
   }, [buildEventLine, dispatchEventLine, updateEventDebug]);
 
   const sendQnaQuestion = useCallback(() => {
+    if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
+      markQnaAborted(qnaStateRef.current, 'retry', Date.now());
+      return false;
+    }
     const asked = askCurrentQuestion(qnaStateRef.current);
     if (!asked) return false;
     const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || '');
@@ -1149,48 +1180,39 @@ export default function App() {
       return false;
     }
     qnaStateRef.current.taggedUser = taggedUser;
-    const eventActiveUsers = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
+    qnaStateRef.current.active.taggedUserHandle = taggedUser;
+    qnaStateRef.current.active.taggedUserId = activeUserProfileRef.current?.id ?? taggedUser;
+
+    const eventActiveUsers = separateChatActorState(sortedMessages, activeUserInitialHandleRef.current || '').audienceUsers;
     let questionActor = qnaStateRef.current.lockTarget || eventExclusiveStateRef.current.currentLockOwner;
     if (!questionActor || questionActor === taggedUser) {
-      qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:lock_target_invalid:${Date.now()}`].slice(-40);
       const actorPool = eventActiveUsers.filter((name) => name !== taggedUser);
       questionActor = pickOne(actorPool.length > 0 ? actorPool : ['mod_live']);
       setQnaQuestionActor(qnaStateRef.current, questionActor);
     }
+
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
-    const requiredTag = `@${taggedUser}`;
-    if (!line.includes(requiredTag)) {
-      qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:qna_question_missing_tag:${Date.now()}`].slice(-40);
-      setLastBlockedReason('qna_question_missing_tag');
-      setReplyPreviewSuppressedReason('missing_tag_in_message');
-      resetQnaUiState();
-      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
-      return false;
-    }
     const sent = dispatchEventLine(line, questionActor, 'scheduler_tick', 'qna_question');
     if (!sent.ok || !sent.lineId) {
       setLastBlockedReason(sent.ok ? 'qna_question_send_failed' : sent.blockedReason ?? 'qna_question_send_failed');
-      resetQnaUiState();
       return false;
     }
 
     const now = Date.now();
+    markQnaQuestionCommitted(qnaStateRef.current, { messageId: sent.lineId, askedAt: now });
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
     setLastQuestionMessageId(sent.lineId);
     setLastQuestionMessageHasTag(true);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
-    if (hasHandleMention(line, taggedUser)) {
-      startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
-    }
-
+    startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
 
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
     return true;
-  }, [dispatchEventLine, resetQnaUiState, startChatFreezeCountdown, state.messages]);
+  }, [dispatchEventLine, sortedMessages, startChatFreezeCountdown]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -1356,7 +1378,7 @@ export default function App() {
   }, [appStarted, playSfx, postFollowUpLine, startEvent, state.messages, triggerReactionBurst]);
 
   useEffect(() => {
-    chatEngineRef.current.syncFromMessages(state.messages);
+    chatEngineRef.current.syncFromMessages(sortedMessages);
   }, [state.messages]);
 
   useEffect(() => {
@@ -1826,7 +1848,7 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
-      const chatActors = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '');
+      const chatActors = separateChatActorState(sortedMessages, activeUserInitialHandleRef.current || '');
       const activeUsers = chatActors.audienceUsers;
       const nextDueAt = Math.max(now, eventNextDueAtRef.current || now);
       const schedulerBlockedReason = !appStarted ? 'app_not_started' : (lockStateRef.current.isLocked ? 'lock_active' : '-');
@@ -1893,6 +1915,7 @@ export default function App() {
         },
         qna: {
           ...qnaStateRef.current,
+          questionMessageId: qnaStateRef.current.active.questionMessageId,
           lockTargetInvalid: Boolean(qnaStateRef.current.lockTarget && qnaStateRef.current.taggedUser && qnaStateRef.current.lockTarget === qnaStateRef.current.taggedUser),
           taggedUserHandle: qnaStateRef.current.taggedUser,
           lastQuestionMessageId,
@@ -1907,10 +1930,20 @@ export default function App() {
           ...(window.__CHAT_DEBUG__?.ui ?? {}),
           replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-',
           replyPinMounted: Boolean(lockStateRef.current.replyingToMessageId),
+          replyBarVisible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
+          replyBarMessageFound: Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId)),
           replyPinContainerLocation: 'above_input',
           replyPinInsideChatList: false,
           replyPreviewLocation: 'above_input',
-          legacyReplyQuoteEnabled: false
+          legacyReplyQuoteEnabled: false,
+          qnaSyncAssert: (() => {
+            const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
+            const found = Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId));
+            const tagOk = Boolean(sortedMessages.find((message) => message.id === qnaStateRef.current.active.questionMessageId)?.text.includes(`@${activeUserInitialHandleRef.current}`));
+            return awaiting
+              ? (found && tagOk && Boolean(qnaStateRef.current.active.questionMessageId))
+              : !(qnaStateRef.current.active.status === 'AWAITING_REPLY');
+          })()
         },
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
@@ -1933,6 +1966,15 @@ export default function App() {
           audience: {
             count: chatActors.audienceUsers.length
           },
+          messages: {
+            lastSeq: sortedMessages[sortedMessages.length - 1]?.seq ?? 0,
+            last10: sortedMessages.slice(-10).map((message) => ({
+              id: message.id,
+              createdAtMs: message.createdAtMs ?? 0,
+              seq: message.seq ?? 0,
+              source: message.source ?? '-'
+            }))
+          },
           activeUser: {
             id: activeUserProfileRef.current?.id ?? '-',
             handle: activeUserProfileRef.current?.handle ?? '-',
@@ -1951,7 +1993,7 @@ export default function App() {
       syncChatEngineDebug();
     }, 600);
     return () => window.clearInterval(timer);
-  }, [appStarted, chatAutoPaused, chatAutoScrollMode, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, state.messages, syncChatEngineDebug, updateChatDebug]);
+  }, [appStarted, chatAutoPaused, chatAutoScrollMode, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, sortedMessages, syncChatEngineDebug, updateChatDebug]);
 
   const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
     if (!debugEnabled) return;
@@ -2099,6 +2141,12 @@ export default function App() {
         source: 'player_input',
         sourceTag: source
       });
+      if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
+        markQnaResolved(qnaStateRef.current, Date.now());
+        qnaStateRef.current.awaitingReply = false;
+        lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
+        resetChatAutoScrollFollow();
+      }
       if (activeUserProfileRef.current) {
         activeUserProfileRef.current = { ...activeUserProfileRef.current, hasSpoken: true };
         usersByIdRef.current.set(activeUserProfileRef.current.id, activeUserProfileRef.current);
@@ -2519,6 +2567,12 @@ export default function App() {
                 <div>qna.taggedUserHandle: {window.__CHAT_DEBUG__?.event?.qna?.taggedUser ?? '-'}</div>
                 <div>qna.lastQuestionMessageId: {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageId ?? '-'}</div>
                 <div>qna.lastQuestionMessageHasTag: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)}</div>
+                <div>qna.status: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.status ?? '-'}</div>
+                <div>qna.questionMessageId: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.questionMessageId ?? '-'}</div>
+                <div>qna.askerActorId: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.askerActorId ?? '-'}</div>
+                <div>qna.taggedUserHandle: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.taggedUserHandle ?? '-'}</div>
+                <div>ui.replyBarVisible: {String((window.__CHAT_DEBUG__?.ui as any)?.replyBarVisible ?? false)}</div>
+                <div>ui.replyBarMessageFound: {String((window.__CHAT_DEBUG__?.ui as any)?.replyBarMessageFound ?? false)}</div>
                 <div>qna.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
                 <div>ui.replyPreviewSuppressed: {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
                 <div>ui.replyPinMounted: {String((window.__CHAT_DEBUG__?.ui as { replyPinMounted?: boolean } | undefined)?.replyPinMounted ?? false)}</div>
@@ -2549,7 +2603,7 @@ export default function App() {
         </section>
         <section ref={chatAreaRef} className="chat-area chat-container input-surface">
           <ChatPanel
-            messages={state.messages}
+            messages={sortedMessages}
             input={input}
             onChange={(value) => {
               setInput(value);
@@ -2574,7 +2628,8 @@ export default function App() {
             onSendButtonClick={handleSendButtonClick}
             isLocked={lockStateRef.current.isLocked}
             lockTarget={lockStateRef.current.target}
-            replyingToMessageId={lockStateRef.current.replyingToMessageId}
+            questionMessageId={qnaStateRef.current.active.questionMessageId}
+            qnaStatus={qnaStateRef.current.active.status}
             replyPreviewSuppressedReason={replyPreviewSuppressedReason}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
             autoScrollMode={chatAutoScrollMode}

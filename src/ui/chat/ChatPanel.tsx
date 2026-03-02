@@ -25,7 +25,8 @@ type Props = {
   onSendButtonClick?: () => void;
   lockTarget?: string | null;
   isLocked?: boolean;
-  replyingToMessageId?: string | null;
+  questionMessageId?: string | null;
+  qnaStatus?: 'IDLE' | 'ASKING' | 'AWAITING_REPLY' | 'RESOLVED' | 'ABORTED';
   activeUserInitialHandle: string;
   autoScrollMode: 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
   replyPreviewSuppressedReason?: string | null;
@@ -56,7 +57,8 @@ export default function ChatPanel({
   onSendButtonClick,
   lockTarget,
   isLocked,
-  replyingToMessageId,
+  questionMessageId,
+  qnaStatus = 'IDLE',
   activeUserInitialHandle,
   autoScrollMode,
   replyPreviewSuppressedReason = null
@@ -80,12 +82,12 @@ export default function ChatPanel({
     text: sanitizeMentions(message.text, activeSet),
     translation: message.translation ? sanitizeMentions(message.translation, activeSet) : message.translation
   }));
-  const originalMessage = replyingToMessageId
-    ? sanitizedMessages.find((message) => message.id === replyingToMessageId)
+  const originalMessage = questionMessageId
+    ? sanitizedMessages.find((message) => message.id === questionMessageId)
     : null;
 
   const originalMessageHasActiveUserTag = Boolean(originalMessage && activeUserInitialHandle && originalMessage.text.includes(`@${activeUserInitialHandle}`));
-  const shouldRenderReplyPreview = Boolean(isLocked && lockTarget && replyingToMessageId && originalMessageHasActiveUserTag);
+  const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId && isLocked && lockTarget && originalMessageHasActiveUserTag);
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();

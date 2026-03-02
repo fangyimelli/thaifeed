@@ -2,6 +2,9 @@ import type { ThaiConsonant } from '../systems/consonantSelector';
 
 export type ChatMessage = {
   id: string;
+  createdAtMs?: number;
+  seq?: number;
+  source?: string;
   username: string;
   text: string;
   language: 'zh' | 'th';
