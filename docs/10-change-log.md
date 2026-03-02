@@ -123,3 +123,16 @@
 ### Docs
 - README 補充 Debug SFX Tests 操作與 PlayResult/trace 欄位說明。
 - PR_NOTES 同步新增本次 SFX root-cause 排查與修正摘要。
+
+## 2026-03-02（question_send_failed 卡死根治）
+
+### Changed
+- [events] 修正 cooldown/lock commit 時機：只有事件確實開始才 commit；`question_send_failed`（未送出 starter tag / 未觸發 pre-effect）會 rollback cooldown，避免 `cooldown_blocked` 假鎖死。
+- [freeze/qna] tagged question freeze 增加 guard：必須同時 `questionHasTagToActiveUser=true` 與 `ui.replyBarVisible=true` 才允許進入 hard freeze；不成立時即刻 release。
+- [watchdog] 新增 freeze watchdog：`isFrozen && freezeCountdownRemaining<=0` 時自動解凍、`chat.pause=false`、scroll mode 回 FOLLOW。
+- [debug] 新增一鍵救援按鈕 `Reset Stuck State`，可同步 reset freeze/pause/qna/event queue/cooldown。
+- [debug fields] 新增 `event.cooldownMeta[eventKey].nextAllowedAt/lastCommittedAt/lastRollbackAt` 與 `event.freezeGuard(hasRealTag/replyUIReady/freezeAllowed)`。
+
+### Docs
+- README 新增「卡死時如何復原」與「事件 cooldown/lock commit 規則」。
+- PR_NOTES 補充風險、重現步驟與 web/local 驗證腳本。

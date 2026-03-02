@@ -1322,3 +1322,24 @@ npm run build
 - debug overlay 新增欄位：
   - `audio.lastApproach.key/startedAt/durationMs/startGain/endGain/startLPF/endLPF`
   - `fx.blackout.isActive/mode/endsInMs`
+
+## Debug：卡死時如何復原（Stuck Recovery）
+- 若出現 `chat.freeze.isFrozen=true` + `chat.pause.isPaused=true` 且 `freezeCountdownRemaining=0`，可在 Debug 面板按 **Reset Stuck State**。
+- 按鈕會一次執行：
+  - release tagged question freeze
+  - `chat.pause=false`
+  - `qna.reset()`（回到 IDLE，清掉 question/tagged handle）
+  - `event.inFlight=false` + `event.queue.clear()`
+  - rollback 事件 cooldown（避免 `question_send_failed` 後誤鎖死）
+
+## 事件 cooldown/lock commit 規則（Root-cause fix）
+- 事件只有在「確實開始」後才可 commit cooldown/lock。
+- `startEvent()` 的 commit 判準：
+  - `starterTagSent === true`（tagged question 成功送出）或
+  - `preEffectTriggered === true`（前置效果成功）
+- 若 `question_send_failed` 且 `starterTagSent=false && preEffectTriggered=false`：
+  - 不可推進 cooldown（必須 rollback）
+  - 立刻解除 freeze/pause，並重置 qna/event queue，避免 hard-freeze 卡死。
+
+## README Removed/Deprecated Log
+- 本次無新增移除項。

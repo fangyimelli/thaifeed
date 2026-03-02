@@ -201,6 +201,7 @@ declare global {
       lock?: { isLocked: boolean; target: string | null; elapsed: number; chatSpeedMultiplier: number };
       queueLength?: number;
       blockedReasons?: Record<string, number>;
+      debugReset?: { count?: number; reason?: string; resetAt?: number };
       chat?: {
         autoPaused?: boolean;
         autoPausedReason?: string;
@@ -222,6 +223,7 @@ declare global {
           audioEnabledSystemMessageSent?: boolean;
           audioUnlockFailedReason?: string;
           lastBlockedReason?: string;
+          debugReset?: { count?: number; reason?: string; resetAt?: number };
         };
         canTagActiveUser?: boolean;
         mention?: { lastMessageMentionsActiveUser?: boolean };
@@ -310,6 +312,8 @@ declare global {
           lockTargetMissing?: boolean;
         };
         cooldowns?: Record<string, number>;
+        cooldownMeta?: Record<string, { nextAllowedAt?: number; lastCommittedAt?: number; lastRollbackAt?: number }>;
+        freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean; checkedAt?: number };
         inFlight?: boolean;
         lastStartAttemptBlockedReason?: string;
         exclusive?: boolean;

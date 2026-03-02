@@ -435,6 +435,15 @@ export default function App() {
     LIGHT_GLITCH: 0,
     FEAR_CHALLENGE: 0
   });
+  const eventCooldownMetaRef = useRef<Record<StoryEventKey, { nextAllowedAt: number; lastCommittedAt: number; lastRollbackAt: number }>>({
+    VOICE_CONFIRM: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 },
+    GHOST_PING: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 },
+    TV_EVENT: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 },
+    NAME_CALL: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 },
+    VIEWER_SPIKE: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 },
+    LIGHT_GLITCH: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 },
+    FEAR_CHALLENGE: { nextAllowedAt: 0, lastCommittedAt: 0, lastRollbackAt: 0 }
+  });
   const pendingReplyEventRef = useRef<{ key: StoryEventKey; target: string; eventId: string; expiresAt: number } | null>(null);
   const reactionBurstTimerRef = useRef<number | null>(null);
   const eventRecentContentIdsRef = useRef<Record<StoryEventKey, string[]>>({
@@ -1046,6 +1055,54 @@ export default function App() {
   }, []);
 
 
+  const rollbackEventCooldown = useCallback((eventKey: StoryEventKey) => {
+    eventCooldownsRef.current[eventKey] = 0;
+    const current = eventCooldownMetaRef.current[eventKey];
+    eventCooldownMetaRef.current[eventKey] = {
+      nextAllowedAt: 0,
+      lastCommittedAt: current?.lastCommittedAt ?? 0,
+      lastRollbackAt: Date.now()
+    };
+  }, []);
+
+  const commitEventCooldown = useCallback((eventKey: StoryEventKey, cooldownMs: number) => {
+    const committedAt = Date.now();
+    const nextAllowedAt = committedAt + cooldownMs;
+    eventCooldownsRef.current[eventKey] = nextAllowedAt;
+    const current = eventCooldownMetaRef.current[eventKey];
+    eventCooldownMetaRef.current[eventKey] = {
+      nextAllowedAt,
+      lastCommittedAt: committedAt,
+      lastRollbackAt: current?.lastRollbackAt ?? 0
+    };
+  }, []);
+
+  const recoverFromStuckEventState = useCallback((reason: string) => {
+    clearChatFreeze(reason);
+    setChatAutoPaused(false);
+    qnaStateRef.current = createInitialQnaState();
+    clearEventRunnerState();
+    eventQueueRef.current = [];
+    eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
+    lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
+    pendingReplyEventRef.current = null;
+    resetQnaUiState();
+    (['ghost_female', 'footsteps', 'low_rumble'] as const).forEach((key) => {
+      cooldownsRef.current[key] = 0;
+    });
+    EVENT_REGISTRY_KEYS.forEach((eventKey) => rollbackEventCooldown(eventKey));
+    const prevCount = Number((window.__CHAT_DEBUG__ as { debugReset?: { count?: number } } | undefined)?.debugReset?.count ?? 0);
+    window.__CHAT_DEBUG__ = {
+      ...(window.__CHAT_DEBUG__ ?? {}),
+      debugReset: {
+        count: prevCount + 1,
+        reason,
+        resetAt: Date.now()
+      }
+    };
+  }, [clearChatFreeze, clearEventRunnerState, resetQnaUiState, rollbackEventCooldown]);
+
+
   const nextAnimationFrame = useCallback(() => new Promise<void>((resolve) => {
     window.requestAnimationFrame(() => resolve());
   }), []);
@@ -1067,6 +1124,28 @@ export default function App() {
   }, [nextAnimationFrame]);
 
   const scrollThenPauseForTaggedQuestion = useCallback(async ({ questionMessageId }: { questionMessageId: string }) => {
+    const questionMessage = sortedMessages.find((entry) => entry.id === questionMessageId);
+    const hasRealTag = Boolean(
+      qnaStateRef.current.active.status === 'AWAITING_REPLY'
+      && questionMessage
+      && hasHandleMention(questionMessage.text, activeUserInitialHandleRef.current)
+    );
+    const replyUIReady = Boolean(qnaStateRef.current.active.status === 'AWAITING_REPLY' && questionMessageId);
+    const freezeAllowed = hasRealTag && replyUIReady;
+
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        freezeGuard: { hasRealTag, replyUIReady, freezeAllowed, checkedAt: Date.now() }
+      }
+    });
+
+    if (!freezeAllowed) {
+      if (chatFreeze.isFrozen || chatAutoScrollMode !== 'FOLLOW') clearChatFreeze('tagged_question_guard_rejected');
+      setChatAutoPaused(false);
+      return;
+    }
+
     await waitForMessageRendered(questionMessageId);
     await nextAnimationFrame();
     await nextAnimationFrame();
@@ -1079,11 +1158,12 @@ export default function App() {
     const startedAt = Date.now();
     setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt });
     setScrollMode('FROZEN', 'tagged_question');
+    setChatAutoPaused(true);
     setChatFreezeCountdownRemaining(0);
     setChatFreezeCountdownStartedAt(startedAt);
     setChatLastMessageActorIdCounted(null);
     setChatLastCountdownDecrementAt(startedAt);
-  }, [nextAnimationFrame, setScrollMode, waitForMessageRendered]);
+  }, [activeUserInitialHandleRef, chatAutoScrollMode, chatFreeze.isFrozen, clearChatFreeze, nextAnimationFrame, setScrollMode, sortedMessages, updateEventDebug, waitForMessageRendered]);
 
   useEffect(() => {
     const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
@@ -1097,11 +1177,11 @@ export default function App() {
   }, [state.messages.length]);
 
   useEffect(() => {
-    if (chatAutoScrollMode === 'FOLLOW') return;
-    if (qnaStateRef.current.active.status !== 'AWAITING_REPLY') {
-      resetChatAutoScrollFollow();
-    }
-  }, [chatAutoScrollMode, resetChatAutoScrollFollow, state.messages.length]);
+    if (!chatFreeze.isFrozen) return;
+    if (chatFreezeCountdownRemaining > 0) return;
+    clearChatFreeze('freeze_watchdog_countdown_zero');
+    setChatAutoPaused(false);
+  }, [chatFreeze.isFrozen, chatFreezeCountdownRemaining, clearChatFreeze]);
 
   const playSfx = useCallback((
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
@@ -1217,6 +1297,8 @@ export default function App() {
     }
 
     const eventId = `${eventKey}_${Date.now()}`;
+    eventRunnerStateRef.current.inFlight = true;
+    eventRunnerStateRef.current.currentEventId = eventId;
     const opener = pickDialog(eventKey, 'opener', activeUserForTag, eventRecentContentIdsRef.current[eventKey]);
     let txn: EventTxn = {
       eventKey,
@@ -1276,6 +1358,15 @@ export default function App() {
       if (debugEnabled) console.log('[EVENT] commit blocked reason=' + reason, { eventKey, eventId });
     };
 
+    const handleAbortCleanup = (reason: EventCommitBlockedReason) => {
+      eventRunnerStateRef.current.inFlight = false;
+      eventRunnerStateRef.current.currentEventId = null;
+      if (reason === 'question_send_failed' && !txn.starterTagSent) {
+        recoverFromStuckEventState('question_send_failed_recover');
+        rollbackEventCooldown(eventKey);
+      }
+    };
+
     if (txn.status === 'ABORTED') commitBlocked(txn.abortReason ?? 'unknown');
     else if ((!forcedByDebug || !forceOptions.ignorePause) && (chatAutoPaused || chatFreeze.isFrozen)) commitBlocked('paused');
     else if ((!forcedByDebug || !forceOptions.ignoreCooldown) && (eventCooldownsRef.current[eventKey] ?? 0) > now) commitBlocked('cooldown');
@@ -1287,6 +1378,7 @@ export default function App() {
     else if (effects.video && effects.video === 'loop4' && !VIDEO_PATH_BY_KEY.oldhouse_room_loop4) commitBlocked('video_not_ready');
     else {
       txn = { ...txn, status: 'COMMITTED', committedAt: Date.now() };
+      commitEventCooldown(eventKey, eventDef.cooldownMs);
       if (debugEnabled) {
         if (forcedByDebug) console.log('[DEBUG FORCE] eventKey=' + eventKey, { eventId, txn });
         console.log('[EVENT] commit ok key=' + eventKey, { eventId, txn });
@@ -1294,6 +1386,7 @@ export default function App() {
     }
 
     if (txn.status === 'ABORTED') {
+      handleAbortCleanup(txn.abortReason ?? 'unknown');
       const record: EventRunRecord = {
         eventId,
         key: eventKey,
@@ -1352,6 +1445,9 @@ export default function App() {
     };
     eventLifecycleRef.current = record;
 
+    eventRunnerStateRef.current.inFlight = false;
+    eventRunnerStateRef.current.currentEventId = null;
+
     const qnaFlowId = eventDef?.qnaFlowId ?? QNA_FLOW_BY_EVENT[eventKey];
     if (qnaFlowId && activeUserForTag) {
       startQnaFlow(qnaStateRef.current, { eventKey, flowId: qnaFlowId, taggedUser: activeUserForTag, questionActor });
@@ -1398,7 +1494,7 @@ export default function App() {
     }
 
     return { eventId: record.eventId, target: questionActor };
-  }, [appStarted, chatAutoPaused, chatFreeze.isFrozen, debugEnabled, dispatchEventLine, playSfx, requiredAssetErrors.length, scheduleBlackoutFlicker, scrollThenPauseForTaggedQuestion, setEventAttemptDebug, sortedMessages, state.messages, updateEventDebug]);
+  }, [appStarted, chatAutoPaused, chatFreeze.isFrozen, commitEventCooldown, debugEnabled, dispatchEventLine, playSfx, recoverFromStuckEventState, requiredAssetErrors.length, rollbackEventCooldown, scheduleBlackoutFlicker, scrollThenPauseForTaggedQuestion, setEventAttemptDebug, sortedMessages, state.messages, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
@@ -1639,7 +1735,6 @@ export default function App() {
       if (Math.random() >= def.chance) continue;
       const started = startEvent(key, { source });
       if (!started) return;
-      eventCooldownsRef.current[key] = now + def.cooldownMs;
       if (def.lockOnStart && started.target) lockStateRef.current = { isLocked: true, target: started.target, startedAt: now, replyingToMessageId: null };
       if (key === 'LIGHT_GLITCH') {
         requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop2', reason: `event:${started.eventId}`, sourceEventKey: 'LIGHT_GLITCH' });
@@ -2212,6 +2307,7 @@ export default function App() {
           lockTargetMissing: lockStateRef.current.isLocked && !lockStateRef.current.target
         },
         cooldowns: { ...cooldownsRef.current, ...eventCooldownsRef.current },
+        cooldownMeta: Object.fromEntries(EVENT_REGISTRY_KEYS.map((key) => [key, eventCooldownMetaRef.current[key]])),
         inFlight: eventRunnerStateRef.current.inFlight,
         lastStartAttemptBlockedReason: eventTestDebugRef.current.lastStartAttemptBlockedReason,
         test: {
@@ -2249,6 +2345,7 @@ export default function App() {
           replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-',
           replyPinMounted,
           replyBarVisible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
+          freezeGuard: (window.__CHAT_DEBUG__?.event as { freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean } } | undefined)?.freezeGuard ?? { hasRealTag: false, replyUIReady: false, freezeAllowed: false },
           replyBarMessageFound: Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId)),
           replyPinContainerLocation: 'input_overlay',
           replyPinInsideChatList: false,
@@ -2318,7 +2415,8 @@ export default function App() {
             bootstrap: { ...bootstrapRef.current },
             audioEnabledSystemMessageSent: audioEnabledSystemMessageSentRef.current,
             audioUnlockFailedReason: audioUnlockFailedReasonRef.current ?? '-',
-            lastBlockedReason: lastBlockedReasonRef.current
+            lastBlockedReason: lastBlockedReasonRef.current,
+            debugReset: (window.__CHAT_DEBUG__ as { debugReset?: { count?: number; reason?: string; resetAt?: number } } | undefined)?.debugReset ?? { count: 0, reason: '-', resetAt: 0 }
           },
           canTagActiveUser: Boolean(bootstrapRef.current.isReady && activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
           mention: {
@@ -2773,12 +2871,6 @@ export default function App() {
       return;
     }
 
-    if (ignoreCooldownsDebug) {
-      eventCooldownsRef.current[eventKey] = now + 5_000;
-    } else {
-      eventCooldownsRef.current[eventKey] = now + EVENT_REGISTRY[eventKey].cooldownMs;
-    }
-
     const started = startEvent(eventKey, { source: 'debug_tester', ignoreCooldowns: ignoreCooldownsDebug });
     if (!started) {
       const blockedReason = eventTestDebugRef.current.lastStartAttemptBlockedReason;
@@ -2837,10 +2929,8 @@ export default function App() {
   }, [clearEventRunnerState, updateEventDebug]);
 
   const forceUnlockDebug = useCallback(() => {
-    eventExclusiveStateRef.current = { exclusive: false, currentEventId: null, currentLockOwner: null };
-    lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
-      resetQnaUiState();
-  }, []);
+    recoverFromStuckEventState('debug_manual_recover');
+  }, [recoverFromStuckEventState]);
 
   const forceShowLoop4Debug = useCallback(() => {
     requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: 'debug_force_show_loop4_3s', sourceEventKey: 'TV_EVENT' });
@@ -2962,7 +3052,7 @@ export default function App() {
                   )}
                   <button type="button" onClick={emitNpcTagToActiveUser}>Emit NPC Tag @You</button>
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
-                  <button type="button" onClick={forceUnlockDebug}>Force Unlock</button>
+                  <button type="button" onClick={forceUnlockDebug}>Reset Stuck State</button>
                   <button type="button" onClick={forceShowLoop4Debug}>Force Show loop4 (3s)</button>
                 </div>
               </div>
@@ -3067,6 +3157,9 @@ export default function App() {
                 <div>event.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.lastBlockedReason ?? '-'}</div>
                 <div>sfx.ghostCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.ghost_female ?? 0}</div>
                 <div>sfx.footstepsCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.footsteps ?? 0}</div>
+                <div>event.cooldownMeta: {Object.entries((window.__CHAT_DEBUG__?.event as { cooldownMeta?: Record<string, { nextAllowedAt?: number; lastCommittedAt?: number; lastRollbackAt?: number }> } | undefined)?.cooldownMeta ?? {}).map(([k, v]) => `${k}(next:${v?.nextAllowedAt ?? 0}/commit:${v?.lastCommittedAt ?? 0}/rollback:${v?.lastRollbackAt ?? 0})`).join(' | ') || '-'}</div>
+                <div>event.freezeGuard(hasTag/replyReady/allowed): {String((window.__CHAT_DEBUG__?.event as { freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean } } | undefined)?.freezeGuard?.hasRealTag ?? false)} / {String((window.__CHAT_DEBUG__?.event as { freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean } } | undefined)?.freezeGuard?.replyUIReady ?? false)} / {String((window.__CHAT_DEBUG__?.event as { freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean } } | undefined)?.freezeGuard?.freezeAllowed ?? false)}</div>
+                <div>debug.reset(count/reason/at): {((window.__CHAT_DEBUG__?.chat as any)?.system?.debugReset?.count ?? 0)} / {((window.__CHAT_DEBUG__?.chat as any)?.system?.debugReset?.reason ?? '-')} / {((window.__CHAT_DEBUG__?.chat as any)?.system?.debugReset?.resetAt ?? 0)}</div>
                 <div>audio.lastApproach.key: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.key ?? '-'}</div>
                 <div>audio.lastApproach.startedAt: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startedAt ?? 0}</div>
                 <div>audio.lastApproach.durationMs: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.durationMs ?? 0}</div>
