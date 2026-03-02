@@ -16,7 +16,7 @@ import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
 import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
-import { distanceApproachPlayer, playSfxApproach } from '../../audio/distanceApproach';
+import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
 
 export type SceneMissingAsset = {
   name: string;
@@ -118,6 +118,9 @@ type AudioDebugState = {
   };
   videoStates: Array<{ id: 'videoA' | 'videoB'; paused: boolean; muted: boolean; volume: number; currentTime: number }>;
   playingAudios: Array<{ label: string; muted: boolean; volume: number; currentTime: number }>;
+  lastPlayResult?: PlayResult;
+  lastApproach?: { key: string; startGain: number; endGain: number; currentGain: number; startedAt: number; durationMs: number };
+  trace?: Array<{ at: number; stage: string; key?: string; detail?: string }>;
 };
 
 type VideoDebugState = {
@@ -374,6 +377,10 @@ declare global {
             ignorePause?: boolean;
             skipTagRequirement?: boolean;
           } | null;
+          effects?: {
+            plan?: { sfx?: string[]; videoKey?: string; blackout?: boolean };
+            applied?: { sfxPlayed?: string[]; videoSwitched?: string; errors?: string[] };
+          };
         };
         lastEventCommitBlockedReason?: string;
         lastCommitBlockedReason?: string;
@@ -445,6 +452,9 @@ export default function SceneView({
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [videoErrorDetail, setVideoErrorDetail] = useState<string | null>(null);
+  const [debugIgnorePause, setDebugIgnorePause] = useState(false);
+  const [debugIgnoreCooldown, setDebugIgnoreCooldown] = useState(false);
+  const [debugMasterVolume, setDebugMasterVolume] = useState(distanceApproachPlayer.getMasterVolume());
   const videoLayerRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
@@ -497,9 +507,14 @@ export default function SceneView({
         lastRestartReason: null
       },
       videoStates: [],
-      playingAudios: []
+      playingAudios: [],
+      trace: []
     };
-    window.__AUDIO_DEBUG__ = { ...prev, ...patch };
+    window.__AUDIO_DEBUG__ = {
+      ...prev,
+      ...patch,
+      trace: [...(prev.trace ?? []), ...(patch.trace ?? [])].slice(-40)
+    };
   }, []);
 
   const stopAllNonPersistentSfx = useCallback(() => {
@@ -644,35 +659,95 @@ export default function SceneView({
     }
   }, [setNeedsGestureState, updateAudioDebug]);
 
-  const playSfx = useCallback((sfxKey: SfxKey, options?: { delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number }) => {
-    if (sfxKey === 'fan_loop') return;
-    const run = () => {
-      if (needsUserGestureToPlayRef.current) return;
+  const playSfx = useCallback((sfxKey: SfxKey, options?: {
+    delayMs?: number;
+    startVolume?: number;
+    endVolume?: number;
+    rampSec?: number;
+    ignorePause?: boolean;
+    ignoreCooldown?: boolean;
+    forceDebug?: boolean;
+  }): Promise<PlayResult> => {
+    if (sfxKey === 'fan_loop') return Promise.resolve({ ok: false, key: sfxKey, reason: 'unknown', detail: 'fan_loop handled by AudioEngine' });
+    const trace = (stage: string, detail?: string) => updateAudioDebug({ trace: [{ at: Date.now(), stage, key: sfxKey, detail }] });
+    trace('play_called', options?.forceDebug ? 'debug_force' : 'event');
+    const spec = SFX_REGISTRY[sfxKey];
+    if (!spec) {
+      const result: PlayResult = { ok: false, key: sfxKey, reason: 'asset_missing', detail: 'missing manifest entry' };
+      trace('asset_missing', result.detail);
+      updateAudioDebug({ lastPlayResult: result });
+      return Promise.resolve(result);
+    }
+    trace('asset_loaded', spec.file);
+    const paused = Boolean((window.__CHAT_DEBUG__?.chat as { pause?: { isPaused?: boolean } } | undefined)?.pause?.isPaused);
+    if (paused && !options?.ignorePause) {
+      const result: PlayResult = { ok: false, key: sfxKey, reason: 'paused', detail: 'chat.pause.isPaused=true' };
+      trace('paused_gate', result.detail);
+      updateAudioDebug({ lastPlayResult: result });
+      return Promise.resolve(result);
+    }
+    const now = Date.now();
+    const cooldowns = window.__CHAT_DEBUG__?.event?.cooldowns ?? {};
+    if (!options?.ignoreCooldown && (cooldowns[sfxKey] ?? 0) > now) {
+      const result: PlayResult = { ok: false, key: sfxKey, reason: 'cooldown', detail: `until=${cooldowns[sfxKey]}` };
+      trace('cooldown_gate', result.detail);
+      updateAudioDebug({ lastPlayResult: result });
+      return Promise.resolve(result);
+    }
+    if (distanceApproachPlayer.getMasterVolume() <= 0) {
+      const result: PlayResult = { ok: false, key: sfxKey, reason: 'volume_zero', detail: 'master_gain=0' };
+      trace('volume_zero', result.detail);
+      updateAudioDebug({ lastPlayResult: result });
+      return Promise.resolve(result);
+    }
+    const run = async () => {
+      if (needsUserGestureToPlayRef.current) {
+        const result: PlayResult = { ok: false, key: sfxKey, reason: 'audio_locked', detail: 'needs_user_gesture' };
+        trace('audio_locked', result.detail);
+        updateAudioDebug({ lastPlayResult: result });
+        return result;
+      }
+      trace('node_chain_ready', 'src->gain->lowpass->panner->master');
       const approachKey = sfxKey as 'footsteps' | 'ghost_female';
-      void playSfxApproach(approachKey, {
+      const result = await playSfxApproach(approachKey, {
         profileOverride: {
           startGain: options?.startVolume,
           endGain: options?.endVolume,
           durationMs: options?.rampSec ? Math.floor(options.rampSec * 1000) : undefined
         }
-      }).then(() => {
-        const startedAt = Date.now();
+      });
+      if (result.ok) {
+        const startedAt = result.startedAt;
+        trace('play_started', `duration=${result.durationMs}`);
         updateAudioDebug({
           started: true,
           lastFootstepsAt: sfxKey === 'footsteps' ? startedAt : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0),
-          lastGhostAt: sfxKey === 'ghost_female' ? startedAt : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0)
+          lastGhostAt: sfxKey === 'ghost_female' ? startedAt : (window.__AUDIO_DEBUG__?.lastGhostAt ?? 0),
+          lastPlayResult: result,
+          lastApproach: distanceApproachPlayer.getLastApproach() ?? undefined
         });
         emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt });
-      }).catch((e: unknown) => {
+        window.setTimeout(() => {
+          trace('ended');
+        }, result.durationMs + 60);
+      } else {
+        trace('error', `${result.reason}:${result.detail ?? '-'}`);
+        updateAudioDebug({ lastPlayResult: result });
+      }
+      if (!result.ok && result.reason === 'audio_locked') {
         setNeedsGestureState(true);
-        console.warn('[AUDIO] play blocked/failed', { key: sfxKey, errName: e instanceof Error ? e.name : 'unknown' });
-      });
+      }
+      console.log('[AUDIO][SFX_PLAY_RESULT]', result);
+      return result;
     };
     if (options?.delayMs && options.delayMs > 0) {
-      window.setTimeout(run, options.delayMs);
-      return;
+      return new Promise((resolve) => {
+        window.setTimeout(() => {
+          void run().then(resolve);
+        }, options.delayMs);
+      });
     }
-    run();
+    return run();
   }, [setNeedsGestureState, updateAudioDebug]);
 
   useEffect(() => {
@@ -1504,6 +1579,8 @@ export default function SceneView({
       },
       videoStates: [],
       playingAudios: []
+      ,
+      trace: []
     };
 
     return () => {
@@ -1812,6 +1889,9 @@ export default function SceneView({
           <div>fan lastRestartReason/mode: {window.__AUDIO_DEBUG__?.fanState?.lastRestartReason ?? '-'} / {window.__AUDIO_DEBUG__?.fanState?.mode ?? '-'}</div>
           <div>videoStates: {(window.__AUDIO_DEBUG__?.videoStates ?? []).map((item) => `${item.id}[p:${String(item.paused)} m:${String(item.muted)} v:${item.volume}]`).join(' | ') || '-'}</div>
           <div>playingAudios: {(window.__AUDIO_DEBUG__?.playingAudios ?? []).map((item) => `${item.label}[m:${String(item.muted)} v:${item.volume} t:${item.currentTime}]`).join(' | ') || '-'} | fan[{String(window.__AUDIO_DEBUG__?.fanState?.playing ?? false)}]</div>
+          <div>audio.lastPlayResult: {window.__AUDIO_DEBUG__?.lastPlayResult ? JSON.stringify(window.__AUDIO_DEBUG__?.lastPlayResult) : '-'}</div>
+          <div>audio.lastApproach gain(start/end/current): {(window.__AUDIO_DEBUG__?.lastApproach?.startGain ?? '-')} / {(window.__AUDIO_DEBUG__?.lastApproach?.endGain ?? '-')} / {(window.__AUDIO_DEBUG__?.lastApproach?.currentGain ?? '-')}</div>
+          <div>audio.trace(last5): {(window.__AUDIO_DEBUG__?.trace ?? []).slice(-5).map((t) => `${t.stage}:${t.key ?? '-'}:${t.detail ?? '-'}`).join(' | ') || '-'}</div>
           <div>event.lastEvent/reason: {window.__CHAT_DEBUG__?.lastEventKey ?? '-'} / {window.__CHAT_DEBUG__?.lastEventReason ?? '-'}</div>
           <div>event.line/variant/tone/persona: {window.__CHAT_DEBUG__?.lastLineKey ?? '-'} / {window.__CHAT_DEBUG__?.lastVariantId ?? '-'} / {window.__CHAT_DEBUG__?.lastTone ?? '-'} / {window.__CHAT_DEBUG__?.lastPersona ?? '-'}</div>
           <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
@@ -1872,6 +1952,8 @@ export default function SceneView({
           <div>event.lastEvent.preEffectTriggered/preEffectAt: {String(window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectTriggered ?? false)} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffectAt ?? '-'}</div>
           <div>event.lastEvent.preEffect.sfxKey/videoKey: {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.sfxKey ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEvent?.preEffect?.videoKey ?? '-'}</div>
           <div>event.lastEffects.sfxPlayed: {(window.__CHAT_DEBUG__?.event?.lastEffects?.sfxPlayed ?? []).map((item: { key?: string; startedAt?: number }) => `${item.key ?? '-'}@${item.startedAt ?? '-'}`).join(', ') || '-'}</div>
+          <div>event.lastEvent.effects.plan: {JSON.stringify(window.__CHAT_DEBUG__?.event?.lastEvent?.effects?.plan ?? null)}</div>
+          <div>event.lastEvent.effects.applied: {JSON.stringify(window.__CHAT_DEBUG__?.event?.lastEvent?.effects?.applied ?? null)}</div>
           <div>event.lastEffects.videoSwitchedTo: {(window.__CHAT_DEBUG__?.event?.lastEffects?.videoSwitchedTo?.key ?? '-')} / {(window.__CHAT_DEBUG__?.event?.lastEffects?.videoSwitchedTo?.src ?? '-')}</div>
           <div>event.lastEffects.blackoutStartedAt/mode: {window.__CHAT_DEBUG__?.event?.lastEffects?.blackoutStartedAt ?? '-'} / {window.__CHAT_DEBUG__?.event?.lastEffects?.mode ?? '-'}</div>
           <div>event.lastStartAttemptBlockedReason: {window.__CHAT_DEBUG__?.event?.lastStartAttemptBlockedReason ?? '-'}</div>
@@ -1902,6 +1984,31 @@ export default function SceneView({
             }); }}>▶ Force Show loop4 (3s)</button>
             <button type="button" onClick={() => { void runDebugForceAction('FORCE_PLANNED', forcePlannedJumpNow); }}>⚡ Force Planned Jump Now</button>
             <button type="button" onClick={() => { void runDebugForceAction('RESCHEDULE_JUMP', () => scheduleNextJump({ force: true })); }}>🔁 Reschedule Jump</button>
+          </div>
+          <div className="video-debug-controls" style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <strong>SFX Tests</strong>
+            <button type="button" onClick={() => { void playSfx('footsteps', { forceDebug: true, ignorePause: debugIgnorePause, ignoreCooldown: debugIgnoreCooldown }); }}>Play footsteps</button>
+            <button type="button" onClick={() => { void playSfx('ghost_female', { forceDebug: true, ignorePause: debugIgnorePause, ignoreCooldown: debugIgnoreCooldown }); }}>Play ghost_female</button>
+            <button type="button" onClick={() => { distanceApproachPlayer.stopAll(); updateAudioDebug({ trace: [{ at: Date.now(), stage: 'stop_all', detail: 'debug_stop_all' }] }); }}>Stop all</button>
+            <label><input type="checkbox" checked={debugIgnorePause} onChange={(e) => setDebugIgnorePause(e.target.checked)} /> Ignore pause</label>
+            <label><input type="checkbox" checked={debugIgnoreCooldown} onChange={(e) => setDebugIgnoreCooldown(e.target.checked)} /> Ignore cooldown</label>
+            <label>
+              Master
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={debugMasterVolume}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  setDebugMasterVolume(value);
+                  distanceApproachPlayer.setMasterVolume(value);
+                  updateAudioDebug({ trace: [{ at: Date.now(), stage: 'master_volume', detail: String(value) }] });
+                }}
+              />
+              {debugMasterVolume.toFixed(2)}
+            </label>
           </div>
         </div>
         </>

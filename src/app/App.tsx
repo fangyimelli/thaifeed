@@ -1309,12 +1309,16 @@ export default function App() {
     }
 
     const sfxPlayed: Array<{ key: string; startedAt: number }> = [];
+    const effectsPlan = { sfx: [...(effects.sfx ?? [])], videoKey: effects.video ?? undefined, blackout: Boolean(effects.blackout) };
+    const effectsErrors: string[] = [];
     for (const sfxKey of effects.sfx) {
       const startedAt = Date.now();
       const played = playSfx(sfxKey, { reason: `event:effect:${eventId}`, source: 'event', eventId, eventKey, allowBeforeStarterTag: true });
       if (played) {
         sfxPlayed.push({ key: sfxKey, startedAt });
         if (debugEnabled) console.log('[EFFECT] sfx start key=' + sfxKey, { eventKey, eventId });
+      } else {
+        effectsErrors.push(`sfx_blocked:${sfxKey}`);
       }
     }
 
@@ -1369,6 +1373,14 @@ export default function App() {
           preEffectTriggered: true,
           preEffectAt: txn.committedAt ?? undefined,
           preEffect: { sfxKey: effects.sfx[0] === 'ghost_female' || effects.sfx[0] === 'footsteps' ? effects.sfx[0] : undefined, videoKey: effects.video === 'loop4' ? 'oldhouse_room_loop4' : effects.video === 'loop2' ? 'oldhouse_room_loop2' : undefined },
+          effects: {
+            plan: effectsPlan,
+            applied: {
+              sfxPlayed: sfxPlayed.map((item) => item.key),
+              videoSwitched: videoSwitchedTo?.key,
+              errors: effectsErrors
+            }
+          },
           forcedByDebug,
           forceOptions: forcedByDebug ? forceOptions : null
         },

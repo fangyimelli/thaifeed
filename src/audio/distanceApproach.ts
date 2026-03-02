@@ -1,5 +1,14 @@
 import { SFX_REGISTRY } from './SfxRegistry';
 
+export type PlayResult =
+  | { ok: true; key: ApproachKey; startedAt: number; durationMs: number; sourceType: 'webaudio' | 'htmlaudio' }
+  | {
+    ok: false;
+    key: string;
+    reason: 'paused' | 'cooldown' | 'audio_locked' | 'asset_missing' | 'decode_failed' | 'play_rejected' | 'volume_zero' | 'unknown';
+    detail?: string;
+  };
+
 export type ApproachProfile = {
   durationMs: number;
   startGain: number;
@@ -44,12 +53,14 @@ class DistanceApproachPlayer {
   private masterGain: GainNode | null = null;
   private bufferCache = new Map<ApproachKey, AudioBuffer>();
   private activeSources = new Map<ApproachKey, AudioBufferSourceNode>();
+  private masterVolume = 1;
+  private lastApproach: { key: ApproachKey; startGain: number; endGain: number; currentGain: number; startedAt: number; durationMs: number } | null = null;
 
   private getOrCreateContext() {
     if (this.context) return this.context;
     this.context = new window.AudioContext();
     this.masterGain = this.context.createGain();
-    this.masterGain.gain.setValueAtTime(1, this.context.currentTime);
+    this.masterGain.gain.setValueAtTime(this.masterVolume, this.context.currentTime);
     this.masterGain.connect(this.context.destination);
     return this.context;
   }
@@ -75,12 +86,22 @@ class DistanceApproachPlayer {
     return buffer;
   }
 
-  async playSfxApproach(key: ApproachKey, opts?: { profileOverride?: Partial<ApproachProfile> }) {
+  async playSfxApproach(key: ApproachKey, opts?: { profileOverride?: Partial<ApproachProfile> }): Promise<PlayResult> {
     const context = this.getOrCreateContext();
     if (context.state !== 'running') {
-      await context.resume();
+      try {
+        await context.resume();
+      } catch (error) {
+        return { ok: false, key, reason: 'audio_locked', detail: error instanceof Error ? error.message : String(error) };
+      }
     }
-    const sourceBuffer = await this.ensureBuffer(key);
+    let sourceBuffer: AudioBuffer;
+    try {
+      sourceBuffer = await this.ensureBuffer(key);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, key, reason: message.startsWith('fetch_failed') ? 'asset_missing' : 'decode_failed', detail: message };
+    }
     const source = context.createBufferSource();
     source.buffer = sourceBuffer;
 
@@ -104,9 +125,16 @@ class DistanceApproachPlayer {
       startPan: opts?.profileOverride?.startPan ?? randomizedStartPan,
       endPan: opts?.profileOverride?.endPan ?? randomizedStartPan * 0.2,
       endGain: Math.min(0.9, opts?.profileOverride?.endGain ?? defaults.endGain),
-      startLPFCutoffHz: Math.max(80, opts?.profileOverride?.startLPFCutoffHz ?? defaults.startLPFCutoffHz),
-      endLPFCutoffHz: Math.max(80, opts?.profileOverride?.endLPFCutoffHz ?? defaults.endLPFCutoffHz)
+      startGain: Math.max(0.05, opts?.profileOverride?.startGain ?? defaults.startGain),
+      startLPFCutoffHz: Math.max(200, opts?.profileOverride?.startLPFCutoffHz ?? defaults.startLPFCutoffHz),
+      endLPFCutoffHz: Math.max(200, opts?.profileOverride?.endLPFCutoffHz ?? defaults.endLPFCutoffHz),
+      startPlaybackRate: Math.max(0.95, Math.min(1.08, opts?.profileOverride?.startPlaybackRate ?? defaults.startPlaybackRate)),
+      endPlaybackRate: Math.max(0.95, Math.min(1.08, opts?.profileOverride?.endPlaybackRate ?? defaults.endPlaybackRate))
     };
+
+    if (this.masterVolume <= 0 || resolved.startGain <= 0 || resolved.endGain <= 0) {
+      return { ok: false, key, reason: 'volume_zero', detail: `master=${this.masterVolume}, start=${resolved.startGain}, end=${resolved.endGain}` };
+    }
 
     const t0 = context.currentTime;
     const t1 = t0 + resolved.durationMs / 1000;
@@ -125,14 +153,28 @@ class DistanceApproachPlayer {
     }
     source.start(t0);
     this.activeSources.set(key, source);
+    this.lastApproach = {
+      key,
+      startGain: resolved.startGain,
+      endGain: resolved.endGain,
+      currentGain: resolved.startGain,
+      startedAt: Date.now(),
+      durationMs: resolved.durationMs
+    };
+    const startedAt = Date.now();
+    const startedPerf = performance.now();
+    const step = () => {
+      if (!this.lastApproach || this.lastApproach.key !== key) return;
+      const progress = Math.min(1, (performance.now() - startedPerf) / Math.max(1, resolved.durationMs));
+      this.lastApproach.currentGain = resolved.startGain + (resolved.endGain - resolved.startGain) * progress;
+      if (progress < 1) window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
     source.onended = () => {
       if (this.activeSources.get(key) === source) this.activeSources.delete(key);
     };
 
-    return {
-      startedAt: Date.now(),
-      profile: resolved
-    };
+    return { ok: true, key, startedAt, durationMs: resolved.durationMs, sourceType: 'webaudio' };
   }
 
   stopAll() {
@@ -144,6 +186,21 @@ class DistanceApproachPlayer {
 
   getPlayingKeys() {
     return [...this.activeSources.keys()];
+  }
+
+  setMasterVolume(value: number) {
+    this.masterVolume = Math.max(0, Math.min(1, value));
+    if (this.masterGain && this.context) {
+      this.masterGain.gain.setValueAtTime(this.masterVolume, this.context.currentTime);
+    }
+  }
+
+  getMasterVolume() {
+    return this.masterVolume;
+  }
+
+  getLastApproach() {
+    return this.lastApproach;
   }
 }
 

@@ -257,7 +257,32 @@ npm run build
   - `▶ Force LOOP2`：直接呼叫 `switchTo('oldhouse_room_loop2')`。
   - `▶ Force MAIN`：直接呼叫 `switchTo('oldhouse_room_loop3')`。
   - `⚡ Force Planned Jump Now`：直接執行目前已排程的 `plannedJump`（不重 pick、不重排 schedule）。
-  - `🔁 Reschedule Jump`：重新呼叫 `scheduleNextJump()`，重新計算 `dueAt` 與 `plannedJump`。
+- `🔁 Reschedule Jump`：重新呼叫 `scheduleNextJump()`，重新計算 `dueAt` 與 `plannedJump`。
+
+### SFX Tests（Debug only）
+
+- 新增 `SFX Tests` 區塊（僅 Debug overlay）：
+  - `Play footsteps`
+  - `Play ghost_female`
+  - `Stop all`
+  - `Ignore pause`
+  - `Ignore cooldown`
+  - `Master` 音量滑桿（0~1）
+- 這些按鈕直接走 `audio.play` 入口並回傳 `PlayResult`，不依賴事件觸發。
+- production 行為不變：正式流程仍是事件驅動，debug 才可 force 測試。
+
+### SFX 追蹤與阻擋原因
+
+- `PlayResult`（成功/失敗可觀測）
+  - success: `ok=true, key, startedAt, durationMs, sourceType`
+  - fail: `ok=false, key, reason(paused/cooldown/audio_locked/asset_missing/decode_failed/play_rejected/volume_zero/unknown), detail`
+- Debug overlay 新增：
+  - `audio.lastPlayResult`
+  - `audio.trace(last5)`（asset_loaded / audio_locked / node_chain_ready / play_started / ended / error）
+  - `audio.lastApproach gain(start/end/current)`
+- 事件效果也新增追蹤：
+  - `event.lastEvent.effects.plan`
+  - `event.lastEvent.effects.applied`
 - 用於排查插播不切換：
   - 若 `Force LOOP` 可切成功但自動插播不會切，表示排程 / planned jump 還有問題。
   - 若 `Force LOOP` 都無法切換，表示 `switchTo` 或 buffer 覆寫仍有衝突。

@@ -110,3 +110,16 @@
 ### Docs
 - README Debug 區段補充 Force Execute 使用規則與「僅限開發使用」警示。
 - PR_NOTES 同步更新影響範圍、SSOT、debug 欄位與驗收結果。
+
+## 2026-03-02（SFX tracing + debug test panel）
+
+### Changed
+- [audio/debug] Debug overlay 新增 `SFX Tests`：可直接測 `footsteps` / `ghost_female`、Stop all、Ignore pause/cooldown、Master volume slider。
+- [audio] SFX 播放改為可觀測 `PlayResult`，每次播放都回傳成功/失敗與 reason，避免 silent fail。
+- [audio] 在播放管線增加逐段 trace：`play_called`、`asset_loaded`、`paused_gate`、`cooldown_gate`、`audio_locked`、`node_chain_ready`、`play_started`、`ended`、`error`。
+- [audio] 距離接近參數加安全下限：`startGain >= 0.05`、`endGain <= 0.9`、`LPF cutoff >= 200Hz`、`playbackRate 0.95~1.08`。
+- [events/debug] 事件效果新增 plan/applied 追蹤：`event.lastEvent.effects.plan` 與 `event.lastEvent.effects.applied`，可定位「事件成立但效果沒播」的落點。
+
+### Docs
+- README 補充 Debug SFX Tests 操作與 PlayResult/trace 欄位說明。
+- PR_NOTES 同步新增本次 SFX root-cause 排查與修正摘要。
