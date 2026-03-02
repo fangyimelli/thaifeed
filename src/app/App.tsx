@@ -77,7 +77,7 @@ type ChatSendSource =
   | 'debug_tester'
   | 'unknown';
 
-type ChatAutoScrollMode = 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
+type ChatAutoScrollMode = 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
 const FREEZE_AFTER_MESSAGE_COUNT = 10;
 
 type BootstrapActivatedBy = 'username_submit' | 'debug' | null;
@@ -301,6 +301,8 @@ export default function App() {
   const [chatFreezeCountdownStartedAt, setChatFreezeCountdownStartedAt] = useState<number | null>(null);
   const [chatLastMessageActorIdCounted, setChatLastMessageActorIdCounted] = useState<string | null>(null);
   const [chatLastCountdownDecrementAt, setChatLastCountdownDecrementAt] = useState<number | null>(null);
+  const [lastScrollFreezeReason, setLastScrollFreezeReason] = useState<string | null>(null);
+  const [lastScrollModeChangeAt, setLastScrollModeChangeAt] = useState<number | null>(null);
   const [lastQuestionMessageId, setLastQuestionMessageId] = useState<string | null>(null);
   const [lastQuestionMessageHasTag, setLastQuestionMessageHasTag] = useState(false);
   const [replyPreviewSuppressedReason, setReplyPreviewSuppressedReason] = useState<string | null>(null);
@@ -569,18 +571,48 @@ export default function App() {
       };
     }
     const now = Date.now();
+    if (chatAutoScrollMode === 'FROZEN' && source !== 'player_input') {
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          lastBlockedSendAttempt: {
+            actorHandle,
+            source,
+            sourceTag: options?.sourceTag ?? '-',
+            textPreview: message.text.slice(0, 40),
+            at: now,
+            blockedReason: 'chat_frozen_until_player_reply'
+          }
+        }
+      };
+      return { ok: false, blockedReason: 'chat_frozen_until_player_reply' };
+    }
     const shouldCountDownForFreeze =
-      chatAutoScrollMode === 'COUNTDOWN_FREEZE'
+      chatAutoScrollMode === 'COUNTDOWN'
       && actorHandle !== normalizeHandle(activeUserInitialHandleRef.current || '')
       && source !== 'system_ui'
       && (linted.message as ChatMessage & { isPinnedLayer?: boolean }).isPinnedLayer !== true;
     if (shouldCountDownForFreeze) {
-      const nextRemaining = Math.max(0, chatFreezeCountdownRemaining - 1);
-      setChatFreezeCountdownRemaining(nextRemaining);
-      setChatLastMessageActorIdCounted(actorHandle || '-');
-      setChatLastCountdownDecrementAt(now);
-      if (nextRemaining <= 0) {
-        setChatAutoScrollMode('FROZEN');
+      const questionMessageId = qnaStateRef.current.active.questionMessageId;
+      const questionMessage = questionMessageId ? state.messages.find((entry) => entry.id === questionMessageId) : null;
+      const isTaggedQuestionActive = Boolean(
+        bootstrapRef.current.isReady
+        && qnaStateRef.current.active.status === 'AWAITING_REPLY'
+        && questionMessageId
+        && questionMessage
+        && questionMessage.text.includes(`@${activeUserInitialHandleRef.current}`)
+      );
+      if (!isTaggedQuestionActive) {
+        resetChatAutoScrollFollow();
+      } else {
+        const nextRemaining = Math.max(0, chatFreezeCountdownRemaining - 1);
+        setChatFreezeCountdownRemaining(nextRemaining);
+        setChatLastMessageActorIdCounted(actorHandle || '-');
+        setChatLastCountdownDecrementAt(now);
+        if (nextRemaining <= 0) {
+          setScrollMode('FROZEN', 'tagged_question_countdown_done');
+        }
       }
     }
     lastChatMessageAtRef.current = now;
@@ -847,27 +879,42 @@ export default function App() {
     return { ok: true, lineId: messageId };
   }, [appStarted, chatAutoPaused, dispatchChatMessage, updateEventDebug]);
 
+  const setScrollMode = useCallback((mode: ChatAutoScrollMode, reason: string) => {
+    setChatAutoScrollMode(mode);
+    setLastScrollModeChangeAt(Date.now());
+    if (mode === 'FROZEN') {
+      setLastScrollFreezeReason(reason);
+    }
+  }, []);
+
   const startChatFreezeCountdown = useCallback((count = FREEZE_AFTER_MESSAGE_COUNT) => {
     const now = Date.now();
-    setChatAutoScrollMode('COUNTDOWN_FREEZE');
+    setScrollMode('COUNTDOWN', 'tagged_question_countdown_start');
     setChatFreezeAfterNMessages(count);
     setChatFreezeCountdownRemaining(count);
     setChatFreezeCountdownStartedAt(now);
     setChatLastMessageActorIdCounted(null);
     setChatLastCountdownDecrementAt(null);
-  }, []);
+  }, [setScrollMode]);
 
   const resetChatAutoScrollFollow = useCallback(() => {
-    setChatAutoScrollMode('FOLLOW');
+    setScrollMode('FOLLOW', 'player_send_success');
     setChatFreezeCountdownRemaining(0);
     setChatFreezeCountdownStartedAt(null);
     setChatLastMessageActorIdCounted(null);
     setChatLastCountdownDecrementAt(null);
-  }, []);
+  }, [setScrollMode]);
 
   const resetQnaUiState = useCallback(() => {
     setReplyPreviewSuppressedReason(null);
   }, []);
+
+  useEffect(() => {
+    if (chatAutoScrollMode === 'FOLLOW') return;
+    if (qnaStateRef.current.active.status !== 'AWAITING_REPLY') {
+      resetChatAutoScrollFollow();
+    }
+  }, [chatAutoScrollMode, resetChatAutoScrollFollow, state.messages.length]);
 
   const playSfx = useCallback((
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
@@ -1223,11 +1270,14 @@ export default function App() {
     markQnaQuestionCommitted(qnaStateRef.current, { messageId: sent.lineId, askedAt: now });
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
+    const hasTagToActiveUser = line.includes(`@${activeUserInitialHandleRef.current}`);
     setLastQuestionMessageId(sent.lineId);
-    setLastQuestionMessageHasTag(true);
+    setLastQuestionMessageHasTag(hasTagToActiveUser);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
-    startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
+    if (hasTagToActiveUser) {
+      startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
+    }
 
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
@@ -1873,6 +1923,16 @@ export default function App() {
       const nextDueAt = Math.max(now, eventNextDueAtRef.current || now);
       const schedulerBlockedReason = !appStarted ? 'app_not_started' : (lockStateRef.current.isLocked ? 'lock_active' : '-');
       const schedulerBlocked = schedulerBlockedReason !== '-';
+      const questionMessageId = qnaStateRef.current.active.questionMessageId;
+      const questionMessage = questionMessageId ? sortedMessages.find((message) => message.id === questionMessageId) : null;
+      const questionHasTagToActiveUser = Boolean(questionMessage && questionMessage.text.includes(`@${activeUserInitialHandleRef.current}`));
+      const isTaggedQuestionActive = Boolean(
+        bootstrapRef.current.isReady
+        && qnaStateRef.current.active.status === 'AWAITING_REPLY'
+        && questionMessageId
+        && questionMessage
+        && questionHasTagToActiveUser
+      );
       const snapshot = {
         registry: {
           count: EVENT_REGISTRY_KEYS.length,
@@ -1936,6 +1996,8 @@ export default function App() {
         qna: {
           ...qnaStateRef.current,
           questionMessageId: qnaStateRef.current.active.questionMessageId,
+          questionHasTagToActiveUser,
+          isTaggedQuestionActive,
           lockTargetInvalid: Boolean(qnaStateRef.current.lockTarget && qnaStateRef.current.taggedUser && qnaStateRef.current.lockTarget === qnaStateRef.current.taggedUser),
           taggedUserHandle: qnaStateRef.current.taggedUser,
           lastQuestionMessageId,
@@ -1952,9 +2014,9 @@ export default function App() {
           replyPinMounted: Boolean(lockStateRef.current.replyingToMessageId),
           replyBarVisible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
           replyBarMessageFound: Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId)),
-          replyPinContainerLocation: 'above_input',
-          replyPinInsideChatList: false,
-          replyPreviewLocation: 'above_input',
+          replyPinContainerLocation: 'inside_chat_list',
+          replyPinInsideChatList: true,
+          replyPreviewLocation: 'inside_chat_list_after_tagged_message',
           legacyReplyQuoteEnabled: false,
           qnaSyncAssert: (() => {
             const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
@@ -1972,6 +2034,8 @@ export default function App() {
           autoScrollMode: chatAutoScrollMode,
           freezeCountdownRemaining: chatFreezeCountdownRemaining,
           freezeAfterNMessages: chatFreezeAfterNMessages,
+          lastScrollFreezeReason: lastScrollFreezeReason ?? '-',
+          lastScrollModeChangeAt: lastScrollModeChangeAt ?? 0,
           freezeCountdownStartedAt: chatFreezeCountdownStartedAt ?? 0,
           lastMessageActorIdCounted: chatLastMessageActorIdCounted ?? '-',
           lastCountdownDecrementAt: chatLastCountdownDecrementAt ?? 0,
@@ -2366,11 +2430,14 @@ export default function App() {
     const now = Date.now();
     lockStateRef.current = { isLocked: true, target: 'mod_live', startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = 'mod_live';
+    const hasTagToActiveUser = line.includes(`@${activeUserInitialHandleRef.current}`);
     setLastQuestionMessageId(sent.lineId);
-    setLastQuestionMessageHasTag(true);
+    setLastQuestionMessageHasTag(hasTagToActiveUser);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
-    startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
+    if (hasTagToActiveUser) {
+      startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
+    }
   }, [dispatchEventLine, startChatFreezeCountdown]);
 
 
@@ -2622,6 +2689,8 @@ export default function App() {
                 <div>chat.freezeCountdownRemaining: {window.__CHAT_DEBUG__?.chat?.freezeCountdownRemaining ?? 0}</div>
                 <div>chat.freezeAfterNMessages: {window.__CHAT_DEBUG__?.chat?.freezeAfterNMessages ?? 0}</div>
                 <div>chat.freezeCountdownStartedAt: {window.__CHAT_DEBUG__?.chat?.freezeCountdownStartedAt ?? 0}</div>
+                <div>chat.lastScrollFreezeReason: {window.__CHAT_DEBUG__?.chat?.lastScrollFreezeReason ?? '-'}</div>
+                <div>chat.lastScrollModeChangeAt: {window.__CHAT_DEBUG__?.chat?.lastScrollModeChangeAt ?? 0}</div>
                 <div>chat.lastMessageActorIdCounted: {window.__CHAT_DEBUG__?.chat?.lastMessageActorIdCounted ?? '-'}</div>
                 <div>chat.lastCountdownDecrementAt: {window.__CHAT_DEBUG__?.chat?.lastCountdownDecrementAt ?? 0}</div>
                 <div>lastEvent.key: {window.__CHAT_DEBUG__?.event?.lastEvent?.key ?? '-'}</div>
@@ -2648,6 +2717,8 @@ export default function App() {
                 <div>qna.lastQuestionMessageHasTag: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)}</div>
                 <div>qna.status: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.status ?? '-'}</div>
                 <div>qna.questionMessageId: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.questionMessageId ?? '-'}</div>
+                <div>qna.questionHasTagToActiveUser: {String((window.__CHAT_DEBUG__?.event?.qna as any)?.questionHasTagToActiveUser ?? false)}</div>
+                <div>qna.isTaggedQuestionActive: {String((window.__CHAT_DEBUG__?.event?.qna as any)?.isTaggedQuestionActive ?? false)}</div>
                 <div>qna.askerActorId: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.askerActorId ?? '-'}</div>
                 <div>qna.taggedUserHandle: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.taggedUserHandle ?? '-'}</div>
                 <div>ui.replyBarVisible: {String((window.__CHAT_DEBUG__?.ui as any)?.replyBarVisible ?? false)}</div>

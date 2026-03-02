@@ -985,30 +985,36 @@ npm run build
 - UI 層明確不顯示 `event type / lockReason / flowId`，避免把事件內部細節帶進沉浸視圖。
 - Debug Overlay 仍保留 `eventKey` 與事件追蹤資訊（含 lock.blocking），遵守 Debug 與 UI 分離原則。
 - lock 解除時，`state.lock.replyingToMessageId = null`，Reply Preview 同步消失。
+- Reply Preview 置於 chat list 內、位於被 tag 題目訊息之後（視覺上「題目在上、pinned reply 在下」），避免脫離對話流。
 
 ## Autoscroll Freeze（Countdown 模式）
 
 - `chat.autoScrollMode` 三態：
   - `FOLLOW`：維持自動置底。
-  - `COUNTDOWN_FREEZE`：仍自動置底，但開始倒數訊息數。
+  - `COUNTDOWN`：仍自動置底，但開始倒數訊息數。
   - `FROZEN`：停止自動置底，允許手動捲動。
 - 觸發時機：
-  - 僅在 QNA `askQuestion` 成功送出且訊息包含 `@taggedUserHandle` 後，進入 `COUNTDOWN_FREEZE`。
+  - 僅在 QNA `askQuestion` 成功送出且 `questionMessageId` 對應訊息存在、且內容包含 `@taggedUserHandle` 後，進入 `COUNTDOWN`。
   - 觸發時設定：`freezeAfterNMessages=10`、`freezeCountdownRemaining=10`、`freezeCountdownStartedAt=now`。
 - 倒數規則：
-  - 每新增一則訊息時，若目前為 `COUNTDOWN_FREEZE` 且訊息符合以下條件才遞減：
+  - 每新增一則訊息時，若目前為 `COUNTDOWN` 且訊息符合以下條件才遞減：
     - `message.actor.id !== activeUser.id`（不計玩家）
     - `message.source !== system_ui`（不計 system）
     - `message.isPinnedLayer !== true`（不計 pinned layer）
   - `freezeCountdownRemaining` 歸零後，`autoScrollMode` 轉為 `FROZEN`。
+- 凍結期間行為：
+  - 當 `autoScrollMode=FROZEN` 時，非玩家來源（`source !== player_input`）的聊天室訊息會被統一阻擋，不再繼續產生新訊息。
+  - 玩家成功送出後才會解除凍結，恢復一般聊天室產生節奏。
 - 恢復時機：
-  - activeUser 回覆「成功送出」後立即切回 `FOLLOW`，並清空 countdown state。
+  - activeUser 回覆「成功送出」後立即切回 `FOLLOW`、清空 countdown state，並立即置底。
   - UI 保持既有手機規格：收鍵盤 + 置底。
 - Debug Overlay：
   - `chat.autoScrollMode`
   - `chat.freezeCountdownRemaining`
   - `chat.freezeAfterNMessages`
   - `chat.freezeCountdownStartedAt`
+  - `chat.lastScrollFreezeReason`（僅允許 `tagged_question_countdown_done`）
+  - `chat.lastScrollModeChangeAt`
   - `chat.lastMessageActorIdCounted`
   - `chat.lastCountdownDecrementAt`
 
