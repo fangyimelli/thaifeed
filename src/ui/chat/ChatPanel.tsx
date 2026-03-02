@@ -5,6 +5,18 @@ import ChatMessage from './ChatMessage';
 import { isMobileDevice } from '../../utils/isMobile';
 import type { SendResult, SendSource } from '../../app/App';
 
+type ScrollMetrics = {
+  top: number;
+  height: number;
+  client: number;
+};
+
+type ForceScrollDebugPayload = {
+  reason: string;
+  at: number;
+  metrics: ScrollMetrics | null;
+};
+
 type Props = {
   messages: ChatMessageType[];
   input: string;
@@ -30,6 +42,9 @@ type Props = {
   activeUserInitialHandle: string;
   autoScrollMode: 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
   replyPreviewSuppressedReason?: string | null;
+  onForceScrollDebug?: (payload: ForceScrollDebugPayload) => void;
+  onReplyPinMountedChange?: (mounted: boolean) => void;
+  forceScrollSignalReason?: string | null;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -61,7 +76,10 @@ export default function ChatPanel({
   qnaStatus = 'IDLE',
   activeUserInitialHandle,
   autoScrollMode,
-  replyPreviewSuppressedReason = null
+  replyPreviewSuppressedReason = null,
+  onForceScrollDebug,
+  onReplyPinMountedChange,
+  forceScrollSignalReason = null
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -72,6 +90,7 @@ export default function ChatPanel({
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
   const viewportSyncUntilRef = useRef(0);
+  const forceScrollDebugRef = useRef<ForceScrollDebugPayload | null>(null);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
   const isMobile = isMobileDevice();
@@ -117,14 +136,31 @@ export default function ChatPanel({
             clientHeight: listEl.clientHeight
           }
         : null,
-      visualViewportHeight: window.visualViewport?.height ?? null
+      visualViewportHeight: window.visualViewport?.height ?? null,
+      forceBottom: forceScrollDebugRef.current
     });
   };
 
   const scrollChatToBottom = (reason: string) => {
     const listEl = messageListRef.current;
-    if (listEl) {
-      listEl.scrollTop = listEl.scrollHeight;
+    const at = Date.now();
+    if (!listEl) {
+      const payload: ForceScrollDebugPayload = { reason, at, metrics: null };
+      forceScrollDebugRef.current = payload;
+      onForceScrollDebug?.(payload);
+      return;
+    }
+    listEl.scrollTop = listEl.scrollHeight;
+    const metrics: ScrollMetrics = {
+      top: listEl.scrollTop,
+      height: listEl.scrollHeight,
+      client: listEl.clientHeight
+    };
+    const payload: ForceScrollDebugPayload = { reason, at, metrics };
+    forceScrollDebugRef.current = payload;
+    onForceScrollDebug?.(payload);
+    if (debugEnabled) {
+      console.debug(`[SCROLL] forceBottom reason=${reason} top=${metrics.top} height=${metrics.height} client=${metrics.client}`);
     }
     logDebugState(`scroll:${reason}`);
   };
@@ -243,6 +279,16 @@ export default function ChatPanel({
       vv.removeEventListener('resize', onViewportResize);
     };
   }, []);
+
+
+  useEffect(() => {
+    onReplyPinMountedChange?.(shouldRenderReplyPreview);
+  }, [onReplyPinMountedChange, shouldRenderReplyPreview]);
+
+  useEffect(() => {
+    if (!forceScrollSignalReason) return;
+    scrollChatToBottom(forceScrollSignalReason);
+  }, [forceScrollSignalReason]);
 
   return (
     <section className="chat-panel">

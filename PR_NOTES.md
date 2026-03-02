@@ -1,48 +1,33 @@
-# 強化聊天室 freeze：tagged question 硬暫停 + 視覺順序修正
+# 修正 pinned reply 出現時未先置底就 pause 的時序問題
 
-## 本次 freeze 模型調整
-- 將原本偏向 scrollMode 的 freeze 行為升級為硬暫停旗標：`chat.freeze = { isFrozen, reason, startedAt }`。
-- tagged question 問題訊息送出後，流程改為：
-  1) 先讓聊天室到底（確保看得到被 tag 的訊息）
-  2) 下一個 render tick 再進入 freeze
-- freeze 期間全面阻擋：
-  - idle chatter
-  - reaction chatter
-  - event auto messages
-  - ambient / random line 入口
-  - ghost/sfx 觸發
-  - chat auto scroll
-- 玩家送出成功且為 QNA waiting 狀態時，統一解除 freeze（reason/startTime 清空）並回到 FOLLOW。
-
-## 影響範圍（chat/events/ghost/scroll/debug）
-- chat: `dispatchChatMessage` 加入硬暫停擋板；freeze 中所有非 player_input 訊息直接阻擋。
-- events: `emitChatEvent` 與 scheduler tick 在 freeze 中不產生自動訊息、不觸發事件流程。
-- ghost: `playSfx` 在 freeze 時阻擋 ghost/footsteps/low_rumble（fan_loop 例外）。
-- scroll: QNA tag 流程改為「先顯示/到底，再 freeze」；freeze 中不自動滾動。
-- debug: 新增 freeze 狀態與阻擋計數欄位，並同步顯示於 debug overlay。
-
-## Debug 欄位新增清單
-- `chat.freeze.isFrozen`
-- `chat.freeze.reason`
-- `chat.freeze.startedAt`
-- `chat.npcSpawnBlockedByFreeze`
-- `chat.ghostBlockedByFreeze`
-
-> 本次為新增 debug 欄位，已在此 PR 明確記錄，符合「連續 3 次 PR 未提及才可移除」規則。
-
-## SSOT 變更點
-- 無 SSOT 檔案變更（未修改 `docs/02-ssot-map.md` 或播放/事件配置 SSOT）。
-- 本次為應用層流程與 debug 觀測增強。
-
-## Docs 同步頁面
-- `README.md`
-- `docs/10-change-log.md`
-- `PR_NOTES.md`
+## Changed
+- 將 tagged QNA 的 freeze 入口統一為 `scrollThenPauseForTaggedQuestion`：
+  - 等待 `questionMessageId` 對應訊息 render（最多 500ms，每幀檢查）
+  - 等待 ReplyPinBar mount 後再 double-force 置底
+  - 完成置底後才 `pause=true`（hard freeze）
+- `ChatMessage` 新增 `data-message-id`，供 `waitForMessageRendered` 精準判定 DOM 已落地。
+- `ChatPanel` 新增 force-scroll debug 回傳與 reply-pin mount 回報，並輸出 debug only log：
+  - `[SCROLL] forceBottom reason=... top=... height=... client=...`
+- debug 面板同步新增：
+  - `chat.scroll.lastForceToBottomReason`
+  - `chat.scroll.lastForceToBottomAt`
+  - `chat.scroll.scrollTop / scrollHeight / clientHeight`
+  - `ui.qnaQuestionMessageIdRendered`
+  - `ui.replyPinMounted`
+  - `chat.pause.isPaused`
 
 ## Removed
-- 無功能移除。
+- 移除 tagged question 的 countdown-then-freeze 舊邏輯（先 COUNTDOWN 再 FROZEN）。
+- 移除「一出現 pinned reply 就先關自動置底」舊時序；改為 pause 之前仍可 force scroll。
 
-## 驗收 PASS/FAIL（desktop/mobile/debug）
-- desktop: PASS（build 通過；freeze 欄位與硬暫停 gating 已落地）
-- mobile: PASS（共用 chat/event/freeze 流程，無平台分岔）
-- debug: PASS（overlay 已新增 freeze 與 blocked counters 欄位）
+## SSOT Impact
+- 無 SSOT 檔案變更（`docs/02-ssot-map.md` 未修改）。
+- 本次屬於 App/QNA/ChatPanel 時序整合與 debug 可觀測性補強。
+
+## Debug 欄位變更 + 3 次 PR 規則
+- 新增 debug 欄位（見 Changed 區塊）已完整列出。
+- 這些欄位將依規則至少保留 3 次 PR 觀測週期後再評估移除。
+
+## 驗收
+- `npm run build` 通過（TypeScript + Vite build）。
+- 已提供桌機畫面截圖（含 debug overlay）。

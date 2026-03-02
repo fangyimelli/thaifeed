@@ -18,6 +18,7 @@ export default function ChatMessage({ message, onToggleTranslation, activeUserIn
   const hasActiveUserMention = Boolean(activeUserInitialHandle) && message.text.includes(`@${activeUserInitialHandle}`);
   return (
     <article
+      data-message-id={message.id}
       className={`chat-message ${message.isVip ? `vip ${message.isVip}` : ''} ${message.isSelf ? 'self' : ''} ${isSystemJoin ? 'system join' : ''} ${isSystemInfo ? 'system info' : ''} ${isDonate ? 'donate' : ''} ${hasActiveUserMention ? 'is-mention-highlight' : ''}`}
     >
       <div className="chat-line">

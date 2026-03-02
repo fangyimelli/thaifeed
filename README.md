@@ -1094,7 +1094,28 @@ npm run build
 4. 選擇帶 `nextEventKey` 的選項，確認 chain event 先入 queue，再於非 inFlight 時啟動。
 5. 開 `?debug=1` 檢查 overlay 的 QNA / queue 欄位是否完整更新。
 
+
+
+## QNA pinned reply 先置底再 pause（2026-03-02）
+
+- tagged question 成功送出後，流程固定為：
+  1) `qna.active.status = AWAITING_REPLY` + `questionMessageId` 寫入
+  2) ReplyPinBar mount
+  3) `waitForMessageRendered(questionMessageId)` 等待題目訊息進入 DOM
+  4) 連續兩次 `forceScrollToBottom`（含 double tap）
+  5) 最後才 `pause.isPaused=true`（chat freeze）
+- `pause` 現在只負責阻擋 NPC spawn / event chatter / ghost 觸發，不可提前阻擋這段強制置底。
+- Debug 追加：
+  - `chat.scroll.lastForceToBottomReason`
+  - `chat.scroll.lastForceToBottomAt`
+  - `chat.scroll.scrollTop / scrollHeight / clientHeight`
+  - `ui.replyPinMounted`
+  - `ui.qnaQuestionMessageIdRendered`
+  - `chat.pause.isPaused`
+
 ## Removed / Deprecated Log
+
+- 2026-03-02：移除「tagged question countdown 才 freeze」舊邏輯，改為 pinned reply mount 後立即執行 `scrollThenPause`（先置底、後 pause）。保留 freeze gate（阻擋 NPC/事件/鬼動）但不再等待倒數訊息，避免題目訊息未落在視窗底部。
 
 - 2026-03-01：移除 `src/app/App.tsx` 中 `cooldownsRef.loop4` 的 legacy debug/cooldown 欄位，改用語意一致的 `cooldownsRef.tv_event`。影響：`TV_EVENT` gate 與 cooldown 行為不變，只是移除舊命名避免與已移除的 `loop4` 場景語意衝突。
 
