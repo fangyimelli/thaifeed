@@ -28,7 +28,7 @@ type Props = {
   questionMessageId?: string | null;
   qnaStatus?: 'IDLE' | 'ASKING' | 'AWAITING_REPLY' | 'RESOLVED' | 'ABORTED';
   activeUserInitialHandle: string;
-  autoScrollMode: 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
+  autoScrollMode: 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
   replyPreviewSuppressedReason?: string | null;
 };
 
@@ -270,6 +270,12 @@ export default function ChatPanel({
               activeUserInitialHandle={activeUserInitialHandle}
             />
           ))}
+          {shouldRenderReplyPreview && (
+            <div className="replyPinBar replyPinBar-inline" role="status" aria-live="polite">
+              <div className="replyPinHeader">↳ @{lockTarget}</div>
+              <div className="replyPinText">「{replyPreviewText}」</div>
+            </div>
+          )}
           <div ref={messageEndRef} />
         </div>
       </div>
@@ -285,13 +291,6 @@ export default function ChatPanel({
         >
           最新訊息
         </button>
-      )}
-
-      {shouldRenderReplyPreview && (
-        <div className="replyPinBar" role="status" aria-live="polite">
-          <div className="replyPinHeader">↳ @{lockTarget}</div>
-          <div className="replyPinText">「{replyPreviewText}」</div>
-        </div>
       )}
 
       {debugEnabled && isLocked && lockTarget && !shouldRenderReplyPreview && (

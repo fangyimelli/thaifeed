@@ -191,10 +191,12 @@ declare global {
       chat?: {
         autoPaused?: boolean;
         autoPausedReason?: string;
-        autoScrollMode?: 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
+        autoScrollMode?: 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
         freezeCountdownRemaining?: number;
         freezeAfterNMessages?: number;
         freezeCountdownStartedAt?: number;
+        lastScrollFreezeReason?: string;
+        lastScrollModeChangeAt?: number;
         lastMessageActorIdCounted?: string;
         lastCountdownDecrementAt?: number;
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string; renameDisabled?: boolean };
@@ -304,6 +306,8 @@ declare global {
           taggedUserHandle?: string | null;
           lastQuestionMessageId?: string | null;
           lastQuestionMessageHasTag?: boolean;
+          questionHasTagToActiveUser?: boolean;
+          isTaggedQuestionActive?: boolean;
           lastBlockedReason?: string | null;
         };
         test?: {
@@ -1761,6 +1765,7 @@ export default function SceneView({
           <div>qna.pendingChain: {window.__CHAT_DEBUG__?.event?.qna?.pendingChain?.eventKey ?? '-'}</div>
           <div>qna.taggedUserHandle/lastQuestionMessageId: {window.__CHAT_DEBUG__?.event?.qna?.taggedUserHandle ?? window.__CHAT_DEBUG__?.event?.qna?.taggedUser ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageId ?? '-'}</div>
           <div>qna.lastQuestionMessageHasTag/lastBlockedReason: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
+          <div>qna.questionHasTagToActiveUser/isTaggedQuestionActive: {String(window.__CHAT_DEBUG__?.event?.qna?.questionHasTagToActiveUser ?? false)} / {String(window.__CHAT_DEBUG__?.event?.qna?.isTaggedQuestionActive ?? false)}</div>
           <div>ui.replyPin.mounted/location/insideChatList: {String(window.__CHAT_DEBUG__?.ui?.replyPinMounted ?? false)} / {window.__CHAT_DEBUG__?.ui?.replyPinContainerLocation ?? '-'} / {String(window.__CHAT_DEBUG__?.ui?.replyPinInsideChatList ?? false)}</div>
           <div>ui.replyPreview.suppressed: {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
           <div>ui.replyPreview.location/legacyQuote: {window.__CHAT_DEBUG__?.ui?.replyPreviewLocation ?? '-'} / {String(window.__CHAT_DEBUG__?.ui?.legacyReplyQuoteEnabled ?? false)}</div>
@@ -1773,6 +1778,7 @@ export default function SceneView({
           <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
           <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
           <div>chat.autoScrollMode/remain/after/startAt: {window.__CHAT_DEBUG__?.chat?.autoScrollMode ?? '-'} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownRemaining ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeAfterNMessages ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownStartedAt ?? 0}</div>
+          <div>chat.lastScrollFreezeReason/lastScrollModeChangeAt: {window.__CHAT_DEBUG__?.chat?.lastScrollFreezeReason ?? '-'} / {window.__CHAT_DEBUG__?.chat?.lastScrollModeChangeAt ?? 0}</div>
           <div>chat.lastMessageActorIdCounted/lastCountdownDecrementAt: {window.__CHAT_DEBUG__?.chat?.lastMessageActorIdCounted ?? '-'} / {window.__CHAT_DEBUG__?.chat?.lastCountdownDecrementAt ?? 0}</div>
           <div>chat.pacing.baseRate/currentRate/jitter/nextDue: {window.__CHAT_DEBUG__?.chat?.pacing?.baseRate ?? '-'} / {window.__CHAT_DEBUG__?.chat?.pacing?.currentRate ?? '-'} / {String(window.__CHAT_DEBUG__?.chat?.pacing?.jitterEnabled ?? true)} / {window.__CHAT_DEBUG__?.chat?.pacing?.nextMessageDueInSec ?? '-'}</div>
           <div>chat.pacing.nextModeInSec: {window.__CHAT_DEBUG__?.chat?.pacing?.nextModeInSec ?? '-'}</div>
