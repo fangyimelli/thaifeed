@@ -47,3 +47,10 @@
 - [06 Event System](./06-event-system.md)
 - [08 Mobile Layout](./08-mobile-layout.md)
 - [09 Troubleshooting](./09-troubleshooting.md)
+
+## 2026-03-02 新增欄位（stuck-state recovery）
+- `event.cooldownMeta[eventKey].nextAllowedAt`：該事件下一次可觸發時間（只在 commit 後更新）。
+- `event.cooldownMeta[eventKey].lastCommittedAt`：最後一次合法 commit 時間。
+- `event.cooldownMeta[eventKey].lastRollbackAt`：因 abort（如 `question_send_failed`）回滾時間。
+- `event.freezeGuard.hasRealTag/replyUIReady/freezeAllowed`：freeze 啟動 guard 判斷快照。
+- `chat.system.debugReset.count/reason/resetAt`：一鍵救援執行次數、原因與時間。
