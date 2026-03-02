@@ -1197,3 +1197,42 @@ npm run build
 - 出題流程改為 transaction：先送出題目訊息並拿到 messageId，再切到 `AWAITING_REPLY` 並顯示 Reply Bar。
 - 聊天訊息新增 `createdAtMs + seq`，渲染前用穩定排序，避免題目晚插到玩家回覆下方。
 - 玩家成功送出訊息後，若 QNA 正在等待回覆，立即標記 resolved、關閉 lock、恢復 FOLLOW 自動捲動。
+
+## Username Submit 即完成互動 bootstrap（本次 PR）
+
+### 首次互動 gate 盤點（全 repo）
+
+- `hasInteracted`：未使用。
+- `firstInteraction`：未使用。
+- `audioUnlocked`：未使用（現行為 `soundUnlocked`）。
+- `enableAudio`：未使用。
+- `「聲音已啟用」`：原本綁在 `submitChat` 的首次送出路徑。
+- `initAudio`：未使用。
+- `onFirstMessage / afterFirstSend`：未使用。
+- `hasSpoken`：存在於 `activeUserProfile`，但不再作為 QNA / event / tag gate。
+- `bootstrapAfterChat`：未使用。
+
+### 本次調整
+
+- 新增單一入口 `bootstrapAfterUsernameSubmit(name)`，在 startup Confirm（使用者手勢）時立即執行：
+  1. `registerActiveUser(name)`（立刻 upsert `usersById/usersByHandle`）
+  2. `ensureAudioUnlockedFromUserGesture()`（`resumeFromGesture` + `startFanLoop` + 預載 footsteps/ghost）
+  3. `systemReadyForEventsRef.current = true`
+  4. `emitAudioEnabledSystemMessageOnce()` 送出 `[系統] 聲音已啟用`（僅一次）
+  5. debug stamp：`chat.system.buildStamp = bootstrap_after_username_submit_v1`
+- 移除舊 gate：不再在 `submitChat` 首次發言時才解鎖音效/送系統訊息。
+- QNA / 事件 gate 改為檢查 `readyForEvents`：
+  - `startEvent()` 若未 ready，blocked reason 固定 `not_ready_for_events`。
+  - `sendQnaQuestion()` 若未 ready，直接 abort 並記錄 `lastBlockedReason=not_ready_for_events`。
+- activeUser send guard 維持不變：`dispatchChatMessage` 仍禁止任何 `source !== player_input` 的 activeUser 自動發言。
+
+### Debug Overlay 新增可觀測欄位
+
+- `activeUser.handle`
+- `activeUser.registered`
+- `system.readyForEvents`
+- `audio.unlocked`
+- `audio.enabledSystemMessageSent`
+- `audio.unlockFailedReason`
+- `lastBlockedReason`
+- Debug-only 按鈕：`Run bootstrapAfterUsernameSubmit (debug)`（僅 not ready 時顯示）

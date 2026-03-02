@@ -200,6 +200,15 @@ declare global {
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string; renameDisabled?: boolean };
         audience?: { count?: number };
         activeUser?: { id?: string; handle?: string; registered?: boolean; hasSpoken?: boolean };
+        system?: {
+          buildStamp?: string;
+          at?: number;
+          readyForEvents?: boolean;
+          audioUnlocked?: boolean;
+          audioEnabledSystemMessageSent?: boolean;
+          audioUnlockFailedReason?: string;
+          lastBlockedReason?: string;
+        };
         mention?: { lastMessageMentionsActiveUser?: boolean };
         lastActorPicked?: { id?: string };
         actorPickBlockedReason?: string;

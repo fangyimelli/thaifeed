@@ -20,7 +20,8 @@ import LoadingOverlay, { type LoadingState } from '../ui/hud/LoadingOverlay';
 import { preloadAssets, verifyRequiredAssets, type MissingRequiredAsset } from '../utils/preload';
 import { Renderer2D } from '../renderer/renderer-2d/Renderer2D';
 import { pickOne } from '../utils/random';
-import { MAIN_LOOP } from '../config/oldhousePlayback';
+import { FAN_LOOP_PATH, FOOTSTEPS_PATH, GHOST_FEMALE_PATH, MAIN_LOOP } from '../config/oldhousePlayback';
+import { audioEngine } from '../audio/AudioEngine';
 import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
 import { ChatEngine } from '../chat/ChatEngine';
@@ -61,7 +62,8 @@ type EventStartBlockedReason =
   | 'active_users_lt_3'
   | 'registry_missing'
   | 'vip_target'
-  | 'invalid_state';
+  | 'invalid_state'
+  | 'not_ready_for_events';
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
@@ -316,6 +318,9 @@ export default function App() {
   const postedInitMessages = useRef(false);
   const postedOptionalAssetWarningMessage = useRef(false);
   const soundUnlocked = useRef(false);
+  const audioEnabledSystemMessageSentRef = useRef(false);
+  const audioUnlockFailedReasonRef = useRef<string | null>(null);
+  const systemReadyForEventsRef = useRef(false);
   const nonVipMessagesSinceLastVip = useRef(2);
   const currentVideoKeyRef = useRef<string>(MAIN_LOOP);
   const pacingModeRef = useRef<ChatPacingMode>('normal');
@@ -913,6 +918,7 @@ export default function App() {
     }
     if (!eventDef) blockedReason = 'registry_missing';
     else if (!appStarted) blockedReason = 'invalid_state';
+    else if (!systemReadyForEventsRef.current) blockedReason = 'not_ready_for_events';
     else if (ctx.source === 'scheduler_tick' && chatAutoPaused) blockedReason = 'chat_auto_paused';
     else if (eventRunnerStateRef.current.inFlight) blockedReason = 'in_flight';
     else if (eventExclusiveStateRef.current.exclusive && !exclusiveTimeoutReached) blockedReason = 'event_exclusive_active';
@@ -1162,6 +1168,10 @@ export default function App() {
   }, [buildEventLine, dispatchEventLine, updateEventDebug]);
 
   const sendQnaQuestion = useCallback(() => {
+    if (!systemReadyForEventsRef.current) {
+      setLastBlockedReason('not_ready_for_events');
+      return false;
+    }
     if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
       markQnaAborted(qnaStateRef.current, 'retry', Date.now());
       return false;
@@ -1981,6 +1991,13 @@ export default function App() {
             registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
             hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
           },
+          system: {
+            readyForEvents: systemReadyForEventsRef.current,
+            audioUnlocked: soundUnlocked.current,
+            audioEnabledSystemMessageSent: audioEnabledSystemMessageSentRef.current,
+            audioUnlockFailedReason: audioUnlockFailedReasonRef.current ?? '-',
+            lastBlockedReason: lastBlockedReasonRef.current
+          },
           mention: {
             lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
           },
@@ -2121,17 +2138,6 @@ export default function App() {
       lastInputTimestamp.current = Date.now();
       lastIdleCurseAt.current = 0;
 
-      if (!soundUnlocked.current) {
-        soundUnlocked.current = true;
-        dispatchChatMessage({
-          id: crypto.randomUUID(),
-          type: 'system',
-          username: 'system',
-          text: '聲音已啟用',
-          language: 'zh'
-        }, { source: 'system_ui' });
-      }
-
       const playableConsonant = resolvePlayableConsonant(state.currentConsonant.letter);
 
       if (!activeUserInitialHandleRef.current) {
@@ -2147,12 +2153,6 @@ export default function App() {
         lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
         resetChatAutoScrollFollow();
       }
-      if (activeUserProfileRef.current) {
-        activeUserProfileRef.current = { ...activeUserProfileRef.current, hasSpoken: true };
-        usersByIdRef.current.set(activeUserProfileRef.current.id, activeUserProfileRef.current);
-        usersByHandleRef.current.set(activeUserProfileRef.current.handle, activeUserProfileRef.current);
-      }
-
       const handlePass = () => {
         markReview(playableConsonant.letter, 'pass', state.curse);
         const entry = getMemoryNode(playableConsonant.letter);
@@ -2283,6 +2283,58 @@ export default function App() {
     usersByHandleRef.current.set(nextProfile.handle, nextProfile);
     return true;
   }, []);
+
+  const emitAudioEnabledSystemMessageOnce = useCallback(() => {
+    if (audioEnabledSystemMessageSentRef.current) return;
+    audioEnabledSystemMessageSentRef.current = true;
+    dispatchChatMessage({
+      id: crypto.randomUUID(),
+      type: 'system',
+      username: 'system',
+      text: '聲音已啟用',
+      language: 'zh'
+    }, { source: 'system_ui' });
+  }, [dispatchChatMessage]);
+
+  const ensureAudioUnlockedFromUserGesture = useCallback(async () => {
+    try {
+      await audioEngine.resumeFromGesture();
+      await audioEngine.startFanLoop(FAN_LOOP_PATH, 0.4, 'username_submit_bootstrap');
+      [FOOTSTEPS_PATH, GHOST_FEMALE_PATH].forEach((src) => {
+        const preloadAudio = new Audio(src);
+        preloadAudio.preload = 'auto';
+        preloadAudio.load();
+      });
+      soundUnlocked.current = true;
+      audioUnlockFailedReasonRef.current = null;
+      return true;
+    } catch (error) {
+      soundUnlocked.current = false;
+      audioUnlockFailedReasonRef.current = error instanceof Error ? error.message : String(error);
+      return false;
+    }
+  }, []);
+
+  const bootstrapAfterUsernameSubmit = useCallback(async (rawHandle: string) => {
+    const registered = registerActiveUser(rawHandle);
+    if (!registered) return false;
+    await ensureAudioUnlockedFromUserGesture();
+    systemReadyForEventsRef.current = true;
+    emitAudioEnabledSystemMessageOnce();
+    updateChatDebug({
+      chat: {
+        ...(window.__CHAT_DEBUG__?.chat ?? {}),
+        system: {
+          buildStamp: 'bootstrap_after_username_submit_v1',
+          at: Date.now(),
+          readyForEvents: systemReadyForEventsRef.current,
+          audioUnlocked: soundUnlocked.current,
+          audioUnlockFailedReason: audioUnlockFailedReasonRef.current ?? '-'
+        }
+      }
+    } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
+    return true;
+  }, [emitAudioEnabledSystemMessageOnce, ensureAudioUnlockedFromUserGesture, registerActiveUser, updateChatDebug]);
 
   const emitNpcTagToActiveUser = useCallback(() => {
     const activeHandle = normalizeHandle(activeUserInitialHandleRef.current || '');
@@ -2474,12 +2526,15 @@ export default function App() {
                   onClick={() => {
                     const normalizedName = normalizeHandle(startNameInput);
                     if (!normalizedName) return;
-                    registerActiveUser(normalizedName);
-                    setAppStarted(true);
-                    setChatAutoPaused(false);
-                    window.setTimeout(() => {
-                      videoRef.current?.focus();
-                    }, 0);
+                    void bootstrapAfterUsernameSubmit(normalizedName).then((ok) => {
+                      if (!ok) return;
+                      setStartNameInput(normalizedName);
+                      setAppStarted(true);
+                      setChatAutoPaused(false);
+                      window.setTimeout(() => {
+                        videoRef.current?.focus();
+                      }, 0);
+                    });
                   }}
                 >
                   Confirm
@@ -2513,6 +2568,14 @@ export default function App() {
                   Simulate Player Reply
                 </label>
                 <div className="debug-route-controls">
+                  {!systemReadyForEventsRef.current && (
+                    <button type="button" onClick={() => {
+                      const name = normalizeHandle(startNameInput) || normalizeHandle(activeUserInitialHandleRef.current || '') || 'you';
+                      void bootstrapAfterUsernameSubmit(name);
+                    }}>
+                      Run bootstrapAfterUsernameSubmit (debug)
+                    </button>
+                  )}
                   <button type="button" onClick={emitNpcTagToActiveUser}>Emit NPC Tag @You</button>
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
                   <button type="button" onClick={forceUnlockDebug}>Force Unlock</button>
@@ -2532,6 +2595,11 @@ export default function App() {
                 <div>chat.activeUser.handle: {window.__CHAT_DEBUG__?.chat?.activeUser?.handle ?? '-'}</div>
                 <div>chat.activeUser.registered: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.registered ?? false)}</div>
                 <div>chat.activeUser.hasSpoken: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.hasSpoken ?? false)}</div>
+                <div>system.readyForEvents: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.readyForEvents ?? false)}</div>
+                <div>audio.unlocked: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.audioUnlocked ?? false)}</div>
+                <div>audio.enabledSystemMessageSent: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.audioEnabledSystemMessageSent ?? false)}</div>
+                <div>audio.unlockFailedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.audioUnlockFailedReason ?? '-'}</div>
+                <div>lastBlockedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastBlockedReason ?? '-'}</div>
                 <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
                 <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
                 <div>actorPickBlockedReason: {window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'}</div>
