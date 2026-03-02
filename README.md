@@ -1184,6 +1184,7 @@ npm run build
 - QNA/event 未 ready 時一律 `bootstrap_not_ready` 並中止。
 - 只要 `bootstrap.isReady=true`，出題訊息必須可 `@activeUser`。
 - pinned reply 顯示只看：`qnaStatus === "AWAITING_REPLY" && questionMessageId != null`。
+- pinned reply 標頭顯示優先使用題目訊息中的 `@taggedHandle`，若缺失才 fallback 至 activeUser/lockTarget。
 - 不再以 `hasSpoken` / `messages.length` 作為 pin/tag gate。
 
 ### Debug Overlay
