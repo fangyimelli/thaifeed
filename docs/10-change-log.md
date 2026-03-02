@@ -46,3 +46,15 @@
 
 - 每次 PR 若有流程級變更，必須更新本頁。
 - 變更內容需能追溯到對應 SSOT 檔案與 docs 分頁。
+
+## 2026-03-02
+
+### Changed
+- [chat/events/ghost/scroll] 將 tagged question 的 freeze 改為硬暫停模型：freeze 期間阻擋 NPC 訊息、event 自動訊息、ghost/sfx 觸發與聊天室自動滾動；玩家成功送出回覆後才統一解凍。
+- [qna] tagged question 送出後流程改為「先讓聊天室滾到底顯示被 tag 訊息，再於下一個 render tick 啟用 freeze」，避免先 freeze 導致目標訊息未出現在視窗內。
+- [ui] pinned reply 維持 input 上方 overlay，不寫入 messages[]，確保視覺順序為「聊天室最後一則 tagged 訊息在上、pinned reply 在下」。
+- [debug] 新增 freeze 與阻擋計數觀測欄位：`freeze.isFrozen`、`freeze.reason`、`freeze.startedAt`、`npcSpawnBlockedByFreeze`、`ghostBlockedByFreeze`。
+
+### Docs
+- README 新增本次 freeze 強化規格與驗收重點。
+- PR_NOTES 更新本次變更範圍、debug 欄位與驗收結果。

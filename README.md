@@ -1204,3 +1204,19 @@ npm run build
 - 出題流程改為 transaction：先送出題目訊息並拿到 messageId，再切到 `AWAITING_REPLY` 並顯示 Reply Bar。
 - 聊天訊息新增 `createdAtMs + seq`，渲染前用穩定排序，避免題目晚插到玩家回覆下方。
 - 玩家成功送出訊息後，若 QNA 正在等待回覆，立即標記 resolved、關閉 lock、恢復 FOLLOW 自動捲動。
+
+## Freeze 模型更新（tagged question 硬暫停）
+
+- tagged question 成立後，流程調整為：**先顯示題目訊息並滾到底，再進入 freeze**。
+- freeze 期間為硬暫停：
+  - 不產生 NPC 訊息（idle / reaction / event auto / ambient / random）
+  - 不觸發 ghost 相關動作與音效
+  - 不執行聊天室自動滾動
+- 玩家成功送出回覆後才解除 freeze，並回到 FOLLOW 模式。
+- pinned reply 維持 UI overlay（輸入欄上方），**不寫入 messages[]**，因此訊息時間序與聊天室排序不會被污染。
+- Debug 新增 freeze 欄位：
+  - `chat.freeze.isFrozen`
+  - `chat.freeze.reason`
+  - `chat.freeze.startedAt`
+  - `chat.npcSpawnBlockedByFreeze`
+  - `chat.ghostBlockedByFreeze`
