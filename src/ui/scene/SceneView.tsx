@@ -225,6 +225,9 @@ declare global {
         lint?: { lastRejectedText?: string; lastRejectedReason?: string; rerollCount?: number };
         audienceInvariant?: { removedActiveUser?: boolean; reason?: string };
         blockedCounts?: { activeUserAutoSpeak?: number };
+        freeze?: { isFrozen?: boolean; reason?: 'tagged_question' | null; startedAt?: number | null };
+        npcSpawnBlockedByFreeze?: number;
+        ghostBlockedByFreeze?: number;
         sendSourceWarning?: { at?: number; actor?: string; textPreview?: string };
         lastBlockedSendAttempt?: {
           actorId?: string;

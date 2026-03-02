@@ -87,8 +87,6 @@ export default function ChatPanel({
     : null;
 
   const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId);
-  const taggedHandleFromQuestion = originalMessage?.text.match(/@([\w_]+)/u)?.[1] ?? null;
-  const replyPinHandle = taggedHandleFromQuestion || activeUserInitialHandle || lockTarget || 'you';
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
@@ -272,12 +270,6 @@ export default function ChatPanel({
               activeUserInitialHandle={activeUserInitialHandle}
             />
           ))}
-          {shouldRenderReplyPreview && (
-            <div className="replyPinBar replyPinBar-inline" role="status" aria-live="polite">
-              <div className="replyPinHeader">↳ @{lockTarget}</div>
-              <div className="replyPinText">「{replyPreviewText}」</div>
-            </div>
-          )}
           <div ref={messageEndRef} />
         </div>
       </div>
@@ -293,6 +285,14 @@ export default function ChatPanel({
         >
           最新訊息
         </button>
+      )}
+
+
+      {shouldRenderReplyPreview && (
+        <div className="replyPinBar replyPinBar-inline" role="status" aria-live="polite">
+          <div className="replyPinHeader">↳ @{lockTarget}</div>
+          <div className="replyPinText">「{replyPreviewText}」</div>
+        </div>
       )}
 
       {debugEnabled && isLocked && lockTarget && !shouldRenderReplyPreview && (

@@ -1,35 +1,48 @@
-# 將 TV_EVENT 冷卻欄位由 legacy `loop4` 命名整合為 `tv_event`
+# 強化聊天室 freeze：tagged question 硬暫停 + 視覺順序修正
 
-## 變更摘要
-- 系統性檢查現行播放 SSOT 與 legacy 命名衝突點，確認 `TV_EVENT` 冷卻邏輯仍有保留必要。
-- 保留舊邏輯的冷卻行為（90 秒）與 gate 流程，不移除功能。
-- 將 `src/app/App.tsx` 的 cooldown key 由 `loop4` 改為 `tv_event`，消除語意衝突並提升可維護性。
-- 同步更新 README 與變更紀錄文件。
+## 本次 freeze 模型調整
+- 將原本偏向 scrollMode 的 freeze 行為升級為硬暫停旗標：`chat.freeze = { isFrozen, reason, startedAt }`。
+- tagged question 問題訊息送出後，流程改為：
+  1) 先讓聊天室到底（確保看得到被 tag 的訊息）
+  2) 下一個 render tick 再進入 freeze
+- freeze 期間全面阻擋：
+  - idle chatter
+  - reaction chatter
+  - event auto messages
+  - ambient / random line 入口
+  - ghost/sfx 觸發
+  - chat auto scroll
+- 玩家送出成功且為 QNA waiting 狀態時，統一解除 freeze（reason/startTime 清空）並回到 FOLLOW。
 
-## 影響範圍
-- player: 無
-- audio: 無
-- chat: 無
-- events: `TV_EVENT` gate 命名整合（行為不變）
-- assets: 無
-- mobile: 無
-- debug: 移除 legacy debug/cooldown 欄位 `loop4`，改以 `tv_event` 表示
-- docs: README、docs/10-change-log.md
+## 影響範圍（chat/events/ghost/scroll/debug）
+- chat: `dispatchChatMessage` 加入硬暫停擋板；freeze 中所有非 player_input 訊息直接阻擋。
+- events: `emitChatEvent` 與 scheduler tick 在 freeze 中不產生自動訊息、不觸發事件流程。
+- ghost: `playSfx` 在 freeze 時阻擋 ghost/footsteps/low_rumble（fan_loop 例外）。
+- scroll: QNA tag 流程改為「先顯示/到底，再 freeze」；freeze 中不自動滾動。
+- debug: 新增 freeze 狀態與阻擋計數欄位，並同步顯示於 debug overlay。
+
+## Debug 欄位新增清單
+- `chat.freeze.isFrozen`
+- `chat.freeze.reason`
+- `chat.freeze.startedAt`
+- `chat.npcSpawnBlockedByFreeze`
+- `chat.ghostBlockedByFreeze`
+
+> 本次為新增 debug 欄位，已在此 PR 明確記錄，符合「連續 3 次 PR 未提及才可移除」規則。
 
 ## SSOT 變更點
-- 無新增/修改 SSOT 檔案（僅對應用層命名清理，SSOT 播放配置維持現狀）。
+- 無 SSOT 檔案變更（未修改 `docs/02-ssot-map.md` 或播放/事件配置 SSOT）。
+- 本次為應用層流程與 debug 觀測增強。
 
-## Docs 同步
+## Docs 同步頁面
 - `README.md`
 - `docs/10-change-log.md`
+- `PR_NOTES.md`
 
 ## Removed
-- 移除項目：`cooldownsRef.loop4`
-- 原因：舊命名與已移除 loop4 播放策略衝突，易造成維運誤讀
-- 影響：無功能移除，`TV_EVENT` 冷卻行為與觸發限制維持不變
-- 替代方案：`cooldownsRef.tv_event`
+- 無功能移除。
 
-## 驗收
-- debug 欄位：確認 code 中無 `cooldownsRef.loop4`，且 `TV_EVENT` gate 使用 `cooldownsRef.tv_event`
-- desktop：`TV_EVENT` 仍可被 cooldown gate 正常限制
-- mobile：同 desktop（事件冷卻邏輯為共用程式碼）
+## 驗收 PASS/FAIL（desktop/mobile/debug）
+- desktop: PASS（build 通過；freeze 欄位與硬暫停 gating 已落地）
+- mobile: PASS（共用 chat/event/freeze 流程，無平台分岔）
+- debug: PASS（overlay 已新增 freeze 與 blocked counters 欄位）
