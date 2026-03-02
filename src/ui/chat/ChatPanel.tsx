@@ -28,8 +28,6 @@ type Props = {
   replyingToMessageId?: string | null;
   activeUserInitialHandle: string;
   autoScrollMode: 'FOLLOW' | 'COUNTDOWN_FREEZE' | 'FROZEN';
-  pinnedMessageId?: string | null;
-  isReplyPreviewVisible?: boolean;
   replyPreviewSuppressedReason?: string | null;
 };
 
@@ -61,8 +59,6 @@ export default function ChatPanel({
   replyingToMessageId,
   activeUserInitialHandle,
   autoScrollMode,
-  pinnedMessageId = null,
-  isReplyPreviewVisible = false,
   replyPreviewSuppressedReason = null
 }: Props) {
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -76,7 +72,6 @@ export default function ChatPanel({
   const viewportSyncUntilRef = useRef(0);
   const [stickBottom, setStickBottom] = useState(true);
   const [autoPaused, setAutoPaused] = useState(false);
-  const [inputHeight, setInputHeight] = useState(64);
   const isMobile = isMobileDevice();
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const activeSet = getActiveUserSet(collectActiveUsers(messages));
@@ -90,10 +85,7 @@ export default function ChatPanel({
     : null;
 
   const originalMessageHasActiveUserTag = Boolean(originalMessage && activeUserInitialHandle && originalMessage.text.includes(`@${activeUserInitialHandle}`));
-  const shouldRenderReplyPreview = Boolean(isLocked && lockTarget && isReplyPreviewVisible && originalMessageHasActiveUserTag);
-  const pinnedMessage = pinnedMessageId
-    ? sanitizedMessages.find((message) => message.id === pinnedMessageId)
-    : null;
+  const shouldRenderReplyPreview = Boolean(isLocked && lockTarget && replyingToMessageId && originalMessageHasActiveUserTag);
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
@@ -106,7 +98,6 @@ export default function ChatPanel({
     return `${segmented.slice(0, limit).join('')}…`;
   };
   const replyPreviewText = originalMessage ? truncateReplyText(originalMessage.text, 40) : '（原始訊息已不存在）';
-  const pinnedPreviewText = pinnedMessage ? truncateReplyText(pinnedMessage.text, 60) : '';
 
   const logDebugState = (reason: string) => {
     if (!debugEnabled) return;
@@ -225,7 +216,6 @@ export default function ChatPanel({
 
     const syncHeight = () => {
       const nextHeight = form.getBoundingClientRect().height;
-      setInputHeight(nextHeight);
       onInputHeightChange?.(nextHeight);
     };
 
@@ -260,17 +250,9 @@ export default function ChatPanel({
       </header>
 
 
-      {pinnedMessage && (
-        <div className="pinnedMessagePreview" role="status" aria-live="polite">
-          <div className="pinnedMessagePreviewHeader">📌 {pinnedMessage.username}</div>
-          <div className="pinnedMessagePreviewText">「{pinnedPreviewText}」</div>
-        </div>
-      )}
-
       <div
         ref={messageListRef}
         className="chat-messages chat-list"
-        style={{ paddingBottom: Math.max(8, inputHeight + 8) }}
         onScroll={(event) => {
           const el = event.currentTarget;
           const distanceBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -285,7 +267,6 @@ export default function ChatPanel({
               message={message}
               onToggleTranslation={onToggleTranslation}
               activeUserInitialHandle={activeUserInitialHandle}
-              pinnedMessageId={pinnedMessageId}
             />
           ))}
           <div ref={messageEndRef} />
@@ -306,9 +287,9 @@ export default function ChatPanel({
       )}
 
       {shouldRenderReplyPreview && (
-        <div className="replyPreviewBox composerReplyPreview" role="status" aria-live="polite">
-          <div className="replyPreviewHeader">↳ @{lockTarget}</div>
-          <div className="replyPreviewText">「{replyPreviewText}」</div>
+        <div className="replyPinBar" role="status" aria-live="polite">
+          <div className="replyPinHeader">↳ @{lockTarget}</div>
+          <div className="replyPinText">「{replyPreviewText}」</div>
         </div>
       )}
 

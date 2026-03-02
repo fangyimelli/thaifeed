@@ -187,10 +187,6 @@ body {
 .chat-message.donate { background: linear-gradient(135deg, rgba(255, 153, 102, 0.24), rgba(250, 111, 182, 0.2)); border: 1px solid rgba(255, 168, 116, 0.38); padding: 8px; }
 .chat-message.donate .name { color: #ffd6a6; }
 
-.chat-message.is-pinned {
-  border: 1px solid rgba(255, 213, 92, 0.45);
-  background: rgba(255, 201, 64, 0.1);
-}
 .chat-message.is-mention-highlight .msg {
   color: #fff5c5;
 }
@@ -201,35 +197,25 @@ body {
 .jump-bottom { position: absolute; right: 14px; bottom: 72px; border: none; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: #2f6eff; color: #fff; cursor: pointer; z-index: 2; }
 
 
-.pinnedMessagePreview,
-.replyPreviewBox {
-  margin: 4px 12px 0;
+.replyPinBar {
+  flex-shrink: 0;
+  padding: 6px 12px;
   background: rgba(255, 255, 255, 0.06);
-  border-left: 2px solid rgba(180, 220, 255, 0.8);
-  padding: 6px 10px;
-  margin-bottom: 6px;
-  backdrop-filter: blur(2px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(4px);
 }
 
-.pinnedMessagePreviewHeader,
-.replyPreviewHeader {
+.replyPinHeader {
   font-size: 12px;
   opacity: 0.8;
 }
 
-.pinnedMessagePreviewText,
-.replyPreviewText {
+.replyPinText {
   font-size: 13px;
   opacity: 0.9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.composerReplyPreview {
-  flex-shrink: 0;
-  min-height: 38px;
-  max-height: 44px;
 }
 .chat-input {
   flex-shrink: 0;
@@ -240,8 +226,6 @@ body {
   border-top: 1px solid #2b2d33;
   background: #111;
   z-index: 120;
-  position: sticky;
-  bottom: 0;
 }
 
 .chat-loading-banner {
