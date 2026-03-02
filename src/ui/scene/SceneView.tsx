@@ -199,7 +199,8 @@ declare global {
         lastCountdownDecrementAt?: number;
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string; renameDisabled?: boolean };
         audience?: { count?: number };
-        activeUser?: { id?: string };
+        activeUser?: { id?: string; handle?: string; registered?: boolean; hasSpoken?: boolean };
+        mention?: { lastMessageMentionsActiveUser?: boolean };
         lastActorPicked?: { id?: string };
         actorPickBlockedReason?: string;
         pacing?: {
@@ -1751,7 +1752,7 @@ export default function SceneView({
           <div>qna.awaiting/attempts/lastAskedAt: {String(window.__CHAT_DEBUG__?.event?.qna?.awaitingReply ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.attempts ?? 0} / {window.__CHAT_DEBUG__?.event?.qna?.lastAskedAt ?? 0}</div>
           <div>qna.lockTarget/match: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'} / {(window.__CHAT_DEBUG__?.event?.qna?.matched?.optionId ?? '-') + ':' + (window.__CHAT_DEBUG__?.event?.qna?.matched?.keyword ?? '-')}</div>
           <div>qna.pendingChain: {window.__CHAT_DEBUG__?.event?.qna?.pendingChain?.eventKey ?? '-'}</div>
-          <div>qna.taggedUserHandle/lastQuestionMessageId: {window.__CHAT_DEBUG__?.event?.qna?.taggedUserHandle ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageId ?? '-'}</div>
+          <div>qna.taggedUserHandle/lastQuestionMessageId: {window.__CHAT_DEBUG__?.event?.qna?.taggedUserHandle ?? window.__CHAT_DEBUG__?.event?.qna?.taggedUser ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageId ?? '-'}</div>
           <div>qna.lastQuestionMessageHasTag/lastBlockedReason: {String(window.__CHAT_DEBUG__?.event?.qna?.lastQuestionMessageHasTag ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
           <div>event.blocking.pinned/replyPreview/delay: {window.__CHAT_DEBUG__?.event?.blocking?.pinnedMessageId ?? '-'} / {String(window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.event?.blocking?.replyPreviewDelayMs ?? 0}</div>
           <div>ui.replyPreview.visible/delay/suppressed: {String(window.__CHAT_DEBUG__?.ui?.replyPreviewVisible ?? false)} / {window.__CHAT_DEBUG__?.ui?.replyPreviewDelayMs ?? 0} / {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
@@ -1759,7 +1760,9 @@ export default function SceneView({
           <div>chat.pacing.mode: {window.__CHAT_DEBUG__?.chat?.pacing?.mode ?? '-'}</div>
           <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>
-          <div>chat.activeUser.handle/initial: {window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'} / {window.__CHAT_DEBUG__?.chat?.activeUsers?.initialHandle ?? '-'}</div>
+          <div>chat.activeUser.id/handle: {window.__CHAT_DEBUG__?.chat?.activeUser?.id ?? '-'} / {window.__CHAT_DEBUG__?.chat?.activeUser?.handle ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'}</div>
+          <div>chat.activeUser.registered/hasSpoken: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.registered ?? false)} / {String(window.__CHAT_DEBUG__?.chat?.activeUser?.hasSpoken ?? false)}</div>
+          <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
           <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
           <div>chat.autoScrollMode/remain/after/startAt: {window.__CHAT_DEBUG__?.chat?.autoScrollMode ?? '-'} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownRemaining ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeAfterNMessages ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownStartedAt ?? 0}</div>
           <div>chat.lastMessageActorIdCounted/lastCountdownDecrementAt: {window.__CHAT_DEBUG__?.chat?.lastMessageActorIdCounted ?? '-'} / {window.__CHAT_DEBUG__?.chat?.lastCountdownDecrementAt ?? 0}</div>

@@ -1160,3 +1160,38 @@ npm run build
 - Debug Tester 防呆：
   - Simulate Reply 走 `player_input`（視為玩家真實輸入模擬）。
   - Event Tester 事件台詞來源會標記 `debug_tester`，但 actor 仍須經 guard 檢查，無法冒用 activeUser 自動發言。
+
+## ActiveUser 初始化即可被 Tag（2026-03-01）
+
+### 衝突點全面排查（activeUser 註冊時機）
+
+- `activeUserInitialHandleRef` 原本只在 startup Confirm 寫入名稱；玩家送出前不會建立可查詢的使用者 registry。  
+- mention/tag 判定原先多處直接用 `new RegExp(@handle...)`，且 `handle` 來自 `activeUserInitialHandleRef`；缺少初始化 registry 的一致保證。  
+- QNA `taggedUser` 先前會 fallback 至 `qnaState.taggedUser || activeUserInitialHandleRef`，但未強制驗證 activeUser 是否已完成註冊。  
+- audience/active users 仍維持隔離（`separateChatActorState`），activeUser 不會進 audience 抽樣池，該舊邏輯保留必要性。  
+
+### 整合策略（保留必要舊邏輯、移除不必要耦合）
+
+- 新增 `ActiveUserProfile` 與 app 內 registry：`usersByIdRef / usersByHandleRef`。  
+- 在 startup Confirm 直接 `registerActiveUser(...)`：
+  - `id = "activeUser"`（固定穩定）
+  - `handle = 玩家輸入名稱`
+  - `displayName = 玩家輸入名稱`
+  - `roleLabel = "You"`
+  - `hasSpoken` 初值可為 false（但不影響 tag 判定）
+- mention/tag 判定改為共用 `hasHandleMention(text, handle)`，只看 `@handle` 命中，不依賴 hasSpoken/lastMessage。  
+- QNA 出題強制 `taggedUser = activeUser.handle`，且在送題前驗證 `usersByHandle` 已註冊，避免「未註冊仍出題」隱性錯誤。  
+- 玩家首次送出訊息時僅更新 `hasSpoken=true`（沿用既有 send guard，不允許 activeUser 自動發言）。
+
+### Debug 可觀測性補強
+
+- 新增欄位：
+  - `chat.activeUser.id`
+  - `chat.activeUser.handle`
+  - `chat.activeUser.registered`
+  - `chat.activeUser.hasSpoken`
+  - `chat.mention.lastMessageMentionsActiveUser`
+- 新增 Debug-only 按鈕：`Emit NPC Tag @You`
+  - 以 `mod_live` 送出包含 `@activeUser.handle` 的題目
+  - 直接觸發 lock/pin/reply preview 流程，驗證「未發言也可被 tag」
+

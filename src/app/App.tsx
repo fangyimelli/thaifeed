@@ -134,6 +134,14 @@ type ChatActorState = {
   removedActiveUserFromAudience: boolean;
 };
 
+type ActiveUserProfile = {
+  id: string;
+  handle: string;
+  displayName: string;
+  roleLabel: 'You';
+  hasSpoken: boolean;
+};
+
 function separateChatActorState(messages: ChatMessage[], activeUserHandle: string): ChatActorState {
   const normalizedActiveUser = normalizeHandle(activeUserHandle);
   const activeUsers = collectActiveUsers(messages);
@@ -164,6 +172,16 @@ function isPassCommand(raw: string) {
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasHandleMention(text: string, handle: string): boolean {
+  const normalizedHandle = normalizeHandle(handle);
+  if (!normalizedHandle) return false;
+  return new RegExp(`@${escapeRegExp(normalizedHandle)}(?:\\s|$)`, 'u').test(text);
 }
 
 function nextLeaveDelayMs() {
@@ -505,7 +523,8 @@ export default function App() {
     }
 
     const activeUserHandle = activeUserInitialHandleRef.current;
-    const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\s|$)`, 'u').test(message.text);
+    const textHasActiveUserTag = hasHandleMention(message.text, activeUserHandle);
+    lastMessageMentionsActiveUserRef.current = textHasActiveUserTag;
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && message.username !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
@@ -594,7 +613,13 @@ export default function App() {
           activeUserAutoSpeak: blockedActiveUserAutoSpeakCountRef.current
         },
         activeUser: {
-          id: normalizeHandle(activeUserInitialHandleRef.current || '-')
+          id: activeUserProfileRef.current?.id ?? '-',
+          handle: activeUserProfileRef.current?.handle ?? '-',
+          registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
+          hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
+        },
+        mention: {
+          lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
         },
         lastActorPicked: {
           id: window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'
@@ -748,7 +773,7 @@ export default function App() {
   const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' = 'scheduler_tick', sendSource?: ChatSendSource): EventSendResult => {
     const now = Date.now();
     const activeUserHandle = activeUserInitialHandleRef.current;
-    const textHasActiveUserTag = Boolean(activeUserHandle) && new RegExp(`@${activeUserHandle}(?:\\s|$)`, 'u').test(line);
+    const textHasActiveUserTag = hasHandleMention(line, activeUserHandle);
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && actorHandle !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
@@ -1119,12 +1144,18 @@ export default function App() {
   const sendQnaQuestion = useCallback(() => {
     const asked = askCurrentQuestion(qnaStateRef.current);
     if (!asked) return false;
-    const taggedUser = qnaStateRef.current.taggedUser || activeUserInitialHandleRef.current;
+    const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || '');
     if (!taggedUser) {
       qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:no_tagged_user:${Date.now()}`].slice(-40);
       setLastBlockedReason('no_tagged_user');
       return false;
     }
+    if (!usersByHandleRef.current.has(taggedUser)) {
+      qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:active_user_not_registered:${Date.now()}`].slice(-40);
+      setLastBlockedReason('active_user_not_registered');
+      return false;
+    }
+    qnaStateRef.current.taggedUser = taggedUser;
     const eventActiveUsers = separateChatActorState(state.messages, activeUserInitialHandleRef.current || '').audienceUsers;
     let questionActor = qnaStateRef.current.lockTarget || eventExclusiveStateRef.current.currentLockOwner;
     if (!questionActor || questionActor === taggedUser) {
@@ -1160,8 +1191,7 @@ export default function App() {
     setIsPinnedActive(true);
     setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
-    const taggedUserPattern = new RegExp(`@${taggedUser}(?:\\s|$)`, 'u');
-    if (taggedUserPattern.test(line)) {
+    if (hasHandleMention(line, taggedUser)) {
       startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
     }
 
@@ -1761,6 +1791,10 @@ export default function App() {
     blockedReason: null
   });
   const [sendFeedback, setSendFeedback] = useState<{ reason: string; at: number } | null>(null);
+  const activeUserProfileRef = useRef<ActiveUserProfile | null>(null);
+  const usersByIdRef = useRef<Map<string, ActiveUserProfile>>(new Map());
+  const usersByHandleRef = useRef<Map<string, ActiveUserProfile>>(new Map());
+  const lastMessageMentionsActiveUserRef = useRef(false);
   const [sendDebug, setSendDebug] = useState({
     lastClickAt: 0,
     lastSubmitAt: 0,
@@ -1920,7 +1954,13 @@ export default function App() {
             count: chatActors.audienceUsers.length
           },
           activeUser: {
-            id: chatActors.activeUser || '-'
+            id: activeUserProfileRef.current?.id ?? '-',
+            handle: activeUserProfileRef.current?.handle ?? '-',
+            registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
+            hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
+          },
+          mention: {
+            lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
           },
           lastActorPicked: {
             id: window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'
@@ -2079,6 +2119,11 @@ export default function App() {
         source: 'player_input',
         sourceTag: source
       });
+      if (activeUserProfileRef.current) {
+        activeUserProfileRef.current = { ...activeUserProfileRef.current, hasSpoken: true };
+        usersByIdRef.current.set(activeUserProfileRef.current.id, activeUserProfileRef.current);
+        usersByHandleRef.current.set(activeUserProfileRef.current.handle, activeUserProfileRef.current);
+      }
 
       const handlePass = () => {
         markReview(playableConsonant.letter, 'pass', state.curse);
@@ -2193,6 +2238,60 @@ export default function App() {
     }
     return submitChat(input, source);
   }, [input, logSendDebug, submitChat]);
+
+  const registerActiveUser = useCallback((rawHandle: string) => {
+    const normalizedHandle = normalizeHandle(rawHandle);
+    if (!normalizedHandle) return false;
+    const nextProfile: ActiveUserProfile = {
+      id: 'activeUser',
+      handle: normalizedHandle,
+      displayName: normalizedHandle,
+      roleLabel: 'You',
+      hasSpoken: activeUserProfileRef.current?.hasSpoken ?? false
+    };
+    activeUserInitialHandleRef.current = normalizedHandle;
+    activeUserProfileRef.current = nextProfile;
+    usersByIdRef.current.set(nextProfile.id, nextProfile);
+    usersByHandleRef.current.set(nextProfile.handle, nextProfile);
+    return true;
+  }, []);
+
+  const emitNpcTagToActiveUser = useCallback(() => {
+    const activeHandle = normalizeHandle(activeUserInitialHandleRef.current || '');
+    if (!activeHandle) {
+      setLastBlockedReason('no_active_user');
+      return;
+    }
+    if (!usersByHandleRef.current.has(activeHandle)) {
+      setLastBlockedReason('active_user_not_registered');
+      return;
+    }
+    const line = `@${activeHandle} Debug tester：請回覆我現在有沒有鎖定成功？`;
+    const sent = dispatchEventLine(line, 'mod_live', 'debug_tester', 'debug_tester');
+    if (!sent.ok || !sent.lineId) {
+      setLastBlockedReason(sent.ok ? 'debug_emit_failed' : (sent.blockedReason ?? 'debug_emit_failed'));
+      return;
+    }
+    const now = Date.now();
+    lockStateRef.current = { isLocked: true, target: 'mod_live', startedAt: now, replyingToMessageId: sent.lineId };
+    eventExclusiveStateRef.current.currentLockOwner = 'mod_live';
+    setPinnedMessageId(sent.lineId);
+    setIsPinnedActive(true);
+    setLastQuestionMessageId(sent.lineId);
+    setLastQuestionMessageHasTag(true);
+    setReplyPreviewSuppressedReason(null);
+    setLastBlockedReason(null);
+    startChatFreezeCountdown(FREEZE_AFTER_MESSAGE_COUNT);
+    if (replyPreviewDelayMs <= 0) {
+      setReplyPreviewVisible(true);
+    } else {
+      setReplyPreviewVisible(false);
+      const timerId = window.setTimeout(() => {
+        setReplyPreviewVisible(true);
+      }, replyPreviewDelayMs);
+      registerEventRunnerTimer(timerId);
+    }
+  }, [dispatchEventLine, registerEventRunnerTimer, replyPreviewDelayMs, startChatFreezeCountdown]);
 
 
   useEffect(() => {
@@ -2358,9 +2457,7 @@ export default function App() {
                   onClick={() => {
                     const normalizedName = normalizeHandle(startNameInput);
                     if (!normalizedName) return;
-                    if (!activeUserInitialHandleRef.current) {
-                      activeUserInitialHandleRef.current = normalizedName;
-                    }
+                    registerActiveUser(normalizedName);
                     setAppStarted(true);
                     setChatAutoPaused(false);
                     window.setTimeout(() => {
@@ -2399,6 +2496,7 @@ export default function App() {
                   Simulate Player Reply
                 </label>
                 <div className="debug-route-controls">
+                  <button type="button" onClick={emitNpcTagToActiveUser}>Emit NPC Tag @You</button>
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
                   <button type="button" onClick={forceUnlockDebug}>Force Unlock</button>
                   <button type="button" onClick={forceShowLoop4Debug}>Force Show loop4 (3s)</button>
@@ -2414,8 +2512,13 @@ export default function App() {
                 <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
                 <div>chat.audience.count: {window.__CHAT_DEBUG__?.chat?.audience?.count ?? 0}</div>
                 <div>chat.activeUser.id: {window.__CHAT_DEBUG__?.chat?.activeUser?.id ?? '-'}</div>
+                <div>chat.activeUser.handle: {window.__CHAT_DEBUG__?.chat?.activeUser?.handle ?? '-'}</div>
+                <div>chat.activeUser.registered: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.registered ?? false)}</div>
+                <div>chat.activeUser.hasSpoken: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.hasSpoken ?? false)}</div>
+                <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
                 <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
                 <div>actorPickBlockedReason: {window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'}</div>
+                <div>event.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.lastBlockedReason ?? '-'}</div>
                 <div>chat.blockedCounts.activeUserAutoSpeak: {window.__CHAT_DEBUG__?.chat?.blockedCounts?.activeUserAutoSpeak ?? 0}</div>
                 <div>chat.lastBlockedSendAttempt.actor/source: {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.actorHandle ?? '-')} / {(window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.source ?? '-')}</div>
                 <div>chat.lastBlockedSendAttempt.reason: {window.__CHAT_DEBUG__?.chat?.lastBlockedSendAttempt?.blockedReason ?? '-'}</div>
