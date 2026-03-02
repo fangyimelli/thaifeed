@@ -86,8 +86,9 @@ export default function ChatPanel({
     ? sanitizedMessages.find((message) => message.id === questionMessageId)
     : null;
 
-  const originalMessageHasActiveUserTag = Boolean(originalMessage && activeUserInitialHandle && originalMessage.text.includes(`@${activeUserInitialHandle}`));
-  const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId && isLocked && lockTarget && originalMessageHasActiveUserTag);
+  const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId);
+  const taggedHandleFromQuestion = originalMessage?.text.match(/@([\w_]+)/u)?.[1] ?? null;
+  const replyPinHandle = taggedHandleFromQuestion || activeUserInitialHandle || lockTarget || 'you';
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
@@ -290,7 +291,7 @@ export default function ChatPanel({
 
       {shouldRenderReplyPreview && (
         <div className="replyPinBar" role="status" aria-live="polite">
-          <div className="replyPinHeader">↳ @{lockTarget}</div>
+          <div className="replyPinHeader">↳ @{replyPinHandle}</div>
           <div className="replyPinText">「{replyPreviewText}」</div>
         </div>
       )}

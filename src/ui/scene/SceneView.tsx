@@ -199,16 +199,16 @@ declare global {
         lastCountdownDecrementAt?: number;
         activeUsers?: { count?: number; nameSample?: string[]; namesSample?: string[]; currentHandle?: string; initialHandle?: string; renameDisabled?: boolean };
         audience?: { count?: number };
-        activeUser?: { id?: string; handle?: string; registered?: boolean; hasSpoken?: boolean };
+        activeUser?: { id?: string; handle?: string; registered?: boolean };
         system?: {
           buildStamp?: string;
           at?: number;
-          readyForEvents?: boolean;
-          audioUnlocked?: boolean;
+          bootstrap?: { isReady?: boolean; activatedAt?: number | null; activatedBy?: 'username_submit' | 'debug' | null };
           audioEnabledSystemMessageSent?: boolean;
           audioUnlockFailedReason?: string;
           lastBlockedReason?: string;
         };
+        canTagActiveUser?: boolean;
         mention?: { lastMessageMentionsActiveUser?: boolean };
         lastActorPicked?: { id?: string };
         actorPickBlockedReason?: string;
@@ -1768,7 +1768,8 @@ export default function SceneView({
           <div>chat.activeUsers.count: {window.__CHAT_DEBUG__?.chat?.activeUsers?.count ?? 0}</div>
           <div>chat.activeUsers.nameSample: {(window.__CHAT_DEBUG__?.chat?.activeUsers?.nameSample ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.namesSample ?? []).join(', ') || '-'}</div>
           <div>chat.activeUser.id/handle: {window.__CHAT_DEBUG__?.chat?.activeUser?.id ?? '-'} / {window.__CHAT_DEBUG__?.chat?.activeUser?.handle ?? window.__CHAT_DEBUG__?.chat?.activeUsers?.currentHandle ?? '-'}</div>
-          <div>chat.activeUser.registered/hasSpoken: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.registered ?? false)} / {String(window.__CHAT_DEBUG__?.chat?.activeUser?.hasSpoken ?? false)}</div>
+          <div>chat.activeUser.registered/canTag: {String(window.__CHAT_DEBUG__?.chat?.activeUser?.registered ?? false)} / {String(window.__CHAT_DEBUG__?.chat?.canTagActiveUser ?? false)}</div>
+          <div>system.bootstrap.isReady/activatedBy: {String(window.__CHAT_DEBUG__?.chat?.system?.bootstrap?.isReady ?? false)} / {window.__CHAT_DEBUG__?.chat?.system?.bootstrap?.activatedBy ?? '-'}</div>
           <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
           <div>chat.autoPaused/reason: {String(window.__CHAT_DEBUG__?.chat?.autoPaused ?? false)} / {window.__CHAT_DEBUG__?.chat?.autoPausedReason ?? '-'}</div>
           <div>chat.autoScrollMode/remain/after/startAt: {window.__CHAT_DEBUG__?.chat?.autoScrollMode ?? '-'} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownRemaining ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeAfterNMessages ?? 0} / {window.__CHAT_DEBUG__?.chat?.freezeCountdownStartedAt ?? 0}</div>
