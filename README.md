@@ -1117,6 +1117,9 @@ npm run build
 
 - 2026-03-02：移除「tagged question countdown 才 freeze」舊邏輯，改為 pinned reply mount 後立即執行 `scrollThenPause`（先置底、後 pause）。保留 freeze gate（阻擋 NPC/事件/鬼動）但不再等待倒數訊息，避免題目訊息未落在視窗底部。
 
+- 2026-03-02：移除 `SceneView` 內 `footsteps` / `ghost_female` 的 `<audio>` one-shot 舊播放路徑，整合為單一 WebAudio 距離模型（避免新舊音源雙聲與狀態分裂）。
+
+
 - 2026-03-01：移除 `src/app/App.tsx` 中 `cooldownsRef.loop4` 的 legacy debug/cooldown 欄位，改用語意一致的 `cooldownsRef.tv_event`。影響：`TV_EVENT` gate 與 cooldown 行為不變，只是移除舊命名避免與已移除的 `loop4` 場景語意衝突。
 
 - 2026-03-01：修正 Event Exclusive 與 QNA actor 身分一致性衝突。舊邏輯中事件台詞發送者固定為 `mod_live`，會與「僅 lockOwner 可 tag activeUser」規則互相打架；現改為事件 opener / followUp / QNA 提示均以當前 `lockOwner` 作為發言 actor，並保留舊有 lock/timeout gate，不再新舊並存。
@@ -1241,3 +1244,23 @@ npm run build
   - `chat.freeze.startedAt`
   - `chat.npcSpawnBlockedByFreeze`
   - `chat.ghostBlockedByFreeze`
+
+## 事件驅動驚嚇音效與黑幕效果（2026-03 更新）
+
+- `footsteps` / `ghost_female` 改為 WebAudio 距離接近模型（每次播放都建立一次 node chain）：
+  - `BufferSource -> Gain -> Lowpass -> StereoPanner -> masterGain`
+  - 由遠到近聽感：音量提升、低通打開、左右聲道收斂、播放速率微升。
+  - 每次播放含小幅隨機（pan、duration ±15%），避免機械重複感。
+- 仍維持事件驅動規則：
+  - 只有事件成立且通過既有 cooldown 才會播放。
+  - 若被 cooldown 擋下，不會啟動 blackout（避免無聲黑幕）。
+- blackout flicker（與事件音效耦合）：
+  - 成功播放 `footsteps` / `ghost_female` 後延遲 1 秒啟動。
+  - 模式隨機：`full`（全黑）或 `dim75`（75% 黑）。
+  - 持續 12 秒 flicker；第 4 秒有一次短暫亮起 pulse，之後繼續黑幕閃爍直到結束。
+- pause/freeze 優先序：
+  - `chat.pause.isPaused=true` 時不允許觸發任何新 SFX/blackout。
+  - 若 blackout 進行中且進入 pause，會立刻停止黑幕。
+- debug overlay 新增欄位：
+  - `audio.lastApproach.key/startedAt/durationMs/startGain/endGain/startLPF/endLPF`
+  - `fx.blackout.isActive/mode/endsInMs`

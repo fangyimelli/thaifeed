@@ -94,6 +94,16 @@ type BootstrapState = {
   activatedBy: BootstrapActivatedBy;
 };
 
+type BlackoutState = {
+  isActive: boolean;
+  mode: 'full' | 'dim75';
+  startedAt: number | null;
+  endsAt: number | null;
+  flickerSeed: number;
+  pulseAtMs: number;
+  pulseDurationMs: number;
+};
+
 export type SendResult = {
   ok: boolean;
   status: 'sent' | 'blocked' | 'error';
@@ -332,6 +342,15 @@ export default function App() {
   const chatAreaRef = useRef<HTMLElement>(null);
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [blackoutState, setBlackoutState] = useState<BlackoutState>({
+    isActive: false,
+    mode: 'full',
+    startedAt: null,
+    endsAt: null,
+    flickerSeed: 0,
+    pulseAtMs: 4000,
+    pulseDurationMs: 180
+  });
   const burstCooldownUntil = useRef(0);
   const sendCooldownUntil = useRef(0);
   const speechCooldownUntil = useRef(0);
@@ -431,6 +450,8 @@ export default function App() {
     lastStartAttemptKey: '-',
     lastStartAttemptBlockedReason: '-'
   });
+  const blackoutDelayTimerRef = useRef<number | null>(null);
+  const blackoutStopTimerRef = useRef<number | null>(null);
 
   const clearEventRunnerPendingTimers = useCallback(() => {
     eventRunnerStateRef.current.pendingTimers.forEach((timerId) => {
@@ -448,6 +469,42 @@ export default function App() {
     eventRunnerStateRef.current.inFlight = false;
     eventRunnerStateRef.current.currentEventId = null;
   }, [clearEventRunnerPendingTimers]);
+
+  const stopBlackout = useCallback(() => {
+    if (blackoutDelayTimerRef.current != null) {
+      window.clearTimeout(blackoutDelayTimerRef.current);
+      blackoutDelayTimerRef.current = null;
+    }
+    if (blackoutStopTimerRef.current != null) {
+      window.clearTimeout(blackoutStopTimerRef.current);
+      blackoutStopTimerRef.current = null;
+    }
+    setBlackoutState((prev) => ({ ...prev, isActive: false, startedAt: null, endsAt: null }));
+  }, []);
+
+  const scheduleBlackoutFlicker = useCallback((opts: { delayMs: number; durationMs: number; pulseAtMs: number; pulseDurationMs: number }) => {
+    if (chatAutoPaused) return;
+    stopBlackout();
+    blackoutDelayTimerRef.current = window.setTimeout(() => {
+      blackoutDelayTimerRef.current = null;
+      if (chatAutoPaused) return;
+      const startedAt = Date.now();
+      const endsAt = startedAt + opts.durationMs;
+      setBlackoutState({
+        isActive: true,
+        mode: Math.random() < 0.5 ? 'full' : 'dim75',
+        startedAt,
+        endsAt,
+        flickerSeed: Math.floor(Math.random() * 0xffffffff),
+        pulseAtMs: opts.pulseAtMs,
+        pulseDurationMs: opts.pulseDurationMs
+      });
+      blackoutStopTimerRef.current = window.setTimeout(() => {
+        blackoutStopTimerRef.current = null;
+        setBlackoutState((prev) => ({ ...prev, isActive: false, startedAt: null, endsAt: null }));
+      }, opts.durationMs);
+    }, opts.delayMs);
+  }, [chatAutoPaused, stopBlackout]);
 
   const setEventAttemptDebug = useCallback((eventKey: StoryEventKey, blockedReason: EventStartBlockedReason | null) => {
     eventTestDebugRef.current = {
@@ -1011,6 +1068,7 @@ export default function App() {
     key: 'ghost_female' | 'footsteps' | 'low_rumble' | 'fan_loop',
     options: { reason: string; source: 'event' | 'system' | 'unknown'; delayMs?: number; startVolume?: number; endVolume?: number; rampSec?: number; eventId?: string; eventKey?: StoryEventKey; allowBeforeStarterTag?: boolean }
   ) => {
+    if (chatAutoPaused && key !== 'fan_loop') return false;
     if (chatFreeze.isFrozen && key !== 'fan_loop') {
       ghostBlockedByFreezeRef.current += 1;
       return false;
@@ -1035,8 +1093,30 @@ export default function App() {
       endVolume: options.endVolume,
       rampSec: options.rampSec
     });
+    if (key === 'ghost_female' || key === 'footsteps') {
+      const cooldownUntil = cooldownsRef.current[key] ?? 0;
+      window.__CHAT_DEBUG__ = {
+        ...(window.__CHAT_DEBUG__ ?? {}),
+        audio: {
+          ...(window.__CHAT_DEBUG__ as { audio?: Record<string, unknown> } | undefined)?.audio,
+          lastApproach: {
+            key,
+            startedAt: now,
+            durationMs: Math.max(1200, Math.floor((options.rampSec ?? 3) * 1000)),
+            startGain: options.startVolume ?? 0.12,
+            endGain: Math.min(0.9, options.endVolume ?? 0.72),
+            startLPF: 360,
+            endLPF: 7000
+          }
+        },
+        event: {
+          ...(window.__CHAT_DEBUG__?.event ?? {}),
+          cooldowns: { ...cooldownsRef.current, [key]: cooldownUntil }
+        }
+      };
+    }
     return true;
-  }, []);
+  }, [chatAutoPaused, chatFreeze.isFrozen]);
 
   const startEvent = useCallback((eventKey: StoryEventKey, ctx: { source: 'user_input' | 'scheduler_tick' | 'debug_tester'; ignoreCooldowns?: boolean }) => {
     const now = Date.now();
@@ -1441,19 +1521,25 @@ export default function App() {
       const repliedNo = /沒有/.test(raw);
       const repliedBrave = /不怕/.test(raw);
       if (pending.key === 'VOICE_CONFIRM' && repliedYes) {
-        postFollowUpLine(pending.target, 'VOICE_CONFIRM');
-        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
-        triggerReactionBurst('ghost');
-        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+        const played = playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
+        if (played) {
+          postFollowUpLine(pending.target, 'VOICE_CONFIRM');
+          scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
+          triggerReactionBurst('ghost');
+          if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+        }
       }
       if (pending.key === 'GHOST_PING') {
-        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
-        postFollowUpLine(pending.target, 'GHOST_PING');
-        triggerReactionBurst('ghost');
-        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
-        cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
-        lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
-      resetQnaUiState();
+        const played = playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
+        if (played) {
+          scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
+          postFollowUpLine(pending.target, 'GHOST_PING');
+          triggerReactionBurst('ghost');
+          if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+          cooldownsRef.current.ghost_ping_actor = now + randomInt(8 * 60_000, 12 * 60_000);
+          lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
+          resetQnaUiState();
+        }
       }
       if (pending.key === 'TV_EVENT' && repliedNo) {
         requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: reasonBase, sourceEventKey: 'TV_EVENT', delayMs: 2000 });
@@ -1463,14 +1549,20 @@ export default function App() {
         if (eventLifecycleRef.current) eventLifecycleRef.current.topic = topic;
       }
       if (pending.key === 'NAME_CALL') {
-        playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
-        triggerReactionBurst('ghost');
-        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+        const played = playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
+        if (played) {
+          scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
+          triggerReactionBurst('ghost');
+          if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'ghost';
+        }
       }
       if (pending.key === 'VIEWER_SPIKE') {
-        playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key });
-        triggerReactionBurst('footsteps');
-        if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'footsteps';
+        const played = playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key });
+        if (played) {
+          scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
+          triggerReactionBurst('footsteps');
+          if (eventLifecycleRef.current) eventLifecycleRef.current.topic = 'footsteps';
+        }
       }
       if (pending.key === 'FEAR_CHALLENGE' && repliedBrave) {
         const chooseGhost = Math.random() < 0.5;
@@ -1478,6 +1570,7 @@ export default function App() {
           ? playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
           : playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000 });
         if (played) {
+          scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
           postFollowUpLine(pending.target, 'FEAR_CHALLENGE');
           postFollowUpLine(pending.target, 'FEAR_CHALLENGE', 'closer');
           triggerReactionBurst(chooseGhost ? 'ghost' : 'footsteps');
@@ -2109,6 +2202,18 @@ export default function App() {
       };
 
       updateChatDebug({
+        audio: {
+          ...((window.__CHAT_DEBUG__ as { audio?: Record<string, unknown> } | undefined)?.audio ?? {}),
+          lastApproach: ((window.__CHAT_DEBUG__ as { audio?: { lastApproach?: Record<string, unknown> } } | undefined)?.audio?.lastApproach ?? null)
+        },
+        fx: {
+          ...((window.__CHAT_DEBUG__ as { fx?: Record<string, unknown> } | undefined)?.fx ?? {}),
+          blackout: {
+            isActive: blackoutState.isActive,
+            mode: blackoutState.mode,
+            endsInMs: blackoutState.endsAt ? Math.max(0, blackoutState.endsAt - now) : 0
+          }
+        },
         event: snapshot,
         ui: {
           ...(window.__CHAT_DEBUG__?.ui ?? {}),
@@ -2199,7 +2304,13 @@ export default function App() {
       syncChatEngineDebug();
     }, 600);
     return () => window.clearInterval(timer);
-  }, [appStarted, chatAutoPaused, chatAutoScrollMode, chatFreeze, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, sortedMessages, syncChatEngineDebug, updateChatDebug]);
+  }, [appStarted, blackoutState.endsAt, blackoutState.isActive, blackoutState.mode, chatAutoPaused, chatAutoScrollMode, chatFreeze, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, sortedMessages, syncChatEngineDebug, updateChatDebug]);
+
+  useEffect(() => {
+    if (chatAutoPaused) {
+      stopBlackout();
+    }
+  }, [chatAutoPaused, stopBlackout]);
 
   const logSendDebug = useCallback((event: string, payload: Record<string, unknown>) => {
     if (!debugEnabled) return;
@@ -2699,6 +2810,7 @@ export default function App() {
               anchor={state.currentAnchor}
               isDesktopLayout={isDesktopLayout}
               appStarted={appStarted}
+              blackoutState={blackoutState}
             />
           ) : (
             <div className="asset-warning scene-placeholder">
@@ -2872,6 +2984,14 @@ export default function App() {
                 <div>event.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.lastBlockedReason ?? '-'}</div>
                 <div>sfx.ghostCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.ghost_female ?? 0}</div>
                 <div>sfx.footstepsCooldown: {window.__CHAT_DEBUG__?.event?.cooldowns?.footsteps ?? 0}</div>
+                <div>audio.lastApproach.key: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.key ?? '-'}</div>
+                <div>audio.lastApproach.startedAt: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startedAt ?? 0}</div>
+                <div>audio.lastApproach.durationMs: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.durationMs ?? 0}</div>
+                <div>audio.lastApproach.startGain/endGain: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startGain ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.endGain ?? '-'}</div>
+                <div>audio.lastApproach.startLPF/endLPF: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startLPF ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.endLPF ?? '-'}</div>
+                <div>fx.blackout.isActive: {String((window.__CHAT_DEBUG__ as any)?.fx?.blackout?.isActive ?? false)}</div>
+                <div>fx.blackout.mode: {(window.__CHAT_DEBUG__ as any)?.fx?.blackout?.mode ?? '-'}</div>
+                <div>fx.blackout.endsInMs: {(window.__CHAT_DEBUG__ as any)?.fx?.blackout?.endsInMs ?? 0}</div>
               </div>
             </aside>
           )}

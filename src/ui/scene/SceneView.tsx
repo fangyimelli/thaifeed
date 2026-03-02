@@ -16,6 +16,7 @@ import type { AnchorType } from '../../core/state/types';
 import { getCachedAsset } from '../../utils/preload';
 import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
+import { distanceApproachPlayer, playSfxApproach } from '../../audio/distanceApproach';
 
 export type SceneMissingAsset = {
   name: string;
@@ -34,6 +35,15 @@ type Props = {
   anchor: AnchorType;
   isDesktopLayout: boolean;
   appStarted: boolean;
+  blackoutState?: {
+    isActive: boolean;
+    mode: 'full' | 'dim75';
+    startedAt: number | null;
+    endsAt: number | null;
+    flickerSeed: number;
+    pulseAtMs: number;
+    pulseDurationMs: number;
+  };
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
@@ -229,7 +239,7 @@ declare global {
         npcSpawnBlockedByFreeze?: number;
         ghostBlockedByFreeze?: number;
         sendSourceWarning?: { at?: number; actor?: string; textPreview?: string };
-        lastBlockedSendAttempt?: {
+      lastBlockedSendAttempt?: {
           actorId?: string;
           actorHandle?: string;
           source?: string;
@@ -237,6 +247,24 @@ declare global {
           textPreview?: string;
           at?: number;
           blockedReason?: string;
+        };
+      };
+      audio?: {
+        lastApproach?: {
+          key?: string;
+          startedAt?: number;
+          durationMs?: number;
+          startGain?: number;
+          endGain?: number;
+          startLPF?: number;
+          endLPF?: number;
+        } | null;
+      };
+      fx?: {
+        blackout?: {
+          isActive?: boolean;
+          mode?: 'full' | 'dim75';
+          endsInMs?: number;
         };
       };
       event?: {
@@ -382,6 +410,7 @@ export default function SceneView({
   anchor,
   isDesktopLayout,
   appStarted,
+  blackoutState,
   onNeedUserGestureChange,
   onSceneRunning,
   onSceneError
@@ -395,8 +424,8 @@ export default function SceneView({
   const videoBRef = useRef<HTMLVideoElement>(null);
   const currentVideoRef = useRef<'A' | 'B'>('A');
   const playerCoreRef = useRef(createPlayerCore());
-  const footstepsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const ghostAudioRef = useRef<HTMLAudioElement | null>(null);
+  const blackoutRafRef = useRef<number | null>(null);
+  const [blackoutOpacity, setBlackoutOpacity] = useState(0);
   const currentLoopKeyRef = useRef<OldhouseLoopKey>(MAIN_LOOP);
   const isInJumpRef = useRef(false);
   const jumpTimerRef = useRef<number | null>(null);
@@ -448,11 +477,7 @@ export default function SceneView({
   }, []);
 
   const stopAllNonPersistentSfx = useCallback(() => {
-    [footstepsAudioRef.current, ghostAudioRef.current].forEach((audio) => {
-      if (!audio) return;
-      audio.pause();
-      audio.currentTime = 0;
-    });
+    distanceApproachPlayer.stopAll();
   }, []);
 
   const getCurrentVideoEl = useCallback(() => {
@@ -562,16 +587,12 @@ export default function SceneView({
         volume: Number(video.volume.toFixed(2)),
         currentTime: Number(video.currentTime.toFixed(2))
       }));
-    const audios = [
-      { label: 'footsteps', el: footstepsAudioRef.current },
-      { label: 'ghost_female', el: ghostAudioRef.current }
-    ].filter((item) => item.el && !item.el.paused)
-      .map((item) => ({
-        label: item.label,
-        muted: item.el?.muted ?? true,
-        volume: Number((item.el?.volume ?? 0).toFixed(2)),
-        currentTime: Number((item.el?.currentTime ?? 0).toFixed(2))
-      }));
+    const audios = distanceApproachPlayer.getPlayingKeys().map((label) => ({
+      label,
+      muted: false,
+      volume: Number((SFX_REGISTRY[label].defaultVolume ?? 0).toFixed(2)),
+      currentTime: 0
+    }));
     updateAudioDebug({
       activeVideoEl: currentVideo?.id === 'videoB' ? 'B' : 'A',
       fanState: audioEngine.getFanDebugStatus(),
@@ -601,29 +622,15 @@ export default function SceneView({
     if (sfxKey === 'fan_loop') return;
     const run = () => {
       if (needsUserGestureToPlayRef.current) return;
-      const audio = sfxKey === 'footsteps' ? footstepsAudioRef.current : sfxKey === 'ghost_female' ? ghostAudioRef.current : null;
-      if (!audio) return;
-      const startVolume = options?.startVolume ?? audio.volume;
-      const endVolume = options?.endVolume ?? startVolume;
-      const rampSec = options?.rampSec ?? 0;
-      audio.currentTime = 0;
-      audio.volume = Math.max(0, Math.min(1, startVolume));
-      audio.muted = false;
-      void audio.play().then(() => {
-        const startedAt = Date.now();
-        if (rampSec > 0 && startVolume !== endVolume) {
-          const stepMs = 50;
-          const totalMs = Math.max(1, Math.floor(rampSec * 1000));
-          const diff = endVolume - startVolume;
-          const rampTimer = window.setInterval(() => {
-            const elapsed = Date.now() - startedAt;
-            const progress = Math.min(1, elapsed / totalMs);
-            audio.volume = Math.max(0, Math.min(1, startVolume + diff * progress));
-            if (progress >= 1) {
-              window.clearInterval(rampTimer);
-            }
-          }, stepMs);
+      const approachKey = sfxKey as 'footsteps' | 'ghost_female';
+      void playSfxApproach(approachKey, {
+        profileOverride: {
+          startGain: options?.startVolume,
+          endGain: options?.endVolume,
+          durationMs: options?.rampSec ? Math.floor(options.rampSec * 1000) : undefined
         }
+      }).then(() => {
+        const startedAt = Date.now();
         updateAudioDebug({
           started: true,
           lastFootstepsAt: sfxKey === 'footsteps' ? startedAt : (window.__AUDIO_DEBUG__?.lastFootstepsAt ?? 0),
@@ -641,6 +648,47 @@ export default function SceneView({
     }
     run();
   }, [setNeedsGestureState, updateAudioDebug]);
+
+  useEffect(() => {
+    if (!blackoutState?.isActive || !blackoutState.startedAt || !blackoutState.endsAt) {
+      setBlackoutOpacity(0);
+      if (blackoutRafRef.current != null) {
+        window.cancelAnimationFrame(blackoutRafRef.current);
+        blackoutRafRef.current = null;
+      }
+      return;
+    }
+    const baseOpacity = blackoutState.mode === 'full' ? 1 : 0.75;
+    let seed = blackoutState.flickerSeed >>> 0;
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const render = () => {
+      const now = Date.now();
+      if (now >= blackoutState.endsAt!) {
+        setBlackoutOpacity(0);
+        blackoutRafRef.current = null;
+        return;
+      }
+      const elapsed = now - blackoutState.startedAt!;
+      const inPulse = elapsed >= blackoutState.pulseAtMs && elapsed <= blackoutState.pulseAtMs + blackoutState.pulseDurationMs;
+      if (inPulse) {
+        setBlackoutOpacity(0.02);
+      } else {
+        const jitter = rand() * 0.15;
+        setBlackoutOpacity(Math.max(0, Math.min(1, baseOpacity - jitter)));
+      }
+      blackoutRafRef.current = window.requestAnimationFrame(render);
+    };
+    blackoutRafRef.current = window.requestAnimationFrame(render);
+    return () => {
+      if (blackoutRafRef.current != null) {
+        window.cancelAnimationFrame(blackoutRafRef.current);
+        blackoutRafRef.current = null;
+      }
+    };
+  }, [blackoutState]);
 
   const tryPlayMedia = useCallback(async () => {
     const video = getCurrentVideoEl();
@@ -1439,26 +1487,10 @@ export default function SceneView({
   }, []);
 
   useEffect(() => {
-    footstepsAudioRef.current = new Audio(SFX_REGISTRY.footsteps.file);
-    footstepsAudioRef.current.preload = 'auto';
-    footstepsAudioRef.current.loop = false;
-    footstepsAudioRef.current.volume = 0.85;
-    footstepsAudioRef.current.muted = false;
-
-    ghostAudioRef.current = new Audio(SFX_REGISTRY.ghost_female.file);
-    ghostAudioRef.current.preload = 'auto';
-    ghostAudioRef.current.loop = false;
-    ghostAudioRef.current.volume = 0.75;
-    ghostAudioRef.current.muted = false;
-
     return () => {
       stopAllNonPersistentSfx();
       stopOldhouseCalmMode();
-      footstepsAudioRef.current?.pause();
-      ghostAudioRef.current?.pause();
       audioEngine.teardown();
-      footstepsAudioRef.current = null;
-      ghostAudioRef.current = null;
     };
   }, [stopAllNonPersistentSfx, stopOldhouseCalmMode]);
 
@@ -1600,6 +1632,7 @@ export default function SceneView({
       void (async () => {
         try {
           await startFanLoop();
+          await distanceApproachPlayer.resumeFromGesture();
           const started = await tryPlayMedia();
           if (!started) {
             return;
@@ -1694,6 +1727,7 @@ export default function SceneView({
           >
             {targetConsonant}
           </span>
+          <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
         </div>
 
         {assets.noiseOk && (
