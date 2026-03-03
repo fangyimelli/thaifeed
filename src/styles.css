@@ -191,6 +191,12 @@ body {
   color: #fff5c5;
 }
 
+.chat-message.tag-highlight-row {
+  background: rgba(255, 244, 182, 0.12);
+  border-left: 2px solid rgba(255, 226, 122, 0.62);
+  padding-left: 8px;
+}
+
 .donate-badge { display: inline-flex; align-items: center; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: rgba(255, 121, 170, 0.28); color: #ffdff0; white-space: nowrap; }
 .translation-toggle { border: 1px solid #414b64; background: transparent; color: #c9d8ff; font-size: 11px; border-radius: 4px; cursor: pointer; padding: 1px 6px; }
 

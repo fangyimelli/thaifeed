@@ -18,6 +18,7 @@ export type ChatMessage = {
   chatType?: string;
   personaId?: string;
   tagTarget?: string;
+  mentions?: string[];
 };
 
 export type AnchorType = 'under_table' | 'door' | 'window' | 'corner';

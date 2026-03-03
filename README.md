@@ -1275,6 +1275,21 @@ npm run build
 - pinned reply 標頭顯示優先使用題目訊息中的 `@taggedHandle`，若缺失才 fallback 至 activeUser/lockTarget。
 - 不再以 `hasSpoken` / `messages.length` 作為 pin/tag gate。
 
+### Mention 解析與 Highlight（更新）
+
+- 所有 chat/event/player 訊息在進入 state 前都會解析 `message.mentions: userId[]`（由 `usersByHandle` resolve）。
+- activeUser 在 Confirm 後立即註冊到 registry（`usersById + usersByHandle(lowercase)`），因此**不需先發言**即可被 `@name` 正確解析。
+- 聊天室高亮規則改為：`mentions` 包含 `activeUserId` 且 `authorId != activeUserId` 才套用 row highlight。
+- highlight 為整列底色 + 左側細線，system 訊息不套用。
+
+### Mention / Bootstrap Debug 驗證
+
+- `system.bootstrap.isReady`
+- `chat.activeUser.handle / displayName / registryHandleExists`
+- `mention.lastParsedMentions(messageId→ids)`
+- `mention.lastHighlightReason` (`mentions_activeUser` / `none`)
+- `mention.tagHighlightAppliedCount`
+
 ### Debug Overlay
 
 - 可觀測：`bootstrap.isReady / activatedAt / activatedBy`、`activeUser.registered`、`canTagActiveUser`。

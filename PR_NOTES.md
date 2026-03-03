@@ -1,57 +1,61 @@
-# 修正：事件音效卡死（stuck）→ 事件狀態機化
+# 修正：@你 高亮需先發言才生效（bootstrap / mention registry 解耦）
 
-## 變更摘要
-- 事件音效流程由「lock + cd 分散判斷」收斂為單一事件音效狀態機（`idle | playing | cooldown`），並加上保底 timeout，避免 `onended` 缺失或播放失敗造成永久 stuck。
-- `trigger` 與 `force execute` 共用同一套狀態資料，`force execute` 可跳過 `playing/cd` gate 並可連續觸發，但仍保留保底解鎖。
-- 新增統一事件 log：`[EVENT_TRIGGERED]` / `[EVENT_SKIPPED]` / `[EVENT_PLAY_FAIL]` / `[EVENT_STATE]`。
-- Debug Panel（Event Tester）新增每事件可視化欄位：`state`、`cooldownRemaining`、`lastTriggeredAt`、`pre/post key`、`lastResult+reason`，並新增每事件 `Unlock`。
-- 保留 `Reset Stuck State` 作為跨系統救援（event queue / qna / freeze / pause 全量清理），但事件音效卡死已可由狀態機自我恢復。
-- 新增一次性 `Enable Audio`（使用者手勢）入口與 debug 狀態：`audioContextState`、`lastAudioUnlockResult`、`lastAudioUnlockAt`。
+## Summary
+- 目標：使用者在輸入名稱按 Confirm 後，**不必先發言**也能立即被 `@name` 解析，且聊天室訊息可立刻 row highlight。
+- 本次把「使用者註冊」與「訊息發送」解耦：activeUser registry 在 bootstrap 建立，不再等第一則 player message。
+- mention 判斷與高亮改為使用 `message.mentions[]`（解析後 token），不再靠字串 includes。
 
-## 現況盤點（依程式碼實際路徑）
-- 事件註冊 SSOT 與初始化來源：
-  - `src/core/events/eventRegistry.ts`（事件 key、cd、lock、qna）
-  - `src/events/eventEffectsRegistry.ts`（由 registry 推導 effect）
-  - `src/app/App.tsx`（`startEvent()` 實際觸發）
-- 舊 lock/cd/lastTriggered/reset stuck 呼叫鏈：
-  - `lockStateRef`、`eventCooldownsRef`、`cooldownsRef`、`recoverFromStuckEventState()`、`forceUnlockDebug()` 皆在 `src/app/App.tsx`。
-- Debug 與實際觸發是否同 registry：
-  - Event Tester 使用 `EVENT_TESTER_KEYS + startEvent()`，觸發與正式流程一致。
-  - Debug manifest 來源 `getEventManifest()` 亦來自 `eventRegistry`，非第二份 registry。
+## Root-cause inventory（全 repo 搜尋與衝突點）
+- `registerActiveUser / usersById / usersByHandle`：確認已在 startup Confirm 流程，但 mention 高亮仍以文字比對為主，造成 registry 與 UI 判斷斷裂。
+- `parseMentions / resolveMention`：原本沒有在 message model 保存解析結果，UI 只做 `text.includes("@name")`，容易因 sanitize / 大小寫 / 尚未出現在 messages 而誤判。
+- `highlight`：原先 `ChatMessage` 以 `message.text.includes(@activeUser)` 套字色，沒有 row 背景，且不排除 self-message。
+- `usersByHandle`：原先 key 未統一 lowercase，`@Name`/`@name` 可能 resolve 漏失。
 
-## SSOT 變更
-- `src/core/events/eventRegistry.ts`：仍是事件定義 SSOT（未改定位）。
-- `src/events/eventEffectsRegistry.ts`：仍由 registry 推導（未建立第二份來源）。
-- 本次新增狀態機資料為執行態（runtime state），不取代 SSOT。
+## Changed
+- [bootstrap/chat]
+  - `bootstrapAfterUsernameSubmit(name)` 仍在同一 user gesture 完成：register activeUser + audio unlock + bootstrap ready。
+  - `registerActiveUser` 改為寫入 `usersByHandle(lowercase)`，activeUser `displayName/handle` 於 Confirm 當下可用。
+- [mention parser]
+  - 新增 mention token 解析（`parseMentionHandles`）並在 `dispatchChatMessage` 統一 resolve 為 `message.mentions: userId[]`。
+  - resolve 規則先查 registry（`usersByHandle`），找不到才不寫入 mentions（保留原文字）。
+- [highlight/UI]
+  - `ChatMessage` 高亮改為：`message.mentions` 含 `activeUserId` 且訊息作者非 activeUser。
+  - 新增 row 背景高亮（底色 + 左側線），system 訊息不高亮。
+- [qna/freeze/pin]
+  - tagged-question 判斷改讀 `questionMessage.mentions`，與現有 pinned reply / freeze 流程一致，不再依賴先前字串判斷。
+- [chat sanitize]
+  - `ChatPanel` 產生 active mention set 時加入 `activeUserInitialHandle`，避免「尚未在 messages 出現」時 mention 被 sanitize 掉。
 
-## Debug 欄位/按鈕變更
-- 新增欄位：
-  - `event.stateMachine[eventKey].state`
-  - `event.stateMachine[eventKey].cooldownRemainingMs`
-  - `event.stateMachine[eventKey].lastTriggeredAt`
-  - `event.stateMachine[eventKey].preKey/postKey`
-  - `event.stateMachine[eventKey].lastResult/lastReason`
-  - `chat.system.audioContextState`
-  - `chat.system.lastAudioUnlockResult`
-  - `chat.system.lastAudioUnlockAt`
-- 新增按鈕：
-  - `Enable Audio`
-  - `Unlock <eventKey>`（單事件）
-  - `Force Execute Ghost SFX` / `Force Execute Footsteps SFX`
-- Debug 三次 PR 規則檢查：
-  - 以上欄位已在 README 與本 PR_NOTES 記錄（第 1 次）。
+## SSOT changed
+- 無新增 SSOT 檔案；沿用既有 chat runtime state 與 event registry。
+
+## Debug 欄位變更
+- 新增：
+  - `chat.activeUser.displayName`
+  - `chat.activeUser.registryHandleExists`
+  - `chat.mention.lastParsedMentions`（`messageId + mentions[]`）
+  - `chat.mention.lastHighlightReason`（`mentions_activeUser | none`）
+  - `chat.mention.tagHighlightAppliedCount`
+- 三次 PR 規則檢查：以上欄位已於本 PR_NOTES 與 README 記錄（第 1 次）。
 
 ## Removed
-- 無功能移除。
+- 無功能移除（無按鈕/路由/行為刪除）。
 
-## Testing（實際執行）
-1. `npm run build`：確認 TS 與打包可過。
-2. Web 手動路徑（桌機）：
-   - 開啟 Debug Panel，連按 Trigger 同事件，觀察 `[EVENT_SKIPPED] reason=cd/playing`。
-   - 連按 Force Execute 同事件，觀察每次均可觸發並寫入 `[EVENT_TRIGGERED]`。
-   - 驗證 `ghost_female` / `footsteps`：Trigger 與 Force Execute 皆可重複測試。
-   - 若音訊被瀏覽器阻擋，按 `Enable Audio` 後檢查 `audioContextState` 與 `lastAudioUnlockResult`。
-3. 行動裝置：本環境無實機，改以 responsive + 手勢解鎖邏輯與 debug 欄位作替代證據，於限制段落註記。
+## Impact
+- chat/events/debug/docs
 
-## 限制 / 風險
-- CI/容器內無法提供實機音訊輸出，手機端採替代證據（狀態機欄位、console、build 通過）驗證。
+## Validation / Acceptance
+- Case A（不發言）
+  - Confirm 後 activeUser 名稱與 You badge 立即顯示。
+  - NPC `@你` 訊息可立即 resolve 並 row highlight。
+- Case B（連續多次被 tag）
+  - 每次皆以 mentions 判斷高亮。
+- Case C（自己 @別人）
+  - 不觸發「你被 tag」row highlight。
+
+## Test commands
+1. `npm run build`
+2. Browser manual flow（debug=1）
+   - Confirm 名稱
+   - 點 `Emit NPC Tag @You`
+   - 觀察 row highlight + debug mention 欄位遞增

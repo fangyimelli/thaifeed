@@ -40,6 +40,8 @@ type Props = {
   questionMessageId?: string | null;
   qnaStatus?: 'IDLE' | 'ASKING' | 'AWAITING_REPLY' | 'RESOLVED' | 'ABORTED';
   activeUserInitialHandle: string;
+  activeUserId: string;
+  onTagHighlightEvaluated?: (payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => void;
   autoScrollMode: 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
   replyPreviewSuppressedReason?: string | null;
   onForceScrollDebug?: (payload: ForceScrollDebugPayload) => void;
@@ -75,6 +77,8 @@ export default function ChatPanel({
   questionMessageId,
   qnaStatus = 'IDLE',
   activeUserInitialHandle,
+  activeUserId,
+  onTagHighlightEvaluated,
   autoScrollMode,
   replyPreviewSuppressedReason = null,
   onForceScrollDebug,
@@ -95,7 +99,7 @@ export default function ChatPanel({
   const [autoPaused, setAutoPaused] = useState(false);
   const isMobile = isMobileDevice();
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
-  const activeSet = getActiveUserSet(collectActiveUsers(messages));
+  const activeSet = getActiveUserSet([...collectActiveUsers(messages), activeUserInitialHandle].filter(Boolean));
   const sanitizedMessages = messages.map((message) => ({
     ...message,
     text: sanitizeMentions(message.text, activeSet),
@@ -314,6 +318,8 @@ export default function ChatPanel({
               message={message}
               onToggleTranslation={onToggleTranslation}
               activeUserInitialHandle={activeUserInitialHandle}
+              activeUserId={activeUserId}
+              onTagHighlightEvaluated={onTagHighlightEvaluated}
             />
           ))}
           <div ref={messageEndRef} />
