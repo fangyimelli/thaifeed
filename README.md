@@ -1343,3 +1343,24 @@ npm run build
 
 ## README Removed/Deprecated Log
 - 本次無新增移除項。
+
+## 2026-03-02 事件 registry / SFX 對照修正
+
+- `ghost_female` 與 `footsteps` 仍在事件 registry，並非被移除。
+- 事件效果映射改為由 `eventRegistry` 推導，避免 `eventEffectsRegistry` 與 registry 出現雙份定義分岔。
+- 啟動時 console 會輸出：
+  - `event.registry.count`
+  - `eventIds[]`
+  - `hasGhostFemale` / `hasFootsteps`
+- Debug Overlay 新增「資源對照檢查」：
+  - `audio.loadedKeys`
+  - `event.referencedAudioKeys`
+  - `event.missingAudioRefs`（紅字顯示且附來源 `eventId`）
+  - `audio.context.state(distance)`
+- Debug Panel 新增測試按鈕：
+  - `Test Ghost SFX`（預設觸發 `GHOST_PING -> ghost_female`）
+  - `Test Footsteps SFX`（預設觸發 `VIEWER_SPIKE -> footsteps`）
+  - 會輸出 `[EVENT_TRIGGERED]` / `[EVENT_SKIPPED] reason=lock/cd/missing_asset`。
+
+## README Removed/Deprecated Log
+- 本次無新增移除項（保留既有事件 key，改為統一 SSOT 與 debug 可視化驗證）。

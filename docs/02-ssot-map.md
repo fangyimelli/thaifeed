@@ -34,3 +34,10 @@
    - 對應 docs 分頁
    - README 索引
    - `docs/10-change-log.md`
+
+## 2026-03-02 補充（events/audio）
+
+- 事件定義 SSOT：`src/core/events/eventRegistry.ts`（event key、cooldown、pre/post effect）。
+- 事件效果執行映射：`src/events/eventEffectsRegistry.ts`（由 eventRegistry 推導，不可手動維護第二份真值）。
+- 音效資源 SSOT：`src/audio/SfxRegistry.ts`。
+- Debug 資源對照來源：`src/ui/scene/SceneView.tsx`（loaded audio keys vs event referenced keys vs missing diff）。

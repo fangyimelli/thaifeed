@@ -110,3 +110,12 @@ export function getEventManifest() {
     };
   });
 }
+
+export function getEventReferencedSfxKeys() {
+  return EVENT_REGISTRY_KEYS.flatMap((key) => {
+    const def = EVENT_REGISTRY[key];
+    return [def.preEffect?.sfxKey, def.postEffect?.sfxKey]
+      .filter((sfxKey): sfxKey is NonNullable<typeof sfxKey> => Boolean(sfxKey))
+      .map((sfxKey) => ({ eventId: key, sfxKey }));
+  });
+}

@@ -23,6 +23,7 @@ import { pickOne } from '../utils/random';
 import { FAN_LOOP_PATH, FOOTSTEPS_PATH, GHOST_FEMALE_PATH, MAIN_LOOP } from '../config/oldhousePlayback';
 import { VIDEO_PATH_BY_KEY } from '../config/oldhousePlayback';
 import { audioEngine } from '../audio/AudioEngine';
+import { SFX_REGISTRY } from '../audio/SfxRegistry';
 import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
 import { ChatEngine } from '../chat/ChatEngine';
@@ -2224,6 +2225,22 @@ export default function App() {
   }, [updateChatDebug]);
 
   useEffect(() => {
+    const keys = EVENT_REGISTRY_KEYS.slice();
+    console.log('[EVENT_REGISTRY]', {
+      count: keys.length,
+      eventIds: keys,
+      hasGhostFemale: keys.some((key) => {
+        const def = EVENT_REGISTRY[key];
+        return def.preEffect?.sfxKey === 'ghost_female' || def.postEffect?.sfxKey === 'ghost_female';
+      }),
+      hasFootsteps: keys.some((key) => {
+        const def = EVENT_REGISTRY[key];
+        return def.preEffect?.sfxKey === 'footsteps' || def.postEffect?.sfxKey === 'footsteps';
+      })
+    });
+  }, []);
+
+  useEffect(() => {
     window.__THAIFEED_RENAME_ACTIVE_USER__ = blockRenameAttempt;
     window.__THAIFEED_CHANGE_NAME__ = blockRenameAttempt;
     window.__THAIFEED_SET_NAME__ = blockRenameAttempt;
@@ -2913,6 +2930,42 @@ export default function App() {
     };
   }, [debugForceExecuteEvent]);
 
+  const runSfxEventTest = useCallback((eventKey: StoryEventKey, audioKey: 'ghost_female' | 'footsteps') => {
+    const def = EVENT_REGISTRY[eventKey];
+    if (!def) {
+      console.log(`[EVENT_SKIPPED] reason=missing_asset event=${eventKey} audio=${audioKey}`);
+      return;
+    }
+    const hasAsset = audioKey in SFX_REGISTRY;
+    if (!hasAsset) {
+      console.log(`[EVENT_SKIPPED] reason=missing_asset event=${eventKey} audio=${audioKey}`);
+      return;
+    }
+    const now = Date.now();
+    const isLocked = lockStateRef.current.isLocked;
+    const cooldownUntil = cooldownsRef.current[audioKey] ?? 0;
+    if (isLocked) {
+      console.log(`[EVENT_SKIPPED] reason=lock event=${eventKey} audio=${audioKey}`);
+      return;
+    }
+    if (cooldownUntil > now) {
+      console.log(`[EVENT_SKIPPED] reason=cd event=${eventKey} audio=${audioKey}`);
+      return;
+    }
+    const played = playSfx(audioKey, {
+      reason: `event:test:${eventKey}`,
+      source: 'event',
+      eventId: `debug_test_${eventKey}_${now}`,
+      eventKey,
+      allowBeforeStarterTag: true
+    });
+    if (!played) {
+      console.log(`[EVENT_SKIPPED] reason=lock/cd/missing_asset event=${eventKey} audio=${audioKey}`);
+      return;
+    }
+    console.log(`[EVENT_TRIGGERED] ${eventKey} ${audioKey}`);
+  }, [playSfx]);
+
   const resetEventTestState = useCallback(() => {
     clearEventRunnerState();
     eventTestDebugRef.current.lastStartAttemptBlockedReason = '-';
@@ -3042,6 +3095,8 @@ export default function App() {
                   Simulate Player Reply
                 </label>
                 <div className="debug-route-controls">
+                  <button type="button" onClick={() => runSfxEventTest('GHOST_PING', 'ghost_female')}>Test Ghost SFX</button>
+                  <button type="button" onClick={() => runSfxEventTest('VIEWER_SPIKE', 'footsteps')}>Test Footsteps SFX</button>
                   {!bootstrapRef.current.isReady && (
                     <button type="button" onClick={() => {
                       const name = normalizeHandle(startNameInput) || normalizeHandle(activeUserInitialHandleRef.current || '') || 'you';

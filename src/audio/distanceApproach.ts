@@ -188,6 +188,14 @@ class DistanceApproachPlayer {
     return [...this.activeSources.keys()];
   }
 
+  getLoadedBufferKeys() {
+    return [...this.bufferCache.keys()];
+  }
+
+  getContextState() {
+    return this.context?.state ?? 'not_initialized';
+  }
+
   setMasterVolume(value: number) {
     this.masterVolume = Math.max(0, Math.min(1, value));
     if (this.masterGain && this.context) {
