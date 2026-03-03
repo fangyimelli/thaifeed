@@ -3506,6 +3506,15 @@ export default function App() {
             onDebugToggleComposing={() => {
               setDebugComposingOverride((prev) => (prev == null ? true : !prev));
             }}
+            onDebugInjectMention={() => {
+              const handle = activeUserInitialHandleRef.current || activeUserProfileRef.current?.handle || 'you';
+              dispatchChatMessage({
+                id: crypto.randomUUID(),
+                username: 'npc_mod',
+                text: `測試提及 @${handle}，請看高亮與自動滾動`,
+                language: 'zh'
+              }, { source: 'debug_tester', sourceTag: 'mention_autoscroll' });
+            }}
             onSendButtonClick={handleSendButtonClick}
             isLocked={lockStateRef.current.isLocked}
             lockTarget={lockStateRef.current.target}

@@ -1,61 +1,45 @@
-# 修正：@你 高亮需先發言才生效（bootstrap / mention registry 解耦）
+# 修正：@mention 後聊天室未自動滾到底
 
 ## Summary
-- 目標：使用者在輸入名稱按 Confirm 後，**不必先發言**也能立即被 `@name` 解析，且聊天室訊息可立刻 row highlight。
-- 本次把「使用者註冊」與「訊息發送」解耦：activeUser registry 在 bootstrap 建立，不再等第一則 player message。
-- mention 判斷與高亮改為使用 `message.mentions[]`（解析後 token），不再靠字串 includes。
+- 修正「被 tag 會高亮但不自動滾動」：當新訊息（非自己）`mentions` 命中 activeUser 時，加入 mention autoscroll 流程。
+- 採用**策略 B（Twitch-like）**：
+  - 使用者接近底部（threshold=100px）時：自動滾到底。
+  - 使用者正在往上看舊訊息（超過 threshold）時：不強制跳，改為強化「跳到最新」提示（顯示 `@你・跳到最新`）。
+- 新增 debug：
+  - console logs：`[MENTION_AUTOSCROLL] ...`、`[AUTOSCROLL_SKIPPED] ...`
+  - URL 開關：`forceMentionAutoscroll=1`（強制每次 mention 都 auto scroll）
+  - debug 按鈕：`Inject NPC Tag @You`
 
-## Root-cause inventory（全 repo 搜尋與衝突點）
-- `registerActiveUser / usersById / usersByHandle`：確認已在 startup Confirm 流程，但 mention 高亮仍以文字比對為主，造成 registry 與 UI 判斷斷裂。
-- `parseMentions / resolveMention`：原本沒有在 message model 保存解析結果，UI 只做 `text.includes("@name")`，容易因 sanitize / 大小寫 / 尚未出現在 messages 而誤判。
-- `highlight`：原先 `ChatMessage` 以 `message.text.includes(@activeUser)` 套字色，沒有 row 背景，且不排除 self-message。
-- `usersByHandle`：原先 key 未統一 lowercase，`@Name`/`@name` 可能 resolve 漏失。
+## Strategy 選擇理由
+- 採策略 B 可避免使用者正在閱讀舊訊息時被強制打斷，符合 Twitch 常見 UX。
+- 同時在 mention 事件時強調「跳到最新」按鈕，保留一鍵回到底部的能力，降低漏訊息風險。
 
 ## Changed
-- [bootstrap/chat]
-  - `bootstrapAfterUsernameSubmit(name)` 仍在同一 user gesture 完成：register activeUser + audio unlock + bootstrap ready。
-  - `registerActiveUser` 改為寫入 `usersByHandle(lowercase)`，activeUser `displayName/handle` 於 Confirm 當下可用。
-- [mention parser]
-  - 新增 mention token 解析（`parseMentionHandles`）並在 `dispatchChatMessage` 統一 resolve 為 `message.mentions: userId[]`。
-  - resolve 規則先查 registry（`usersByHandle`），找不到才不寫入 mentions（保留原文字）。
-- [highlight/UI]
-  - `ChatMessage` 高亮改為：`message.mentions` 含 `activeUserId` 且訊息作者非 activeUser。
-  - 新增 row 背景高亮（底色 + 左側線），system 訊息不高亮。
-- [qna/freeze/pin]
-  - tagged-question 判斷改讀 `questionMessage.mentions`，與現有 pinned reply / freeze 流程一致，不再依賴先前字串判斷。
-- [chat sanitize]
-  - `ChatPanel` 產生 active mention set 時加入 `activeUserInitialHandle`，避免「尚未在 messages 出現」時 mention 被 sanitize 掉。
-
-## SSOT changed
-- 無新增 SSOT 檔案；沿用既有 chat runtime state 與 event registry。
+- `ChatPanel` 新增 mention autoscroll 判斷：僅針對「新進訊息 + 非自己 + mentions 命中 activeUser」。
+- `ChatPanel` 新增雙階段滾動（`requestAnimationFrame` + `setTimeout(0)`）確保 Android Chrome / 行動版 DOM 更新後仍穩定到底。
+- `ChatPanel` 新增 mention 提示脈衝狀態：未在底部時將「最新訊息」按鈕高亮與改文案。
+- `App` debug 模式新增注入測試訊息按鈕（帶 `@activeUserHandle`）。
+- `styles` 新增 `jump-bottom.mention-active` 與 debug 說明樣式。
 
 ## Debug 欄位變更
-- 新增：
-  - `chat.activeUser.displayName`
-  - `chat.activeUser.registryHandleExists`
-  - `chat.mention.lastParsedMentions`（`messageId + mentions[]`）
-  - `chat.mention.lastHighlightReason`（`mentions_activeUser | none`）
-  - `chat.mention.tagHighlightAppliedCount`
-- 三次 PR 規則檢查：以上欄位已於本 PR_NOTES 與 README 記錄（第 1 次）。
+- 新增 debug 控制：
+  - URL param: `forceMentionAutoscroll=1`
+  - 按鈕: `Inject NPC Tag @You`
+- 三次 PR 規則檢查：
+  1. 本節已記錄新增 debug 控制。
+  2. README 已同步寫入 debug 驗證方式。
+  3. Change Log 已記錄行為與 debug 變更。
 
-## Removed
-- 無功能移除（無按鈕/路由/行為刪除）。
-
-## Impact
-- chat/events/debug/docs
-
-## Validation / Acceptance
-- Case A（不發言）
-  - Confirm 後 activeUser 名稱與 You badge 立即顯示。
-  - NPC `@你` 訊息可立即 resolve 並 row highlight。
-- Case B（連續多次被 tag）
-  - 每次皆以 mentions 判斷高亮。
-- Case C（自己 @別人）
-  - 不觸發「你被 tag」row highlight。
+## Testing（驗收）
+1. **我停在底部 → 別人 @我**
+   - 結果：立即 autoscroll 到最新；該 row 維持 mention highlight。
+2. **我往上滑看舊訊息（離底部 > threshold）→ 別人 @我（策略 B）**
+   - 結果：不強制跳到底，顯示/高亮 `@你・跳到最新`。
+   - 點擊後可一鍵到底；該 mention row 仍高亮。
+3. **連續多則訊息快速進來**
+   - 結果：mention 命中時仍穩定觸發判斷；採雙階段排程滾動，未觀察到抖動/漏滾。
 
 ## Test commands
 1. `npm run build`
-2. Browser manual flow（debug=1）
-   - Confirm 名稱
-   - 點 `Emit NPC Tag @You`
-   - 觀察 row highlight + debug mention 欄位遞增
+2. `npm run dev` + 手動驗證（`?debug=1`）
+3. `?debug=1&forceMentionAutoscroll=1` 驗證強制自動置底

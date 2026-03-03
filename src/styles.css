@@ -203,6 +203,18 @@ body {
 .jump-bottom { position: absolute; right: 14px; bottom: 72px; border: none; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: #2f6eff; color: #fff; cursor: pointer; z-index: 2; }
 
 
+.jump-bottom.mention-active {
+  background: #f59e0b;
+  color: #1f1300;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+}
+
+.chat-debug-note {
+  font-size: 11px;
+  color: #c9d8ff;
+  opacity: 0.8;
+}
+
 .replyPinBar {
   flex-shrink: 0;
   padding: 6px 12px;
