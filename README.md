@@ -1364,3 +1364,33 @@ npm run build
 
 ## README Removed/Deprecated Log
 - 本次無新增移除項（保留既有事件 key，改為統一 SSOT 與 debug 可視化驗證）。
+
+## Event Audio Stuck 修正（2026-03-03）
+
+- 事件音效觸發改為狀態機：`idle → playing → cooldown → idle`。
+- 每事件追蹤欄位：
+  - `state`
+  - `lastTriggeredAt`
+  - `cooldownUntil / cooldownRemaining`
+  - `preKey / postKey`
+  - `lastResult`（`TRIGGERED / SKIPPED / FAILED`）與 `reason`
+- 防卡死策略：
+  - `playing` 加入 timeout fallback（10s）
+  - 播放失敗（含 autoplay/audio lock）必寫 `[EVENT_PLAY_FAIL]`，且必進 cooldown，不會永久鎖死
+  - `SFX_END` 事件回傳時同步收斂狀態；即使 `onended` 不可靠仍有 timeout 保底
+
+### Debug 操作（Event Tester）
+- 每事件提供三個按鈕：
+  - `Trigger <eventKey>`：一般規則（會受 playing/cd gate）
+  - `Force Execute <eventKey>`：跳過 playing/cd gate，可連按重複觸發
+  - `Unlock <eventKey>`：只解鎖該事件狀態
+- 額外保留 `Reset Stuck State`：跨系統救援（event/qna/freeze/pause 一次重置）。
+- 若瀏覽器阻擋音訊：按 `Enable Audio`（使用者手勢解鎖），並檢查：
+  - `audio.contextState`
+  - `audio.lastUnlockResult`
+  - `audio.lastUnlockAt`
+
+### 驗收重點
+- 連按 Trigger 同事件：應出現 `[EVENT_SKIPPED] reason=playing|cd`。
+- 連按 Force Execute：每次都能觸發，不需先按 Reset Stuck。
+- `ghost_female`、`footsteps` 可在 Debug 面板重複測試。

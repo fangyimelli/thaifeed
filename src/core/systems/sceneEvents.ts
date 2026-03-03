@@ -3,7 +3,8 @@ import type { LoopRequestKey, OldhouseLoopKey } from '../../config/oldhousePlayb
 
 export type SceneEventPayload =
   | { type: 'VIDEO_ACTIVE'; key: OldhouseLoopKey; startedAt: number }
-  | { type: 'SFX_START'; sfxKey: SfxKey; startedAt: number };
+  | { type: 'SFX_START'; sfxKey: SfxKey; startedAt: number }
+  | { type: 'SFX_END'; sfxKey: SfxKey; startedAt: number; endedAt: number; reason: 'ended' | 'timeout_fallback' | 'error' };
 
 export type SceneRequestPayload =
   | {

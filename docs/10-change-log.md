@@ -148,3 +148,15 @@
 ### Docs
 - README 新增本次 registry 與資源對照檢查說明。
 - PR_NOTES 更新全專案 key 盤點、SSOT 結論與驗證步驟。
+
+## 2026-03-03（event audio stuck state-machine hardening）
+
+### Changed
+- [events/audio] 事件音效觸發升級為狀態機：`idle | playing | cooldown`，新增 `lastTriggeredAt`、`cooldownUntil`，並加入 playing timeout fallback，避免 `onended` 未觸發造成永久 stuck。
+- [events/debug] Event Tester 每事件新增 `Trigger / Force Execute / Unlock`，並顯示 `state`、`cooldownRemaining`、`lastTriggeredAt`、`pre/post key`、`lastResult/reason`。
+- [audio/debug] 新增一次性 `Enable Audio` 解鎖入口，debug 顯示 `audioContextState` 與最近一次解鎖結果。
+- [events/log] 統一 console 格式：`[EVENT_TRIGGERED]`、`[EVENT_SKIPPED]`、`[EVENT_PLAY_FAIL]`、`[EVENT_STATE]`。
+
+### Docs
+- README 補充事件音效狀態機與 debug 操作（Trigger / Force Execute / Unlock / Enable Audio）。
+- PR_NOTES 更新本次盤點、SSOT、debug 欄位變更與驗收步驟。
