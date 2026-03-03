@@ -19,7 +19,7 @@
 - [ ] No SSOT changes
 - [ ] SSOT changed (list files + reasons below)
 
-## Acceptance
+## Acceptance（驗收）
 - Debug fields checked:
 - Desktop check:
 - Mobile check:
