@@ -186,3 +186,15 @@
 - README 補充「一開始就可被 tag + row 背景高亮」規格與 debug 驗證點。
 - PR_NOTES 更新 root-cause、修正策略、驗收結果與 debug 欄位。
 
+
+## 2026-03-03（tag start flow：append → scroll → pin → freeze）
+
+### Changed
+- [chat/tag-flow] 新增 `src/chat/tagFlow.ts`，將被 tag 起始流程固定為單一路徑：先 append 題目訊息、等待兩個 paint、強制置底、設定 pinned reply、最後 freeze。
+- [chat/scroll/mobile] 新增 `src/chat/scrollController.ts`，`ChatPanel` 以單一 `chatScrollRef` 註冊容器，`forceScroll` 統一只操作聊天室容器（不使用 `window.scrollTo`），並做一次 rAF 二次置底。
+- [qna] `sendQnaQuestion` 改走 `runTagStartFlow`，將「tag 訊息插入 + 置底 + 顯示 pinned + freeze」整合成同一條流程，避免先 pause 導致置底被 gate 擋掉。
+- [debug] 補齊追蹤欄位：`chat.scroll.containerFound/lastForceReason/lastForceAt/lastForceResult/metrics`、`chat.pause.setAt/reason`、`ui.pinned.visible/textPreview`，並補 `[SCROLL] / [PIN] / [PAUSE]` 打點。
+
+### Docs
+- README 補充 Tag Start Flow 固定順序、debug 觀測項與 mobile 容器策略。
+- PR_NOTES 更新本次影響範圍、驗收案例與 debug 欄位調整。

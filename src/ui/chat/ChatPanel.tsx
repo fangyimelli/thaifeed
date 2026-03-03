@@ -4,6 +4,7 @@ import { collectActiveUsers, getActiveUserSet, sanitizeMentions } from '../../co
 import ChatMessage from './ChatMessage';
 import { isMobileDevice } from '../../utils/isMobile';
 import type { SendResult, SendSource } from '../../app/App';
+import { getChatScrollContainer, registerChatScrollContainer } from '../../chat/scrollController';
 
 type ScrollMetrics = {
   top: number;
@@ -14,6 +15,8 @@ type ScrollMetrics = {
 type ForceScrollDebugPayload = {
   reason: string;
   at: number;
+  containerFound: boolean;
+  result: 'ok' | 'fail';
   metrics: ScrollMetrics | null;
 };
 
@@ -88,7 +91,7 @@ export default function ChatPanel({
   onReplyPinMountedChange,
   forceScrollSignalReason = null
 }: Props) {
-  const messageListRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const keyboardSinkRef = useRef<HTMLButtonElement>(null);
@@ -132,7 +135,7 @@ export default function ChatPanel({
 
   const logDebugState = (reason: string) => {
     if (!debugEnabled) return;
-    const listEl = messageListRef.current;
+    const listEl = getChatScrollContainer();
     const activeEl = document.activeElement as HTMLElement | null;
     console.log('[CHAT_DEBUG]', {
       reason,
@@ -153,25 +156,31 @@ export default function ChatPanel({
   };
 
   const scrollChatToBottom = (reason: string) => {
-    const listEl = messageListRef.current;
+    const listEl = getChatScrollContainer();
     const at = Date.now();
     if (!listEl) {
-      const payload: ForceScrollDebugPayload = { reason, at, metrics: null };
+      const payload: ForceScrollDebugPayload = { reason, at, containerFound: false, result: 'fail', metrics: null };
       forceScrollDebugRef.current = payload;
       onForceScrollDebug?.(payload);
+      if (debugEnabled) {
+        console.debug(`[SCROLL] force ${reason} fail reason=missing_container`);
+      }
       return;
     }
     listEl.scrollTop = listEl.scrollHeight;
+    window.requestAnimationFrame(() => {
+      listEl.scrollTop = listEl.scrollHeight;
+    });
     const metrics: ScrollMetrics = {
       top: listEl.scrollTop,
       height: listEl.scrollHeight,
       client: listEl.clientHeight
     };
-    const payload: ForceScrollDebugPayload = { reason, at, metrics };
+    const payload: ForceScrollDebugPayload = { reason, at, containerFound: true, result: 'ok', metrics };
     forceScrollDebugRef.current = payload;
     onForceScrollDebug?.(payload);
     if (debugEnabled) {
-      console.debug(`[SCROLL] forceBottom reason=${reason} top=${metrics.top} height=${metrics.height} client=${metrics.client}`);
+      console.debug(`[SCROLL] force ${reason} ok top=${metrics.top} height=${metrics.height} client=${metrics.client}`);
     }
     logDebugState(`scroll:${reason}`);
   };
@@ -181,7 +190,7 @@ export default function ChatPanel({
       logDebugState('scroll-skipped:autoScrollMode:FROZEN');
       return;
     }
-    const el = messageListRef.current;
+    const el = getChatScrollContainer();
     if (!el) return;
 
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -267,7 +276,7 @@ export default function ChatPanel({
     incoming.forEach((message) => {
       if (message.isSelf || message.type === 'system' || !message.mentions?.includes(activeUserId)) return;
 
-      const listEl = messageListRef.current;
+      const listEl = getChatScrollContainer();
       const distanceFromBottom = listEl ? listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight : Number.POSITIVE_INFINITY;
       const atBottom = distanceFromBottom <= MENTION_AUTOSCROLL_THRESHOLD;
       const handleMatched = message.text.toLowerCase().includes(`@${activeUserInitialHandle.toLowerCase()}`);
@@ -299,7 +308,7 @@ export default function ChatPanel({
   }, []);
 
   useEffect(() => {
-    const box = messageListRef.current;
+    const box = getChatScrollContainer();
     if (!box) return;
 
     const overflowed = box.scrollHeight > box.clientHeight * 1.2;
@@ -373,6 +382,13 @@ export default function ChatPanel({
     scrollChatToBottom(forceScrollSignalReason);
   }, [forceScrollSignalReason]);
 
+  useEffect(() => {
+    registerChatScrollContainer(chatScrollRef.current);
+    return () => {
+      registerChatScrollContainer(null);
+    };
+  }, []);
+
   return (
     <section className="chat-panel">
       <header className="chat-header input-surface">
@@ -381,7 +397,7 @@ export default function ChatPanel({
 
 
       <div
-        ref={messageListRef}
+        ref={chatScrollRef}
         className="chat-messages chat-list"
         onScroll={(event) => {
           const el = event.currentTarget;

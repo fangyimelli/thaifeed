@@ -37,6 +37,7 @@ import { pickReactionLines } from '../core/events/eventReactions';
 import type { EventLinePhase, EventRunRecord, EventSendResult, EventTopic, StoryEventKey } from '../core/events/eventTypes';
 import { QNA_FLOW_BY_EVENT } from '../game/qna/qnaFlows';
 import { EVENT_EFFECTS } from '../events/eventEffectsRegistry';
+import { runTagStartFlow } from '../chat/tagFlow';
 import {
   applyOptionResult,
   askCurrentQuestion,
@@ -391,8 +392,12 @@ export default function App() {
   const [lastForceToBottomReason, setLastForceToBottomReason] = useState<string | null>(null);
   const [lastForceToBottomAt, setLastForceToBottomAt] = useState<number | null>(null);
   const [lastForceScrollMetrics, setLastForceScrollMetrics] = useState<{ top: number; height: number; client: number } | null>(null);
+  const [lastForceContainerFound, setLastForceContainerFound] = useState(false);
+  const [lastForceResult, setLastForceResult] = useState<'ok' | 'fail'>('fail');
   const [pendingForceScrollReason, setPendingForceScrollReason] = useState<string | null>(null);
   const [lastBlockedReason, setLastBlockedReason] = useState<string | null>(null);
+  const [pauseSetAt, setPauseSetAt] = useState<number | null>(null);
+  const [pauseReason, setPauseReason] = useState<string | null>(null);
   const [viewerCount, setViewerCount] = useState(() => randomInt(400, 900));
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
@@ -1177,6 +1182,8 @@ export default function App() {
 
   const clearChatFreeze = useCallback((reason: string) => {
     setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
+    setPauseReason(null);
+    setPauseSetAt(null);
     setScrollMode('FOLLOW', reason);
     setChatFreezeCountdownRemaining(0);
     setChatFreezeCountdownStartedAt(null);
@@ -1305,6 +1312,9 @@ export default function App() {
     setPendingForceScrollReason('tagged_question_double_tap');
     const startedAt = Date.now();
     setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt });
+    setPauseReason('tag_wait_reply');
+    setPauseSetAt(startedAt);
+    if (debugEnabled) console.debug('[PAUSE] set reason=tag_wait_reply');
     setScrollMode('FROZEN', 'tagged_question');
     setChatAutoPaused(true);
     setChatFreezeCountdownRemaining(0);
@@ -1671,7 +1681,7 @@ export default function App() {
     return true;
   }, [buildEventLine, dispatchEventLine, updateEventDebug]);
 
-  const sendQnaQuestion = useCallback(() => {
+  const sendQnaQuestion = useCallback(async () => {
     if (!bootstrapRef.current.isReady) {
       setLastBlockedReason('bootstrap_not_ready');
       return false;
@@ -1707,29 +1717,64 @@ export default function App() {
 
     const optionLabels = asked.options.map((option) => option.label).join(' / ');
     const line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）`;
-    const sent = dispatchEventLine(line, questionActor, 'scheduler_tick', 'qna_question');
-    if (!sent.ok || !sent.lineId) {
-      setLastBlockedReason(sent.ok ? 'qna_question_send_failed' : sent.blockedReason ?? 'qna_question_send_failed');
+    const messageId = crypto.randomUUID();
+    let appendFailedReason: string | null = null;
+    const tagMessage: ChatMessage = {
+      id: messageId,
+      username: questionActor,
+      type: 'chat',
+      text: line,
+      language: 'zh',
+      translation: line,
+      tagTarget: questionActor
+    };
+
+    await runTagStartFlow({
+      tagMessage,
+      pinnedText: line,
+      shouldFreeze: true,
+      appendMessage: (message) => {
+        const sent = dispatchChatMessage(message, { source: 'qna_question', sourceTag: 'tag_start_flow' });
+        if (!sent.ok) appendFailedReason = sent.blockedReason;
+      },
+      forceScrollToBottom: async ({ reason }) => {
+        setScrollMode('FOLLOW', `tag_start_${reason}`);
+        setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
+        setPendingForceScrollReason(reason);
+        await nextAnimationFrame();
+        setPendingForceScrollReason(`${reason}:timeout0`);
+      },
+      setPinnedReply: ({ visible, text }) => {
+        if (!visible) return;
+        const now = Date.now();
+        markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt: now });
+        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: messageId };
+        eventExclusiveStateRef.current.currentLockOwner = questionActor;
+        setLastQuestionMessageId(messageId);
+        setLastQuestionMessageHasTag(true);
+        setReplyPreviewSuppressedReason(null);
+        if (debugEnabled) console.debug(`[PIN] set visible text="${text.slice(0, 60)}"`);
+      },
+      freezeChat: ({ reason }) => {
+        const startedAt = Date.now();
+        setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt });
+        setPauseSetAt(startedAt);
+        setPauseReason(reason);
+        setScrollMode('FROZEN', reason);
+        setChatAutoPaused(true);
+      }
+    });
+
+    if (appendFailedReason) {
+      setLastBlockedReason(appendFailedReason ?? 'qna_question_send_failed');
       return false;
     }
 
-    const now = Date.now();
-    markQnaQuestionCommitted(qnaStateRef.current, { messageId: sent.lineId, askedAt: now });
-    lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: sent.lineId };
-    eventExclusiveStateRef.current.currentLockOwner = questionActor;
-    const hasTagToActiveUser = parseMentionHandles(line).some((handle) => toHandleKey(handle) === toHandleKey(activeUserInitialHandleRef.current));
-    setLastQuestionMessageId(sent.lineId);
-    setLastQuestionMessageHasTag(hasTagToActiveUser);
-    setReplyPreviewSuppressedReason(null);
     setLastBlockedReason(null);
-    if (hasTagToActiveUser) {
-      void scrollThenPauseForTaggedQuestion({ questionMessageId: sent.lineId });
-    }
-
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
     return true;
-  }, [dispatchEventLine, scrollThenPauseForTaggedQuestion, sortedMessages]);
+  }, [debugEnabled, dispatchChatMessage, nextAnimationFrame, setScrollMode, sortedMessages]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -1753,7 +1798,7 @@ export default function App() {
         if (taggedUser) {
           dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', 'qna_question');
         }
-        sendQnaQuestion();
+        void sendQnaQuestion();
         return;
       }
       qnaStateRef.current.matched = { optionId: parsed.optionId, keyword: parsed.matchedKeyword, at: Date.now() };
@@ -1766,11 +1811,11 @@ export default function App() {
         if (taggedUser) {
           dispatchEventLine(`@${taggedUser} ${prompt}`, lockTarget ?? 'mod_live', 'user_input', 'qna_question');
         }
-        sendQnaQuestion();
+        void sendQnaQuestion();
         return;
       }
       if (result.type === 'next') {
-        sendQnaQuestion();
+        void sendQnaQuestion();
         return;
       }
       if (result.type === 'chain' && qnaStateRef.current.pendingChain) {
@@ -2096,7 +2141,7 @@ export default function App() {
           }
         }
         if (!qnaStateRef.current.awaitingReply && Date.now() >= qnaStateRef.current.nextAskAt) {
-          sendQnaQuestion();
+          void sendQnaQuestion();
         }
       }
       if (!eventRunnerStateRef.current.inFlight && eventQueueRef.current.length > 0) {
@@ -2541,6 +2586,10 @@ export default function App() {
           replyPreviewLocation: 'input_overlay_above_input',
           legacyReplyQuoteEnabled: false,
           qnaQuestionMessageIdRendered,
+          pinned: {
+            visible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
+            textPreview: (sortedMessages.find((message) => message.id === qnaStateRef.current.active.questionMessageId)?.text ?? '-').slice(0, 60)
+          },
           qnaSyncAssert: (() => {
             const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
             const found = Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId));
@@ -2557,14 +2606,20 @@ export default function App() {
           autoScrollMode: chatAutoScrollMode,
           freeze: { ...chatFreeze },
           pause: {
-            isPaused: chatFreeze.isFrozen
+            isPaused: chatFreeze.isFrozen,
+            setAt: pauseSetAt ?? 0,
+            reason: pauseReason ?? '-'
           },
           scroll: {
-            lastForceToBottomReason: lastForceToBottomReason ?? '-',
-            lastForceToBottomAt: lastForceToBottomAt ?? 0,
-            scrollTop: lastForceScrollMetrics?.top ?? 0,
-            scrollHeight: lastForceScrollMetrics?.height ?? 0,
-            clientHeight: lastForceScrollMetrics?.client ?? 0
+            containerFound: lastForceContainerFound,
+            lastForceReason: lastForceToBottomReason ?? '-',
+            lastForceAt: lastForceToBottomAt ?? 0,
+            lastForceResult: lastForceResult,
+            metrics: {
+              top: lastForceScrollMetrics?.top ?? 0,
+              height: lastForceScrollMetrics?.height ?? 0,
+              clientHeight: lastForceScrollMetrics?.client ?? 0
+            }
           },
           npcSpawnBlockedByFreeze: npcSpawnBlockedByFreezeRef.current,
           ghostBlockedByFreeze: ghostBlockedByFreezeRef.current,
@@ -3439,11 +3494,11 @@ export default function App() {
                 <div>ui.replyBarMessageFound: {String((window.__CHAT_DEBUG__?.ui as any)?.replyBarMessageFound ?? false)}</div>
                 <div>qna.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
                 <div>ui.replyPreviewSuppressed: {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
-                <div>ui.replyPinMounted: {String((window.__CHAT_DEBUG__?.ui as { replyPinMounted?: boolean } | undefined)?.replyPinMounted ?? false)}</div>
-                <div>ui.qnaQuestionMessageIdRendered: {String((window.__CHAT_DEBUG__?.ui as { qnaQuestionMessageIdRendered?: boolean } | undefined)?.qnaQuestionMessageIdRendered ?? false)}</div>
-                <div>chat.pause.isPaused: {String((window.__CHAT_DEBUG__?.chat as { pause?: { isPaused?: boolean } } | undefined)?.pause?.isPaused ?? false)}</div>
-                <div>chat.scroll.lastForceToBottomReason: {(window.__CHAT_DEBUG__?.chat as { scroll?: { lastForceToBottomReason?: string } } | undefined)?.scroll?.lastForceToBottomReason ?? '-'}</div>
-                <div>chat.scroll.metrics(top/height/client): {((window.__CHAT_DEBUG__?.chat as { scroll?: { scrollTop?: number; scrollHeight?: number; clientHeight?: number } } | undefined)?.scroll?.scrollTop ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { scrollTop?: number; scrollHeight?: number; clientHeight?: number } } | undefined)?.scroll?.scrollHeight ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { scrollTop?: number; scrollHeight?: number; clientHeight?: number } } | undefined)?.scroll?.clientHeight ?? 0)}</div>
+                <div>ui.replyPinMounted/pinned.visible: {String((window.__CHAT_DEBUG__?.ui as { replyPinMounted?: boolean; pinned?: { visible?: boolean } } | undefined)?.replyPinMounted ?? false)} / {String((window.__CHAT_DEBUG__?.ui as { pinned?: { visible?: boolean } } | undefined)?.pinned?.visible ?? false)}</div>
+                <div>ui.qnaQuestionMessageIdRendered/pinned.textPreview: {String((window.__CHAT_DEBUG__?.ui as { qnaQuestionMessageIdRendered?: boolean; pinned?: { textPreview?: string } } | undefined)?.qnaQuestionMessageIdRendered ?? false)} / {((window.__CHAT_DEBUG__?.ui as { pinned?: { textPreview?: string } } | undefined)?.pinned?.textPreview ?? '-')}</div>
+                <div>chat.pause.isPaused/setAt/reason: {String((window.__CHAT_DEBUG__?.chat as { pause?: { isPaused?: boolean; setAt?: number; reason?: string } } | undefined)?.pause?.isPaused ?? false)} / {((window.__CHAT_DEBUG__?.chat as { pause?: { setAt?: number } } | undefined)?.pause?.setAt ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { pause?: { reason?: string } } | undefined)?.pause?.reason ?? '-')}</div>
+                <div>chat.scroll.containerFound/lastForceReason/result: {String((window.__CHAT_DEBUG__?.chat as { scroll?: { containerFound?: boolean; lastForceReason?: string; lastForceResult?: string } } | undefined)?.scroll?.containerFound ?? false)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { lastForceReason?: string } } | undefined)?.scroll?.lastForceReason ?? '-')} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { lastForceResult?: string } } | undefined)?.scroll?.lastForceResult ?? '-')}</div>
+                <div>chat.scroll.metrics(top/height/client): {((window.__CHAT_DEBUG__?.chat as { scroll?: { metrics?: { top?: number; height?: number; clientHeight?: number } } } | undefined)?.scroll?.metrics?.top ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { metrics?: { height?: number } } } | undefined)?.scroll?.metrics?.height ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { metrics?: { clientHeight?: number } } } | undefined)?.scroll?.metrics?.clientHeight ?? 0)}</div>
                 <div>ui.replyPinContainerLocation: {(window.__CHAT_DEBUG__?.ui as { replyPinContainerLocation?: string } | undefined)?.replyPinContainerLocation ?? '-'}</div>
                 <div>ui.replyPinInsideChatList: {String((window.__CHAT_DEBUG__?.ui as { replyPinInsideChatList?: boolean } | undefined)?.replyPinInsideChatList ?? false)}</div>
                 <div>ui.replyPreviewLocation/legacyReplyQuoteEnabled: {(window.__CHAT_DEBUG__?.ui as { replyPreviewLocation?: string; legacyReplyQuoteEnabled?: boolean } | undefined)?.replyPreviewLocation ?? '-'} / {String((window.__CHAT_DEBUG__?.ui as { legacyReplyQuoteEnabled?: boolean } | undefined)?.legacyReplyQuoteEnabled ?? false)}</div>
@@ -3534,6 +3589,8 @@ export default function App() {
               setLastForceToBottomReason(payload.reason);
               setLastForceToBottomAt(payload.at);
               setLastForceScrollMetrics(payload.metrics);
+              setLastForceContainerFound(payload.containerFound);
+              setLastForceResult(payload.result);
               setPendingForceScrollReason(null);
             }}
           />
