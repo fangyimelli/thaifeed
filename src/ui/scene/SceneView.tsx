@@ -223,6 +223,9 @@ declare global {
           bootstrap?: { isReady?: boolean; activatedAt?: number | null; activatedBy?: 'username_submit' | 'debug' | null };
           audioEnabledSystemMessageSent?: boolean;
           audioUnlockFailedReason?: string;
+          lastAudioUnlockAt?: number;
+          lastAudioUnlockResult?: string;
+          audioContextState?: string;
           lastBlockedReason?: string;
           debugReset?: { count?: number; reason?: string; resetAt?: number };
         };
@@ -297,6 +300,16 @@ declare global {
           blockedReason?: string;
           cooldowns?: Record<string, number>;
         };
+        stateMachine?: Record<string, {
+          state?: 'idle' | 'playing' | 'cooldown';
+          cooldownRemainingMs?: number;
+          cooldownUntil?: number;
+          lastTriggeredAt?: number | null;
+          preKey?: string | null;
+          postKey?: string | null;
+          lastResult?: string;
+          lastReason?: string;
+        }>;
         candidates?: {
           lastComputedAt?: number;
           lastCandidateCount?: number;
@@ -738,10 +751,12 @@ export default function SceneView({
         emitSceneEvent({ type: 'SFX_START', sfxKey, startedAt });
         window.setTimeout(() => {
           trace('ended');
+          emitSceneEvent({ type: 'SFX_END', sfxKey, startedAt, endedAt: Date.now(), reason: 'ended' });
         }, result.durationMs + 60);
       } else {
         trace('error', `${result.reason}:${result.detail ?? '-'}`);
         updateAudioDebug({ lastPlayResult: result });
+        emitSceneEvent({ type: 'SFX_END', sfxKey, startedAt: Date.now(), endedAt: Date.now(), reason: 'error' });
       }
       if (!result.ok && result.reason === 'audio_locked') {
         setNeedsGestureState(true);

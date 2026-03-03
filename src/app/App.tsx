@@ -334,6 +334,21 @@ const EVENT_TOPIC_WEIGHT: TopicWeightProfile = {
 
 const DEBUG_SEED_USERS = ['ink31', 'mew88', 'koo_77', 'nana23'];
 const EVENT_TESTER_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_EVENT', 'NAME_CALL', 'VIEWER_SPIKE', 'LIGHT_GLITCH', 'FEAR_CHALLENGE'];
+const EVENT_AUDIO_PLAYING_TIMEOUT_MS = 10_000;
+
+type EventAudioState = 'idle' | 'playing' | 'cooldown';
+type EventAudioResult = 'TRIGGERED' | 'SKIPPED' | 'FAILED' | '-';
+type EventAudioStatus = {
+  state: EventAudioState;
+  lastTriggeredAt: number | null;
+  cooldownUntil: number;
+  cooldownMs: number;
+  preKey: string | null;
+  postKey: string | null;
+  lastResult: EventAudioResult;
+  lastReason: string;
+  playingSince: number | null;
+};
 
 
 export default function App() {
@@ -427,6 +442,21 @@ export default function App() {
     replyingToMessageId: null
   });
   const cooldownsRef = useRef<Record<string, number>>({ ghost_female: 0, footsteps: 0, low_rumble: 0, tv_event: 0, ghost_ping_actor: 0 });
+  const eventAudioStateRef = useRef<Record<StoryEventKey, EventAudioStatus>>(EVENT_TESTER_KEYS.reduce((acc, key) => {
+    acc[key] = {
+      state: 'idle',
+      lastTriggeredAt: null,
+      cooldownUntil: 0,
+      cooldownMs: EVENT_REGISTRY[key]?.cooldownMs ?? 0,
+      preKey: EVENT_EFFECTS[key]?.sfx?.[0] ?? null,
+      postKey: EVENT_EFFECTS[key]?.sfx?.[1] ?? null,
+      lastResult: '-',
+      lastReason: '-',
+      playingSince: null
+    };
+    return acc;
+  }, {} as Record<StoryEventKey, EventAudioStatus>));
+  const eventAudioPlayingTimeoutsRef = useRef<Partial<Record<StoryEventKey, number>>>({});
   const eventCooldownsRef = useRef<Record<StoryEventKey, number>>({
     VOICE_CONFIRM: 0,
     GHOST_PING: 0,
@@ -507,7 +537,7 @@ export default function App() {
       window.clearTimeout(timerId);
     });
     eventRunnerStateRef.current.pendingTimers = [];
-  }, [chatFreeze.isFrozen]);
+  }, []);
 
   const registerEventRunnerTimer = useCallback((timerId: number) => {
     eventRunnerStateRef.current.pendingTimers = [...eventRunnerStateRef.current.pendingTimers, timerId];
@@ -563,10 +593,101 @@ export default function App() {
     };
   }, []);
 
+  const clearEventAudioPlayingTimeout = useCallback((eventKey: StoryEventKey) => {
+    const timerId = eventAudioPlayingTimeoutsRef.current[eventKey];
+    if (timerId != null) {
+      window.clearTimeout(timerId);
+      delete eventAudioPlayingTimeoutsRef.current[eventKey];
+    }
+  }, []);
+
+  const updateEventAudioState = useCallback((eventKey: StoryEventKey, patch: Partial<EventAudioStatus>, logType: 'EVENT_STATE' | 'EVENT_TRIGGERED' | 'EVENT_SKIPPED' | 'EVENT_PLAY_FAIL' = 'EVENT_STATE') => {
+    const prev = eventAudioStateRef.current[eventKey];
+    const next: EventAudioStatus = {
+      ...prev,
+      ...patch,
+      cooldownMs: EVENT_REGISTRY[eventKey]?.cooldownMs ?? prev.cooldownMs,
+      preKey: EVENT_EFFECTS[eventKey]?.sfx?.[0] ?? prev.preKey,
+      postKey: EVENT_EFFECTS[eventKey]?.sfx?.[1] ?? prev.postKey
+    };
+    eventAudioStateRef.current[eventKey] = next;
+    const payload = {
+      eventId: eventKey,
+      state: next.state,
+      cooldownUntil: next.cooldownUntil,
+      lastTriggeredAt: next.lastTriggeredAt,
+      lastResult: next.lastResult,
+      reason: next.lastReason,
+      preKey: next.preKey,
+      postKey: next.postKey
+    };
+    if (logType === 'EVENT_TRIGGERED') console.log('[EVENT_TRIGGERED]', payload);
+    else if (logType === 'EVENT_SKIPPED') console.log('[EVENT_SKIPPED]', payload);
+    else if (logType === 'EVENT_PLAY_FAIL') console.log('[EVENT_PLAY_FAIL]', payload);
+    else console.log('[EVENT_STATE]', payload);
+  }, []);
+
+  const scheduleEventAudioIdle = useCallback((eventKey: StoryEventKey) => {
+    clearEventAudioPlayingTimeout(eventKey);
+    const status = eventAudioStateRef.current[eventKey];
+    const now = Date.now();
+    if (status.cooldownUntil <= now) {
+      updateEventAudioState(eventKey, { state: 'idle' });
+      return;
+    }
+    const timerId = window.setTimeout(() => {
+      updateEventAudioState(eventKey, { state: 'idle' });
+    }, Math.max(0, status.cooldownUntil - now));
+    eventAudioPlayingTimeoutsRef.current[eventKey] = timerId;
+  }, [clearEventAudioPlayingTimeout, updateEventAudioState]);
+
+  const transitionEventAudioToCooldown = useCallback((eventKey: StoryEventKey, reason: string) => {
+    clearEventAudioPlayingTimeout(eventKey);
+    const now = Date.now();
+    const cooldownMs = EVENT_REGISTRY[eventKey]?.cooldownMs ?? 0;
+    const cooldownUntil = now + cooldownMs;
+    updateEventAudioState(eventKey, {
+      state: 'cooldown',
+      lastResult: reason === 'play_failed' ? 'FAILED' : 'TRIGGERED',
+      lastReason: reason,
+      cooldownUntil,
+      lastTriggeredAt: now,
+      playingSince: null
+    }, reason === 'play_failed' ? 'EVENT_PLAY_FAIL' : 'EVENT_STATE');
+    scheduleEventAudioIdle(eventKey);
+  }, [clearEventAudioPlayingTimeout, scheduleEventAudioIdle, updateEventAudioState]);
+
+  const markEventAudioPlaying = useCallback((eventKey: StoryEventKey) => {
+    clearEventAudioPlayingTimeout(eventKey);
+    const now = Date.now();
+    updateEventAudioState(eventKey, {
+      state: 'playing',
+      playingSince: now,
+      lastResult: 'TRIGGERED',
+      lastReason: 'playing',
+      lastTriggeredAt: now
+    }, 'EVENT_TRIGGERED');
+    const timerId = window.setTimeout(() => {
+      transitionEventAudioToCooldown(eventKey, 'playing_timeout_fallback');
+    }, EVENT_AUDIO_PLAYING_TIMEOUT_MS);
+    eventAudioPlayingTimeoutsRef.current[eventKey] = timerId;
+  }, [clearEventAudioPlayingTimeout, transitionEventAudioToCooldown, updateEventAudioState]);
+
+  const canTriggerByEventAudioState = useCallback((eventKey: StoryEventKey, force = false) => {
+    const now = Date.now();
+    const status = eventAudioStateRef.current[eventKey];
+    if (force) return { ok: true as const, reason: null as string | null };
+    if (status.state === 'playing') return { ok: false as const, reason: 'playing' };
+    if (status.state === 'cooldown' && now < status.cooldownUntil) return { ok: false as const, reason: 'cd' };
+    return { ok: true as const, reason: null as string | null };
+  }, []);
 
   useEffect(() => () => {
     clearEventRunnerState();
-  }, [clearEventRunnerState]);
+    EVENT_TESTER_KEYS.forEach((eventKey) => {
+      clearEventAudioPlayingTimeout(eventKey);
+    });
+  }, [clearEventAudioPlayingTimeout, clearEventRunnerState]);
 
 
   useEffect(() => {
@@ -1091,7 +1212,17 @@ export default function App() {
     (['ghost_female', 'footsteps', 'low_rumble'] as const).forEach((key) => {
       cooldownsRef.current[key] = 0;
     });
-    EVENT_REGISTRY_KEYS.forEach((eventKey) => rollbackEventCooldown(eventKey));
+    EVENT_REGISTRY_KEYS.forEach((eventKey) => {
+      rollbackEventCooldown(eventKey);
+      clearEventAudioPlayingTimeout(eventKey);
+      updateEventAudioState(eventKey, {
+        state: 'idle',
+        cooldownUntil: 0,
+        playingSince: null,
+        lastResult: 'SKIPPED',
+        lastReason: `manual_unlock:${reason}`
+      });
+    });
     const prevCount = Number((window.__CHAT_DEBUG__ as { debugReset?: { count?: number } } | undefined)?.debugReset?.count ?? 0);
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
@@ -1101,7 +1232,7 @@ export default function App() {
         resetAt: Date.now()
       }
     };
-  }, [clearChatFreeze, clearEventRunnerState, resetQnaUiState, rollbackEventCooldown]);
+  }, [clearChatFreeze, clearEventAudioPlayingTimeout, clearEventRunnerState, resetQnaUiState, rollbackEventCooldown, updateEventAudioState]);
 
 
   const nextAnimationFrame = useCallback(() => new Promise<void>((resolve) => {
@@ -1285,7 +1416,13 @@ export default function App() {
     else if (activeUsers.length < 3) blockedReason = 'active_users_lt_3';
     else if (!activeUserForTag) blockedReason = eligibleActiveUsers.length === 0 ? 'vip_target' : 'no_active_user';
     else if (lockStateRef.current.isLocked && lockStateRef.current.target && lockStateRef.current.target !== activeUserForTag) blockedReason = 'locked_active';
-    else if (!forcedByDebug && !shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
+    else {
+      const stateGate = canTriggerByEventAudioState(eventKey, forcedByDebug);
+      if (!stateGate.ok) {
+        updateEventAudioState(eventKey, { lastResult: 'SKIPPED', lastReason: stateGate.reason ?? 'blocked' }, 'EVENT_SKIPPED');
+        blockedReason = stateGate.reason === 'cd' ? 'cooldown_blocked' : 'event_exclusive_active';
+      } else if (!forcedByDebug && !shouldIgnoreCooldown && (eventCooldownsRef.current[eventKey] ?? 0) > now) blockedReason = 'cooldown_blocked';
+    }
 
     setEventAttemptDebug(eventKey, blockedReason);
     if (blockedReason) {
@@ -1300,6 +1437,7 @@ export default function App() {
     const eventId = `${eventKey}_${Date.now()}`;
     eventRunnerStateRef.current.inFlight = true;
     eventRunnerStateRef.current.currentEventId = eventId;
+    markEventAudioPlaying(eventKey);
     const opener = pickDialog(eventKey, 'opener', activeUserForTag, eventRecentContentIdsRef.current[eventKey]);
     let txn: EventTxn = {
       eventKey,
@@ -1362,6 +1500,7 @@ export default function App() {
     const handleAbortCleanup = (reason: EventCommitBlockedReason) => {
       eventRunnerStateRef.current.inFlight = false;
       eventRunnerStateRef.current.currentEventId = null;
+      transitionEventAudioToCooldown(eventKey, reason === 'audio_locked' ? 'audio_locked' : 'play_failed');
       if (reason === 'question_send_failed' && !txn.starterTagSent) {
         recoverFromStuckEventState('question_send_failed_recover');
         rollbackEventCooldown(eventKey);
@@ -1374,7 +1513,6 @@ export default function App() {
     else if ((!forcedByDebug || !forceOptions.skipTagRequirement) && !txn.starterTagSent) commitBlocked('no_tag');
     else if (!soundUnlocked.current) commitBlocked('audio_locked');
     else if (requiredAssetErrors.length > 0) commitBlocked('assets_missing');
-    else if ((effects.sfx ?? []).some((sfxKey) => (cooldownsRef.current[sfxKey] ?? 0) > Date.now())) commitBlocked('sfx_cooldown_active');
     else if (effects.video && !VIDEO_PATH_BY_KEY[`oldhouse_room_${effects.video}` as keyof typeof VIDEO_PATH_BY_KEY]) commitBlocked('video_src_empty');
     else if (effects.video && effects.video === 'loop4' && !VIDEO_PATH_BY_KEY.oldhouse_room_loop4) commitBlocked('video_not_ready');
     else {
@@ -1495,7 +1633,7 @@ export default function App() {
     }
 
     return { eventId: record.eventId, target: questionActor };
-  }, [appStarted, chatAutoPaused, chatFreeze.isFrozen, commitEventCooldown, debugEnabled, dispatchEventLine, playSfx, recoverFromStuckEventState, requiredAssetErrors.length, rollbackEventCooldown, scheduleBlackoutFlicker, scrollThenPauseForTaggedQuestion, setEventAttemptDebug, sortedMessages, state.messages, updateEventDebug]);
+  }, [appStarted, canTriggerByEventAudioState, chatAutoPaused, chatFreeze.isFrozen, commitEventCooldown, debugEnabled, dispatchEventLine, markEventAudioPlaying, playSfx, recoverFromStuckEventState, requiredAssetErrors.length, rollbackEventCooldown, scheduleBlackoutFlicker, scrollThenPauseForTaggedQuestion, setEventAttemptDebug, sortedMessages, state.messages, transitionEventAudioToCooldown, updateEventAudioState, updateEventDebug]);
 
   const postFollowUpLine = useCallback((target: string, eventKey: StoryEventKey, phase: Exclude<EventLinePhase, 'opener'> = 'followUp') => {
     const built = buildEventLine(eventKey, phase, target);
@@ -1986,6 +2124,14 @@ export default function App() {
         const sfxKey = event.sfxKey === 'fan_loop' ? 'fan' : event.sfxKey === 'footsteps' ? 'footsteps' : 'ghost';
         emitChatEvent({ type: 'SFX_START', sfxKey });
       }
+      if (event.type === 'SFX_END') {
+        EVENT_TESTER_KEYS.forEach((eventKey) => {
+          const status = eventAudioStateRef.current[eventKey];
+          if (status.state !== 'playing') return;
+          if (status.preKey !== event.sfxKey && status.postKey !== event.sfxKey) return;
+          transitionEventAudioToCooldown(eventKey, event.reason === 'error' ? 'play_failed' : 'ended');
+        });
+      }
     });
 
     return () => unsubscribe();
@@ -2004,6 +2150,13 @@ export default function App() {
         sfxCooldowns: { ...cooldownsRef.current },
         event: {
           ...(window.__CHAT_DEBUG__?.event ?? {}),
+          stateMachine: Object.fromEntries(EVENT_TESTER_KEYS.map((eventKey) => {
+            const status = eventAudioStateRef.current[eventKey];
+            return [eventKey, {
+              ...status,
+              cooldownRemainingMs: Math.max(0, status.cooldownUntil - now)
+            }];
+          })),
           scheduler: {
             ...(window.__CHAT_DEBUG__?.event?.scheduler ?? {}),
             now,
@@ -2750,13 +2903,35 @@ export default function App() {
       });
       soundUnlocked.current = true;
       audioUnlockFailedReasonRef.current = null;
+      updateChatDebug({
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          system: {
+            ...(window.__CHAT_DEBUG__?.chat?.system ?? {}),
+            lastAudioUnlockAt: Date.now(),
+            lastAudioUnlockResult: 'success',
+            audioContextState: window.__AUDIO_DEBUG__?.fanState?.contextState ?? 'unknown'
+          }
+        }
+      });
       return true;
     } catch (error) {
       soundUnlocked.current = false;
       audioUnlockFailedReasonRef.current = error instanceof Error ? error.message : String(error);
+      updateChatDebug({
+        chat: {
+          ...(window.__CHAT_DEBUG__?.chat ?? {}),
+          system: {
+            ...(window.__CHAT_DEBUG__?.chat?.system ?? {}),
+            lastAudioUnlockAt: Date.now(),
+            lastAudioUnlockResult: `failed:${audioUnlockFailedReasonRef.current}`,
+            audioContextState: window.__AUDIO_DEBUG__?.fanState?.contextState ?? 'unknown'
+          }
+        }
+      });
       return false;
     }
-  }, []);
+  }, [updateChatDebug]);
 
   const bootstrapAfterUsernameSubmit = useCallback(async (rawHandle: string, activatedBy: Exclude<BootstrapActivatedBy, null> = 'username_submit') => {
     const registered = registerActiveUser(rawHandle);
@@ -2930,28 +3105,24 @@ export default function App() {
     };
   }, [debugForceExecuteEvent]);
 
-  const runSfxEventTest = useCallback((eventKey: StoryEventKey, audioKey: 'ghost_female' | 'footsteps') => {
+  const runSfxEventTest = useCallback((eventKey: StoryEventKey, audioKey: 'ghost_female' | 'footsteps', forceExecute = false) => {
     const def = EVENT_REGISTRY[eventKey];
     if (!def) {
-      console.log(`[EVENT_SKIPPED] reason=missing_asset event=${eventKey} audio=${audioKey}`);
+      updateEventAudioState(eventKey, { lastResult: 'SKIPPED', lastReason: 'missing_event' }, 'EVENT_SKIPPED');
       return;
     }
     const hasAsset = audioKey in SFX_REGISTRY;
     if (!hasAsset) {
-      console.log(`[EVENT_SKIPPED] reason=missing_asset event=${eventKey} audio=${audioKey}`);
+      updateEventAudioState(eventKey, { lastResult: 'SKIPPED', lastReason: 'missing_asset' }, 'EVENT_SKIPPED');
       return;
     }
+    const gate = canTriggerByEventAudioState(eventKey, forceExecute);
+    if (!gate.ok) {
+      updateEventAudioState(eventKey, { lastResult: 'SKIPPED', lastReason: gate.reason ?? 'blocked' }, 'EVENT_SKIPPED');
+      return;
+    }
+    markEventAudioPlaying(eventKey);
     const now = Date.now();
-    const isLocked = lockStateRef.current.isLocked;
-    const cooldownUntil = cooldownsRef.current[audioKey] ?? 0;
-    if (isLocked) {
-      console.log(`[EVENT_SKIPPED] reason=lock event=${eventKey} audio=${audioKey}`);
-      return;
-    }
-    if (cooldownUntil > now) {
-      console.log(`[EVENT_SKIPPED] reason=cd event=${eventKey} audio=${audioKey}`);
-      return;
-    }
     const played = playSfx(audioKey, {
       reason: `event:test:${eventKey}`,
       source: 'event',
@@ -2960,14 +3131,24 @@ export default function App() {
       allowBeforeStarterTag: true
     });
     if (!played) {
-      console.log(`[EVENT_SKIPPED] reason=lock/cd/missing_asset event=${eventKey} audio=${audioKey}`);
+      transitionEventAudioToCooldown(eventKey, 'play_failed');
+      updateEventAudioState(eventKey, { lastResult: 'FAILED', lastReason: 'play_failed' }, 'EVENT_PLAY_FAIL');
       return;
     }
-    console.log(`[EVENT_TRIGGERED] ${eventKey} ${audioKey}`);
-  }, [playSfx]);
+  }, [canTriggerByEventAudioState, markEventAudioPlaying, playSfx, transitionEventAudioToCooldown, updateEventAudioState]);
 
   const resetEventTestState = useCallback(() => {
     clearEventRunnerState();
+    EVENT_TESTER_KEYS.forEach((eventKey) => {
+      clearEventAudioPlayingTimeout(eventKey);
+      updateEventAudioState(eventKey, {
+        state: 'idle',
+        cooldownUntil: 0,
+        playingSince: null,
+        lastResult: '-',
+        lastReason: 'reset_test_state'
+      });
+    });
     eventTestDebugRef.current.lastStartAttemptBlockedReason = '-';
     setEventTesterStatus({ key: null, blockedReason: null });
     updateEventDebug({
@@ -2979,11 +3160,23 @@ export default function App() {
         }
       }
     });
-  }, [clearEventRunnerState, updateEventDebug]);
+  }, [clearEventAudioPlayingTimeout, clearEventRunnerState, updateEventAudioState, updateEventDebug]);
 
   const forceUnlockDebug = useCallback(() => {
     recoverFromStuckEventState('debug_manual_recover');
   }, [recoverFromStuckEventState]);
+
+  const unlockSingleEventDebug = useCallback((eventKey: StoryEventKey) => {
+    rollbackEventCooldown(eventKey);
+    clearEventAudioPlayingTimeout(eventKey);
+    updateEventAudioState(eventKey, {
+      state: 'idle',
+      cooldownUntil: 0,
+      playingSince: null,
+      lastResult: 'SKIPPED',
+      lastReason: 'manual_unlock_single'
+    }, 'EVENT_STATE');
+  }, [clearEventAudioPlayingTimeout, rollbackEventCooldown, updateEventAudioState]);
 
   const forceShowLoop4Debug = useCallback(() => {
     requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: 'debug_force_show_loop4_3s', sourceEventKey: 'TV_EVENT' });
@@ -3064,19 +3257,28 @@ export default function App() {
                 <h4>Event Tester</h4>
                 <div><strong>Events</strong></div>
                 <div className="debug-route-controls">
-                  {EVENT_TESTER_KEYS.map((eventKey) => (
-                    <div key={eventKey} className="debug-event-button-row">
-                      <button type="button" onClick={() => triggerEventFromTester(eventKey)}>
-                        Trigger {eventKey}
-                      </button>
-                      <button type="button" onClick={() => debugForceExecuteEvent(eventKey, { ignoreCooldown: ignoreCooldownsDebug, ignorePause: ignorePauseDebug, skipTagRequirement: skipTagRequirementDebug })}>
-                        Force {eventKey}
-                      </button>
-                      {eventTesterStatus.key === eventKey && eventTesterStatus.blockedReason && (
-                        <small>Blocked: {eventTesterStatus.blockedReason}</small>
-                      )}
-                    </div>
-                  ))}
+                  {EVENT_TESTER_KEYS.map((eventKey) => {
+                    const eventState = window.__CHAT_DEBUG__?.event?.stateMachine?.[eventKey];
+                    return (
+                      <div key={eventKey} className="debug-event-button-row">
+                        <button type="button" onClick={() => triggerEventFromTester(eventKey)}>
+                          Trigger {eventKey}
+                        </button>
+                        <button type="button" onClick={() => debugForceExecuteEvent(eventKey, { ignoreCooldown: ignoreCooldownsDebug, ignorePause: ignorePauseDebug, skipTagRequirement: skipTagRequirementDebug })}>
+                          Force Execute {eventKey}
+                        </button>
+                        <button type="button" onClick={() => unlockSingleEventDebug(eventKey)}>
+                          Unlock {eventKey}
+                        </button>
+                        <small>
+                          state={eventState?.state ?? '-'} cd={eventState?.cooldownRemainingMs ?? 0} lastAt={eventState?.lastTriggeredAt ?? '-'} pre/post={eventState?.preKey ?? '-'}/{eventState?.postKey ?? '-'} result={eventState?.lastResult ?? '-'}:{eventState?.lastReason ?? '-'}
+                        </small>
+                        {eventTesterStatus.key === eventKey && eventTesterStatus.blockedReason && (
+                          <small>Blocked: {eventTesterStatus.blockedReason}</small>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <label>
                   <input type="checkbox" checked={ignoreCooldownsDebug} onChange={(event) => setIgnoreCooldownsDebug(event.target.checked)} />
@@ -3095,8 +3297,10 @@ export default function App() {
                   Simulate Player Reply
                 </label>
                 <div className="debug-route-controls">
-                  <button type="button" onClick={() => runSfxEventTest('GHOST_PING', 'ghost_female')}>Test Ghost SFX</button>
-                  <button type="button" onClick={() => runSfxEventTest('VIEWER_SPIKE', 'footsteps')}>Test Footsteps SFX</button>
+                  <button type="button" onClick={() => runSfxEventTest('GHOST_PING', 'ghost_female')}>Trigger Ghost SFX</button>
+                  <button type="button" onClick={() => runSfxEventTest('GHOST_PING', 'ghost_female', true)}>Force Execute Ghost SFX</button>
+                  <button type="button" onClick={() => runSfxEventTest('VIEWER_SPIKE', 'footsteps')}>Trigger Footsteps SFX</button>
+                  <button type="button" onClick={() => runSfxEventTest('VIEWER_SPIKE', 'footsteps', true)}>Force Execute Footsteps SFX</button>
                   {!bootstrapRef.current.isReady && (
                     <button type="button" onClick={() => {
                       const name = normalizeHandle(startNameInput) || normalizeHandle(activeUserInitialHandleRef.current || '') || 'you';
@@ -3106,6 +3310,7 @@ export default function App() {
                     </button>
                   )}
                   <button type="button" onClick={emitNpcTagToActiveUser}>Emit NPC Tag @You</button>
+                  <button type="button" onClick={() => { void ensureAudioUnlockedFromUserGesture(); }}>Enable Audio</button>
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
                   <button type="button" onClick={forceUnlockDebug}>Reset Stuck State</button>
                   <button type="button" onClick={forceShowLoop4Debug}>Force Show loop4 (3s)</button>
@@ -3128,6 +3333,9 @@ export default function App() {
                 <div>chat.canTagActiveUser: {String((window.__CHAT_DEBUG__?.chat as any)?.canTagActiveUser ?? false)}</div>
                 <div>audio.enabledSystemMessageSent: {String((window.__CHAT_DEBUG__?.chat as any)?.system?.audioEnabledSystemMessageSent ?? false)}</div>
                 <div>audio.unlockFailedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.audioUnlockFailedReason ?? '-'}</div>
+                <div>audio.contextState: {(window.__CHAT_DEBUG__?.chat as any)?.system?.audioContextState ?? (window.__AUDIO_DEBUG__?.fanState?.contextState ?? '-')}</div>
+                <div>audio.lastUnlockResult: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastAudioUnlockResult ?? '-'}</div>
+                <div>audio.lastUnlockAt: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastAudioUnlockAt ?? '-'}</div>
                 <div>lastBlockedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastBlockedReason ?? '-'}</div>
                 <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
                 <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
