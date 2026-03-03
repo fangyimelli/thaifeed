@@ -34,6 +34,7 @@ type Props = {
   onDebugSimulateSend?: () => Promise<SendResult>;
   onDebugToggleSelfTag?: () => void;
   onDebugToggleComposing?: () => void;
+  onDebugInjectMention?: () => void;
   onSendButtonClick?: () => void;
   lockTarget?: string | null;
   isLocked?: boolean;
@@ -50,6 +51,7 @@ type Props = {
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
+const MENTION_AUTOSCROLL_THRESHOLD = 100;
 const MAX_RENDER_COUNT = 100;
 const KEYBOARD_CLOSE_FOLLOWUP_MS = 250;
 const KEYBOARD_VIEWPORT_SYNC_WINDOW_MS = 500;
@@ -71,6 +73,7 @@ export default function ChatPanel({
   onDebugSimulateSend,
   onDebugToggleSelfTag,
   onDebugToggleComposing,
+  onDebugInjectMention,
   onSendButtonClick,
   lockTarget,
   isLocked,
@@ -96,9 +99,13 @@ export default function ChatPanel({
   const viewportSyncUntilRef = useRef(0);
   const forceScrollDebugRef = useRef<ForceScrollDebugPayload | null>(null);
   const [stickBottom, setStickBottom] = useState(true);
+  const [mentionJumpHintActive, setMentionJumpHintActive] = useState(false);
   const [autoPaused, setAutoPaused] = useState(false);
+  const previousMessageCountRef = useRef(0);
+  const mentionJumpHintTimerRef = useRef<number | null>(null);
   const isMobile = isMobileDevice();
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const forceMentionAutoScroll = new URLSearchParams(window.location.search).get('forceMentionAutoscroll') === '1';
   const activeSet = getActiveUserSet([...collectActiveUsers(messages), activeUserInitialHandle].filter(Boolean));
   const sanitizedMessages = messages.map((message) => ({
     ...message,
@@ -183,6 +190,31 @@ export default function ChatPanel({
     }
   };
 
+  const clearMentionJumpHintPulse = () => {
+    if (mentionJumpHintTimerRef.current) {
+      window.clearTimeout(mentionJumpHintTimerRef.current);
+      mentionJumpHintTimerRef.current = null;
+    }
+  };
+
+  const pulseMentionJumpHint = () => {
+    setMentionJumpHintActive(true);
+    clearMentionJumpHintPulse();
+    mentionJumpHintTimerRef.current = window.setTimeout(() => {
+      setMentionJumpHintActive(false);
+      mentionJumpHintTimerRef.current = null;
+    }, 1600);
+  };
+
+  const scheduleScrollToBottom = (reason: string) => {
+    window.requestAnimationFrame(() => {
+      scrollChatToBottom(reason);
+      window.setTimeout(() => {
+        scrollChatToBottom(`${reason}:timeout0`);
+      }, 0);
+    });
+  };
+
   const closeKeyboard = () => {
     const inputEl = inputRef.current;
     if (!inputEl) return;
@@ -218,6 +250,53 @@ export default function ChatPanel({
   useLayoutEffect(() => {
     conditionalScrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (!messages.length) {
+      previousMessageCountRef.current = 0;
+      return;
+    }
+    const previousCount = previousMessageCountRef.current;
+    const incoming = previousCount <= messages.length
+      ? messages.slice(previousCount)
+      : messages;
+    previousMessageCountRef.current = messages.length;
+    if (!incoming.length) return;
+
+    let shouldForceToBottom = false;
+    incoming.forEach((message) => {
+      if (message.isSelf || message.type === 'system' || !message.mentions?.includes(activeUserId)) return;
+
+      const listEl = messageListRef.current;
+      const distanceFromBottom = listEl ? listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight : Number.POSITIVE_INFINITY;
+      const atBottom = distanceFromBottom <= MENTION_AUTOSCROLL_THRESHOLD;
+      const handleMatched = message.text.toLowerCase().includes(`@${activeUserInitialHandle.toLowerCase()}`);
+      const idMatched = message.text.includes(`@${activeUserId}`);
+      const matched = handleMatched ? 'handle' : (idMatched ? 'id' : 'id');
+      console.log(`[MENTION_AUTOSCROLL] messageId=${message.id} matched=${matched} atBottom=${String(atBottom)}`);
+
+      if (forceMentionAutoScroll || atBottom) {
+        shouldForceToBottom = true;
+        return;
+      }
+
+      const skippedReason = stickBottom ? 'not_at_bottom' : 'user_scrolling';
+      console.log(`[AUTOSCROLL_SKIPPED] reason=${skippedReason}`);
+      setStickBottom(false);
+      pulseMentionJumpHint();
+    });
+
+    if (shouldForceToBottom) {
+      setStickBottom(true);
+      setMentionJumpHintActive(false);
+      clearMentionJumpHintPulse();
+      scheduleScrollToBottom('mention-autoscroll');
+    }
+  }, [activeUserId, activeUserInitialHandle, forceMentionAutoScroll, messages, stickBottom]);
+
+  useEffect(() => () => {
+    clearMentionJumpHintPulse();
+  }, []);
 
   useEffect(() => {
     const box = messageListRef.current;
@@ -307,7 +386,12 @@ export default function ChatPanel({
         onScroll={(event) => {
           const el = event.currentTarget;
           const distanceBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-          setStickBottom(distanceBottom < STICK_BOTTOM_THRESHOLD);
+          const nextStickBottom = distanceBottom < STICK_BOTTOM_THRESHOLD;
+          setStickBottom(nextStickBottom);
+          if (nextStickBottom) {
+            setMentionJumpHintActive(false);
+            clearMentionJumpHintPulse();
+          }
         }}
       >
         <div className="chat-items">
@@ -328,14 +412,16 @@ export default function ChatPanel({
 
       {!stickBottom && (
         <button
-          className="jump-bottom"
+          className={`jump-bottom ${mentionJumpHintActive ? 'mention-active' : ''}`}
           type="button"
           onClick={() => {
             scrollChatToBottom('jump-bottom');
             setStickBottom(true);
+            setMentionJumpHintActive(false);
+            clearMentionJumpHintPulse();
           }}
         >
-          最新訊息
+          {mentionJumpHintActive ? '@你・跳到最新' : '最新訊息'}
         </button>
       )}
 
@@ -413,6 +499,8 @@ export default function ChatPanel({
           <button type="button" onClick={() => { void onDebugSimulateSend?.(); }}>Simulate Send</button>
           <button type="button" onClick={onDebugToggleSelfTag}>Toggle TagLock(Self)</button>
           <button type="button" onClick={onDebugToggleComposing}>Toggle isComposing ({String(isComposing)})</button>
+          <button type="button" onClick={onDebugInjectMention}>Inject NPC Tag @You</button>
+          <div className="chat-debug-note">forceMentionAutoscroll=1 → 強制每次 @你 都自動滾到底</div>
         </div>
       )}
     </section>
