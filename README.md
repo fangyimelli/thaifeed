@@ -1425,3 +1425,35 @@ npm run build
 - 連按 Trigger 同事件：應出現 `[EVENT_SKIPPED] reason=playing|cd`。
 - 連按 Force Execute：每次都能觸發，不需先按 Reset Stuck。
 - `ghost_female`、`footsteps` 可在 Debug 面板重複測試。
+
+## Tag Start Flow（2026-03-03）
+
+- 被 `@activeUser` 的題目訊息現在固定執行順序（單一路徑）：
+  1) append tag message 到 `messages[]`
+  2) 等待 `nextPaint`（雙 rAF）
+  3) 強制 `forceScrollToBottom(reason="tag")`
+  4) 設定 pinned reply（僅 overlay，不重複插入聊天室訊息）
+  5) 再等待一次 `nextPaint`
+  6) 最後 freeze/pause（停止後不再產生新訊息/鬼動）
+- 置底被視為 UI 動作，不可被 pause gate 提前擋住；pause 只能在流程最後生效。
+- mobile/desktop 皆統一以 chat list 容器執行置底，避免作用到錯誤 element。
+
+### Debug 觀測（本次新增/調整）
+
+- `chat.scroll.containerFound`
+- `chat.scroll.lastForceReason`
+- `chat.scroll.lastForceAt`
+- `chat.scroll.lastForceResult`
+- `chat.scroll.metrics(top/height/clientHeight)`
+- `chat.pause.setAt`
+- `chat.pause.reason`
+- `ui.pinned.visible`
+- `ui.pinned.textPreview`
+
+Console（debug 模式）可觀察：
+- `[SCROLL] force tag ok top=... height=...`
+- `[PIN] set visible text="..."`
+- `[PAUSE] set reason=tag_wait_reply`
+
+## README Removed/Deprecated Log
+- 本次無新增移除項。
