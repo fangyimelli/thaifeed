@@ -198,3 +198,13 @@
 ### Docs
 - README 補充 Tag Start Flow 固定順序、debug 觀測項與 mobile 容器策略。
 - PR_NOTES 更新本次影響範圍、驗收案例與 debug 欄位調整。
+
+
+## 2026-03-03（classic mode architecture doc）
+
+### Changed
+- [docs] 新增 `docs/20-classic-mode-architecture.md`：以目前程式碼現況完整整理 classic mode 架構（入口、播放器、音效、聊天室、QNA、debug 契約、狀態機、資料流、擴充點與最小重構建議）。
+- [docs] `README.md` 新增 Architecture Docs 區塊，加入 classic mode 架構文件索引連結。
+
+### Docs
+- PR_NOTES 更新為本次 docs-only 變更與驗收結果（播放器/音效/聊天室/手機/桌機/debug 全項 PASS，未改動邏輯）。

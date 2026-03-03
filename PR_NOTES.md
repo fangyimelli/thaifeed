@@ -1,31 +1,16 @@
-# 修正：Tag 後先置底再 pin，最後 freeze（避免置底消失）
-
 ## Summary
-- 將 tag 起始流程改為單一入口 `runTagStartFlow`，固定順序：append → scrollToBottom → setPinnedReply → freeze。
-- `forceScrollToBottom` 改為只操作 chat list 容器，加入 mobile 二次置底（rAF double-tap）。
-- `sendQnaQuestion` 改走新 flow，避免 pause 太早造成置底被略過。
-- Debug overlay 補齊 scroll/pause/pinned 可觀測欄位與 console 打點。
+- 新增 `docs/20-classic-mode-architecture.md`，以目前 repo 實際程式為準，完整記錄 classic mode 的架構：入口、模組邊界、runtime data flow、state machine、chat/tag/reply/freeze 契約、video/audio/debug 契約、extension points 與已知問題。
+- 更新 `README.md`，新增 Architecture Docs 區塊並加入新文件索引。
+- 更新 `docs/10-change-log.md`，記錄本次 docs-only 變更。
 
 ## Changed
-- 新增 `src/chat/tagFlow.ts`
-  - `runTagStartFlow(...)`
-  - `nextPaint()`（雙 rAF）
-- 新增 `src/chat/scrollController.ts`
-  - `registerChatScrollContainer/getChatScrollContainer`
-- `src/ui/chat/ChatPanel.tsx`
-  - 統一 `chatScrollRef` 註冊容器
-  - `forceScroll` 只讀取 scroll controller 容器
-  - `forceScroll` 回報 `containerFound/result/metrics`
-  - debug console 新增 `[SCROLL] force ...`
-- `src/app/App.tsx`
-  - `sendQnaQuestion` 改為 async + `runTagStartFlow`
-  - pause debug 新增 `setAt/reason`
-  - scroll debug 新增 `containerFound/lastForceReason/lastForceAt/lastForceResult/metrics`
-  - ui debug 新增 `pinned.visible/textPreview`
-  - debug console 新增 `[PIN]`、`[PAUSE]`
+- `docs/20-classic-mode-architecture.md`（NEW）
+- `README.md`（UPDATE：新增 Architecture Docs 連結）
+- `docs/10-change-log.md`（UPDATE：新增本次 Changed/Docs 紀錄）
+- `PR_NOTES.md`（UPDATE）
 
 ## Removed
-- Item: 無（本次未刪除功能）
+- Item: 無（本次未刪除/停用/移除任何功能）
 - Reason: N/A
 - Impact: N/A
 - Alternative: N/A
@@ -40,25 +25,25 @@
 - [ ] SSOT changed (list files + reasons below)
 
 ## Debug 欄位變更
-- 新增/調整：
-  - `chat.scroll.containerFound`
-  - `chat.scroll.lastForceReason`
-  - `chat.scroll.lastForceAt`
-  - `chat.scroll.lastForceResult`
-  - `chat.scroll.metrics`
-  - `chat.pause.setAt`
-  - `chat.pause.reason`
-  - `ui.pinned.visible`
-  - `ui.pinned.textPreview`
-- 三次 PR 規則：本次已明確記錄新增欄位，後續 PR 持續追蹤。
+- 本次無新增/移除 debug 欄位（僅文件化既有欄位來源與排查流程）。
+- 三次 PR 規則：不涉及欄位增刪。
+
+## Impact Scope
+- 類型：docs-only
+- 程式邏輯：未改動
+- UI 行為：未改動
+- 資料/素材：未改動
 
 ## Acceptance
-- Case A（事件/觀眾 tag 一次）
-  - 預期：先看到 tag 訊息 append，聊天室強制到最底，再看到 pinned reply，最後 freeze。
-- Case B（玩家回覆後）
-  - 預期：解除 freeze，觸發 `reason=reply` 的 force scroll，再恢復 FOLLOW。
+- 播放器：PASS（未改動）
+- 音效：PASS（未改動）
+- 聊天室：PASS（未改動）
+- 手機版面：PASS（未改動）
+- 桌機版面：PASS（未改動）
+- Debug 面板：PASS（未改動）
+- Docs：PASS（新增 `docs/20-classic-mode-architecture.md` 且 README 有索引）
 
 ## Checks
 1. `npm run build`
-2. `npm run dev` + `?debug=1` 手動檢視 debug overlay
-3. mobile viewport 截圖（debug 模式）
+2. `npm run lint`（若專案未提供 lint script，略過並註記）
+3. `git diff -- docs/20-classic-mode-architecture.md README.md docs/10-change-log.md PR_NOTES.md`
