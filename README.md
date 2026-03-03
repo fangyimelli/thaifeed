@@ -1395,6 +1395,7 @@ npm run build
 
 ## README Removed/Deprecated Log
 - 本次無新增移除項（保留既有事件 key，改為統一 SSOT 與 debug 可視化驗證）。
+- Fix: focus day detection uses dayKey to avoid exchange/UTC day-shift。
 
 ## Event Audio Stuck 修正（2026-03-03）
 

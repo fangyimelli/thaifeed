@@ -1,45 +1,40 @@
-# 修正：@mention 後聊天室未自動滾到底
+# 修正：Focus 模式日期判斷改用 dayKey，避免 HUD/狀態不更新
 
 ## Summary
-- 修正「被 tag 會高亮但不自動滾動」：當新訊息（非自己）`mentions` 命中 activeUser 時，加入 mention autoscroll 流程。
-- 採用**策略 B（Twitch-like）**：
-  - 使用者接近底部（threshold=100px）時：自動滾到底。
-  - 使用者正在往上看舊訊息（超過 threshold）時：不強制跳，改為強化「跳到最新」提示（顯示 `@你・跳到最新`）。
-- 新增 debug：
-  - console logs：`[MENTION_AUTOSCROLL] ...`、`[AUTOSCROLL_SKIPPED] ...`
-  - URL 開關：`forceMentionAutoscroll=1`（強制每次 mention 都 auto scroll）
-  - debug 按鈕：`Inject NPC Tag @You`
-
-## Strategy 選擇理由
-- 採策略 B 可避免使用者正在閱讀舊訊息時被強制打斷，符合 Twitch 常見 UX。
-- 同時在 mention 事件時強調「跳到最新」按鈕，保留一鍵回到底部的能力，降低漏訊息風險。
+- 目標：修正 Focus 模式在跨時區/交易所日切換時，HUD `TradeDay/BOS/FVG/Blue/Score` 被錯誤遮罩、alerts 與 session 顯示不同步。
+- 策略：將「是否屬於 focus 日」改為 dayKey 比對；NY session 判斷仍保留 timestamp 區間。
 
 ## Changed
-- `ChatPanel` 新增 mention autoscroll 判斷：僅針對「新進訊息 + 非自己 + mentions 命中 activeUser」。
-- `ChatPanel` 新增雙階段滾動（`requestAnimationFrame` + `setTimeout(0)`）確保 Android Chrome / 行動版 DOM 更新後仍穩定到底。
-- `ChatPanel` 新增 mention 提示脈衝狀態：未在底部時將「最新訊息」按鈕高亮與改文案。
-- `App` debug 模式新增注入測試訊息按鈕（帶 `@activeUserHandle`）。
-- `styles` 新增 `jump-bottom.mention-active` 與 debug 說明樣式。
+- [focus day detection]
+  - `isInFocusDay` 由 `time >= focusDayStart && time < focusDayEnd` 改為 `barDayKey == focusDayKey`。
+  - 新增/改用：
+    - `focusDayKey = f_dayKey(focusAnchor, timezoneInput)`
+    - `barDayKey = f_dayKey(time, timezoneInput)`
+- [focus NY session filter]
+  - 新增 `isInFocusNYSession = time >= focusNYStart && time < focusNYEnd`。
+  - 藍燈、入場流程顯示與 alerts 的 focus filter 改用 `isInFocusNYSession`（focus mode 下僅顯示該日 NY session）。
+- [HUD mask]
+  - `focusMasked = focus_mode && !isInFocusDay`（改用 dayKey 版）。
+- [debug]
+  - HUD 新增 debug 行：`barDayKey=xxxx | focusDayKey=xxxx`，方便確認選定日期一致性。
+
+## SSOT changed
+- 無新增 SSOT 檔案；既有 focus/session 判定邏輯修正。
 
 ## Debug 欄位變更
-- 新增 debug 控制：
-  - URL param: `forceMentionAutoscroll=1`
-  - 按鈕: `Inject NPC Tag @You`
-- 三次 PR 規則檢查：
-  1. 本節已記錄新增 debug 控制。
-  2. README 已同步寫入 debug 驗證方式。
-  3. Change Log 已記錄行為與 debug 變更。
+- 新增：`barDayKey`、`focusDayKey`（HUD debug 行）。
 
-## Testing（驗收）
-1. **我停在底部 → 別人 @我**
-   - 結果：立即 autoscroll 到最新；該 row 維持 mention highlight。
-2. **我往上滑看舊訊息（離底部 > threshold）→ 別人 @我（策略 B）**
-   - 結果：不強制跳到底，顯示/高亮 `@你・跳到最新`。
-   - 點擊後可一鍵到底；該 mention row 仍高亮。
-3. **連續多則訊息快速進來**
-   - 結果：mention 命中時仍穩定觸發判斷；採雙階段排程滾動，未觀察到抖動/漏滾。
+## Removed
+- 無功能移除（僅修正判定條件與顯示過濾）。
+
+## Impact
+- focus mode / HUD / alerts
+
+## Validation / Acceptance
+- Case A：focus 指定 1/30，當日所有 bar 的 `barDayKey == focusDayKey`。
+- Case B：HUD 在 1/30 當天可正常顯示 `TradeDay/BOS/FVG/Blue/Score`。
+- Case C：focus mode 下，alerts/藍燈僅在 `isInFocusNYSession` 內觸發。
 
 ## Test commands
-1. `npm run build`
-2. `npm run dev` + 手動驗證（`?debug=1`）
-3. `?debug=1&forceMentionAutoscroll=1` 驗證強制自動置底
+1. 專案內策略/指標重算（focus 日期切換到 1/30）
+2. 檢查 HUD debug 行（`barDayKey | focusDayKey`）與 alerts/session 行為一致
