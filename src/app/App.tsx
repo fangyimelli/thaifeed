@@ -242,14 +242,22 @@ function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function toHandleKey(raw: string): string {
+  return normalizeHandle(raw).toLowerCase();
 }
 
-function hasHandleMention(text: string, handle: string): boolean {
-  const normalizedHandle = normalizeHandle(handle);
-  if (!normalizedHandle) return false;
-  return new RegExp(`@${escapeRegExp(normalizedHandle)}(?:\\s|$)`, 'u').test(text);
+function parseMentionHandles(text: string): string[] {
+  const mentionRegex = /@([^\s@,，。.!！？?、:：;；()\[\]{}"'「」『』]+)/gu;
+  const handles: string[] = [];
+  const seen = new Set<string>();
+  for (const match of text.matchAll(mentionRegex)) {
+    const handle = normalizeHandle(match[1] ?? '');
+    const key = toHandleKey(handle);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    handles.push(handle);
+  }
+  return handles;
 }
 
 function nextLeaveDelayMs() {
@@ -784,9 +792,13 @@ export default function App() {
       };
     }
 
-    const activeUserHandle = activeUserInitialHandleRef.current;
-    const textHasActiveUserTag = hasHandleMention(message.text, activeUserHandle);
+    const resolveMentionUserIds = (text: string): string[] => parseMentionHandles(text).map((handle) => usersByHandleRef.current.get(toHandleKey(handle))?.id).filter((id): id is string => Boolean(id));
+    const mentions = resolveMentionUserIds(message.text);
+    const normalizedMentions = Array.from(new Set(mentions));
+    const textHasActiveUserTag = normalizedMentions.includes('activeUser');
     lastMessageMentionsActiveUserRef.current = textHasActiveUserTag;
+    lastParsedMentionsRef.current = { messageId: message.id, mentions: normalizedMentions };
+    const messageWithMentions: ChatMessage = { ...message, mentions: normalizedMentions };
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && message.username !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
@@ -800,7 +812,7 @@ export default function App() {
       return { ok: false, blockedReason: 'foreign_tag_during_exclusive' };
     }
 
-    const linted = lintOutgoingMessage(message);
+    const linted = lintOutgoingMessage(messageWithMentions);
     if (linted.rejectedReason !== '-') {
       window.__CHAT_DEBUG__ = {
         ...(window.__CHAT_DEBUG__ ?? {}),
@@ -864,7 +876,7 @@ export default function App() {
         && qnaStateRef.current.active.status === 'AWAITING_REPLY'
         && questionMessageId
         && questionMessage
-        && questionMessage.text.includes(`@${activeUserInitialHandleRef.current}`)
+        && Boolean(questionMessage.mentions?.includes('activeUser'))
       );
       if (!isTaggedQuestionActive) {
         resetChatAutoScrollFollow();
@@ -935,10 +947,15 @@ export default function App() {
         activeUser: {
           id: activeUserProfileRef.current?.id ?? '-',
           handle: activeUserProfileRef.current?.handle ?? '-',
-          registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle))
+          displayName: activeUserProfileRef.current?.displayName ?? '-',
+          registryHandleExists: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(toHandleKey(activeUserProfileRef.current.handle))),
+          registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(toHandleKey(activeUserProfileRef.current.handle)))
         },
         mention: {
-          lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
+          lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current,
+          lastParsedMentions: { ...lastParsedMentionsRef.current },
+          lastHighlightReason: lastHighlightReasonRef.current,
+          tagHighlightAppliedCount: tagHighlightAppliedCountRef.current
         },
         lastActorPicked: {
           id: window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'
@@ -1113,8 +1130,7 @@ export default function App() {
 
   const dispatchEventLine = useCallback((line: string, actorHandle: string, source: 'scheduler_tick' | 'user_input' | 'debug_tester' | 'debug_force' = 'scheduler_tick', sendSource?: ChatSendSource): EventSendResult => {
     const now = Date.now();
-    const activeUserHandle = activeUserInitialHandleRef.current;
-    const textHasActiveUserTag = hasHandleMention(line, activeUserHandle);
+    const textHasActiveUserTag = parseMentionHandles(line).some((handle) => usersByHandleRef.current.get(toHandleKey(handle))?.id === 'activeUser');
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && actorHandle !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
@@ -1260,7 +1276,7 @@ export default function App() {
     const hasRealTag = Boolean(
       qnaStateRef.current.active.status === 'AWAITING_REPLY'
       && questionMessage
-      && hasHandleMention(questionMessage.text, activeUserInitialHandleRef.current)
+      && Boolean(questionMessage.mentions?.includes('activeUser'))
     );
     const replyUIReady = Boolean(qnaStateRef.current.active.status === 'AWAITING_REPLY' && questionMessageId);
     const freezeAllowed = hasRealTag && replyUIReady;
@@ -1672,7 +1688,7 @@ export default function App() {
       setLastBlockedReason('no_tagged_user');
       return false;
     }
-    if (!usersByHandleRef.current.has(taggedUser)) {
+    if (!usersByHandleRef.current.has(toHandleKey(taggedUser))) {
       qnaStateRef.current.history = [...qnaStateRef.current.history, `blocked:active_user_not_registered:${Date.now()}`].slice(-40);
       setLastBlockedReason('active_user_not_registered');
       return false;
@@ -1701,7 +1717,7 @@ export default function App() {
     markQnaQuestionCommitted(qnaStateRef.current, { messageId: sent.lineId, askedAt: now });
     lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = questionActor;
-    const hasTagToActiveUser = line.includes(`@${activeUserInitialHandleRef.current}`);
+    const hasTagToActiveUser = parseMentionHandles(line).some((handle) => toHandleKey(handle) === toHandleKey(activeUserInitialHandleRef.current));
     setLastQuestionMessageId(sent.lineId);
     setLastQuestionMessageHasTag(hasTagToActiveUser);
     setReplyPreviewSuppressedReason(null);
@@ -2342,6 +2358,9 @@ export default function App() {
   const usersByIdRef = useRef<Map<string, ActiveUserProfile>>(new Map());
   const usersByHandleRef = useRef<Map<string, ActiveUserProfile>>(new Map());
   const lastMessageMentionsActiveUserRef = useRef(false);
+  const lastParsedMentionsRef = useRef<{ messageId: string; mentions: string[] }>({ messageId: '-', mentions: [] });
+  const lastHighlightReasonRef = useRef<'mentions_activeUser' | 'none'>('none');
+  const tagHighlightAppliedCountRef = useRef(0);
   const [sendDebug, setSendDebug] = useState({
     lastClickAt: 0,
     lastSubmitAt: 0,
@@ -2414,7 +2433,7 @@ export default function App() {
       const schedulerBlocked = schedulerBlockedReason !== '-';
       const questionMessageId = qnaStateRef.current.active.questionMessageId;
       const questionMessage = questionMessageId ? sortedMessages.find((message) => message.id === questionMessageId) : null;
-      const questionHasTagToActiveUser = Boolean(questionMessage && questionMessage.text.includes(`@${activeUserInitialHandleRef.current}`));
+      const questionHasTagToActiveUser = Boolean(questionMessage?.mentions?.includes('activeUser'));
       const isTaggedQuestionActive = Boolean(
         bootstrapRef.current.isReady
         && qnaStateRef.current.active.status === 'AWAITING_REPLY'
@@ -2525,7 +2544,7 @@ export default function App() {
           qnaSyncAssert: (() => {
             const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
             const found = Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId));
-            const tagOk = Boolean(sortedMessages.find((message) => message.id === qnaStateRef.current.active.questionMessageId)?.text.includes(`@${activeUserInitialHandleRef.current}`));
+            const tagOk = Boolean(sortedMessages.find((message) => message.id === qnaStateRef.current.active.questionMessageId)?.mentions?.includes('activeUser'));
             return awaiting
               ? (found && tagOk && Boolean(qnaStateRef.current.active.questionMessageId))
               : !(qnaStateRef.current.active.status === 'AWAITING_REPLY');
@@ -2579,7 +2598,9 @@ export default function App() {
           activeUser: {
             id: activeUserProfileRef.current?.id ?? '-',
             handle: activeUserProfileRef.current?.handle ?? '-',
-            registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle))
+            displayName: activeUserProfileRef.current?.displayName ?? '-',
+            registryHandleExists: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(toHandleKey(activeUserProfileRef.current.handle))),
+            registered: Boolean(activeUserProfileRef.current && usersByHandleRef.current.has(toHandleKey(activeUserProfileRef.current.handle)))
           },
           system: {
             bootstrap: { ...bootstrapRef.current },
@@ -2588,9 +2609,12 @@ export default function App() {
             lastBlockedReason: lastBlockedReasonRef.current,
             debugReset: (window.__CHAT_DEBUG__ as { debugReset?: { count?: number; reason?: string; resetAt?: number } } | undefined)?.debugReset ?? { count: 0, reason: '-', resetAt: 0 }
           },
-          canTagActiveUser: Boolean(bootstrapRef.current.isReady && activeUserProfileRef.current && usersByHandleRef.current.has(activeUserProfileRef.current.handle)),
+          canTagActiveUser: Boolean(bootstrapRef.current.isReady && activeUserProfileRef.current && usersByHandleRef.current.has(toHandleKey(activeUserProfileRef.current.handle))),
           mention: {
-            lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current
+            lastMessageMentionsActiveUser: lastMessageMentionsActiveUserRef.current,
+            lastParsedMentions: { ...lastParsedMentionsRef.current },
+            lastHighlightReason: lastHighlightReasonRef.current,
+            tagHighlightAppliedCount: tagHighlightAppliedCountRef.current
           },
           lastActorPicked: {
             id: window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'
@@ -2876,7 +2900,7 @@ export default function App() {
     activeUserInitialHandleRef.current = normalizedHandle;
     activeUserProfileRef.current = nextProfile;
     usersByIdRef.current.set(nextProfile.id, nextProfile);
-    usersByHandleRef.current.set(nextProfile.handle, nextProfile);
+    usersByHandleRef.current.set(toHandleKey(nextProfile.handle), nextProfile);
     return true;
   }, []);
 
@@ -2963,7 +2987,7 @@ export default function App() {
       setLastBlockedReason('no_active_user');
       return;
     }
-    if (!usersByHandleRef.current.has(activeHandle)) {
+    if (!usersByHandleRef.current.has(toHandleKey(activeHandle))) {
       setLastBlockedReason('active_user_not_registered');
       return;
     }
@@ -2976,7 +3000,7 @@ export default function App() {
     const now = Date.now();
     lockStateRef.current = { isLocked: true, target: 'mod_live', startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = 'mod_live';
-    const hasTagToActiveUser = line.includes(`@${activeUserInitialHandleRef.current}`);
+    const hasTagToActiveUser = parseMentionHandles(line).some((handle) => toHandleKey(handle) === toHandleKey(activeUserInitialHandleRef.current));
     setLastQuestionMessageId(sent.lineId);
     setLastQuestionMessageHasTag(hasTagToActiveUser);
     setReplyPreviewSuppressedReason(null);
@@ -3185,6 +3209,25 @@ export default function App() {
     }, 3000);
   }, []);
 
+
+  const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
+    lastHighlightReasonRef.current = payload.reason;
+    if (payload.applied) {
+      tagHighlightAppliedCountRef.current += 1;
+    }
+    updateChatDebug({
+      chat: {
+        ...(window.__CHAT_DEBUG__?.chat ?? {}),
+        mention: {
+          ...(window.__CHAT_DEBUG__?.chat?.mention ?? {}),
+          lastParsedMentions: { ...lastParsedMentionsRef.current },
+          lastHighlightReason: lastHighlightReasonRef.current,
+          tagHighlightAppliedCount: tagHighlightAppliedCountRef.current
+        }
+      }
+    });
+  }, [updateChatDebug]);
+
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
@@ -3338,6 +3381,10 @@ export default function App() {
                 <div>audio.lastUnlockAt: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastAudioUnlockAt ?? '-'}</div>
                 <div>lastBlockedReason: {(window.__CHAT_DEBUG__?.chat as any)?.system?.lastBlockedReason ?? '-'}</div>
                 <div>mention.test.lastMessageMentionsActiveUser: {String(window.__CHAT_DEBUG__?.chat?.mention?.lastMessageMentionsActiveUser ?? false)}</div>
+                <div>mention.lastParsedMentions(messageId→ids): {(window.__CHAT_DEBUG__?.chat?.mention as any)?.lastParsedMentions?.messageId ?? '-'} → {((window.__CHAT_DEBUG__?.chat?.mention as any)?.lastParsedMentions?.mentions ?? []).join(',') || '-'}</div>
+                <div>mention.lastHighlightReason/tagHighlightAppliedCount: {(window.__CHAT_DEBUG__?.chat?.mention as any)?.lastHighlightReason ?? 'none'} / {(window.__CHAT_DEBUG__?.chat?.mention as any)?.tagHighlightAppliedCount ?? 0}</div>
+                <div>chat.activeUser.displayName: {window.__CHAT_DEBUG__?.chat?.activeUser?.displayName ?? '-'}</div>
+                <div>chat.activeUser.registryHandleExists: {String((window.__CHAT_DEBUG__?.chat?.activeUser as any)?.registryHandleExists ?? false)}</div>
                 <div>lastActorPicked.id: {window.__CHAT_DEBUG__?.chat?.lastActorPicked?.id ?? '-'}</div>
                 <div>actorPickBlockedReason: {window.__CHAT_DEBUG__?.chat?.actorPickBlockedReason ?? '-'}</div>
                 <div>event.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.lastBlockedReason ?? '-'}</div>
@@ -3466,6 +3513,8 @@ export default function App() {
             qnaStatus={qnaStateRef.current.active.status}
             replyPreviewSuppressedReason={replyPreviewSuppressedReason}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
+            activeUserId={activeUserProfileRef.current?.id ?? 'activeUser'}
+            onTagHighlightEvaluated={handleTagHighlightEvaluated}
             autoScrollMode={chatAutoScrollMode}
             forceScrollSignalReason={pendingForceScrollReason}
             onReplyPinMountedChange={(mounted) => {
