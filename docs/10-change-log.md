@@ -47,6 +47,18 @@
 - 每次 PR 若有流程級變更，必須更新本頁。
 - 變更內容需能追溯到對應 SSOT 檔案與 docs 分頁。
 
+## 2026-03-03（mention autoscroll + jump hint）
+
+### Changed
+- [chat/ui] 新增 mention autoscroll：新進訊息若 `mentions` 命中 activeUser 且作者非自己，會觸發自動滾動判斷。
+- [chat/ui] 採策略 B（near-bottom threshold=100px）：接近底部時自動滾到底；不在底部時不強制跳轉，改為高亮「@你・跳到最新」。
+- [mobile/scroll] 置底改為雙階段排程（`requestAnimationFrame` + `setTimeout(0)`）提升 Android Chrome 穩定性，降低 layout 變動造成漏滾。
+- [debug] 新增 mention autoscroll 觀測：`[MENTION_AUTOSCROLL]`、`[AUTOSCROLL_SKIPPED]`，以及 debug URL `forceMentionAutoscroll=1` 與 `Inject NPC Tag @You` 按鈕。
+
+### Docs
+- README 新增 mention autoscroll 行為規格、策略選擇與 debug 驗證步驟。
+- PR_NOTES 記錄策略 B、驗收案例與 debug 欄位變更。
+
 ## 2026-03-02
 
 ### Changed

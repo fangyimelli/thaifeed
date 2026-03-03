@@ -1290,6 +1290,22 @@ npm run build
 - `mention.lastHighlightReason` (`mentions_activeUser` / `none`)
 - `mention.tagHighlightAppliedCount`
 
+### Mention Autoscroll（Twitch-like）
+
+- 觸發條件：**新進訊息 + 非自己送出 + `message.mentions` 命中 activeUser**。
+- 策略：採 **B（near-bottom threshold）**。
+  - 若使用者接近底部（`<=100px`）：自動滾到底。
+  - 若使用者不在底部：不強制跳轉；改為顯示並高亮右下 `@你・跳到最新` 按鈕。
+- 行動瀏覽器穩定性：採 `requestAnimationFrame` + `setTimeout(0)` 雙階段補償，避免 DOM/layout 尚未穩定造成漏滾。
+
+### Mention Autoscroll Debug 驗證
+
+- Console logs：
+  - `[MENTION_AUTOSCROLL] messageId=... matched=handle/id atBottom=...`
+  - `[AUTOSCROLL_SKIPPED] reason=user_scrolling or not_at_bottom`
+- Debug 按鈕（`?debug=1`）：`Inject NPC Tag @You`。
+- Debug 開關（URL）：`forceMentionAutoscroll=1`（每次 mention 強制滾到底，方便壓測）。
+
 ### Debug Overlay
 
 - 可觀測：`bootstrap.isReady / activatedAt / activatedBy`、`activeUser.registered`、`canTagActiveUser`。
