@@ -269,6 +269,19 @@ declare global {
           endLPF?: number;
         } | null;
       };
+      mode?: {
+        id?: string;
+      };
+      sandbox?: {
+        nodeIndex?: number;
+        scheduler?: {
+          phase?: string;
+        };
+        currentNode?: {
+          word?: string;
+          char?: string;
+        };
+      };
       fx?: {
         blackout?: {
           isActive?: boolean;
@@ -1932,6 +1945,10 @@ export default function SceneView({
           <div>event.sfxCooldowns: {Object.entries(window.__CHAT_DEBUG__?.sfxCooldowns ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
           <div>event.lock: {window.__CHAT_DEBUG__?.lock ? `${String(window.__CHAT_DEBUG__.lock.isLocked)} target=${window.__CHAT_DEBUG__.lock.target ?? '-'} elapsed=${window.__CHAT_DEBUG__.lock.elapsed}ms speed=${window.__CHAT_DEBUG__.lock.chatSpeedMultiplier}` : '-'}</div>
           <div>event.queue/blocked: {window.__CHAT_DEBUG__?.event?.queue?.length ?? window.__CHAT_DEBUG__?.queueLength ?? 0} / {Object.entries(window.__CHAT_DEBUG__?.blockedReasons ?? {}).map(([k, v]) => `${k}:${v}`).join(', ') || '-'}</div>
+          <div>mode.id: {window.__CHAT_DEBUG__?.mode?.id ?? '-'}</div>
+          <div>sandbox.nodeIndex: {window.__CHAT_DEBUG__?.sandbox?.nodeIndex ?? '-'}</div>
+          <div>sandbox.scheduler.phase: {window.__CHAT_DEBUG__?.sandbox?.scheduler?.phase ?? '-'}</div>
+          <div>sandbox.currentNode.word/char: {window.__CHAT_DEBUG__?.sandbox?.currentNode?.word ?? '-'} / {window.__CHAT_DEBUG__?.sandbox?.currentNode?.char ?? '-'}</div>
           <div>qna.active/flow/step: {String(window.__CHAT_DEBUG__?.event?.qna?.isActive ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.flowId ?? '-'} / {window.__CHAT_DEBUG__?.event?.qna?.stepId ?? '-'}</div>
           <div>qna.awaiting/attempts/lastAskedAt: {String(window.__CHAT_DEBUG__?.event?.qna?.awaitingReply ?? false)} / {window.__CHAT_DEBUG__?.event?.qna?.attempts ?? 0} / {window.__CHAT_DEBUG__?.event?.qna?.lastAskedAt ?? 0}</div>
           <div>qna.lockTarget/match: {window.__CHAT_DEBUG__?.event?.qna?.lockTarget ?? '-'} / {(window.__CHAT_DEBUG__?.event?.qna?.matched?.optionId ?? '-') + ':' + (window.__CHAT_DEBUG__?.event?.qna?.matched?.keyword ?? '-')}</div>

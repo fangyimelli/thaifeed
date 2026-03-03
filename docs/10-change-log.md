@@ -1,3 +1,15 @@
+## 2026-03-03（sandbox story mode engine stage 1）
+
+### Changed
+- [modes] 新增 `GameMode` 介面與 mode routing 基礎，加入 `classicMode` wrapper（不改 classic 行為）與 `sandbox_story` 模式骨架。
+- [sandbox_story] 新增 story engine phase scheduler：`boot → awaitingQuestionReady → revealingWord → chatWaveRelated → awaitingComprehensionTag → pinnedFreezeAwaitAnswer → resolvingComprehension → ghostMotionPlaying → postMotionWrapUp`。
+- [ssot] 新增 `src/ssot/sandbox_story/types.ts` 與 `night1.ts`，建立 Story Mode SSOT（含 3 個測試 `WordNode`）。
+- [debug] Debug 面板新增 `mode.id`、`sandbox.nodeIndex`、`sandbox.scheduler.phase`、`sandbox.currentNode.word/char`。
+
+### Docs
+- 新增 `docs/30-sandbox-story-mode.md`（Repo Mapping / Story Engine 架構 / SSOT 結構）。
+- README 補充 Sandbox Story Mode Stage 1 說明與文件索引。
+
 # 10｜Change Log（變更紀錄規範）
 
 ## 這份文件在管什麼

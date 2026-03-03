@@ -53,6 +53,7 @@ npm run build
 ## Architecture Docs
 
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
+- [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
 
 ## Actor Pool Separation
@@ -1461,3 +1462,16 @@ Console（debug 模式）可觀察：
 
 ## README Removed/Deprecated Log
 - 本次無新增移除項。
+
+
+## Sandbox Story Mode（Stage 1）
+
+- 新增 `sandbox_story` 模式（以 query `?mode=sandbox_story` 啟用）。
+- 第一階段包含：Mode Router、Story Engine、SSOT（Night1 測試節點）。
+- 不改動 classic 行為；classic 以 wrapper 方式保留原流程。
+- Debug 面板新增：
+  - `mode.id`
+  - `sandbox.nodeIndex`
+  - `sandbox.scheduler.phase`
+  - `sandbox.currentNode.word/char`
+
