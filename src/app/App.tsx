@@ -55,6 +55,9 @@ import {
   stopQnaFlow,
   updateLastAskedPreview
 } from '../game/qna/qnaEngine';
+import { createClassicMode } from '../modes/classic/classicMode';
+import { createSandboxStoryMode } from '../modes/sandbox_story/sandboxStoryMode';
+import type { GameMode } from '../modes/types';
 
 type EventStartBlockedReason =
   | 'locked_active'
@@ -237,6 +240,12 @@ function pickAudienceActor(state: ChatActorState, recentActors: string[]): { act
 function isPassCommand(raw: string) {
   const normalized = raw.trim().toLowerCase();
   return normalized === 'pass' || raw.trim() === '跳過';
+}
+
+
+function resolveModeFromQuery(): 'classic' | 'sandbox_story' {
+  const mode = new URLSearchParams(window.location.search).get('mode');
+  return mode === 'sandbox_story' ? 'sandbox_story' : 'classic';
 }
 
 function normalizeHandle(raw: string): string {
@@ -511,6 +520,9 @@ export default function App() {
   const eventLastKeyRef = useRef('-');
   const eventLastAtRef = useRef(0);
   const eventNextDueAtRef = useRef(0);
+  const modeRef = useRef<GameMode>(createClassicMode());
+  const sandboxModeRef = useRef(createSandboxStoryMode());
+  const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveModeFromQuery());
 
   const qnaStateRef = useRef(createInitialQnaState());
   const messageSeqRef = useRef(0);
@@ -992,6 +1004,16 @@ export default function App() {
       ...(window.__CHAT_DEBUG__ ?? {}),
       ...patch,
       ui: window.__CHAT_DEBUG__?.ui
+    };
+  }, []);
+
+  useEffect(() => {
+    const selectedMode = modeIdRef.current;
+    const mode = selectedMode === 'sandbox_story' ? sandboxModeRef.current : createClassicMode();
+    modeRef.current = mode;
+    mode.init();
+    return () => {
+      mode.dispose();
     };
   }, []);
 
@@ -2201,7 +2223,23 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
+      modeRef.current.tick(now);
+      const sandboxState = sandboxModeRef.current.getState();
+      const sandboxNode = sandboxModeRef.current.getCurrentNode();
       updateEventDebug({
+        mode: {
+          id: modeRef.current.id
+        },
+        sandbox: {
+          nodeIndex: sandboxState.nodeIndex,
+          scheduler: {
+            phase: sandboxState.scheduler.phase
+          },
+          currentNode: {
+            word: sandboxNode?.word ?? '-',
+            char: sandboxNode?.char ?? '-'
+          }
+        },
         lock: {
           isLocked: lockStateRef.current.isLocked,
           target: lockStateRef.current.target,
