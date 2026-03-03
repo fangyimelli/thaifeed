@@ -1,41 +1,59 @@
-# 修正：question_send_failed 導致 freeze/pause/cooldown 鎖死
+# 修正：事件 registry / debug 面板 / 鬼聲腳步聲驗證鏈路
 
 ## 變更摘要
-- 調整事件 commit 規則：cooldown 僅在事件成功開始後才寫入（不再於測試入口預先推進）。
-- `question_send_failed` 失敗路徑新增收尾：強制解除 freeze/pause、qna reset、event queue 清空、rollback cooldown。
-- tagged_question freeze 增加 guard：需同時 `hasRealTag=true` + `replyUIReady=true` 才可 freeze。
-- 新增 watchdog：`freezeCountdownRemaining<=0` 仍 frozen 時自動解凍。
-- Debug 面板按鈕改為 **Reset Stuck State**（一鍵解卡，手機可用）。
-- 新增 debug 欄位：
-  - `event.cooldownMeta[eventKey].nextAllowedAt/lastCommittedAt/lastRollbackAt`
-  - `event.freezeGuard.hasRealTag/replyUIReady/freezeAllowed`
-  - `chat.system.debugReset.count/reason/resetAt`
+- 針對 `ghost_female`、`footsteps` 與 `VOICE_CONFIRM/GHOST_PING/NAME_CALL/VIEWER_SPIKE` 進行全專案盤點，確認事件仍在 registry，並補上可視化驗證。
+- 整合事件效果來源：`eventEffectsRegistry` 改由 `eventRegistry` 推導，避免雙份配置分裂。
+- 啟動時新增 console 記錄：`event.registry.count`、`eventIds`、`hasGhostFemale/hasFootsteps`。
+- debug 面板新增「資源對照檢查」欄位：
+  - 已載入 audio keys
+  - event 引用 audio keys
+  - missing diff（紅字 + source eventId）
+  - AudioContext state（distance player）
+- 新增兩個可重複測試按鈕：
+  - `Test Ghost SFX`
+  - `Test Footsteps SFX`
+  並在 console 輸出 `[EVENT_TRIGGERED]` / `[EVENT_SKIPPED] reason=lock/cd/missing_asset`。
+
+## 事件 key/註冊盤點（重點）
+- `ghost_female`：
+  - `src/core/events/eventRegistry.ts`（VOICE_CONFIRM/GHOST_PING/NAME_CALL 的 pre/post，FEAR_CHALLENGE post）
+  - `src/audio/SfxRegistry.ts`
+  - `src/app/App.tsx` 事件播放流程
+- `footsteps`：
+  - `src/core/events/eventRegistry.ts`（VIEWER_SPIKE pre/post，FEAR_CHALLENGE pre）
+  - `src/audio/SfxRegistry.ts`
+  - `src/app/App.tsx` 事件播放流程
+- `VOICE_CONFIRM` / `GHOST_PING` / `NAME_CALL` / `VIEWER_SPIKE`：
+  - 定義與 pre/post effect：`src/core/events/eventRegistry.ts`
+  - 觸發與 commit：`src/app/App.tsx`
+  - 對話：`src/core/events/eventDialogs.ts`
+  - QNA 對應：`src/game/qna/qnaFlows.ts`
 
 ## 修改檔案
+- `src/core/events/eventRegistry.ts`
+- `src/events/eventEffectsRegistry.ts`
+- `src/audio/distanceApproach.ts`
+- `src/ui/scene/SceneView.tsx`
 - `src/app/App.tsx`
 - `README.md`
 - `docs/10-change-log.md`
-- `docs/07-debug-system.md`
-- `scripts/regression-question-send-failed.mjs`
-- `scripts/regression-freeze-watchdog.mjs`
-
-## 風險
-- `startEvent()` 現在會在 abort 路徑主動 recover，若後續有新事件型別依賴 partial state，需明確補豁免。
-- debug reset 會清空事件 cooldown（用於救援），不應在 production 自動流程觸發。
-
-## 重現與驗證（thaifeed-bd75c.web.app 或本機）
-1. 開 `?debug=1`。
-2. 觸發一個 tagged question 事件（如 `GHOST_PING`/`VIEWER_SPIKE`），在網路/發送失敗情境下重現 `question_send_failed`。
-3. 檢查 debug：
-   - `event.lastEvent.abortedReason=question_send_failed`
-   - `event.cooldownMeta.<event>.lastRollbackAt` 有值，`nextAllowedAt` 未被錯誤推進。
-   - `chat.freeze.isFrozen=false`、`chat.pause.isPaused=false`、`qna.status=IDLE`。
-4. 連按 `Force GHOST_PING` / `Force VIEWER_SPIKE`：應可持續觸發（僅受正常 cooldown 影響，不會卡成永久 blocked）。
-5. 手機版開 debug 面板按 `Reset Stuck State`：可立即恢復互動。
+- `docs/02-ssot-map.md`
+- `PR_NOTES.md`
 
 ## SSOT / debug 欄位變更紀錄
-- SSOT：`src/app/App.tsx` 的 `startEvent()` 現為唯一 cooldown commit / rollback 寫入點。
-- debug 欄位語意：
-  - `cooldownMeta` 用於區分「合法 commit」與「abort rollback」。
-  - `freezeGuard` 用於判斷 freeze 啟動是否符合 UI 與 tag 條件。
-  - `debugReset` 用於現場救援追蹤與回歸驗證。
+- SSOT：事件 effect 映射改為以 `src/core/events/eventRegistry.ts` 為唯一來源，`src/events/eventEffectsRegistry.ts` 只負責轉譯成執行時結構。
+- debug 新增欄位：
+  - `audio.loadedKeys`
+  - `audio.context.state(distance)`
+  - `event.referencedAudioKeys`
+  - `event.missingAudioRefs`
+- debug 新增按鈕：
+  - `Test Ghost SFX`
+  - `Test Footsteps SFX`
+
+## 驗證重點
+1. 啟動後 console 出現 `[EVENT_REGISTRY]`，可見 count、eventIds、`hasGhostFemale/hasFootsteps`。
+2. Debug Panel 觀察 `event.registry.manifest` 與 `event.referencedAudioKeys`。
+3. 按 `Test Ghost SFX` / `Test Footsteps SFX`：
+   - 成功時印 `[EVENT_TRIGGERED] <eventId> <audioKey>`。
+   - 阻擋時印 `[EVENT_SKIPPED] reason=lock/cd/missing_asset`。

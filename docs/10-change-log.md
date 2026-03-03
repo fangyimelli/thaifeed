@@ -136,3 +136,15 @@
 ### Docs
 - README 新增「卡死時如何復原」與「事件 cooldown/lock commit 規則」。
 - PR_NOTES 補充風險、重現步驟與 web/local 驗證腳本。
+
+## 2026-03-02（event registry ssot + audio reference audit）
+
+### Changed
+- [events/ssot] `src/events/eventEffectsRegistry.ts` 改為由 `src/core/events/eventRegistry.ts` 推導事件效果，移除雙配置漂移風險。
+- [events/debug] 啟動時新增 `[EVENT_REGISTRY]` console snapshot：`count/eventIds/hasGhostFemale/hasFootsteps`。
+- [audio/debug] Scene debug overlay 新增「資源對照檢查」：`audio.loadedKeys`、`event.referencedAudioKeys`、`event.missingAudioRefs`、`audio.context.state(distance)`。
+- [debug ui] 新增 `Test Ghost SFX` / `Test Footsteps SFX`，輸出 `[EVENT_TRIGGERED]` / `[EVENT_SKIPPED] reason=lock/cd/missing_asset`。
+
+### Docs
+- README 新增本次 registry 與資源對照檢查說明。
+- PR_NOTES 更新全專案 key 盤點、SSOT 結論與驗證步驟。

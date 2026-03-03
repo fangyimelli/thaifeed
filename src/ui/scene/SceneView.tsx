@@ -10,6 +10,7 @@ import {
 } from '../../config/oldhousePlayback';
 import { resolveAssetUrl } from '../../config/assetUrls';
 import { createPlayerCore } from '../../core/player/playerCore';
+import { getEventReferencedSfxKeys } from '../../core/events/eventRegistry';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import { emitSceneEvent, onSceneRequest } from '../../core/systems/sceneEvents';
 import type { AnchorType } from '../../core/state/types';
@@ -488,6 +489,10 @@ export default function SceneView({
     return searchEnabled || hashEnabled;
   });
   const [debugTick, setDebugTick] = useState(() => Date.now());
+  const loadedAudioKeys = distanceApproachPlayer.getLoadedBufferKeys();
+  const eventReferencedEntries = getEventReferencedSfxKeys();
+  const eventReferencedAudioKeys = Array.from(new Set(eventReferencedEntries.map((item) => item.sfxKey)));
+  const missingEventAudioRefs = eventReferencedEntries.filter((item) => !(item.sfxKey in SFX_REGISTRY));
 
   const updateAudioDebug = useCallback((patch: Partial<AudioDebugState>) => {
     const prev: AudioDebugState = window.__AUDIO_DEBUG__ ?? {
@@ -1896,6 +1901,12 @@ export default function SceneView({
           <div>audio.lastPlayResult: {window.__AUDIO_DEBUG__?.lastPlayResult ? JSON.stringify(window.__AUDIO_DEBUG__?.lastPlayResult) : '-'}</div>
           <div>audio.lastApproach gain(start/end/current): {(window.__AUDIO_DEBUG__?.lastApproach?.startGain ?? '-')} / {(window.__AUDIO_DEBUG__?.lastApproach?.endGain ?? '-')} / {(window.__AUDIO_DEBUG__?.lastApproach?.currentGain ?? '-')}</div>
           <div>audio.trace(last5): {(window.__AUDIO_DEBUG__?.trace ?? []).slice(-5).map((t) => `${t.stage}:${t.key ?? '-'}:${t.detail ?? '-'}`).join(' | ') || '-'}</div>
+          <div>audio.loadedKeys: {loadedAudioKeys.join(', ') || '-'}</div>
+          <div>audio.context.state(distance): {distanceApproachPlayer.getContextState()}</div>
+          <div>event.referencedAudioKeys: {eventReferencedAudioKeys.join(', ') || '-'}</div>
+          <div style={{ color: missingEventAudioRefs.length > 0 ? '#ff6b6b' : undefined }}>
+            event.missingAudioRefs: {missingEventAudioRefs.length > 0 ? missingEventAudioRefs.map((item) => `${item.sfxKey} (source=${item.eventId})`).join(' | ') : 'none'}
+          </div>
           <div>event.lastEvent/reason: {window.__CHAT_DEBUG__?.lastEventKey ?? '-'} / {window.__CHAT_DEBUG__?.lastEventReason ?? '-'}</div>
           <div>event.line/variant/tone/persona: {window.__CHAT_DEBUG__?.lastLineKey ?? '-'} / {window.__CHAT_DEBUG__?.lastVariantId ?? '-'} / {window.__CHAT_DEBUG__?.lastTone ?? '-'} / {window.__CHAT_DEBUG__?.lastPersona ?? '-'}</div>
           <div>event.sfx/reason: {window.__CHAT_DEBUG__?.lastSfxKey ?? '-'} / {window.__CHAT_DEBUG__?.lastSfxReason ?? '-'}</div>
