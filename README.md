@@ -50,6 +50,10 @@ npm run build
 - [09｜Troubleshooting](./docs/09-troubleshooting.md)
 - [10｜Change Log](./docs/10-change-log.md)
 
+## Architecture Docs
+
+- [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
+
 
 ## Actor Pool Separation
 
