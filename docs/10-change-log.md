@@ -1,3 +1,15 @@
+## 2026-03-04（debug gate ssot + mode switch debug_disabled fix）
+
+### Changed
+- [debug/ssot] 新增 `src/debug/debugGate.ts` 作為共用 debug gate SSOT，統一 `isDebugEnabled()` 判定（query/hash/session/window flag）。
+- [debug/overlay] App debug overlay 開啟時會同步設定 shared debug enabled 狀態；因此只要 overlay 可見，mode switch guard 會視為 debug enabled，不再誤回 `debug_disabled`。
+- [debug/mode-switch] `Switch to Sandbox` 維持既有流程：寫入 `localStorage['app.currentMode']`、更新 mode override 與 URL、執行 reload；並維持 `Mode Switch Debug` 可視化欄位。
+- [debug/safety] 啟動時從 storage 覆寫 mode 仍受 `isDebugEnabled()` gate 控制，非 debug 不受 localStorage 影響。
+
+### Docs
+- README 補充 Debug Gate SSOT 與「overlay 可見即 debug enabled」規則。
+- PR_NOTES 補充本次 root cause、驗收與 rollback。
+
 ## 2026-03-04（debug mode switcher no-response fix）
 
 ### Changed

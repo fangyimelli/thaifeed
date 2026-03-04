@@ -64,6 +64,7 @@ import WordRevealOverlay from '../ui/overlays/WordRevealOverlay';
 import { playPronounce } from '../ui/audio/PronounceAudio';
 import { playGhostMotion } from '../core/ghostMotionPlayer';
 import type { GameMode } from '../modes/types';
+import { isDebugEnabled as getIsDebugEnabled, setDebugOverlayEnabled } from '../debug/debugGate';
 
 type EventStartBlockedReason =
   | 'locked_active'
@@ -647,7 +648,15 @@ export default function App() {
   const eventLastKeyRef = useRef('-');
   const eventLastAtRef = useRef(0);
   const eventNextDueAtRef = useRef(0);
-  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const debugEnabled = debugOpen || getIsDebugEnabled();
+
+  useEffect(() => {
+    if (debugOpen) {
+      setDebugOverlayEnabled(true);
+      return;
+    }
+    setDebugOverlayEnabled(false);
+  }, [debugOpen]);
   const modeRef = useRef<GameMode>(createClassicMode());
   const sandboxModeRef = useRef(createSandboxStoryMode());
   const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveInitialMode(debugEnabled));

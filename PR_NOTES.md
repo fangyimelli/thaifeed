@@ -1,3 +1,44 @@
+## 2026-03-04（debug_disabled mode switch guard fix）
+
+## Why
+- 現況可見 `Mode Switch Debug` 已有 click 訊號，但 `result=blocked / reason=debug_disabled`，代表 mode switch guard 的 debug 判定與 overlay 可見狀態不一致。
+- 需求要求：只要 debug overlay 可見，就必須允許 mode override / storage 寫入 / reload（或 reinit）生效。
+
+## What changed
+- `src/debug/debugGate.ts`（新增）
+  - 建立共用 debug gate SSOT：`isDebugEnabled()`。
+  - 判定來源：`?debug=1`、`#debug=1`、`sessionStorage['app.debug.enabled']`、`window.__THAIFEED_DEBUG_ENABLED__`。
+  - 提供 `setDebugOverlayEnabled(enabled)` 給 overlay 掛載狀態同步使用。
+- `src/app/App.tsx`
+  - `debugEnabled` 改走共用 gate，並加上 `debugOpen` 直接視為 enabled（overlay 可見即 debug enabled）。
+  - 新增 effect：overlay 開關時同步 `setDebugOverlayEnabled(true/false)`。
+  - `switchDebugMode` guard 因此不再在 overlay 可見時誤擋 `debug_disabled`。
+- `src/ui/chat/ChatPanel.tsx`、`src/ui/scene/SceneView.tsx`
+  - debug 判定統一改用 `isDebugEnabled()`，避免各處 query-only 判定分岔。
+
+## SSOT / debug fields
+- Debug Gate SSOT：`src/debug/debugGate.ts`。
+- Mode Switch Debug 可視化欄位沿用：
+  - `lastModeSwitch.clickAt`
+  - `lastModeSwitch.requestedMode`
+  - `lastModeSwitch.persistedMode`
+  - `lastModeSwitch.action`
+  - `lastModeSwitch.result`
+  - `lastModeSwitch.reason`
+
+## Validation
+1. 進入可見 debug overlay 的畫面後點 `Switch to Sandbox (sandbox_story)`：
+   - `reason` 不再是 `debug_disabled`
+   - `persistedMode.storage` 應為 `sandbox_story`
+   - `action=reload` / `result=ok`
+   - reload 後 `currentMode=sandbox_story`
+2. 關閉 debug/overlay 且無 debug query 時：
+   - 啟動 mode 不應被 `localStorage['app.currentMode']` 強制覆寫（仍需 `isDebugEnabled()` gate）。
+
+## Rollback
+- 移除 `src/debug/debugGate.ts` 並回退各檔改回 query-only debug 判定。
+- 還原 `App.tsx` overlay->debug enabled 同步邏輯（`setDebugOverlayEnabled` 與 `debugOpen` override）。
+
 ## Why
 - `DebugModeSwitcher` 的 `Switch to Sandbox (sandbox_story)` 在部分情境「看起來沒反應」，缺少 UI 可視化回饋，無法快速判斷是 click 未觸發、持久化未寫入，還是被 guard 擋住。
 - 需求要求 debug-only 修正：按下後必須明確顯示 click/request/persist/action/result/reason，並保證 mode SSOT 寫入 + 觸發生效（reinit/reload 其一）。
