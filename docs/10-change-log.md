@@ -368,3 +368,16 @@
 
 ### Removed
 - [sandbox] PASS 後 related 討論波與 preNextPrompt 驚訝/猜測波（不再並存舊流程）。
+
+## 2026-03-04（sandbox WordRevealOverlay A/B visual spec rebuild）
+
+### Changed
+- [sandbox/reveal] `WordRevealOverlay` 重做為單一文字容器渲染，支援 `renderMode: pair | fullWord`；預設先走 `fullWord` 保底，完整單字同一行顯示並將第一個 grapheme 上色。
+- [sandbox/reveal] reveal phase 統一改為 `idle → enter → pulse → exit → done`，時序對應 `200ms fade-in + 2x pulse + 900ms scale/fade-out`。
+- [sandbox/reveal] Thai 字元拆分統一使用 `Array.from()`，新增 `baseChar/restTextLen` state 供 debug 與驗收。
+- [sandbox/debug] 新增 `word.reveal.renderMode`、`word.reveal.baseChar`、`word.reveal.restTextLen` 欄位，並保留 `word.reveal.phase` 供動畫核對。
+- [sandbox/isolation] 變更僅在 sandbox_story reveal pipeline 與其掛載 UI；classic mode 無變更。
+
+### Docs
+- README 補上 sandbox WordRevealOverlay A/B 規格、動畫時序、debug 欄位與 Removed/Deprecated 記錄。
+- PR_NOTES 更新本次驗收項目（尺寸/脈衝/退場/首字上色/Classic isolation）與 debug 值範例。

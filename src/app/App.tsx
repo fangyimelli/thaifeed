@@ -2455,7 +2455,17 @@ export default function App() {
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
-        word: { reveal: { phase: sandboxState.reveal.phase, wordKey: sandboxState.reveal.wordKey, base: sandboxState.reveal.baseConsonant || '-', appended: sandboxState.reveal.appended || '-' } },
+        word: {
+          reveal: {
+            phase: sandboxState.reveal.phase,
+            wordKey: sandboxState.reveal.wordKey,
+            base: sandboxState.reveal.baseConsonant || '-',
+            appended: sandboxState.reveal.appended || '-',
+            renderMode: sandboxState.reveal.renderMode,
+            baseChar: sandboxState.reveal.baseChar || '-',
+            restTextLen: sandboxState.reveal.restTextLen
+          }
+        },
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
         consonant: {
           ...(sandboxState.consonant ?? {}),
@@ -3820,7 +3830,7 @@ export default function App() {
     if (modeRef.current.id !== 'sandbox_story') return;
     const sandboxState = sandboxModeRef.current.getState();
     const reveal = sandboxState.reveal;
-    if (reveal.visible && reveal.phase === 'fadeIn') {
+    if (reveal.visible && reveal.phase === 'enter') {
       sandboxModeRef.current.setPronounceState('idle', { key: reveal.audioKey, reason: 'reserved_no_side_effect' });
     }
     if (reveal.visible && reveal.phase === 'done') {
@@ -4058,7 +4068,17 @@ export default function App() {
               isDesktopLayout={isDesktopLayout}
               appStarted={appStarted}
               blackoutState={blackoutState}
-              wordReveal={modeIdRef.current === 'sandbox_story' ? (() => { const st = sandboxModeRef.current.getState(); return { visible: st.reveal.visible, phase: st.reveal.phase, wordText: st.reveal.text, baseConsonant: st.reveal.baseConsonant, appendedText: st.reveal.appended }; })() : undefined}
+              wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
+                const st = sandboxModeRef.current.getState();
+                return {
+                  visible: st.reveal.visible,
+                  phase: st.reveal.phase,
+                  renderMode: st.reveal.renderMode,
+                  wordText: st.reveal.text,
+                  baseConsonant: st.reveal.baseConsonant,
+                  appendedText: st.reveal.appended
+                };
+              })() : undefined}
             />
           ) : (
             <div className="asset-warning scene-placeholder">
@@ -4377,6 +4397,9 @@ export default function App() {
                     <div><strong>Night Timeline</strong></div>
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
+                    <div>word.reveal.renderMode: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.renderMode ?? '-'}</div>
+                    <div>word.reveal.baseChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.baseChar ?? '-'}</div>
+                    <div>word.reveal.restTextLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restTextLen ?? '-'}</div>
                     <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
                     <div>word.reveal.appended: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.appended ?? '-'}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
