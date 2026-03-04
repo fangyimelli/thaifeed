@@ -56,7 +56,7 @@ import {
   updateLastAskedPreview
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
-import { createSandboxStoryMode } from '../modes/sandbox_story/sandboxStoryMode';
+import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
@@ -402,6 +402,19 @@ type GhostEventManagerDebugState = {
   };
 };
 
+const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
+  fearLevel: 0,
+  maxFear: 100,
+  pressureLevel: 'low',
+  ghostProbability: 0,
+  triggers: {
+    chatSpike: 0,
+    storyEmotion: 0,
+    darkFrame: 0,
+    ghostNearby: 0
+  }
+};
+
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -585,6 +598,7 @@ export default function App() {
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const [debugModeOverride, setDebugModeOverride] = useState<'classic' | 'sandbox_story' | null>(() => resolveDebugModeOverride());
   const [sandboxAutoPlayNight, setSandboxAutoPlayNight] = useState(false);
+  const [fearDebugState, setFearDebugState] = useState<SandboxFearDebugState>(EMPTY_FEAR_DEBUG_STATE);
   const [ghostEventDebugState, setGhostEventDebugState] = useState<GhostEventManagerDebugState>({
     events: EVENT_TESTER_KEYS.map((eventName) => ({
       eventName,
@@ -3630,9 +3644,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (mode !== 'sandbox_story') return;
+    if (mode !== 'sandbox_story') {
+      setFearDebugState(EMPTY_FEAR_DEBUG_STATE);
+      return;
+    }
     const refresh = () => {
       setGhostEventDebugState(getGhostEventManagerDebugState());
+      setFearDebugState(sandboxModeRef.current.getFearDebugState());
     };
     refresh();
     const timer = window.setInterval(refresh, 500);
@@ -3650,6 +3668,18 @@ export default function App() {
     triggerEventFromTester(picked);
     setGhostEventDebugState(getGhostEventManagerDebugState());
   }, [getGhostEventManagerDebugState, triggerEventFromTester]);
+
+  const handleDebugAddFear = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.debugAddFear(10);
+    setFearDebugState(sandboxModeRef.current.getFearDebugState());
+  }, []);
+
+  const handleDebugResetFear = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.debugResetFear();
+    setFearDebugState(sandboxModeRef.current.getFearDebugState());
+  }, []);
 
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
@@ -3980,6 +4010,43 @@ export default function App() {
                     <div>queue: {ghostEventDebugState.ghostSystem.eventQueueLength}</div>
                     <div>lastEvent: {ghostEventDebugState.ghostSystem.lastEvent}</div>
                     <div>cooldownCount: {ghostEventDebugState.ghostSystem.cooldownCount}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Fear System</strong></div>
+                    <div>fearLevel: {fearDebugState.fearLevel}</div>
+                    <div>
+                      pressureLevel:{' '}
+                      <span style={{
+                        color: fearDebugState.pressureLevel === 'panic'
+                          ? '#ff4d4f'
+                          : fearDebugState.pressureLevel === 'high'
+                            ? '#fb923c'
+                            : fearDebugState.pressureLevel === 'medium'
+                              ? '#facc15'
+                              : '#9ca3af'
+                      }}>
+                        {fearDebugState.pressureLevel}
+                      </span>
+                    </div>
+                    <div>ghostProbability: {fearDebugState.ghostProbability.toFixed(2)}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Fear Meter</strong></div>
+                    <div>
+                      {`${'█'.repeat(Math.round((fearDebugState.fearLevel / Math.max(1, fearDebugState.maxFear)) * 10))}${'░'.repeat(Math.max(0, 10 - Math.round((fearDebugState.fearLevel / Math.max(1, fearDebugState.maxFear)) * 10)))}`}
+                    </div>
+                    <div>{fearDebugState.fearLevel} / {fearDebugState.maxFear}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Triggers</strong></div>
+                    <div>chatSpike +{fearDebugState.triggers.chatSpike}</div>
+                    <div>storyEmotion +{fearDebugState.triggers.storyEmotion}</div>
+                    <div>darkFrame +{fearDebugState.triggers.darkFrame}</div>
+                    <div>ghostNearby +{fearDebugState.triggers.ghostNearby}</div>
+                  </div>
+                  <div className="debug-route-controls" style={{ marginTop: 8 }}>
+                    <button type="button" onClick={handleDebugAddFear}>Add Fear +10</button>
+                    <button type="button" onClick={handleDebugResetFear}>Reset Fear</button>
                   </div>
                   <div className="debug-route-meta">
                     <div><strong>Night Timeline</strong></div>
