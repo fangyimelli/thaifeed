@@ -58,9 +58,13 @@ npm run build
 ## Sandbox PASS / Reveal / Advance（2026-03-04 修正）
 
 - sandbox 的「真實答對」與 debug 面板 `PASS` 已統一走同一路徑：`applyCorrect() → startReveal() → reveal done → advancePrompt()`。
-- reveal pipeline 新增保底：即使動畫或 rerender 異常，`2100ms` 後也會強制 `done`，並觸發 `advancePrompt('correct')`。
+- reveal pipeline 新增保底：即使動畫或 rerender 異常，`4000ms` 後也會強制 `done`，並觸發 `advancePrompt('correct')`。
 - 若推進時被 gate 擋住（phaseBusy），不再 silent fail：會記錄 `scheduler.blockedReason` 並每 `200ms` retry（最多 10 次）。
 - prompt 單一真相維持 `prompt.current`；push 到下一題時由 `advancePrompt()` 統一更新 prompt/node。
+
+- sandbox prompt SSOT 強制一致：`sandbox.prompt.current`（`id/consonant/wordKey`）同時提供題目子音、judge 與 reveal；reveal 不可自行選字或 fallback 第一個藍字。
+- 只有在判定結果已落地（`correct/wrong/unknown`）後才可推進；`parse.none` / `parse.ok=false` 會標記 `sandbox.advance.blockedReason=parse_none`，不得當作 correct 直接推進。
+- reveal 視覺規格（sandbox only）：固定螢幕中心、純文字無底框、總時長 4000ms；`0~1000ms scale 1.0→1.15 + opacity 1`，`1000~4000ms scale 1.15→1.35 + opacity 1→0`。
 - sandbox debug 新增欄位：
   - `scheduler.phase`
   - `scheduler.blockedReason`
@@ -303,6 +307,7 @@ npm run build
 
 ## README Removed/Deprecated Log
 
+- 2026-03-04（sandbox only）：移除 reveal 期間 2100ms 快速淡出舊規格；改為固定 4000ms 置中放大淡出，且 reveal 僅允許讀取 prompt SSOT（wordKey/consonant）。
 - 2026-03-04（sandbox only）：移除「玩家回覆有效選項後僅更新訊息但保留 reply bar/freeze」舊行為；改為強制 resolve + clearReplyUi 單一路徑。
 
 - 2026-03-04（sandbox only）：移除 reveal `renderMode(pair|fullWord)` 雙路徑，改為強制 A（單一 overlay + 同步動畫）；不再以 B（完整單字替代）作為預設或保底。

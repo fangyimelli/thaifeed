@@ -85,6 +85,8 @@ export type SandboxStoryState = {
     startedAt: number;
     doneAt: number;
     wordKey: string;
+    consonantFromPrompt: string;
+    durationMs: number;
     position: {
       xPct: number;
       yPct: number;
@@ -101,7 +103,7 @@ export type SandboxStoryState = {
   fearSystem: SandboxFearDebugState;
   wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
   blocked: { reason: '' | 'phaseBusy'; count: number };
-  advance: { lastAt: number; lastReason: string };
+  advance: { lastAt: number; lastReason: string; blockedReason: string };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
   hint: { lastText: string; count: number };
   prompt: {
@@ -116,6 +118,9 @@ export type SandboxStoryState = {
       };
     };
     mismatch: boolean;
+  };
+  mismatch: {
+    promptVsReveal: boolean;
   };
 };
 
@@ -148,6 +153,7 @@ export type SandboxStoryMode = GameMode & {
   markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
   notifyBlockedByPhase: () => void;
+  commitAdvanceBlockedReason: (reason: string) => void;
   setCurrentPrompt: (prompt: SandboxPrompt | null) => void;
   getCurrentPrompt: () => SandboxPrompt | null;
   commitPromptOverlay: (consonantShown: string) => void;
@@ -178,6 +184,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   let script: NightScript = cloneScript(NIGHT1);
   const maxFear = 100;
   let extraFear = 0;
+  const REVEAL_DURATION_MS = 4000;
   const state: SandboxStoryState = {
     nodeIndex: 0,
     scheduler: { phase: 'boot', blockedReason: '' },
@@ -204,6 +211,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       startedAt: 0,
       doneAt: 0,
       wordKey: '',
+      consonantFromPrompt: '',
+      durationMs: REVEAL_DURATION_MS,
       position: { xPct: 50, yPct: 36 },
       safeRect: { ...REVEAL_SAFE_RECT }
     },
@@ -219,7 +228,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     wave: { count: 0, kind: 'related' },
     blocked: { reason: '', count: 0 },
-    advance: { lastAt: 0, lastReason: '' },
+    advance: { lastAt: 0, lastReason: '', blockedReason: '' },
     audio: { lastKey: '', state: 'idle', reason: '' },
     hint: { lastText: '', count: 0 },
     prompt: {
@@ -230,6 +239,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         lastWriter: { source: 'unknown', writerBlocked: false, blockedReason: '' }
       },
       mismatch: false
+    },
+    mismatch: {
+      promptVsReveal: false
     }
   };
 
@@ -298,8 +310,22 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       }
     };
   };
-  const startReveal = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
-    if (!node) return;
+  const startReveal = (mode: 'correct' | 'wrong' | 'unknown') => {
+    const currentPrompt = state.prompt.current;
+    if (!currentPrompt || currentPrompt.kind !== 'consonant') {
+      state.scheduler.blockedReason = 'mismatch:prompt_missing';
+      state.advance.blockedReason = 'mismatch';
+      state.mismatch.promptVsReveal = true;
+      return;
+    }
+    const node = script.nodes.find((item) => item.id === currentPrompt.wordKey) ?? null;
+    const revealMismatch = !node || node.char !== currentPrompt.consonant;
+    state.mismatch.promptVsReveal = revealMismatch;
+    if (revealMismatch || !node) {
+      state.scheduler.blockedReason = 'mismatch:prompt_vs_reveal';
+      state.advance.blockedReason = 'mismatch';
+      return;
+    }
     if (mode === 'correct') state.scheduler.phase = 'revealingWord';
     clearSchedulerBlockedReason();
     const splitWord = splitGraphemes(node.wordText);
@@ -326,13 +352,15 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       audioKey: node.audioKey,
       startedAt: Date.now(),
       doneAt: 0,
-      wordKey: node.id,
+      wordKey: currentPrompt.wordKey,
+      consonantFromPrompt: currentPrompt.consonant,
+      durationMs: REVEAL_DURATION_MS,
       position,
       safeRect: { ...REVEAL_SAFE_RECT }
     };
   };
   const advancePromptInternal = (reason: string) => {
-    state.advance = { lastAt: Date.now(), lastReason: reason };
+    state.advance = { lastAt: Date.now(), lastReason: reason, blockedReason: '' };
     state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
     syncNodeChar();
     state.scheduler.phase = 'awaitingTag';
@@ -342,6 +370,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.prompt.overlay.consonantShown = '';
     state.prompt.pinned.promptIdRendered = '';
     syncPromptMismatch();
+    state.mismatch.promptVsReveal = false;
     syncFear();
   };
 
@@ -363,6 +392,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
       state.prompt.pinned.lastWriter = { source: 'unknown', writerBlocked: false, blockedReason: '' };
+      state.advance.blockedReason = '';
+      state.mismatch.promptVsReveal = false;
       syncPromptMismatch();
       syncNodeChar();
       syncFear();
@@ -381,7 +412,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     tick() {
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
-        state.reveal.phase = elapsed < 200 ? 'enter' : elapsed < 1200 ? 'pulse' : elapsed < 2100 ? 'exit' : 'done';
+        state.reveal.phase = elapsed < 1000 ? 'enter' : elapsed < REVEAL_DURATION_MS ? 'pulse' : 'done';
         if (state.reveal.phase === 'done' && !state.reveal.doneAt) {
           state.reveal.doneAt = Date.now();
         }
@@ -393,7 +424,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     getCurrentNode,
     forceRevealCurrent() {
       const node = getCurrentNode();
-      startReveal(node, 'correct');
+      startReveal('correct');
       syncFear();
       return node;
     },
@@ -405,7 +436,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       return null;
     },
     forceAdvanceNode() {
-      state.advance = { lastAt: Date.now(), lastReason: 'forceAdvanceNode' };
+      state.advance = { lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       state.scheduler.phase = 'awaitingTag';
       clearSchedulerBlockedReason();
@@ -414,6 +445,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
       syncPromptMismatch();
+      state.mismatch.promptVsReveal = false;
       syncNodeChar();
       syncFear();
     },
@@ -434,6 +466,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
       syncPromptMismatch();
+      state.mismatch.promptVsReveal = false;
       syncNodeChar();
       syncFear();
       return true;
@@ -445,9 +478,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     commitConsonantJudgeResult(result) {
       state.consonant.parse = { ok: result.parsed.ok, matchedChar: result.parsed.matchedChar ?? '', kind: result.parsed.debug?.kind ?? '', matchedAlias: result.parsed.debug?.matchedAlias ?? '', inputNorm: result.parsed.debug?.inputNorm ?? '' };
       state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
-      if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal(getCurrentNode(), 'correct');
-      if (result.judge === 'wrong') startReveal(getCurrentNode(), 'wrong');
-      if (result.judge === 'unknown') startReveal(getCurrentNode(), 'unknown');
+      if (!result.parsed.ok || (result.parsed.debug?.kind ?? '') === 'none') {
+        state.advance.blockedReason = 'parse_none';
+      }
+      if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal('correct');
+      if (result.judge === 'wrong') startReveal('wrong');
+      if (result.judge === 'unknown') startReveal('unknown');
       syncFear();
     },
     getFearDebugState() { syncFear(); return JSON.parse(JSON.stringify(state.fearSystem)) as SandboxFearDebugState; },
@@ -517,7 +553,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         lastInput: payload?.input ?? state.consonant.judge.lastInput,
         lastResult: 'correct'
       };
-      startReveal(node, 'correct');
+      startReveal('correct');
       syncFear();
     },
     advancePrompt(reason) {
@@ -531,7 +567,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     notifyBlockedByPhase() {
       state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 };
       state.scheduler.blockedReason = 'phaseBusy';
+      state.advance.blockedReason = 'phaseBusy';
       syncFear();
+    },
+    commitAdvanceBlockedReason(reason) {
+      state.advance.blockedReason = reason;
     },
     setCurrentPrompt(prompt) {
       state.prompt.current = prompt;

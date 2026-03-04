@@ -3,36 +3,37 @@ export type SandboxWordRevealTextPhase = 'idle' | 'enter' | 'pulse' | 'exit' | '
 type Props = {
   visible: boolean;
   phase: SandboxWordRevealTextPhase;
-  baseText?: string;
-  restText?: string;
-  position?: { xPct: number; yPct: number };
+  wordKey?: string;
+  consonantFromPrompt?: string;
+  mismatch?: boolean;
+  durationMs?: number;
+  wordText?: string;
 };
 
 export default function SandboxWordRevealText({
   visible,
   phase,
-  baseText,
-  restText,
-  position
+  wordKey,
+  consonantFromPrompt,
+  mismatch,
+  durationMs,
+  wordText
 }: Props) {
-  const resolvedBase = (baseText ?? '').trim();
-  const resolvedRest = restText ?? '';
-  const textReady = resolvedBase.length > 0;
+  const resolvedWord = (wordText ?? '').trim();
+  const textReady = resolvedWord.length > 0;
 
-  if (!visible || !textReady || phase === 'idle' || phase === 'done') return null;
+  if (!visible || !textReady || phase === 'idle' || phase === 'done' || mismatch) return null;
 
   return (
     <div
       className={`sandbox-word-reveal-text phase-${phase}`}
       aria-live="polite"
-      style={{
-        left: `${position?.xPct ?? 50}%`,
-        top: `${position?.yPct ?? 36}%`
-      }}
+      data-word-key={wordKey ?? ''}
+      style={{ animationDuration: `${Math.max(4000, durationMs ?? 4000)}ms` }}
     >
-      <span className="sandbox-word-reveal-text__word pulseAndScaleFade">
-        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--base">{resolvedBase}</span>
-        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--rest">{resolvedRest}</span>
+      <span className="sandbox-word-reveal-text__word">
+        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--base">{consonantFromPrompt ?? ''}</span>
+        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--rest">{resolvedWord.slice((consonantFromPrompt ?? '').length)}</span>
       </span>
     </div>
   );

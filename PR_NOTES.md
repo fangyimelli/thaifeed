@@ -1,3 +1,18 @@
+## 2026-03-04（sandbox only：judge gate + prompt/reveal SSOT + 4s reveal）
+
+### Changed
+- [sandbox/flow] 將 sandbox 推題時機收斂為「判定結果已建立後」才可前進；`parse.ok=false` 或 `parse.kind=none` 會降級為 `wrong|unknown`，並記錄 `sandbox.advance.blockedReason=parse_none`，禁止當作 correct 直推。
+- [sandbox/ssot] 建立 prompt/reveal 單一真相：`sandbox.prompt.current`（`id/consonant/wordKey`）同時供 UI 子音、judge、word reveal 使用；reveal 改為只吃 current prompt，不再內部自行挑字或 fallback。
+- [sandbox/guard] 若 prompt 與 reveal 來源不一致，寫入 `mismatch.promptVsReveal=true` 並阻擋 reveal，避免錯字內容曝光。
+- [sandbox/ui] Word reveal 改為螢幕正中央固定顯示、純文字無底框，總時長固定 4000ms，動畫為 scale up + opacity down。
+- [sandbox/debug] 新增/調整欄位：`sandbox.prompt.current.id/consonant/wordKey`、`word.reveal.active/wordKey/consonantFromPrompt/durationMs`、`advance.lastAt/lastReason/blockedReason`、`mismatch.promptVsReveal`。
+
+### Acceptance
+- 1) 任意亂打字不再「未判定就跳題」：PASS
+- 2) 題目子音 = 單字內對應子音（同一 prompt）不錯位：PASS
+- 3) 單字置中放大、4 秒慢慢消失：PASS
+- 4) Classic mode 不受影響：PASS
+
 ## Summary
 - [sandbox only] 修正 Tag 後玩家回覆有效選項（`穩住/衝/不知道`）時，reply bar 不消失、QnA 卡在 awaiting reply 的問題。
 - 根因是玩家送出後同時走了 sandbox consume 與通用 `tryTriggerStoryEvent` 路徑，後者會把已 resolve 的 QnA 又重新改寫成 retry/重問，造成 UI 與狀態不同步。
