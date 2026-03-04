@@ -56,7 +56,7 @@ import {
   updateLastAskedPreview
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
-import { createSandboxStoryMode } from '../modes/sandbox_story/sandboxStoryMode';
+import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
@@ -163,6 +163,13 @@ export type SendResult = {
 };
 
 type LegacyRenameBlocker = (nextHandle: string) => false;
+
+const FEAR_PRESSURE_COLOR_BY_LEVEL: Record<SandboxFearDebugState['pressureLevel'], string> = {
+  low: '#8a8f98',
+  medium: '#f6d365',
+  high: '#ff9f43',
+  panic: '#ff5e5b'
+};
 
 declare global {
   interface Window {
@@ -429,6 +436,15 @@ export default function App() {
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
   const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
+  const [fearDebugState, setFearDebugState] = useState<SandboxFearDebugState>({
+    fearLevel: 0,
+    maxFear: 100,
+    pressureLevel: 'low',
+    ghostProbability: 0,
+    baseProbability: 0,
+    fearLevelFactor: 0,
+    triggers: []
+  });
   const sandboxRevealAudioStampRef = useRef<string>('');
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
@@ -2238,6 +2254,15 @@ export default function App() {
   }, [chatFreeze.isFrozen]);
 
   useEffect(() => {
+    if (modeIdRef.current !== 'sandbox_story') return;
+    setFearDebugState(sandboxModeRef.current.getFearDebugState());
+    const timer = window.setInterval(() => {
+      setFearDebugState(sandboxModeRef.current.getFearDebugState());
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
       modeRef.current.tick(now);
@@ -2320,9 +2345,15 @@ export default function App() {
           lastBlockedReason: lastBlockedReasonRef.current
         }
       });
-    }, 1000);
+    }, 500);
     return () => window.clearInterval(timer);
   }, [sandboxSsotVersion, updateEventDebug]);
+
+  const fearMeterBlocks = useMemo(() => {
+    const total = 10;
+    const filled = Math.max(0, Math.min(total, Math.round((fearDebugState.fearLevel / Math.max(1, fearDebugState.maxFear)) * total)));
+    return `${'█'.repeat(filled)}${'░'.repeat(Math.max(0, total - filled))}`;
+  }, [fearDebugState.fearLevel, fearDebugState.maxFear]);
 
   useEffect(() => {
     if (!isReady || !appStarted) return;
@@ -3488,6 +3519,18 @@ export default function App() {
     setSandboxRevealTick(Date.now());
   }, []);
 
+  const addFearDebug = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.addFear(10);
+    setFearDebugState(sandboxModeRef.current.getFearDebugState());
+  }, []);
+
+  const resetFearDebug = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.resetFear();
+    setFearDebugState(sandboxModeRef.current.getFearDebugState());
+  }, []);
+
   const exportSandboxSSOT = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
     const ssot = sandboxModeRef.current.getSSOT();
@@ -3693,6 +3736,29 @@ export default function App() {
                 </div>
               </div>
               <div className="debug-route-meta">
+                {modeIdRef.current === 'sandbox_story' && (
+                  <div className="debug-fear-system" aria-label="Fear System Debug">
+                    <h4>Fear System</h4>
+                    <div>fearLevel: {fearDebugState.fearLevel}</div>
+                    <div>
+                      pressureLevel:{' '}
+                      <span style={{ color: FEAR_PRESSURE_COLOR_BY_LEVEL[fearDebugState.pressureLevel] }}>{fearDebugState.pressureLevel}</span>
+                    </div>
+                    <div>ghostProbability: {fearDebugState.ghostProbability.toFixed(2)}</div>
+                    <div>Fear Meter</div>
+                    <div className="debug-fear-meter" aria-label="Fear Meter">{fearMeterBlocks}</div>
+                    <div>Triggers</div>
+                    <div className="debug-fear-triggers">
+                      {fearDebugState.triggers.map((trigger) => (
+                        <div key={trigger.name}>{trigger.name} +{trigger.value}</div>
+                      ))}
+                    </div>
+                    <div className="debug-route-controls">
+                      <button type="button" onClick={addFearDebug}>Add Fear +10</button>
+                      <button type="button" onClick={resetFearDebug}>Reset Fear</button>
+                    </div>
+                  </div>
+                )}
                 <div>event.registry.count: {window.__CHAT_DEBUG__?.event?.registry?.count ?? 0}</div>
                 <div className="debug-event-manifest">
                   {(window.__CHAT_DEBUG__?.event?.registry?.manifest ?? []).map((entry) => (

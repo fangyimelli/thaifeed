@@ -1487,3 +1487,21 @@ Console（debug 模式）可觀察：
   - `SimulateConsonantAnswer(text)`
   - `sandbox.consonant.*` 一組欄位
   - `freeze.active / pinned.text`
+
+## Sandbox Story Mode（Fear Meter Debug Monitor）
+
+- 僅 `mode=sandbox_story` 顯示 Fear debug 區塊，classic mode 不顯示、且不改任何 classic 邏輯。
+- Debug Panel 新增 **Fear System**：
+  - `fearLevel`
+  - `pressureLevel`（`low / medium / high / panic`，顏色灰/黃/橘/紅）
+  - `ghostProbability`（`baseProbability + fearLevelFactor`，顯示 0.00~1.00）
+- 新增 **Fear Meter** 視覺 bar（`fearLevel / maxFear`）：`██████░░░░`。
+- 新增 **Triggers** 明細：
+  - `chatSpike`
+  - `storyEmotion`
+  - `darkFrame`
+  - `ghostNearby`
+- 新增 debug tools：
+  - `Add Fear +10`
+  - `Reset Fear`
+- Fear debug 狀態透過 `fearSystem.getDebugState()` 對應介面（sandbox mode 實作 `getFearDebugState()` 只讀輸出）並以 **500ms** 更新。
