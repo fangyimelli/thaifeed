@@ -20,6 +20,10 @@ import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
 import { isDebugEnabled } from '../../debug/debugGate';
 import SandboxWordRevealText, { type SandboxWordRevealTextPhase } from '../overlays/SandboxWordRevealText';
+import {
+  buildRevealRestColor,
+  buildSandboxPromptGlyphStyleToken
+} from '../../modes/sandbox_story/ui/promptGlyphStyle';
 
 export type SceneMissingAsset = {
   name: string;
@@ -1847,6 +1851,22 @@ export default function SceneView({
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
+  const promptGlyphStyleToken = buildSandboxPromptGlyphStyleToken({ curse, opacity: pulseOpacity });
+  const revealRestColor = buildRevealRestColor(promptGlyphStyleToken.opacity);
+
+  if (typeof window !== 'undefined') {
+    const debugRoot = ((window.__CHAT_DEBUG__ ??= {}) as any);
+    debugRoot.sandbox = debugRoot.sandbox ?? {};
+    debugRoot.sandbox.word = debugRoot.sandbox.word ?? {};
+    debugRoot.sandbox.word.reveal = debugRoot.sandbox.word.reveal ?? {};
+    debugRoot.sandbox.word.reveal.style = {
+      ...(debugRoot.sandbox.word.reveal.style ?? {}),
+      baseColor: promptGlyphStyleToken.baseColor,
+      opacity: promptGlyphStyleToken.opacity,
+      restColorResolved: revealRestColor,
+      source: promptGlyphStyleToken.source
+    };
+  }
   const consonantBubbleVisible = !(wordReveal?.visible && wordReveal.phase !== 'idle' && wordReveal.phase !== 'done');
 
   return (
@@ -1919,9 +1939,9 @@ export default function SceneView({
             <span
               className="glyph-blink"
               style={{
-                filter: `contrast(${1 + curse / 180})`,
-                opacity: pulseOpacity,
-                textShadow: `0 0 ${18 + curse / 3}px rgba(134, 217, 255, ${0.7 + curse / 300}), 0 0 ${40 + curse / 2}px rgba(88, 162, 255, ${0.45 + curse / 250})`,
+                filter: promptGlyphStyleToken.filterCss,
+                opacity: promptGlyphStyleToken.opacity,
+                textShadow: promptGlyphStyleToken.glowCss,
                 animationDuration: `${Math.max(0.45, 1.1 - curse / 200)}s`,
                 transform: `scale(${pulseStrength})`
               }}
@@ -1936,6 +1956,7 @@ export default function SceneView({
             baseText={wordReveal?.baseText ?? ''}
             restText={wordReveal?.restText ?? ''}
             position={wordReveal?.position}
+            glyphStyleToken={promptGlyphStyleToken}
           />
           <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
         </div>

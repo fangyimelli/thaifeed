@@ -600,11 +600,9 @@ body {
 }
 
 .sandbox-word-reveal-text__word {
-  color: #edf2ff;
   font-size: clamp(62px, 6.4vw, 92px);
   line-height: 1;
   letter-spacing: 0.04em;
-  text-shadow: 0 0 16px rgba(170, 208, 255, 0.42);
   font-family: 'Noto Sans Thai', 'Noto Sans TC', sans-serif;
   font-weight: 800;
 }
@@ -616,11 +614,11 @@ body {
 }
 
 .sandbox-word-reveal-text__glyph--base {
-  color: #8fd6ff;
+  color: inherit;
 }
 
 .sandbox-word-reveal-text__glyph--rest {
-  color: #edf2ff;
+  color: inherit;
 }
 
 .sandbox-word-reveal-text.phase-enter {

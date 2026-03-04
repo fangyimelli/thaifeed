@@ -1,3 +1,8 @@
+import {
+  buildRevealRestColor,
+  type GlyphStyleToken
+} from '../../modes/sandbox_story/ui/promptGlyphStyle';
+
 export type SandboxWordRevealTextPhase = 'idle' | 'enter' | 'pulse' | 'exit' | 'done';
 
 type Props = {
@@ -6,6 +11,7 @@ type Props = {
   baseText?: string;
   restText?: string;
   position?: { xPct: number; yPct: number };
+  glyphStyleToken: GlyphStyleToken;
 };
 
 export default function SandboxWordRevealText({
@@ -13,7 +19,8 @@ export default function SandboxWordRevealText({
   phase,
   baseText,
   restText,
-  position
+  position,
+  glyphStyleToken
 }: Props) {
   const resolvedBase = (baseText ?? '').trim();
   const resolvedRest = restText ?? '';
@@ -27,12 +34,22 @@ export default function SandboxWordRevealText({
       aria-live="polite"
       style={{
         left: `${position?.xPct ?? 50}%`,
-        top: `${position?.yPct ?? 36}%`
+        top: `${position?.yPct ?? 36}%`,
+        opacity: glyphStyleToken.opacity,
+        filter: glyphStyleToken.filterCss,
+        textShadow: glyphStyleToken.glowCss
       }}
     >
       <span className="sandbox-word-reveal-text__word pulseAndScaleFade">
-        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--base">{resolvedBase}</span>
-        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--rest">{resolvedRest}</span>
+        <span className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--base" style={{ color: glyphStyleToken.baseColor }}>
+          {resolvedBase}
+        </span>
+        <span
+          className="sandbox-word-reveal-text__glyph sandbox-word-reveal-text__glyph--rest"
+          style={{ color: buildRevealRestColor(glyphStyleToken.opacity) }}
+        >
+          {resolvedRest}
+        </span>
       </span>
     </div>
   );
