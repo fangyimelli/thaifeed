@@ -6,9 +6,10 @@ export type SandboxStoryPhase =
   | 'boot'
   | 'awaitingTag'
   | 'awaitingAnswer'
-  | 'revealingWord';
+  | 'revealingWord'
+  | 'awaitingWave';
 
-export type SandboxRevealPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut' | 'done';
+export type SandboxRevealPhase = 'idle' | 'fadeIn' | 'scaleUp' | 'fadeOut' | 'done';
 
 export type SandboxFearDebugState = {
   fearLevel: number;
@@ -73,6 +74,8 @@ export type SandboxStoryState = {
     text: string;
     highlightChar: string;
     baseConsonant: string;
+    appended: string;
+    mode: 'correct' | 'wrong' | 'unknown';
     audioKey: string;
     startedAt: number;
     wordKey: string;
@@ -83,6 +86,7 @@ export type SandboxStoryState = {
   wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
   blocked: { reason: '' | 'phaseBusy'; count: number };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
+  hint: { lastText: string; count: number };
   prompt: {
     current: SandboxPrompt | null;
     overlay: { consonantShown: string };
@@ -133,6 +137,7 @@ export type SandboxStoryMode = GameMode & {
     writerBlocked: boolean;
     blockedReason?: '' | 'notSandbox' | 'phaseBusy' | 'writerNotAllowed';
   }) => void;
+  commitHintText: (text: string) => void;
 };
 
 const cloneScript = (script: NightScript): NightScript => JSON.parse(JSON.stringify(script)) as NightScript;
@@ -151,7 +156,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '' },
       judge: { lastInput: '', lastResult: 'none', timeoutEnabled: false }
     },
-    reveal: { visible: false, phase: 'idle', text: '', highlightChar: '', baseConsonant: '', audioKey: '', startedAt: 0, wordKey: '' },
+    reveal: { visible: false, phase: 'idle', text: '', highlightChar: '', baseConsonant: '', appended: '', mode: 'correct', audioKey: '', startedAt: 0, wordKey: '' },
     ghostMotion: { lastId: null, state: 'idle' },
     ghostGate: { lastReason: 'init' },
     fearSystem: {
@@ -165,6 +170,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     wave: { count: 0, kind: 'related' },
     blocked: { reason: '', count: 0 },
     audio: { lastKey: '', state: 'idle', reason: '' },
+    hint: { lastText: '', count: 0 },
     prompt: {
       current: null,
       overlay: { consonantShown: '' },
@@ -174,6 +180,19 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       },
       mismatch: false
     }
+  };
+
+
+  const splitGraphemes = (text: string) => Array.from(text || '');
+  const pickAppendedByNode = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
+    if (!node) return '';
+    const all = splitGraphemes(node.wordText);
+    const baseLen = splitGraphemes(node.char).length || 1;
+    const appended = all.slice(baseLen).join('');
+    if (mode === 'correct') return appended;
+    if (node.hintAppend) return node.hintAppend;
+    const hintLen = Math.max(1, Math.min(2, node.hintAppendPrefixLen ?? 2));
+    return splitGraphemes(appended).slice(0, hintLen).join('');
   };
 
   const syncPromptMismatch = () => {
@@ -205,7 +224,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       maxFear,
       pressureLevel: fear > 80 ? 'panic' : fear > 60 ? 'high' : fear > 30 ? 'medium' : 'low',
       ghostProbability: Math.min(1, 0.1 + fear / maxFear),
-      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'fogOut' ? 12 : 3, ghostNearby: 4 },
+      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'fadeOut' ? 12 : 3, ghostNearby: 4 },
       footsteps: {
         probability,
         cooldownMs,
@@ -214,15 +233,17 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       }
     };
   };
-  const startReveal = (node: WordNode | null) => {
+  const startReveal = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
     if (!node) return;
-    state.scheduler.phase = 'revealingWord';
+    if (mode === 'correct') state.scheduler.phase = 'revealingWord';
     state.reveal = {
       visible: true,
       phase: 'fadeIn',
       text: node.wordText,
       highlightChar: node.char,
       baseConsonant: node.char,
+      appended: pickAppendedByNode(node, mode),
+      mode,
       audioKey: node.audioKey,
       startedAt: Date.now(),
       wordKey: node.id
@@ -237,6 +258,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.scheduler.phase = 'awaitingTag';
       state.reveal.visible = false;
       state.reveal.phase = 'idle';
+      state.reveal.appended = '';
+      state.hint = { lastText: '', count: 0 };
       state.wave = { count: 0, kind: 'related' };
       state.blocked = { reason: '', count: 0 };
       state.prompt.current = null;
@@ -260,7 +283,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     tick() {
       if (state.scheduler.phase === 'revealingWord') {
         const elapsed = Date.now() - state.reveal.startedAt;
-        state.reveal.phase = elapsed < 800 ? 'fadeIn' : elapsed < 1700 ? 'hold' : elapsed < 2900 ? 'fogOut' : 'done';
+        state.reveal.phase = elapsed < 550 ? 'fadeIn' : elapsed < 1350 ? 'scaleUp' : elapsed < 1950 ? 'fadeOut' : 'done';
       }
       syncFear();
     },
@@ -269,7 +292,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     getCurrentNode,
     forceRevealCurrent() {
       const node = getCurrentNode();
-      startReveal(node);
+      startReveal(node, 'correct');
       syncFear();
       return node;
     },
@@ -283,7 +306,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     forceAdvanceNode() {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       state.scheduler.phase = 'awaitingTag';
-      state.reveal = { ...state.reveal, visible: false, phase: 'idle' };
+      state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0 };
       state.prompt.current = null;
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
@@ -317,7 +340,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     commitConsonantJudgeResult(result) {
       state.consonant.parse = { ok: result.parsed.ok, matchedChar: result.parsed.matchedChar ?? '', kind: result.parsed.debug?.kind ?? '', matchedAlias: result.parsed.debug?.matchedAlias ?? '', inputNorm: result.parsed.debug?.inputNorm ?? '' };
       state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
-      if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal(getCurrentNode());
+      if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal(getCurrentNode(), 'correct');
+      if (result.judge === 'wrong') startReveal(getCurrentNode(), 'wrong');
+      if (result.judge === 'unknown') startReveal(getCurrentNode(), 'unknown');
       syncFear();
     },
     getFearDebugState() { syncFear(); return JSON.parse(JSON.stringify(state.fearSystem)) as SandboxFearDebugState; },
@@ -356,20 +381,25 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     debugAddFear(value = 10) { extraFear += value; syncFear(); },
     debugResetFear() { extraFear = 0; syncFear(); },
     markRevealDone() {
-      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
-      syncNodeChar();
-      state.scheduler.phase = 'awaitingTag';
+      if (state.reveal.mode === 'correct') {
+        state.scheduler.phase = 'awaitingWave';
+      } else {
+        state.scheduler.phase = 'awaitingAnswer';
+      }
       state.reveal.visible = false;
       state.reveal.phase = 'done';
-      state.prompt.current = null;
-      state.prompt.overlay.consonantShown = '';
-      state.prompt.pinned.promptIdRendered = '';
-      syncPromptMismatch();
       syncFear();
     },
     markWaveDone(kind, count) {
       state.wave = { kind, count };
+      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+      syncNodeChar();
       state.scheduler.phase = 'awaitingTag';
+      state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0 };
+      state.prompt.current = null;
+      state.prompt.overlay.consonantShown = '';
+      state.prompt.pinned.promptIdRendered = '';
+      syncPromptMismatch();
       syncFear();
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
@@ -399,6 +429,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         writerBlocked: payload.writerBlocked,
         blockedReason: payload.blockedReason ?? ''
       };
+    },
+    commitHintText(text) {
+      state.hint = { lastText: text, count: state.hint.count + 1 };
     }
   };
 }

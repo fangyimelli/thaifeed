@@ -1,29 +1,25 @@
-export type WordRevealOverlayPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut' | 'done';
+export type WordRevealOverlayPhase = 'idle' | 'fadeIn' | 'scaleUp' | 'fadeOut' | 'done';
 
 type Props = {
   visible: boolean;
   phase: WordRevealOverlayPhase;
-  text?: string;
   wordText?: string;
-  highlightChar?: string;
   baseConsonant?: string;
+  appendedText?: string;
 };
 
-function resolveSuffixByPhase(wordText: string, baseConsonant: string, phase: WordRevealOverlayPhase) {
-  const graphemes = Array.from(wordText);
-  const baseGraphemes = Array.from(baseConsonant || '');
-  const suffix = graphemes.slice(baseGraphemes.length).join('');
-  const suffixGraphemes = Array.from(suffix);
-  if (phase === 'fadeIn') return suffixGraphemes.slice(0, Math.ceil(suffixGraphemes.length * 0.45)).join('');
-  if (phase === 'hold' || phase === 'fogOut' || phase === 'done') return suffix;
-  return '';
+function resolveSuffixByPhase(appendedText: string, phase: WordRevealOverlayPhase) {
+  const graphemes = Array.from(appendedText || '');
+  if (phase === 'fadeIn') return graphemes.slice(0, Math.max(1, Math.ceil(graphemes.length * 0.45))).join('');
+  return appendedText;
 }
 
-export default function WordRevealOverlay({ visible, phase, text, wordText, highlightChar, baseConsonant }: Props) {
-  const resolvedText = wordText ?? text ?? '';
-  const resolvedBase = baseConsonant ?? highlightChar ?? Array.from(resolvedText)[0] ?? '';
-  if (!visible || !resolvedText || phase === 'idle' || phase === 'done') return null;
-  const suffix = resolveSuffixByPhase(resolvedText, resolvedBase, phase);
+export default function WordRevealOverlay({ visible, phase, wordText, baseConsonant, appendedText }: Props) {
+  const resolvedWord = wordText ?? '';
+  const resolvedBase = baseConsonant ?? Array.from(resolvedWord)[0] ?? '';
+  const resolvedAppended = appendedText ?? '';
+  if (!visible || (!resolvedBase && !resolvedAppended) || phase === 'idle' || phase === 'done') return null;
+  const suffix = resolveSuffixByPhase(resolvedAppended, phase);
   return (
     <div className={`word-reveal-overlay phase-${phase}`} aria-live="polite">
       <div className="word-reveal-text">

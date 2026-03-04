@@ -1610,3 +1610,13 @@ Console（debug 模式）可觀察：
   - `word.reveal.phase`
   - `ghost.gate.lastReason`
   - `footsteps.probability/cooldownRemaining/lastAt`
+
+## Sandbox Consonant Prompt（2026-03-04 更新）
+
+- 僅 sandbox_story：`unknown` 與 `wrong` 都會透過 classic hint adapter 產生提示文字，且維持同一題 `awaitingAnswer`（不跳題）。
+- `correct`：先做字形補字 overlay（base + appended，逐步顯示→放大→淡出），再送出 related chat wave（3~6 則），最後才進下一題。
+- overlay / pinned / judge 共享同一個 `sandbox.prompt.current`（同 `promptId`），debug `sandbox.prompt.mismatch` 應維持 `false`。
+- pronounce audio 目前保留介面，不觸發 side effect，`audio.pronounce.state` 會停在 `idle`（reserved）。
+
+### README Removed/Deprecated Log
+- 2026-03-04：sandbox 舊「unknown 僅回覆收到不知道」行為視為 deprecated，改為強制提示文字。

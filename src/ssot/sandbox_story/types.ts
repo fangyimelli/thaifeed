@@ -24,6 +24,8 @@ export type WordNode = {
   unknownKeywords: string[];
   word: string;
   wordText: string;
+  hintAppend?: string;
+  hintAppendPrefixLen?: number;
   highlightChar: string;
   audioKey: string;
   comprehensionQuestion: ComprehensionQuestion;

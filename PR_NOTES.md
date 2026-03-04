@@ -1,63 +1,51 @@
 ## Summary
-- 只修改 sandbox 範圍：`src/modes/sandbox_story/**` 與 sandbox 掛載邏輯（`src/app/App.tsx`），未改 classic engine。
-- 修正 sandbox_story Overlay 與 pinned 題目不一致：兩者改用同一個 `sandbox.prompt.current`（PromptCoordinator）單一真相來源。
-- 加入 sandbox pinned writer guard：sandbox 期間只允許 `sandboxPromptCoordinator` 寫 pinned，其他來源阻擋並寫 debug。
-- 「不知道」流程保持同一 promptId，不會切換成 comprehension 其他題型。
+- 僅修改 sandbox 範圍（`src/modes/sandbox_story/**`、sandbox 掛載 UI / debug）；classic mode 無行為變更、無 import sandbox-only logic。
+- 修正 consonant prompt 三種結果：
+  - correct：螢幕子音旁 overlay 補字（完整 appended）→ 放大淡出 → related chat wave 3~6 則 → 才進下一題。
+  - wrong：overlay 顯示提示 appended（1~2 grapheme）→ 放大淡出，並送出 hint 文字，同題重答。
+  - unknown：一定送出 hint 文字（不再只有「收到不知道」），同題重答。
+- 單一真相來源：overlay / pinned / judge 全部綁 `sandbox.prompt.current`，維持 `promptId` 一致；`sandbox.prompt.mismatch` 持續可觀測。
 
-## Root-cause 排查
-1) Overlay 子音來源
-- 先前 `SceneView` 讀 `state.currentConsonant.letter`，未綁 sandbox prompt，會與 sandbox 題目不同步。
-
-2) pinned 題目來源
-- 由 `runTagStartFlow(... setPinnedReply ...)` 觸發，原本 qna/event/sandbox 都能更新 `lastQuestionMessageId`，sandbox 無 writer guard。
-
-3) scheduler.phase 寫入檢查
-- sandbox `awaitingAnswer` 期間仍可能被其他流程（qna/event）嘗試寫 pinned；現在 guard 會阻擋並標記 `phaseBusy` / `writerNotAllowed`。
-
-4) 「不知道」覆寫檢查
-- 先前 unknown 會送提示並可能重新走其他出題路徑；現在 unknown 保持 `sandbox.prompt.current` 不變，promptId 不變。
-
-## Changed
+## Changed Files
 - `src/modes/sandbox_story/sandboxStoryMode.ts`
-  - 新增 `SandboxPrompt` 與 `state.prompt.current`。
-  - 新增 prompt 一致性 debug 狀態：overlay/pinned promptId + mismatch。
-  - 新增 coordinator API：`setCurrentPrompt/getCurrentPrompt/commitPromptOverlay/commitPromptPinnedRendered/commitPinnedWriter`。
+  - reveal phase 調整為 `fadeIn/scaleUp/fadeOut`，新增 `awaitingWave`。
+  - reveal state 新增 `appended/mode`；新增 hint state `sandbox.hint.lastText/count`。
+  - correct 完成 reveal 後進 `awaitingWave`；`markWaveDone` 才推進到下一題。
+- `src/modes/sandbox_story/classicHintAdapter.ts`（new）
+  - 透過 adapter 呼叫 classic hint 產生器供 sandbox 使用。
 - `src/app/App.tsx`
-  - sandbox 出題時建立 `SandboxPrompt`，messageId 與 promptId 綁定。
-  - 新增 `setPinnedQuestionMessage()` writer guard（sandbox only）。
-  - Overlay 顯示改讀 `getSandboxOverlayConsonant()`（來自 prompt.current）。
-  - sandbox 答題解析改讀 current prompt（不是直接依 node state）。
-  - debug 新增 `sandbox.prompt.*` 與 `pinned.lastWriter.*`。
-- `src/ui/scene/SceneView.tsx`
-  - 擴充 debug 型別，加入 `sandbox.prompt.*` 結構。
-- `README.md`
-  - 新增 Sandbox PromptCoordinator / pinned writer guard / 一致性 debug 欄位。
-- `docs/10-change-log.md`
-  - 新增本次變更記錄。
+  - sandbox 判題分支：wrong/unknown 必送 hint 並記錄 `commitHintText`。
+  - correct 流程新增 related wave（3~6）完成後 `markWaveDone`。
+  - pronounce state 保留 `idle`（無 side effect）。
+  - debug 同步新增 prompt/hint/reveal/wave 欄位。
+- `src/ui/scene/SceneView.tsx` + `src/ui/overlays/WordRevealOverlay.tsx` + `src/styles.css`
+  - overlay 改掛在子音 glyph 旁，且動畫符合 fadeIn→scaleUp→fadeOut。
+- `src/data/night1_words.ts` + `src/ssot/sandbox_story/types.ts` + `src/ssot/sandbox_story/night1.ts`
+  - SSOT 新增 `hintAppend` / `hintAppendPrefixLen` 管道，供 wrong/unknown 提示補字使用。
 
 ## Removed/Deprecated Log
-- Removed（sandbox only）
-  - 無（本次為整合修正，不新增移除項）。
+- Deprecated（sandbox only）
+  - unknown 僅回覆「收到不知道」且未附提示文字的舊行為。
 
-## SSOT
-- Added（sandbox only）
-  - `sandbox.prompt.current`（PromptCoordinator 單一真相來源）。
-- Classic SSOT
-  - 無變更。
-
-## Debug fields change log
+## SSOT 變更
 - Added
-  - `sandbox.prompt.current.kind`
-  - `sandbox.prompt.current.promptId`
-  - `sandbox.prompt.overlay.consonantShown`
-  - `sandbox.prompt.pinned.promptIdRendered`
+  - `WordNode.hintAppend?: string`
+  - `WordNode.hintAppendPrefixLen?: number`
+- Retained
+  - `sandbox.prompt.current` 作為 overlay/pinned/judge 單一真相來源。
+
+## Debug 欄位變更紀錄
+- Added / Expanded
+  - `sandbox.prompt.current.promptId/kind/consonant/wordKey`
   - `sandbox.prompt.mismatch`
-  - `sandbox.prompt.pinned.lastWriter.source`
-  - `sandbox.prompt.pinned.lastWriter.writerBlocked`
-  - `sandbox.prompt.pinned.lastWriter.blockedReason`
+  - `sandbox.judge.lastInput/lastResult`（沿用並校驗）
+  - `sandbox.hint.lastText/hint.count`
+  - `word.reveal.base/appended/phase`
+  - `lastWave.count/lastWave.kind`
 
 ## Acceptance (PASS/FAIL)
-1) sandbox_story 畫面顯示「ฉ」時，pinned 同題子音題：PASS
-2) 回覆「不知道」後 promptId 不變、同題維持：PASS
-3) Debug `sandbox.prompt.mismatch` 永遠為 false：PASS
-4) Classic Isolation（classic pinned/overlay 行為不變，且 classic 不 import sandbox coordinator）：PASS
+1) unknown：輸入「不知道」必出提示文字且同題可重答：PASS
+2) wrong：錯字母會出提示且同題重答，overlay 在子音旁顯示提示補字並放大消失：PASS
+3) correct：正確子音會補齊單字並放大消失，產生 related 3~6 則後才下一題：PASS
+4) prompt 同步：overlay 與 pinned promptId 一致、`mismatch=false`：PASS
+5) Classic Isolation：classic 不受影響：PASS

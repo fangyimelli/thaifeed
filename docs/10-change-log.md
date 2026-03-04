@@ -1,3 +1,16 @@
+
+## 2026-03-04（sandbox consonant prompt integration）
+
+### Changed
+- [sandbox/qna] `unknown`、`wrong` 兩種結果都改為「同題重答 + 一定產生提示文字」，提示改由 `classicHintAdapter`（透過 adapter）提供，避免 sandbox 與 classic 文案漂移。
+- [sandbox/reveal] Overlay 改為顯示 `baseConsonant + appended`；`correct` 顯示完整補字、`wrong/unknown` 顯示 hint appended，動畫調整為 fadeIn → scaleUp → fadeOut，並掛在螢幕子音旁。
+- [sandbox/scheduler] `correct` 流程改為 reveal 完成後先送 related wave（3~6 則、不可 tag 玩家），wave 結束才進下一題；`wrong/unknown` 不推進題目。
+- [sandbox/ssot+debug] `night1_words` 與 `WordNode` 新增 hint appended 欄位；debug 新增 `sandbox.hint.*`、`word.reveal.base/appended/phase`、`sandbox.prompt.current.consonant/wordKey` 與 `lastWave.*` 觀測。
+- [sandbox/audio] 發音音效保留介面但不播放，`audio.pronounce.state=idle`（reserved no side effect）。
+
+### Docs
+- README、PR_NOTES 同步更新本次 sandbox 強制整合內容、Removed/Deprecated log、SSOT 與 debug 欄位變更紀錄。
+
 ## 2026-03-04（sandbox_story PromptCoordinator 單一真相來源）
 
 ### Changed

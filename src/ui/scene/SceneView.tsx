@@ -19,6 +19,7 @@ import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
 import { isDebugEnabled } from '../../debug/debugGate';
+import WordRevealOverlay, { type WordRevealOverlayPhase } from '../overlays/WordRevealOverlay';
 
 export type SceneMissingAsset = {
   name: string;
@@ -49,6 +50,13 @@ type Props = {
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
+  wordReveal?: {
+    visible: boolean;
+    phase: WordRevealOverlayPhase;
+    wordText: string;
+    baseConsonant: string;
+    appendedText: string;
+  };
 };
 
 type SceneAssetState = {
@@ -525,7 +533,8 @@ export default function SceneView({
   blackoutState,
   onNeedUserGestureChange,
   onSceneRunning,
-  onSceneError
+  onSceneError,
+  wordReveal
 }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
   const [currentLoopKey, setCurrentLoopKey] = useState<OldhouseLoopKey>(MAIN_LOOP);
@@ -1897,20 +1906,34 @@ export default function SceneView({
             />
           )}
 
+
+          <div
+            className="glyph-word-reveal-wrap"
+            style={{
+              top: `${anchorPos.top}%`,
+              left: `${anchorPos.left}%`
+            }}
+          >
           <span
             className="glyph-blink"
             style={{
-              top: `${anchorPos.top}%`,
-              left: `${anchorPos.left}%`,
               filter: `contrast(${1 + curse / 180})`,
               opacity: pulseOpacity,
               textShadow: `0 0 ${18 + curse / 3}px rgba(134, 217, 255, ${0.7 + curse / 300}), 0 0 ${40 + curse / 2}px rgba(88, 162, 255, ${0.45 + curse / 250})`,
               animationDuration: `${Math.max(0.45, 1.1 - curse / 200)}s`,
-              transform: `translate(-50%, -50%) scale(${pulseStrength})`
+              transform: `scale(${pulseStrength})`
             }}
           >
             {targetConsonant}
           </span>
+            <WordRevealOverlay
+              visible={Boolean(wordReveal?.visible)}
+              phase={wordReveal?.phase ?? 'idle'}
+              wordText={wordReveal?.wordText ?? ''}
+              baseConsonant={wordReveal?.baseConsonant ?? ''}
+              appendedText={wordReveal?.appendedText ?? ''}
+            />
+          </div>
           <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
         </div>
 
