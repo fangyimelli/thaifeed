@@ -62,7 +62,7 @@ export type SandboxStoryState = {
     nodeChar: string;
     promptText: string;
     promptCurrent: string;
-    parse: { ok: boolean; matchedChar: string; kind: string; matchedAlias: string; inputNorm: string };
+    parse: { ok: boolean; matchedChar: string; kind: string; matchedAlias: string; inputNorm: string; inputRaw: string; allowedSetsHit: { latin: boolean; bopomofo: boolean; thai: boolean; cjk: boolean }; matched: string; blockedReason: string };
     judge: {
       lastInput: string;
       lastResult: 'correct' | 'wrong' | 'unknown' | 'timeout' | 'none';
@@ -139,7 +139,7 @@ export type SandboxStoryMode = GameMode & {
   setConsonantPromptText: (promptText: string) => void;
   commitConsonantJudgeResult: (result: {
     input: string;
-    parsed: { ok: boolean; matchedChar?: string; debug?: { kind?: string; matchedAlias?: string; inputNorm?: string } };
+    parsed: { ok: boolean; matchedChar?: string; debug?: { kind?: string; matchedAlias?: string; inputNorm?: string; inputRaw?: string; matched?: string; blockedReason?: string; normalize?: { allowedSetsHit?: { latin?: boolean; bopomofo?: boolean; thai?: boolean; cjk?: boolean } } } };
     judge: 'correct' | 'wrong' | 'unknown' | 'timeout';
   }) => void;
   getFearDebugState: () => SandboxFearDebugState;
@@ -194,7 +194,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       nodeChar: '',
       promptText: '',
       promptCurrent: '',
-      parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '' },
+      parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '', inputRaw: '', allowedSetsHit: { latin: false, bopomofo: false, thai: false, cjk: false }, matched: '', blockedReason: '' },
       judge: { lastInput: '', lastResult: 'none', timeoutEnabled: false }
     },
     reveal: {
@@ -493,16 +493,33 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.consonant.promptCurrent = getCurrentNode()?.char ?? '';
     },
     commitConsonantJudgeResult(result) {
-      state.consonant.parse = { ok: result.parsed.ok, matchedChar: result.parsed.matchedChar ?? '', kind: result.parsed.debug?.kind ?? '', matchedAlias: result.parsed.debug?.matchedAlias ?? '', inputNorm: result.parsed.debug?.inputNorm ?? '' };
+      state.consonant.parse = {
+        ok: result.parsed.ok,
+        matchedChar: result.parsed.matchedChar ?? '',
+        kind: result.parsed.debug?.kind ?? '',
+        matchedAlias: result.parsed.debug?.matchedAlias ?? '',
+        inputNorm: result.parsed.debug?.inputNorm ?? '',
+        inputRaw: result.parsed.debug?.inputRaw ?? result.input,
+        allowedSetsHit: {
+          latin: Boolean(result.parsed.debug?.normalize?.allowedSetsHit?.latin),
+          bopomofo: Boolean(result.parsed.debug?.normalize?.allowedSetsHit?.bopomofo),
+          thai: Boolean(result.parsed.debug?.normalize?.allowedSetsHit?.thai),
+          cjk: Boolean(result.parsed.debug?.normalize?.allowedSetsHit?.cjk)
+        },
+        matched: result.parsed.debug?.matched ?? '',
+        blockedReason: result.parsed.debug?.blockedReason ?? ''
+      };
       state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
-      if (!result.parsed.ok || (result.parsed.debug?.kind ?? '') === 'none') {
+      if (state.consonant.parse.blockedReason === 'input_sanitized_to_empty') {
+        state.advance.blockedReason = 'input_sanitized_to_empty';
+      } else if (!result.parsed.ok || (result.parsed.debug?.kind ?? '') === 'none') {
         state.advance.blockedReason = 'parse_none';
       }
       if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal('correct');
-      if (result.judge === 'wrong') {
+      if (result.judge === 'wrong' && state.advance.blockedReason !== 'input_sanitized_to_empty') {
         state.advance.blockedReason = 'not_correct_or_pass';
       }
-      if (result.judge === 'unknown') {
+      if (result.judge === 'unknown' && state.advance.blockedReason !== 'input_sanitized_to_empty') {
         state.advance.blockedReason = 'not_correct_or_pass';
       }
       syncFear();
@@ -567,7 +584,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         matchedChar: payload?.matchedChar ?? node?.char ?? '',
         kind: 'debug_apply_correct',
         matchedAlias: '',
-        inputNorm: payload?.input ?? ''
+        inputNorm: payload?.input ?? '',
+        inputRaw: payload?.input ?? '',
+        allowedSetsHit: { latin: false, bopomofo: false, thai: false, cjk: false },
+        matched: 'keyword',
+        blockedReason: ''
       };
       state.consonant.judge = {
         ...state.consonant.judge,

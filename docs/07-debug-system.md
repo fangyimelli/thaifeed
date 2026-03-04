@@ -54,3 +54,20 @@
 - `event.cooldownMeta[eventKey].lastRollbackAt`：因 abort（如 `question_send_failed`）回滾時間。
 - `event.freezeGuard.hasRealTag/replyUIReady/freezeAllowed`：freeze 啟動 guard 判斷快照。
 - `chat.system.debugReset.count/reason/resetAt`：一鍵救援執行次數、原因與時間。
+
+## 2026-03-04（sandbox 輸入與樣式驗收欄位）
+
+sandbox_story 建議固定檢查以下欄位：
+- `sandbox.consonant.parse.inputRaw`
+- `sandbox.consonant.parse.inputNorm`
+- `sandbox.consonant.parse.allowedSetsHit`
+- `sandbox.parser.kind`
+- `sandbox.parser.matched`
+- `sandbox.blockedReason`
+- `ui.promptGlyph.className`
+- `ui.promptGlyph.colorResolved`
+- `ui.promptGlyph.opacityResolved`
+- `ui.promptGlyph.source`
+- `ui.promptGlyph.isBlueExpected`
+
+補充規則：若某問題連續 3 次 PR 都未提及，才可自 debug 頁移除；後續再次出現則重新加回。

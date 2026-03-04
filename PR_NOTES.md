@@ -136,3 +136,29 @@
 | 3) 玩家答對：置中單字放大 4 秒淡出，結束後自動換題 | PASS |
 | 4) 按 PASS：立即換題（不需答對） | PASS |
 | 5) Classic mode 不受影響 | PASS |
+
+## 2026-03-04（sandbox_story only：輸入解析 + 題目子音藍色修復）
+
+### 範圍
+- 僅修改 sandbox_story 解析鏈與樣式 scope；classic mode 未改動。
+
+### 主要變更
+1. **輸入 normalize / parser（sandbox only）**
+   - 加入 sandbox 專用 normalize，保留英文/數字/注音/中文與常見標點。
+   - parser 支援：`A/a/1`、`B/b/2`、`C/c/3`。
+   - unknown 支援：`不知道/不確定/idk/?/？`。
+   - 若 normalize 後為空，阻擋推題並記錄 `blockedReason=input_sanitized_to_empty`。
+2. **題目子音樣式（sandbox only）**
+   - prompt glyph 補上 sandbox scope class：`sandbox-story-prompt-glyph`。
+   - 在 `.video-area.sandbox-story-mode` 注入藍色 token，恢復藍色顯示。
+3. **Debug 欄位**
+   - `input.raw / input.norm / input.allowedSetsHit`
+   - `parser.kind / parser.matched / blockedReason`
+   - `ui.promptGlyph.className/colorResolved/opacityResolved/source/isBlueExpected`
+
+### 驗收表
+- [PASS] 輸入 `A`：可被 parser 命中並走正確流程。
+- [PASS] 輸入 `idk` 或 `?`：判定 unknown 並顯示提示。
+- [PASS] 輸入注音 `ㄅㄆㄇˋ`：不會被清空，debug `input.norm` 保留。
+- [PASS] sandbox 題目子音恢復藍色。
+- [PASS] classic mode 完全不受影響。

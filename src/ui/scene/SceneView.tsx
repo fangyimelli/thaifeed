@@ -50,6 +50,7 @@ type Props = {
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
+  mode?: 'classic' | 'sandbox_story';
   wordReveal?: {
     visible: boolean;
     phase: SandboxWordRevealTextPhase;
@@ -313,6 +314,10 @@ declare global {
             kind?: string;
             matchedAlias?: string;
             inputNorm?: string;
+            inputRaw?: string;
+            allowedSetsHit?: { latin?: boolean; bopomofo?: boolean; thai?: boolean; cjk?: boolean };
+            matched?: string;
+            blockedReason?: string;
           };
           judge?: {
             lastInput?: string;
@@ -536,6 +541,7 @@ export default function SceneView({
   onNeedUserGestureChange,
   onSceneRunning,
   onSceneError,
+  mode = 'classic',
   wordReveal
 }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
@@ -1912,6 +1918,7 @@ export default function SceneView({
 
           <div
             className="glyph-word-reveal-wrap"
+            data-mode={mode}
             style={{
               top: `${anchorPos.top}%`,
               left: `${anchorPos.left}%`
@@ -1919,7 +1926,7 @@ export default function SceneView({
           >
           {consonantBubbleVisible && (
             <span
-              className="glyph-blink"
+              className={`glyph-blink ${mode === 'sandbox_story' ? 'sandbox-story-prompt-glyph' : ''}`.trim()}
               style={{
                 filter: `contrast(${1 + curse / 180})`,
                 opacity: pulseOpacity,
