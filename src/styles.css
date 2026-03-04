@@ -587,6 +587,27 @@ body {
   font-size: 11px;
 }
 
+.debug-fear-system {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 143, 107, 0.35);
+  border-radius: 8px;
+  background: rgba(30, 22, 22, 0.45);
+}
+
+.debug-fear-system h4 {
+  margin: 0 0 6px;
+}
+
+.debug-fear-meter {
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.debug-fear-triggers {
+  margin-bottom: 6px;
+}
+
 .word-reveal-overlay {
   position: absolute;
   inset: 12% 0 auto 0;

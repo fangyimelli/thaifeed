@@ -70,6 +70,19 @@
 - 每次 PR 若有流程級變更，必須更新本頁。
 - 變更內容需能追溯到對應 SSOT 檔案與 docs 分頁。
 
+## 2026-03-04（sandbox fear meter debug monitor）
+
+### Changed
+- [sandbox/debug] Debug Panel 新增 Fear Meter Monitor（`Fear System` 區塊），顯示 `fearLevel`、`pressureLevel`、`ghostProbability`。
+- [sandbox/debug] 新增 `Fear Meter` 字元長條（`fearLevel / maxFear`），並顯示 trigger 累積來源（`chatSpike`、`storyEmotion`、`darkFrame`、`ghostNearby`）。
+- [sandbox/debug] 新增 debug tools：`Add Fear +10`、`Reset Fear`，僅在 `mode === sandbox_story` 顯示。
+- [sandbox/core] `sandboxStoryMode` 新增只讀 `getFearDebugState()` 以及 `addFear/resetFear` 測試入口，ghost 機率以 `baseProbability + fearLevelFactor` 計算並 clamp 到 `0.00 ~ 1.00`。
+- [debug/refresh] Fear debug 與 sandbox debug tick 更新頻率調整為 `500ms`。
+
+### Docs
+- README 補充 Fear Meter Debug Monitor 的使用與驗收。
+- PR_NOTES 同步記錄 sandbox-only 影響範圍與驗收。
+
 ## 2026-03-03（mention autoscroll + jump hint）
 
 ### Changed
