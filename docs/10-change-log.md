@@ -1,3 +1,16 @@
+## 2026-03-04（debug mode switcher no-response fix）
+
+### Changed
+- [debug/ui] `DebugModeSwitcher` 新增 `Mode Switch Debug` 狀態區塊，點擊後立即回寫 `lastModeSwitch.clickAt/requestedMode/persistedMode/action/result/reason`，不再只靠 console 判斷。
+- [debug/ssot] Mode 切換沿用既有 SSOT（`mode` query + `localStorage['app.currentMode']`）；切換時會回讀 query/storage/store 並顯示在 `persistedMode`，可直接確認是否真的寫入。
+- [debug/bootstrap] 切換成功時固定走 debug-only `reload` 生效，並在 UI 顯示 `Switching…` 與 `action=reload`。
+- [debug/guard] 新增阻擋/錯誤可視化（例如 `debug_disabled` / `already_current_mode` / `invalid_mode` / 例外訊息），避免按鈕看起來「無反應」。
+- [classic] 無事件/流程/遊戲邏輯變更。
+
+### Docs
+- README 補充 Debug 模式切換排障（優先看 `lastModeSwitch.result/reason`）。
+- PR_NOTES 新增本次驗收流程與 rollback（移除 mode switcher 或關閉 debug override）。
+
 ## 2026-03-04（debug mode switcher classic/sandbox_story）
 
 ### Changed

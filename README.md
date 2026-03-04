@@ -895,6 +895,15 @@ npm run build
   - `Classic Debug Tools`：僅在 `mode === "classic"` 時顯示。
   - `Sandbox Story Debug Tools`：僅在 `mode === "sandbox_story"` 時顯示。
 - Mode SSOT：沿用既有 `mode` query param（`?mode=classic|sandbox_story`），debug-only switcher 會同步寫入 `localStorage['app.currentMode']` 並立即 reload 生效。
+- Mode Switch Debug（在 `Mode Debug` 區塊內）會即時顯示：
+  - `lastModeSwitch.clickAt`
+  - `lastModeSwitch.requestedMode`
+  - `lastModeSwitch.persistedMode`（`query/storage/store` 回讀結果）
+  - `lastModeSwitch.action`（`reinit / reload / none`）
+  - `lastModeSwitch.result`（`ok / blocked / error`）
+  - `lastModeSwitch.reason`（若被 guard 擋住或例外）
+- 點擊 Mode Switch 按鈕後，UI 會先更新 `lastModeSwitch.*`，再執行生效動作；若可切換，debug-only 會顯示 `Switching…` 並以 `reload` 讓 mode 立即重啟套用。
+- 常見排障：若按鈕看起來沒反應，先看 `lastModeSwitch.result/reason`，例如 `debug_disabled`、`already_current_mode`、`invalid_mode`。
 - 啟動時 mode 決策：
   - `mode` query param（最高優先）
   - 若 `debug=1` 才允許讀取 `localStorage['app.currentMode']`
@@ -963,9 +972,10 @@ npm run build
 - 安全保護：`mode !== "sandbox_story"` 時不渲染任何 sandbox debug tools，避免 classic engine 誤觸 sandbox controls。
 - Debug-only Mode Switcher 驗收：
   1. 以 `?debug=1` 開啟 Debug Panel。
-  2. 點 `Switch to Sandbox (sandbox_story)` 後會 reload，`currentMode` 應變成 `sandbox_story`。
-  3. 點 `Switch to Classic` 後會 reload，`currentMode` 應回 `classic`。
-  4. 未開啟 debug 時不顯示該切換 UI。
+  2. 點 `Switch to Sandbox (sandbox_story)` 後，`lastModeSwitch.clickAt/requestedMode` 先更新，`persistedMode` 應顯示 storage 已寫入 `sandbox_story`。
+  3. 切換流程會顯示 `Switching…` 且執行 reload，回來後 `currentMode` 應變成 `sandbox_story`。
+  4. 點 `Switch to Classic` 同理可切回，且 `lastModeSwitch` 顯示新的 requested/persisted/action/result。
+  5. 未開啟 debug 時不顯示該切換 UI。
 
 ## System message 使用邊界（SSOT）
 
