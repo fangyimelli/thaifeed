@@ -380,6 +380,7 @@ const EVENT_TESTER_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_E
 const EVENT_AUDIO_PLAYING_TIMEOUT_MS = 10_000;
 const SANDBOX_SSOT_STORAGE_KEY = 'thaifeed.sandbox_story.ssot';
 const DEBUG_MODE_STORAGE_KEY = 'app.currentMode';
+const DEBUG_MODE_SWITCH_STATUS_KEY = 'app.debug.lastModeSwitch';
 
 type EventAudioState = 'idle' | 'playing' | 'cooldown';
 type EventAudioResult = 'TRIGGERED' | 'SKIPPED' | 'FAILED' | '-';
@@ -431,10 +432,21 @@ const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
 
 type DebugModeSwitcherProps = {
   currentMode: 'classic' | 'sandbox_story';
+  switching: boolean;
+  lastModeSwitch: LastModeSwitchStatus;
   onSwitch: (mode: 'classic' | 'sandbox_story') => void;
 };
 
-function DebugModeSwitcher({ currentMode, onSwitch }: DebugModeSwitcherProps) {
+type LastModeSwitchStatus = {
+  clickAt: number | null;
+  requestedMode: 'classic' | 'sandbox_story' | null;
+  persistedMode: string;
+  action: 'reinit' | 'reload' | 'none';
+  result: 'ok' | 'blocked' | 'error' | '-';
+  reason: string;
+};
+
+function DebugModeSwitcher({ currentMode, onSwitch, switching, lastModeSwitch }: DebugModeSwitcherProps) {
   return (
     <div className="debug-event-tester" aria-label="Debug Mode Switcher">
       <h4>Mode Debug</h4>
@@ -447,6 +459,14 @@ function DebugModeSwitcher({ currentMode, onSwitch }: DebugModeSwitcherProps) {
           {currentMode === 'sandbox_story' ? 'Sandbox (Current)' : 'Switch to Sandbox (sandbox_story)'}
         </button>
       </div>
+      {switching && <div>Switching…</div>}
+      <div><strong>Mode Switch Debug</strong></div>
+      <div>lastModeSwitch.clickAt: {lastModeSwitch.clickAt ?? '-'}</div>
+      <div>lastModeSwitch.requestedMode: {lastModeSwitch.requestedMode ?? '-'}</div>
+      <div>lastModeSwitch.persistedMode: {lastModeSwitch.persistedMode || '-'}</div>
+      <div>lastModeSwitch.action: {lastModeSwitch.action}</div>
+      <div>lastModeSwitch.result: {lastModeSwitch.result}</div>
+      <div>lastModeSwitch.reason: {lastModeSwitch.reason || '-'}</div>
     </div>
   );
 }
@@ -501,6 +521,28 @@ export default function App() {
   const chatAreaRef = useRef<HTMLElement>(null);
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [debugModeSwitching, setDebugModeSwitching] = useState(false);
+  const [lastModeSwitch, setLastModeSwitch] = useState<LastModeSwitchStatus>(() => {
+    const fallback = {
+      clickAt: null,
+      requestedMode: null,
+      persistedMode: `query=${resolveModeFromQuery() ?? '-'} | storage=${window.localStorage.getItem(DEBUG_MODE_STORAGE_KEY) ?? '-'} | store=-`,
+      action: 'none' as const,
+      result: '-' as const,
+      reason: ''
+    };
+    const raw = window.sessionStorage.getItem(DEBUG_MODE_SWITCH_STATUS_KEY);
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw) as typeof fallback;
+      return {
+        ...fallback,
+        ...parsed
+      };
+    } catch {
+      return fallback;
+    }
+  });
   const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
   const sandboxRevealAudioStampRef = useRef<string>('');
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
@@ -3634,19 +3676,93 @@ export default function App() {
 
   const mode = modeIdRef.current;
 
+  const readModePersistenceDebug = useCallback((storeMode?: 'classic' | 'sandbox_story') => {
+    const queryMode = resolveModeFromQuery() ?? '-';
+    const storageMode = window.localStorage.getItem(DEBUG_MODE_STORAGE_KEY) ?? '-';
+    return `query=${queryMode} | storage=${storageMode} | store=${storeMode ?? modeIdRef.current}`;
+  }, []);
+
+  const pushModeSwitchDebug = useCallback((next: LastModeSwitchStatus) => {
+    setLastModeSwitch(next);
+    window.sessionStorage.setItem(DEBUG_MODE_SWITCH_STATUS_KEY, JSON.stringify(next));
+  }, []);
+
   const switchDebugMode = useCallback((nextMode: 'classic' | 'sandbox_story') => {
-    if (!debugEnabled || nextMode === modeIdRef.current) return;
-    window.localStorage.setItem(DEBUG_MODE_STORAGE_KEY, nextMode);
-    const chatDebug = (window.__CHAT_DEBUG__ ??= {} as any) as any;
-    chatDebug.debug = {
-      ...(chatDebug.debug ?? {}),
-      modeOverride: nextMode,
-      modeOverrideSource: 'debug_mode_switcher'
-    };
-    const nextUrl = new URL(window.location.href);
-    nextUrl.searchParams.set('mode', nextMode);
-    window.location.href = nextUrl.toString();
-  }, [debugEnabled]);
+    const clickAt = Date.now();
+    pushModeSwitchDebug({
+      clickAt,
+      requestedMode: nextMode,
+      persistedMode: readModePersistenceDebug(),
+      action: 'none',
+      result: '-',
+      reason: ''
+    });
+    if (!debugEnabled) {
+      pushModeSwitchDebug({
+        clickAt,
+        requestedMode: nextMode,
+        persistedMode: readModePersistenceDebug(),
+        action: 'none',
+        result: 'blocked',
+        reason: 'debug_disabled'
+      });
+      return;
+    }
+    if (nextMode !== 'classic' && nextMode !== 'sandbox_story') {
+      pushModeSwitchDebug({
+        clickAt,
+        requestedMode: nextMode,
+        persistedMode: readModePersistenceDebug(),
+        action: 'none',
+        result: 'blocked',
+        reason: 'invalid_mode'
+      });
+      return;
+    }
+    if (nextMode === modeIdRef.current) {
+      pushModeSwitchDebug({
+        clickAt,
+        requestedMode: nextMode,
+        persistedMode: readModePersistenceDebug(),
+        action: 'none',
+        result: 'blocked',
+        reason: 'already_current_mode'
+      });
+      return;
+    }
+    try {
+      window.localStorage.setItem(DEBUG_MODE_STORAGE_KEY, nextMode);
+      const chatDebug = (window.__CHAT_DEBUG__ ??= {} as any) as any;
+      chatDebug.debug = {
+        ...(chatDebug.debug ?? {}),
+        modeOverride: nextMode,
+        modeOverrideSource: 'debug_mode_switcher'
+      };
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set('mode', nextMode);
+      const persisted = readModePersistenceDebug(nextMode);
+      setDebugModeSwitching(true);
+      pushModeSwitchDebug({
+        clickAt,
+        requestedMode: nextMode,
+        persistedMode: persisted,
+        action: 'reload',
+        result: 'ok',
+        reason: ''
+      });
+      window.location.assign(nextUrl.toString());
+    } catch (error) {
+      pushModeSwitchDebug({
+        clickAt,
+        requestedMode: nextMode,
+        persistedMode: readModePersistenceDebug(),
+        action: 'none',
+        result: 'error',
+        reason: error instanceof Error ? error.message : 'mode_switch_exception'
+      });
+      setDebugModeSwitching(false);
+    }
+  }, [debugEnabled, pushModeSwitchDebug, readModePersistenceDebug]);
 
   const getGhostEventManagerDebugState = useCallback((): GhostEventManagerDebugState => {
     const now = Date.now();
@@ -3795,7 +3911,7 @@ export default function App() {
           {debugOpen && (
             <aside className="video-debug-panel" aria-label="Debug Panel">
               <button type="button" className="video-debug-close" onClick={() => setDebugOpen(false)} aria-label="Close debug panel">×</button>
-              <DebugModeSwitcher currentMode={mode} onSwitch={switchDebugMode} />
+              <DebugModeSwitcher currentMode={mode} switching={debugModeSwitching} lastModeSwitch={lastModeSwitch} onSwitch={switchDebugMode} />
               {mode === 'classic' && (
                 <>
               <div className="debug-event-tester" aria-label="Event Tester">
