@@ -2072,6 +2072,9 @@ export default function App() {
     if (!appStarted) return;
 
     if (source === 'user_input' && qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply) {
+      if (modeRef.current.id === 'sandbox_story') {
+        return;
+      }
       const lockTarget = qnaStateRef.current.lockTarget;
       if (lockTarget && lockStateRef.current.target !== lockTarget) {
         lockStateRef.current = { isLocked: true, target: lockTarget, startedAt: Date.now(), replyingToMessageId: lockStateRef.current.replyingToMessageId };
@@ -3371,6 +3374,13 @@ export default function App() {
           return markSent(`sandbox_consonant_${judge}`);
         }
       }
+      if (modeRef.current.id === 'sandbox_story' && sandboxQnaConsumed) {
+        setInput('');
+        sendCooldownUntil.current = Date.now() + 350;
+        tagSlowActiveRef.current = false;
+        return markSent('sandbox_qna_consumed');
+      }
+
       if (!sandboxQnaConsumed && qnaStateRef.current.active.status === 'AWAITING_REPLY') {
         markQnaResolved(qnaStateRef.current, Date.now());
         qnaStateRef.current.awaitingReply = false;
@@ -3457,7 +3467,9 @@ export default function App() {
       if (lockStateRef.current.isLocked && lockStateRef.current.target && tagTarget !== lockStateRef.current.target) {
         return markBlocked('lock_target_mismatch');
       }
-      tryTriggerStoryEvent(outgoingText, 'user_input');
+      if (!(modeRef.current.id === 'sandbox_story' && sandboxQnaConsumed)) {
+        tryTriggerStoryEvent(outgoingText, 'user_input');
+      }
       const chats = chatEngineRef.current.emit({ type: 'USER_SENT', text: outgoingText, user: 'you' }, Date.now());
       const wrongMessage = chats[0] ?? { id: crypto.randomUUID(), username: 'chat_mod', text: '這下壓力又上來了', language: 'zh', translation: '這下壓力又上來了' };
       dispatch({

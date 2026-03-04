@@ -1,13 +1,13 @@
 ## Summary
-- [sandbox only] Fix QnA deadlock where valid player replies were sent but reply bar stayed visible and flow stayed awaiting reply.
-- Enforced unified sandbox consume path: `consumePlayerReply() -> parsePlayerReplyToOption() -> resolveQna()` with mandatory UI clear + freeze release.
+- [sandbox only] 修正 Tag 後玩家回覆有效選項（`穩住/衝/不知道`）時，reply bar 不消失、QnA 卡在 awaiting reply 的問題。
+- 根因是玩家送出後同時走了 sandbox consume 與通用 `tryTriggerStoryEvent` 路徑，後者會把已 resolve 的 QnA 又重新改寫成 retry/重問，造成 UI 與狀態不同步。
 
 ## Changed Files
 - `src/app/App.tsx`
-  - Added sandbox QnA helpers: `consumePlayerReply`, `resolveQna`, `clearReplyUi`.
-  - On valid parsed option (`穩住/衝/不知道`), immediately resolves QnA, clears reply UI, and unfreezes chat.
-  - Added post-resolve fail-safe: if `ui.replyBarVisible` still true, force clear UI and record `sandbox.qna.lastAnomaly`.
-  - Added debug fields and tester buttons: `ForceResolveQna`, `ClearReplyUi`.
+  - 在 `tryTriggerStoryEvent(..., 'user_input')` 入口加入 sandbox guard：`mode === sandbox_story` 且 `qna.awaitingReply` 時直接 return，避免與 `consumePlayerReply()` 重複消費。
+  - `submitChat()` 在 sandbox 命中 `consumePlayerReply()` 後立即 `markSent('sandbox_qna_consumed')`，不再繼續跑 classic wrong/chatEngine/event 分支。
+  - 保留既有單一路徑：`consumePlayerReply() -> parsePlayerReplyToOption() -> resolveQna()`；`resolveQna()` 會同步 clear reply UI、解除 freeze、更新 debug。
+  - 只有在「不是 sandbox 已消費」時才執行 `tryTriggerStoryEvent`，避免 resolved 後被覆寫。
 
 ## Docs
 - [x] README.md updated
@@ -16,16 +16,21 @@
 
 ## SSOT
 - [x] SSOT changed
-  - Sandbox QnA reply-resolution path in `src/app/App.tsx` is now the canonical single path for valid options.
+  - `src/app/App.tsx` 的 sandbox 玩家回覆處理改為單一消費點（`consumePlayerReply`），並明確阻斷 `tryTriggerStoryEvent` 在同一送出循環重入。
 
 ## Debug 欄位變更紀錄
-- Added
-  - `sandbox.qna.lastResolveAt`
-  - `sandbox.qna.lastResolveReason`
-  - `sandbox.qna.lastClearReplyUiAt`
-  - `sandbox.qna.lastClearReplyUiReason`
-  - `sandbox.qna.lastAnomaly`
+- 本次未新增新欄位；沿用既有欄位完成驗證：
+  - `qna.isActive`
+  - `qna.status`
+  - `qna.awaitingReply`
+  - `qna.questionMessageId`
+  - `qna.matched.optionId/keyword/at`
+  - `ui.replyBarVisible`
   - `ui.replyToMessageId`
+  - `ui.pinned.visible/ui.pinned.textPreview`
+  - `freeze.active`
+  - `sandbox.qna.lastResolveAt/lastResolveReason`
+  - `sandbox.qna.lastClearReplyUiAt/lastClearReplyUiReason`
 
 ## Acceptance (requested)
 - 1) tag 後回覆「穩住」：reply bar 立刻消失，freeze 解除：PASS
@@ -33,72 +38,3 @@
 - 3) tag 後回覆「不知道」：同上（且會進提示流程）：PASS
 - 4) debug 顯示 qna.awaitingReply true→false，ui.replyBarVisible true→false：PASS
 - 5) classic mode 不受影響：PASS
-
-## Summary
-- Sandbox-only patch: unified PASS and real-correct flow to a single engine path (`applyCorrect → startReveal → done → advancePrompt`).
-- Fixed reveal pipeline with deterministic done fallback and advance retry logic when blocked by phase gates.
-- Added sandbox debug observability for scheduler/reveal/advance/pass-click and prompt current/next IDs.
-- Classic mode untouched.
-
-## Changed
-- `src/modes/sandbox_story/sandboxStoryMode.ts`
-  - Added sandbox scheduler debug state: `scheduler.blockedReason`.
-  - Added reveal completion tracking: `reveal.doneAt`.
-  - Added advance audit state: `advance.lastAt/lastReason`.
-  - Added unified engine APIs:
-    - `applyCorrect()` for both real-correct and debug PASS entry.
-    - `forceRevealDone()` for reveal fail-safe completion.
-    - `advancePrompt(reason)` as single prompt progression path.
-  - Consolidated prompt/node progression via `advancePromptInternal()` and reused by `markWaveDone()`.
-
-- `src/app/App.tsx`
-  - Real correct answer in sandbox now calls `applySandboxCorrect()` (engine path), no direct prompt/state jump.
-  - Added sandbox debug PASS button handler `handleSandboxDebugPass()` that calls `applySandboxCorrect()` (not state-only mutation).
-  - Added reveal fail-safe timer (total 2100ms) to guarantee `done`, then `markRevealDone()` and `advanceSandboxPrompt()`.
-  - Added gate-block retry mechanism for advance:
-    - records blocked state via `notifyBlockedByPhase()` / `scheduler.blockedReason`
-    - retries every 200ms, max 10 retries
-    - no silent failure.
-  - Extended debug payload and panel fields:
-    - `scheduler.phase`, `scheduler.blockedReason`
-    - `prompt.current.*`, `promptNext.id`
-    - `advance.lastAt/lastReason`
-    - `reveal.phase/doneAt`
-    - `debug.pass.clickedAt/action`
-
-- `README.md`
-  - Added section documenting sandbox PASS/reveal/advance unified flow, retry behavior, and debug fields.
-  - Added Removed/Deprecated log for legacy “state-only debug PASS” behavior.
-
-- `docs/10-change-log.md`
-  - Added this patch entry with sandbox-only scope, root cause, and acceptance status.
-
-## Removed
-- Deprecated behavior removed: debug PASS directly mutating local state without engine flow.
-
-## Docs
-- [x] README.md updated
-- [x] docs/10-change-log.md updated
-- [x] PR_NOTES.md updated
-
-## SSOT
-- [ ] No SSOT changes
-- [x] SSOT changed
-  - `src/modes/sandbox_story/sandboxStoryMode.ts`
-    - scheduler/reveal/advance progression state now tracks blocked and done/advance metadata as canonical sandbox flow SSOT.
-
-## Debug 欄位變更紀錄
-- Added
-  - `scheduler.blockedReason`
-  - `sandbox.prompt.next.id`
-  - `sandbox.advance.lastAt`
-  - `sandbox.advance.lastReason`
-  - `sandbox.reveal.doneAt`
-  - `sandbox.debug.pass.clickedAt`
-  - `sandbox.debug.pass.action`
-
-## Acceptance (requested)
-- 1) 按一次 PASS：reveal 跑完並跳下一題（prompt.current.id 改變）: PASS
-- 2) 真實答對：同樣會跳下一題: PASS
-- 3) 若被 gate 擋住：debug 顯示 blockedReason: PASS
-- 4) Classic mode 不受影響: PASS

@@ -1,4 +1,18 @@
 
+## 2026-03-04（sandbox only：QnA consume/retry 雙路徑衝突修正）
+
+### Changed
+- [sandbox/qna] 修正玩家送出有效選項後，`consumePlayerReply()` 與 `tryTriggerStoryEvent('user_input')` 重複消費造成的狀態回滾；sandbox 在 awaitingReply 期間禁止再進 `tryTriggerStoryEvent` user-input 分支。
+- [sandbox/send] 當 `consumePlayerReply()` 命中有效選項時，`submitChat()` 立即短路 `markSent('sandbox_qna_consumed')`，不再執行 classic wrong/chatEngine/event 分支。
+- [sandbox/state-ui] 維持單一路徑 resolve：`consume -> parse -> resolve`，並確保 resolve 後 reply UI 與 freeze 不會被後續邏輯覆寫回等待狀態。
+
+### Acceptance
+- 1) tag 後回覆「穩住」：reply bar 立刻消失、freeze 解除：PASS
+- 2) tag 後回覆「衝」：reply bar 立刻消失、freeze 解除：PASS
+- 3) tag 後回覆「不知道」：reply bar 立刻消失、freeze 解除、進提示流程：PASS
+- 4) debug 欄位 `qna.awaitingReply true->false`、`ui.replyBarVisible true->false` 可觀測：PASS
+- 5) classic mode 不受影響：PASS
+
 ## 2026-03-04（sandbox only：QnA reply bar stuck fix）
 
 ### Changed
