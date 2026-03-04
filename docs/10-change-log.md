@@ -1,3 +1,18 @@
+## 2026-03-04（sandbox only：currentPrompt SSOT + parser PASS + unknown 不跳題）
+
+### Changed
+- [sandbox/ssot] 新增驗收別名 `sandbox.currentPrompt`（`id/consonant/wordKey`），並與既有 `sandbox.prompt.current` 同步，題目 UI / parser / hint / reveal / debug 共用同一題資料。
+- [sandbox/parser] 子音 parser/judge 新增 PASS keyword：`pass` / `skip` / `p`；命中時 `judge=pass`，立即走 `advancePrompt('debug_pass')`，不再顯示 hint。
+- [sandbox/unknown] `不知道 / 不確定 / idk / ?` 固定只顯示 hint 並保持同一題，不會 advance。
+- [sandbox/hint] hint builder 改為只讀 `currentPrompt.consonant` 產生提示，避免與 UI 子音來源分裂。
+- [sandbox/debug] 新增/補齊欄位：`sandbox.currentPrompt.id/consonant/wordKey`、`sandbox.parser.result`、`sandbox.advance.lastReason`。
+
+### Acceptance
+- 1) 輸入 `pass` 立即下一題：PASS
+- 2) UI 子音與 hint 子音一致：PASS
+- 3) unknown 只顯示提示不跳題：PASS
+- 4) classic mode 不受影響：PASS
+
 ## 2026-03-04（sandbox_story only：submit gate + advance one-shot + classic hint shared）
 
 ### Changed

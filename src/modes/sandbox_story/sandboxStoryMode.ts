@@ -65,7 +65,7 @@ export type SandboxStoryState = {
     parse: { ok: boolean; matchedChar: string; kind: string; matchedAlias: string; inputNorm: string; inputRaw: string; allowedSetsHit: { latin: boolean; bopomofo: boolean; thai: boolean; cjk: boolean }; matched: string; blockedReason: string };
     judge: {
       lastInput: string;
-      lastResult: 'correct' | 'wrong' | 'unknown' | 'timeout' | 'none';
+      lastResult: 'correct' | 'wrong' | 'unknown' | 'pass' | 'timeout' | 'none';
       timeoutEnabled: boolean;
     };
   };
@@ -140,7 +140,7 @@ export type SandboxStoryMode = GameMode & {
   commitConsonantJudgeResult: (result: {
     input: string;
     parsed: { ok: boolean; matchedChar?: string; debug?: { kind?: string; matchedAlias?: string; inputNorm?: string; inputRaw?: string; matched?: string; blockedReason?: string; normalize?: { allowedSetsHit?: { latin?: boolean; bopomofo?: boolean; thai?: boolean; cjk?: boolean } } } };
-    judge: 'correct' | 'wrong' | 'unknown' | 'timeout';
+    judge: 'correct' | 'wrong' | 'unknown' | 'pass' | 'timeout';
   }) => void;
   getFearDebugState: () => SandboxFearDebugState;
   canTriggerGhostMotion: (ctx: { qnaType: 'consonant' | 'comprehension'; answerResult: 'correct' | 'wrong' | 'unknown' }) => SandboxGhostGateResult;
@@ -512,8 +512,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
       if (state.consonant.parse.blockedReason === 'input_sanitized_to_empty') {
         state.advance.blockedReason = 'input_sanitized_to_empty';
-      } else if (!result.parsed.ok || (result.parsed.debug?.kind ?? '') === 'none') {
+      } else if ((result.parsed.debug?.kind ?? '') === 'none' || (!result.parsed.ok && result.judge !== 'pass')) {
         state.advance.blockedReason = 'parse_none';
+      }
+      if (result.judge === 'pass') {
+        state.advance.blockedReason = '';
       }
       if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal('correct');
       if (result.judge === 'wrong' && state.advance.blockedReason !== 'input_sanitized_to_empty') {

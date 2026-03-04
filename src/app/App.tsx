@@ -2559,6 +2559,10 @@ export default function App() {
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
         consonant: {
           ...(sandboxState.consonant ?? {}),
+          parse: {
+            ...(sandboxState.consonant.parse ?? {}),
+            result: sandboxState.consonant.judge.lastResult
+          },
           currentIndex: sandboxState.nodeIndex,
           currentConsonant: sandboxState.consonant.nodeChar ?? '-',
           currentWordKey: sandboxState.reveal.wordKey || sandboxNode?.id || '-',
@@ -2583,6 +2587,11 @@ export default function App() {
           lastAt: sandboxState.advance.lastAt || 0,
           lastReason: sandboxState.advance.lastReason || '-',
           blockedReason: sandboxState.advance.blockedReason || '-'
+        },
+        currentPrompt: {
+          id: sandboxState.prompt.current?.promptId ?? '-',
+          consonant: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '-',
+          wordKey: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.wordKey : '-'
         },
         prompt: {
           current: {
@@ -3259,10 +3268,7 @@ export default function App() {
   }, [clearChatFreeze]);
 
   const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string } }) => {
-    const node = sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === params.currentPrompt.wordKey) ?? null;
-    const expected = node?.correctKeywords?.[0] ?? params.currentPrompt.consonant;
-    const aliases = (node?.correctKeywords ?? [params.currentPrompt.consonant]).filter(Boolean);
-    const hintLine = buildConsonantHint({ expected, aliases });
+    const hintLine = buildConsonantHint({ expected: params.currentPrompt.consonant, aliases: [params.currentPrompt.consonant] });
     sandboxModeRef.current.commitHintText(hintLine, 'classic_shared');
     dispatchChatMessage({
       id: crypto.randomUUID(),
@@ -3425,7 +3431,7 @@ export default function App() {
             setSandboxRevealTick(Date.now());
             return markSent('sandbox_consonant_blocked_empty');
           }
-          if (!parsed.ok || parseKind === 'none') {
+          if ((parseKind === 'none') || (!parsed.ok && parseKind !== 'pass')) {
             judge = judge === 'unknown' ? 'unknown' : 'wrong';
             sandboxModeRef.current.commitAdvanceBlockedReason('parse_none');
           }
@@ -3436,6 +3442,15 @@ export default function App() {
             normalize: normalizedInput
           };
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
+          if (judge === 'pass') {
+            advanceSandboxPrompt('debug_pass');
+            clearReplyUi('sandbox_consonant_pass');
+            clearChatFreeze('sandbox_consonant_pass');
+            sendCooldownUntil.current = Date.now() + 350;
+            tagSlowActiveRef.current = false;
+            setInput('');
+            return markSent('sandbox_consonant_pass');
+          }
           if (judge === 'correct' && parsed.matchedChar === currentPrompt.consonant) {
             applySandboxCorrect({ input: raw, matchedChar: parsed.matchedChar, source: 'real_answer' });
             return markSent('sandbox_consonant_correct');
@@ -4720,6 +4735,7 @@ export default function App() {
                     <div>sandbox.consonant.parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedAlias ?? '-'}</div>
                     <div>sandbox.consonant.parse.inputRaw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputRaw ?? '-'}</div>
                     <div>sandbox.consonant.parse.inputNorm: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputNorm ?? '-'}</div>
+                    <div>sandbox.parser.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.result ?? '-'}</div>
                     <div>sandbox.consonant.parse.allowedSetsHit: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.allowedSetsHit ?? null)}</div>
                     <div>sandbox.parser.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
                     <div>sandbox.parser.matched: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matched ?? '-'}</div>
@@ -4729,6 +4745,9 @@ export default function App() {
                     <div>audio.pronounce.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.state ?? '-'}</div>
                     <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
                     <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
+                    <div>sandbox.currentPrompt.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.id ?? '-'}</div>
+                    <div>sandbox.currentPrompt.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.consonant ?? '-'}</div>
+                    <div>sandbox.currentPrompt.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.wordKey ?? '-'}</div>
                     <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
                     <div>sandbox.prompt.current.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.id ?? '-'}</div>
                     <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
