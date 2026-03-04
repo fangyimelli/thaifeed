@@ -57,10 +57,10 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt, getHintForConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getSandboxConsonantHint } from '../modes/sandbox_story/classicHintAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
-import WordRevealOverlay from '../ui/overlays/WordRevealOverlay';
 import { playPronounce } from '../ui/audio/PronounceAudio';
 import type { GameMode } from '../modes/types';
 import { isDebugEnabled as getIsDebugEnabled, setDebugOverlayEnabled } from '../debug/debugGate';
@@ -301,9 +301,10 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
-function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' {
+function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'awaitingWave' {
   if (phase === 'awaitingAnswer') return 'awaitingAnswer';
   if (phase === 'revealingWord') return 'revealingWord';
+  if (phase === 'awaitingWave') return 'awaitingWave';
   return 'awaitingTag';
 }
 
@@ -556,7 +557,6 @@ export default function App() {
     }
   });
   const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
-  const sandboxRevealAudioStampRef = useRef<string>('');
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
@@ -673,6 +673,7 @@ export default function App() {
   const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveInitialMode(debugEnabled));
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
   const sandboxConsonantTagOwnerRef = useRef<string>('mod_live');
+  const sandboxWaveRunningRef = useRef(false);
 
   const qnaStateRef = useRef(createInitialQnaState());
   const messageSeqRef = useRef(0);
@@ -2454,7 +2455,7 @@ export default function App() {
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
-        word: { reveal: { phase: sandboxState.reveal.phase, wordKey: sandboxState.reveal.wordKey } },
+        word: { reveal: { phase: sandboxState.reveal.phase, wordKey: sandboxState.reveal.wordKey, base: sandboxState.reveal.baseConsonant || '-', appended: sandboxState.reveal.appended || '-' } },
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
         consonant: {
           ...(sandboxState.consonant ?? {}),
@@ -2469,6 +2470,8 @@ export default function App() {
           current: {
             kind: sandboxState.prompt.current?.kind ?? '-',
             promptId: sandboxState.prompt.current?.promptId ?? '-',
+            consonant: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '-',
+            wordKey: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.wordKey : '-',
             pinnedText: sandboxState.prompt.current?.pinnedText ?? '-'
           },
           overlay: {
@@ -2489,6 +2492,7 @@ export default function App() {
           cooldownRemaining: sandboxState.fearSystem.footsteps.cooldownRemaining,
           lastAt: sandboxState.fearSystem.footsteps.lastAt
         },
+        hint: { lastText: sandboxState.hint.lastText || '-', count: sandboxState.hint.count },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
         blockedReason: sandboxState.blocked.reason || '-'
       };
@@ -3176,11 +3180,12 @@ export default function App() {
             setInput('');
             return markSent('sandbox_consonant_correct');
           }
-          const hint = getHintForConsonantPrompt({ nodeChar: currentPrompt.consonant, node, activeUser: activeUserInitialHandleRef.current || 'you' });
+          const hint = getSandboxConsonantHint({ nodeChar: currentPrompt.consonant, node, activeUser: activeUserInitialHandleRef.current || 'you' });
           const retryPrefix = judge === 'unknown'
             ? `@${activeUserInitialHandleRef.current || 'you'} 收到「不知道」。`
             : `@${activeUserInitialHandleRef.current || 'you'} 這次還沒對。`;
           const hintLine = `${retryPrefix} ${hint}`;
+          sandboxModeRef.current.commitHintText(hintLine);
           dispatchChatMessage({
             id: crypto.randomUUID(),
             username: sandboxConsonantTagOwnerRef.current || 'mod_live',
@@ -3815,20 +3820,37 @@ export default function App() {
     if (modeRef.current.id !== 'sandbox_story') return;
     const sandboxState = sandboxModeRef.current.getState();
     const reveal = sandboxState.reveal;
-    if (reveal.visible && reveal.phase === 'fadeIn' && reveal.audioKey && reveal.startedAt > 0) {
-      const stamp = `${sandboxState.nodeIndex}-${reveal.startedAt}-${reveal.audioKey}`;
-      if (sandboxRevealAudioStampRef.current !== stamp) {
-        sandboxRevealAudioStampRef.current = stamp;
-        void playPronounce(reveal.audioKey).then((result) => {
-          sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: reveal.audioKey, reason: result });
-          setSandboxRevealTick(Date.now());
-        });
-      }
+    if (reveal.visible && reveal.phase === 'fadeIn') {
+      sandboxModeRef.current.setPronounceState('idle', { key: reveal.audioKey, reason: 'reserved_no_side_effect' });
     }
-    if (sandboxState.scheduler.phase === 'revealingWord' && reveal.phase === 'done') {
+    if (reveal.visible && reveal.phase === 'done') {
       sandboxModeRef.current.markRevealDone();
       setSandboxRevealTick(Date.now());
       return;
+    }
+    if (sandboxState.scheduler.phase === 'awaitingWave' && !sandboxWaveRunningRef.current) {
+      const waveNode = sandboxModeRef.current.getCurrentNode();
+      if (!waveNode) return;
+      sandboxWaveRunningRef.current = true;
+      const waveCount = randomInt(3, 6);
+      const lines = waveNode.talkSeeds.related;
+      for (let i = 0; i < waveCount; i += 1) {
+        window.setTimeout(() => {
+          dispatchChatMessage({
+            id: crypto.randomUUID(),
+            username: pickOne(usernames),
+            text: pickOne(lines),
+            language: 'zh',
+            translation: pickOne(lines)
+          }, { source: 'sandbox_consonant', sourceTag: 'sandbox_related_wave' });
+          if (i === waveCount - 1) {
+            sandboxModeRef.current.markWaveDone('related', waveCount);
+            sandboxWaveRunningRef.current = false;
+            sandboxConsonantPromptNodeIdRef.current = null;
+            setSandboxRevealTick(Date.now());
+          }
+        }, i * randomInt(220, 360));
+      }
     }
   }, [sandboxRevealTick]);
 
@@ -4036,24 +4058,13 @@ export default function App() {
               isDesktopLayout={isDesktopLayout}
               appStarted={appStarted}
               blackoutState={blackoutState}
+              wordReveal={modeIdRef.current === 'sandbox_story' ? (() => { const st = sandboxModeRef.current.getState(); return { visible: st.reveal.visible, phase: st.reveal.phase, wordText: st.reveal.text, baseConsonant: st.reveal.baseConsonant, appendedText: st.reveal.appended }; })() : undefined}
             />
           ) : (
             <div className="asset-warning scene-placeholder">
               初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
             </div>
           )}
-          {modeIdRef.current === 'sandbox_story' && (() => {
-            const sandboxState = sandboxModeRef.current.getState();
-            return (
-              <WordRevealOverlay
-                key={`${sandboxState.nodeIndex}-${sandboxRevealTick}`}
-                visible={sandboxState.reveal.visible}
-                phase={sandboxState.reveal.phase}
-                wordText={sandboxState.reveal.text}
-                baseConsonant={sandboxState.reveal.baseConsonant}
-              />
-            );
-          })()}
           {!appStarted && (
             <div className="startup-overlay" role="dialog" aria-modal="true" aria-label="Enter your name">
               <div className="startup-card">
@@ -4366,6 +4377,8 @@ export default function App() {
                     <div><strong>Night Timeline</strong></div>
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
+                    <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
+                    <div>word.reveal.appended: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.appended ?? '-'}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
                     <div>sandbox.consonant.currentIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentIndex ?? '-'}</div>
                     <div>sandbox.consonant.currentConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentConsonant ?? '-'}</div>
@@ -4385,6 +4398,8 @@ export default function App() {
                     <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
                     <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
                     <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
+                    <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
+                    <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
                     <div>sandbox.prompt.overlay.consonantShown: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.overlay?.consonantShown ?? '-'}</div>
                     <div>sandbox.prompt.pinned.promptIdRendered: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.promptIdRendered ?? '-'}</div>
                     <div>sandbox.prompt.mismatch: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.mismatch ?? false)}</div>
@@ -4395,6 +4410,8 @@ export default function App() {
                     <div>footsteps.probability: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.probability ?? '-'}</div>
                     <div>footsteps.cooldownRemaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.cooldownRemaining ?? '-'}</div>
                     <div>footsteps.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.lastAt ?? '-'}</div>
+                    <div>sandbox.hint.lastText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.hint?.lastText ?? '-'}</div>
+                    <div>sandbox.hint.count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.hint?.count ?? 0}</div>
                     <div>lastWave.count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.count ?? 0}</div>
                     <div>lastWave.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.kind ?? '-'}</div>
                     <div>blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedReason ?? '-'}</div>

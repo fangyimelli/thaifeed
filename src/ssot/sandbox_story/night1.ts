@@ -16,6 +16,8 @@ export const NIGHT1: NightScript = {
     unknownKeywords: entry.unknownKeywords,
     word: entry.wordText,
     wordText: entry.wordText,
+    hintAppend: entry.hintAppend,
+    hintAppendPrefixLen: entry.hintAppendPrefixLen,
     highlightChar: entry.consonant,
     audioKey: entry.audioKey,
     talkSeeds: entry.talkSeeds,
