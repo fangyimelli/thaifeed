@@ -37,6 +37,8 @@ export type SandboxStoryState = {
     phase: SandboxRevealPhase;
     text: string;
     highlightChar: string;
+    audioKey: string;
+    startedAt: number;
   };
   ghostMotion: {
     lastId: string | null;
@@ -97,7 +99,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       visible: false,
       phase: 'idle',
       text: '',
-      highlightChar: ''
+      highlightChar: '',
+      audioKey: '',
+      startedAt: 0
     },
     ghostMotion: {
       lastId: null,
@@ -120,7 +124,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       visible: true,
       phase: 'fadeIn',
       text: node.word,
-      highlightChar: node.highlightChar
+      highlightChar: node.highlightChar,
+      audioKey: node.audioKey,
+      startedAt: Date.now()
     };
   };
 
@@ -151,7 +157,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.nodeIndex = 0;
       state.scheduler.phase = 'boot';
       syncNodeChar();
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
+      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
       state.ghostMotion = { lastId: null, state: 'idle' };
       toNextPhase();
     },
@@ -169,18 +175,36 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       }
     },
     tick() {
+      if (state.scheduler.phase === 'revealingWord') {
+        if (!state.reveal.visible) {
+          applyRevealFromNode(getCurrentNode());
+        }
+        const elapsed = Math.max(0, Date.now() - state.reveal.startedAt);
+        if (elapsed < 800) {
+          state.reveal.phase = 'fadeIn';
+          return;
+        }
+        if (elapsed < 1700) {
+          state.reveal.phase = 'hold';
+          return;
+        }
+        if (elapsed < 2900) {
+          state.reveal.phase = 'fogOut';
+          return;
+        }
+        state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
+        state.scheduler.phase = 'chatWaveRelated';
+        return;
+      }
       if (state.scheduler.phase === 'ghostMotionPlaying' || state.scheduler.phase === 'pinnedFreezeAwaitConsonant' || state.scheduler.phase === 'pinnedFreezeAwaitAnswer') {
         return;
       }
       toNextPhase();
-      if (state.scheduler.phase === 'revealingWord') {
-        applyRevealFromNode(getCurrentNode());
-      }
     },
     dispose() {
       state.nodeIndex = 0;
       state.scheduler.phase = 'boot';
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
+      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
       state.ghostMotion = { lastId: null, state: 'idle' };
     },
     getState: () => ({
@@ -229,7 +253,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       syncNodeChar();
       state.scheduler.phase = 'awaitingConsonantTagPrompt';
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
+      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
       state.ghostMotion = { ...state.ghostMotion, state: 'idle' };
     },
     getSSOT: () => cloneScript(script),
@@ -239,7 +263,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.nodeIndex = 0;
       syncNodeChar();
       state.scheduler.phase = 'awaitingConsonantTagPrompt';
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
+      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
       state.ghostMotion = { lastId: null, state: 'idle' };
       return true;
     },
@@ -255,6 +279,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         inputNorm: result.debug?.inputNorm ?? ''
       };
       if (result.ok && result.matchedChar === state.consonant.nodeChar) {
+        applyRevealFromNode(getCurrentNode());
         state.scheduler.phase = 'revealingWord';
       }
     }

@@ -429,6 +429,7 @@ export default function App() {
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
   const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
+  const sandboxRevealAudioStampRef = useRef<string>('');
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
@@ -2917,7 +2918,6 @@ export default function App() {
             clearChatFreeze('sandbox_consonant_correct');
             setChatAutoPaused(false);
             sandboxConsonantPromptNodeIdRef.current = null;
-            void playPronounce(node.audioKey);
             setSandboxRevealTick(Date.now());
             sendCooldownUntil.current = Date.now() + 350;
             tagSlowActiveRef.current = false;
@@ -3509,6 +3509,18 @@ export default function App() {
       // no throw in debug import path
     }
   }, []);
+
+
+  useEffect(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const sandboxState = sandboxModeRef.current.getState();
+    const reveal = sandboxState.reveal;
+    if (!reveal.visible || reveal.phase !== 'fadeIn' || !reveal.audioKey || reveal.startedAt <= 0) return;
+    const stamp = `${sandboxState.nodeIndex}-${reveal.startedAt}-${reveal.audioKey}`;
+    if (sandboxRevealAudioStampRef.current === stamp) return;
+    sandboxRevealAudioStampRef.current = stamp;
+    void playPronounce(reveal.audioKey);
+  }, [sandboxRevealTick]);
 
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
