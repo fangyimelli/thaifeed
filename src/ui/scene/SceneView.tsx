@@ -1936,7 +1936,6 @@ export default function SceneView({
             visible={Boolean(wordReveal?.visible)}
             phase={wordReveal?.phase ?? 'idle'}
             wordKey={wordReveal?.wordKey}
-            consonantFromPrompt={wordReveal?.consonantFromPrompt}
             mismatch={wordReveal?.mismatch}
             durationMs={wordReveal?.durationMs}
             wordText={wordReveal?.wordText}

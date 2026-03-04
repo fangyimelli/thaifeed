@@ -676,7 +676,7 @@ export default function App() {
   const sandboxWaveRunningRef = useRef(false);
   const sandboxRevealDoneTimerRef = useRef<number | null>(null);
   const sandboxAdvanceRetryTimerRef = useRef<number | null>(null);
-  const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_applyCorrect' | 'state_only' }>({ clickedAt: 0, action: 'none' });
+  const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxQnaDebugRef = useRef<{
     lastResolveAt: number;
     lastResolveReason: string;
@@ -2590,7 +2590,12 @@ export default function App() {
           cooldownRemaining: sandboxState.fearSystem.footsteps.cooldownRemaining,
           lastAt: sandboxState.fearSystem.footsteps.lastAt
         },
-        hint: { lastText: sandboxState.hint.lastText || '-', count: sandboxState.hint.count },
+        hint: {
+          active: sandboxState.hint.active,
+          lastText: sandboxState.hint.lastText || '-',
+          count: sandboxState.hint.count,
+          lastShownAt: sandboxState.hint.lastShownAt
+        },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
         blockedReason: sandboxState.blocked.reason || '-',
         advance: {
@@ -2601,7 +2606,10 @@ export default function App() {
         reveal: {
           visible: sandboxState.reveal.visible,
           phase: sandboxState.reveal.phase,
-          doneAt: sandboxState.reveal.doneAt
+          doneAt: sandboxState.reveal.doneAt,
+          active: sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done',
+          wordKey: sandboxState.reveal.wordKey || '-',
+          durationMs: sandboxState.reveal.durationMs
         },
         debug: {
           pass: {
@@ -3203,28 +3211,18 @@ export default function App() {
     }
   }, []);
 
-  const advanceSandboxPrompt = useCallback((reason: 'correct' | 'wrong' | 'unknown', retryCount = 0) => {
+  const advanceSandboxPrompt = useCallback((reason: 'correct_done' | 'debug_pass') => {
     if (modeRef.current.id !== 'sandbox_story') return;
     const st = sandboxModeRef.current.getState();
-    if (st.scheduler.phase === 'awaitingTag') {
-      sandboxModeRef.current.advancePrompt(reason);
-      sandboxConsonantPromptNodeIdRef.current = null;
-      clearSandboxAdvanceRetry();
+    if (st.prompt.mismatch || st.mismatch.promptVsReveal) {
+      sandboxModeRef.current.commitAdvanceBlockedReason('mismatch');
       setSandboxRevealTick(Date.now());
       return;
     }
-    sandboxModeRef.current.notifyBlockedByPhase();
-    if (retryCount >= 10) {
-      sandboxModeRef.current.advancePrompt(reason);
-      sandboxConsonantPromptNodeIdRef.current = null;
-      clearSandboxAdvanceRetry();
-      setSandboxRevealTick(Date.now());
-      return;
-    }
+    sandboxModeRef.current.advancePrompt(reason);
+    sandboxConsonantPromptNodeIdRef.current = null;
     clearSandboxAdvanceRetry();
-    sandboxAdvanceRetryTimerRef.current = window.setTimeout(() => {
-      advanceSandboxPrompt(reason, retryCount + 1);
-    }, 200);
+    setSandboxRevealTick(Date.now());
   }, [clearSandboxAdvanceRetry]);
 
   const applySandboxCorrect = useCallback((payload?: { input?: string; matchedChar?: string; source?: string }) => {
@@ -3237,6 +3235,23 @@ export default function App() {
     setInput('');
     setSandboxRevealTick(Date.now());
   }, [clearChatFreeze]);
+
+  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string }; activeUser: string }) => {
+    const node = sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === params.currentPrompt.wordKey) ?? null;
+    const hint = getSandboxConsonantHint({ nodeChar: params.currentPrompt.consonant, node, activeUser: params.activeUser });
+    const retryPrefix = params.judge === 'unknown'
+      ? `@${params.activeUser} 收到「不知道」。`
+      : `@${params.activeUser} 這次還沒對。`;
+    const hintLine = `${retryPrefix} ${hint}`;
+    sandboxModeRef.current.commitHintText(hintLine);
+    dispatchChatMessage({
+      id: crypto.randomUUID(),
+      username: sandboxConsonantTagOwnerRef.current || 'mod_live',
+      text: hintLine,
+      language: 'zh',
+      translation: hintLine
+    }, { source: 'sandbox_consonant', sourceTag: params.judge === 'unknown' ? 'sandbox_consonant_hint_unknown' : 'sandbox_consonant_hint_wrong' });
+  }, [dispatchChatMessage]);
 
   useEffect(() => () => {
     clearSandboxAdvanceRetry();
@@ -3368,19 +3383,11 @@ export default function App() {
             applySandboxCorrect({ input: raw, matchedChar: parsed.matchedChar, source: 'real_answer' });
             return markSent('sandbox_consonant_correct');
           }
-          const hint = getSandboxConsonantHint({ nodeChar: currentPrompt.consonant, node, activeUser: activeUserInitialHandleRef.current || 'you' });
-          const retryPrefix = judge === 'unknown'
-            ? `@${activeUserInitialHandleRef.current || 'you'} 收到「不知道」。`
-            : `@${activeUserInitialHandleRef.current || 'you'} 這次還沒對。`;
-          const hintLine = `${retryPrefix} ${hint}`;
-          sandboxModeRef.current.commitHintText(hintLine);
-          dispatchChatMessage({
-            id: crypto.randomUUID(),
-            username: sandboxConsonantTagOwnerRef.current || 'mod_live',
-            text: hintLine,
-            language: 'zh',
-            translation: hintLine
-          }, { source: 'sandbox_consonant', sourceTag: judge === 'unknown' ? 'sandbox_consonant_hint_unknown' : 'sandbox_consonant_hint_wrong' });
+          showHintForCurrentPrompt({
+            judge: judge === 'unknown' ? 'unknown' : 'wrong',
+            currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey },
+            activeUser: activeUserInitialHandleRef.current || 'you'
+          });
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
           setInput('');
@@ -3507,7 +3514,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, consumePlayerReply, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
+  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, consumePlayerReply, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, showHintForCurrentPrompt, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {
@@ -3953,10 +3960,16 @@ export default function App() {
 
   const handleSandboxDebugPass = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
-    sandboxDebugPassRef.current = { clickedAt: Date.now(), action: 'called_applyCorrect' };
-    const node = sandboxModeRef.current.getCurrentNode();
-    applySandboxCorrect({ input: '__debug_pass__', matchedChar: node?.char, source: 'debug_pass_button' });
-  }, [applySandboxCorrect]);
+    sandboxDebugPassRef.current = { clickedAt: Date.now(), action: 'called_advance_prompt' };
+    clearSandboxRevealDoneTimer();
+    sandboxModeRef.current.advancePrompt('debug_pass');
+    sandboxConsonantPromptNodeIdRef.current = null;
+    clearReplyUi('sandbox_debug_pass');
+    clearChatFreeze('sandbox_debug_pass');
+    setChatAutoPaused(false);
+    setInput('');
+    setSandboxRevealTick(Date.now());
+  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze]);
 
   const forceResolveQna = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -4041,13 +4054,13 @@ export default function App() {
       sandboxRevealDoneTimerRef.current = window.setTimeout(() => {
         sandboxModeRef.current.forceRevealDone();
         sandboxModeRef.current.markRevealDone();
-        advanceSandboxPrompt('correct');
+        advanceSandboxPrompt('correct_done');
         setSandboxRevealTick(Date.now());
       }, remainMs);
     }
     if (reveal.visible && reveal.phase === 'done') {
       sandboxModeRef.current.markRevealDone();
-      advanceSandboxPrompt('correct');
+      advanceSandboxPrompt('correct_done');
       setSandboxRevealTick(Date.now());
       return;
     }
@@ -4543,7 +4556,7 @@ export default function App() {
                     <button type="button" onClick={() => setSandboxAutoPlayNight((prev) => !prev)}>
                       Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
                     </button>
-                    <button type="button" onClick={handleSandboxDebugPass}>PASS (applyCorrect)</button>
+                    <button type="button" onClick={handleSandboxDebugPass}>PASS (advancePrompt)</button>
                     <button type="button" onClick={forceResolveQna}>ForceResolveQna</button>
                     <button type="button" onClick={handleClearReplyUi}>ClearReplyUi</button>
                     <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>

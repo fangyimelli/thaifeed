@@ -105,7 +105,7 @@ export type SandboxStoryState = {
   blocked: { reason: '' | 'phaseBusy'; count: number };
   advance: { lastAt: number; lastReason: string; blockedReason: string };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
-  hint: { lastText: string; count: number };
+  hint: { active: boolean; lastText: string; count: number; lastShownAt: number };
   prompt: {
     current: SandboxPrompt | null;
     overlay: { consonantShown: string };
@@ -230,7 +230,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     blocked: { reason: '', count: 0 },
     advance: { lastAt: 0, lastReason: '', blockedReason: '' },
     audio: { lastKey: '', state: 'idle', reason: '' },
-    hint: { lastText: '', count: 0 },
+    hint: { active: false, lastText: '', count: 0, lastShownAt: 0 },
     prompt: {
       current: null,
       overlay: { consonantShown: '' },
@@ -311,6 +311,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     };
   };
   const startReveal = (mode: 'correct' | 'wrong' | 'unknown') => {
+    if (mode !== 'correct') {
+      state.scheduler.phase = 'awaitingAnswer';
+      state.reveal = { ...state.reveal, visible: false, phase: 'idle', startedAt: 0, doneAt: 0 };
+      state.advance.blockedReason = 'not_correct_or_pass';
+      clearSchedulerBlockedReason();
+      return;
+    }
     const currentPrompt = state.prompt.current;
     if (!currentPrompt || currentPrompt.kind !== 'consonant') {
       state.scheduler.blockedReason = 'mismatch:prompt_missing';
@@ -359,16 +366,20 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       safeRect: { ...REVEAL_SAFE_RECT }
     };
   };
+  const resetPromptRuntimeState = () => {
+    state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: state.reveal.doneAt || Date.now() };
+    state.prompt.current = null;
+    state.prompt.overlay.consonantShown = '';
+    state.prompt.pinned.promptIdRendered = '';
+    state.hint = { ...state.hint, active: false };
+  };
   const advancePromptInternal = (reason: string) => {
     state.advance = { lastAt: Date.now(), lastReason: reason, blockedReason: '' };
     state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
     syncNodeChar();
     state.scheduler.phase = 'awaitingTag';
     clearSchedulerBlockedReason();
-    state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: state.reveal.doneAt || Date.now() };
-    state.prompt.current = null;
-    state.prompt.overlay.consonantShown = '';
-    state.prompt.pinned.promptIdRendered = '';
+    resetPromptRuntimeState();
     syncPromptMismatch();
     state.mismatch.promptVsReveal = false;
     syncFear();
@@ -385,7 +396,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.reveal.phase = 'idle';
       state.reveal.appended = '';
       state.reveal.doneAt = 0;
-      state.hint = { lastText: '', count: 0 };
+      state.hint = { active: false, lastText: '', count: 0, lastShownAt: 0 };
       state.wave = { count: 0, kind: 'related' };
       state.blocked = { reason: '', count: 0 };
       state.prompt.current = null;
@@ -482,8 +493,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         state.advance.blockedReason = 'parse_none';
       }
       if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal('correct');
-      if (result.judge === 'wrong') startReveal('wrong');
-      if (result.judge === 'unknown') startReveal('unknown');
+      if (result.judge === 'wrong') {
+        state.advance.blockedReason = 'not_correct_or_pass';
+      }
+      if (result.judge === 'unknown') {
+        state.advance.blockedReason = 'not_correct_or_pass';
+      }
       syncFear();
     },
     getFearDebugState() { syncFear(); return JSON.parse(JSON.stringify(state.fearSystem)) as SandboxFearDebugState; },
@@ -557,6 +572,18 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
     },
     advancePrompt(reason) {
+      if (reason !== 'correct_done' && reason !== 'debug_pass') {
+        state.advance = { ...state.advance, blockedReason: 'not_correct_or_pass', lastReason: 'blocked', lastAt: Date.now() };
+        return;
+      }
+      if (state.prompt.mismatch || state.mismatch.promptVsReveal) {
+        state.advance = { ...state.advance, blockedReason: 'mismatch', lastReason: 'blocked', lastAt: Date.now() };
+        state.scheduler.blockedReason = 'mismatch';
+        return;
+      }
+      if (state.scheduler.phase === 'revealingWord' && reason === 'debug_pass') {
+        resetPromptRuntimeState();
+      }
       advancePromptInternal(reason);
     },
     markWaveDone(kind, count) {
@@ -600,7 +627,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       };
     },
     commitHintText(text) {
-      state.hint = { lastText: text, count: state.hint.count + 1 };
+      state.hint = { active: Boolean(text), lastText: text, count: state.hint.count + 1, lastShownAt: Date.now() };
     }
   };
 }

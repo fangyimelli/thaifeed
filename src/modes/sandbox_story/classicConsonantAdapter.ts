@@ -40,8 +40,10 @@ export function tryParseClassicConsonantAnswer(input: string, ctx: ClassicConson
 }
 
 export function judgeClassicConsonantAnswer(input: string, ctx: ClassicConsonantContext): 'correct' | 'wrong' | 'unknown' {
+  const rawTrimmed = input.trim();
+  if (rawTrimmed === '?') return 'unknown';
   const normalized = normalizeInputForMatch(input);
-  const unknownKeywords = (ctx.node?.unknownKeywords ?? ['不知道', '不知', '不知道欸']).map((k) => normalizeInputForMatch(k));
+  const unknownKeywords = (ctx.node?.unknownKeywords ?? ['不知道', '不知', '不確定', 'idk', '不知道欸']).map((k) => normalizeInputForMatch(k));
   if (unknownKeywords.some((token) => token && (normalized === token || normalized.includes(token)))) return 'unknown';
   const parsed = tryParseClassicConsonantAnswer(input, ctx);
   if (parsed.ok) return 'correct';
