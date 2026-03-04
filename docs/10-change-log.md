@@ -241,3 +241,16 @@
 
 ### Docs
 - PR_NOTES 更新為本次 docs-only 變更與驗收結果（播放器/音效/聊天室/手機/桌機/debug 全項 PASS，未改動邏輯）。
+
+## 2026-03-04（sandbox_story Ghost Event Debug Monitor）
+
+### Changed
+- [debug/sandbox] 在 `Sandbox Story Debug Tools` 新增 `Ghost Event Monitor`，列出 7 個鬼動事件（`VOICE_CONFIRM`、`GHOST_PING`、`TV_EVENT`、`NAME_CALL`、`VIEWER_SPIKE`、`LIGHT_GLITCH`、`FEAR_CHALLENGE`）的 `status/pre/post/cooldown/lock`。
+- [debug/sandbox] `status` 依規則顯示：`ready`（可觸發）、`cooldown`（冷卻中）、`locked`（系統鎖定）。
+- [debug/sandbox] 新增 `Ghost System` 摘要：`activeEvents`、`queue`、`lastEvent`、`cooldownCount`。
+- [debug/sandbox] 新增 `[Trigger Random Ghost]`，可隨機觸發一個目前 `ready` 的事件，供快速測試。
+- [debug/sandbox] 新增 debug state 讀取函式（唯讀）並以 500ms interval refresh。
+
+### Docs
+- README 更新 sandbox_story debug tools 說明與 Ghost Event Monitor 欄位。
+- PR_NOTES 同步更新本次變更與驗收結果。
