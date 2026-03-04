@@ -5,6 +5,7 @@ import ChatMessage from './ChatMessage';
 import { isMobileDevice } from '../../utils/isMobile';
 import type { SendResult, SendSource } from '../../app/App';
 import { getChatScrollContainer, registerChatScrollContainer } from '../../chat/scrollController';
+import { isDebugEnabled } from '../../debug/debugGate';
 
 type ScrollMetrics = {
   top: number;
@@ -107,7 +108,7 @@ export default function ChatPanel({
   const previousMessageCountRef = useRef(0);
   const mentionJumpHintTimerRef = useRef<number | null>(null);
   const isMobile = isMobileDevice();
-  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const debugEnabled = isDebugEnabled();
   const forceMentionAutoScroll = new URLSearchParams(window.location.search).get('forceMentionAutoscroll') === '1';
   const activeSet = getActiveUserSet([...collectActiveUsers(messages), activeUserInitialHandle].filter(Boolean));
   const sanitizedMessages = messages.map((message) => ({

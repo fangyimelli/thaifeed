@@ -18,6 +18,7 @@ import { getCachedAsset } from '../../utils/preload';
 import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
+import { isDebugEnabled } from '../../debug/debugGate';
 
 export type SceneMissingAsset = {
   name: string;
@@ -532,9 +533,7 @@ export default function SceneView({
   const priorityLockRef = useRef<{ lockedUntil: number; lockedByEventKey: string | null }>({ lockedUntil: 0, lockedByEventKey: null });
   const [debugEnabled, setDebugEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
-    const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
-    return searchEnabled || hashEnabled;
+    return isDebugEnabled();
   });
   const [debugTick, setDebugTick] = useState(() => Date.now());
   const loadedAudioKeys = distanceApproachPlayer.getLoadedBufferKeys();
@@ -1477,9 +1476,7 @@ export default function SceneView({
 
   useEffect(() => {
     const syncDebugEnabled = () => {
-      const searchEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
-      const hashEnabled = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('debug') === '1';
-      setDebugEnabled(searchEnabled || hashEnabled);
+      setDebugEnabled(isDebugEnabled());
     };
 
     syncDebugEnabled();

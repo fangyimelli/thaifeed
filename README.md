@@ -895,6 +895,9 @@ npm run build
   - `Classic Debug Tools`：僅在 `mode === "classic"` 時顯示。
   - `Sandbox Story Debug Tools`：僅在 `mode === "sandbox_story"` 時顯示。
 - Mode SSOT：沿用既有 `mode` query param（`?mode=classic|sandbox_story`），debug-only switcher 會同步寫入 `localStorage['app.currentMode']` 並立即 reload 生效。
+- Debug Gate SSOT：改為共用 `src/debug/debugGate.ts`。
+  - `isDebugEnabled()` 判定來源：`?debug=1` 或 `#debug=1` 或 debug session flag 或 `window.__THAIFEED_DEBUG_ENABLED__`。
+  - **只要 Debug Overlay 已開啟（可見）就視為 debug enabled**，mode switch guard 不得再回傳 `debug_disabled`。
 - Mode Switch Debug（在 `Mode Debug` 區塊內）會即時顯示：
   - `lastModeSwitch.clickAt`
   - `lastModeSwitch.requestedMode`
@@ -906,7 +909,7 @@ npm run build
 - 常見排障：若按鈕看起來沒反應，先看 `lastModeSwitch.result/reason`，例如 `debug_disabled`、`already_current_mode`、`invalid_mode`。
 - 啟動時 mode 決策：
   - `mode` query param（最高優先）
-  - 若 `debug=1` 才允許讀取 `localStorage['app.currentMode']`
+  - 僅在 `isDebugEnabled()` 為 true 才允許讀取 `localStorage['app.currentMode']`（避免非 debug 使用者被 storage 帶入 sandbox）
   - fallback `classic`
 - `Classic Debug Tools` 內固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
   - Trigger VOICE_CONFIRM
@@ -1506,6 +1509,7 @@ Console（debug 模式）可觀察：
 
 ## README Removed/Deprecated Log
 - 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
+- 2026-03-04：移除「mode switch guard 僅看 `?debug=1`」舊規則，改為共用 debug gate SSOT（overlay 可見即 debug enabled）。
 
 ## Sandbox Story Mode（Stage 1）
 
