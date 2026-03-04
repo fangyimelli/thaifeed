@@ -303,6 +303,8 @@ npm run build
 
 ## README Removed/Deprecated Log
 
+- 2026-03-04（sandbox only）：移除「玩家回覆有效選項後僅更新訊息但保留 reply bar/freeze」舊行為；改為強制 resolve + clearReplyUi 單一路徑。
+
 - 2026-03-04（sandbox only）：移除 reveal `renderMode(pair|fullWord)` 雙路徑，改為強制 A（單一 overlay + 同步動畫）；不再以 B（完整單字替代）作為預設或保底。
   - `▶ Force LOOP`：直接呼叫 `switchTo('oldhouse_room_loop')`。
   - `▶ Force LOOP2`：直接呼叫 `switchTo('oldhouse_room_loop2')`。
@@ -1192,6 +1194,13 @@ npm run build
 - 聊天室顯示為「輸入名 + You badge」，badge 為輕量半透明樣式；玩家名稱本身不會被替換成 `You`。
 - 所有事件 starter tag 固定使用 `@${activeUserInitialHandle}`；若不存在則於 pre-effect 前直接 blocked（`no_active_user`）。
 - 改名入口已停用；若呼叫舊改名函式會 no-op 並在 Debug 記錄 `blockedReason=rename_disabled`。
+
+## Sandbox QnA Resolve + Reply UI Clearing（sandbox only）
+
+- sandbox 玩家回覆命中有效選項（`穩住/衝/不知道`）時，必須走單一路徑：`consumePlayerReply() -> parsePlayerReplyToOption() -> resolveQna()`，禁止只 append 訊息不 resolve。
+- `resolveQna()` 會同步：`qna.awaitingReply=false`、`qna.status=RESOLVED`、解除 freeze、清空 reply UI（`replyBarVisible=false`、`replyToMessageId=null`、pinned/quote 清空）。
+- 若命中有效選項後 `ui.replyBarVisible` 仍為 `true`，會立即強制 `clearReplyUi()` 並記錄 anomaly（`sandbox.qna.lastAnomaly`）。
+- sandbox debug tester 新增：`ForceResolveQna`（resolve+clear UI）與 `ClearReplyUi`（只清 UI，隔離 UI 問題）。
 
 ## QNA Flow（Keyword + 不知道）
 

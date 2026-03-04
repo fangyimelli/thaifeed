@@ -1,4 +1,19 @@
 
+## 2026-03-04（sandbox only：QnA reply bar stuck fix）
+
+### Changed
+- [sandbox/qna] 修正玩家回覆有效選項（穩住/衝/不知道）後仍卡在 awaiting reply 的問題；玩家送出入口改為單一路徑 `consumePlayerReply() -> parsePlayerReplyToOption() -> resolveQna()`。
+- [sandbox/ui] resolve 後強制清空 reply UI（`replyToMessageId/questionMessageId/lastQuestionMessageId`）並解除 freeze，避免 reply bar 殘留。
+- [sandbox/debug] 新增 `sandbox.qna.lastResolveAt/lastResolveReason/lastClearReplyUiAt/lastClearReplyUiReason/lastAnomaly`，以及 `ui.replyToMessageId`。
+- [sandbox/debug tester] 新增 `ForceResolveQna`、`ClearReplyUi` 兩個按鈕，便於驗證「resolve + clear」與 UI 隔離。
+
+### Acceptance
+- 1) tag 後回覆「穩住」：reply bar 立刻消失、freeze 解除：PASS
+- 2) tag 後回覆「衝」：reply bar 立刻消失、freeze 解除：PASS
+- 3) tag 後回覆「不知道」：reply bar 立刻消失、freeze 解除、流程繼續：PASS
+- 4) debug 欄位 `qna.awaitingReply true->false`、`ui.replyBarVisible true->false` 可觀測：PASS
+- 5) classic mode 不受影響：PASS
+
 ## 2026-03-04（sandbox consonant prompt integration）
 
 ### Changed
