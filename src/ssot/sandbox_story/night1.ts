@@ -4,6 +4,7 @@ export const NIGHT1: NightScript = {
   meta: {
     id: 'night1',
     label: 'Night 1 - Intro Corridor',
+    version: '1.0.0',
     locale: 'zh-TW'
   },
   nodes: [

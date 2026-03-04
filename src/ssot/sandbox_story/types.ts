@@ -42,6 +42,7 @@ export type NightScript = {
   meta: {
     id: string;
     label: string;
+    version: string;
     locale: 'zh-TW';
   };
   nodes: WordNode[];

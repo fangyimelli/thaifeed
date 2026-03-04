@@ -57,3 +57,28 @@
 - `nodes`
 - `ghostMotions`
 - `chatTemplates`
+
+## Debug Tester（Sandbox Story）
+
+在 `?mode=sandbox_story&debug=1` 下，Debug Panel 新增：
+
+- `ForceRevealCurrent`：立即顯示當前字詞 Overlay，並嘗試播放發音。
+- `ForceAskComprehensionNow`：直接跳到理解題提問階段。
+- `ForceGhostMotion`：強制執行當前節點的鬼動包（含 SFX、黑幕閃爍、影片切換）。
+- `ForceAdvanceNode`：推進到下一個節點。
+- `ExportSSOT`：將目前 NightScript 匯出至 `localStorage`。
+- `ImportSSOT`：從 `localStorage` 匯入 NightScript，失敗時不拋錯。
+
+Debug 欄位新增：
+
+- `sandbox.reveal.visible`
+- `sandbox.reveal.phase`
+- `sandbox.ghostMotion.lastId`
+- `sandbox.ghostMotion.state`
+- `sandbox.ssot.version`
+
+## SSOT 修改方式（Sandbox）
+
+- 來源資料仍以 `src/ssot/sandbox_story/night1.ts` 為主，`meta.version` 用於追蹤版本。
+- 若要在執行時覆寫：先用 `ExportSSOT` 產生 JSON，再於瀏覽器修改 `localStorage['thaifeed.sandbox_story.ssot']`，最後按 `ImportSSOT` 套用。
+- 匯入格式需符合 `NightScript` 結構，至少要包含 `nodes`。
