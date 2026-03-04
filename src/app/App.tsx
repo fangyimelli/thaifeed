@@ -56,7 +56,7 @@ import {
   updateLastAskedPreview
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
-import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
+import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, getHintForConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
@@ -1391,6 +1391,29 @@ export default function App() {
     setReplyPreviewSuppressedReason(null);
   }, []);
 
+  const setPinnedQuestionMessage = useCallback((payload: { source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'unknown'; messageId: string; hasTagToActiveUser: boolean }) => {
+    if (modeRef.current.id !== 'sandbox_story') {
+      setLastQuestionMessageId(payload.messageId);
+      setLastQuestionMessageHasTag(payload.hasTagToActiveUser);
+      setReplyPreviewSuppressedReason(null);
+      return true;
+    }
+
+    if (payload.source !== 'sandboxPromptCoordinator') {
+      const sandboxState = sandboxModeRef.current.getState();
+      const blockedReason = sandboxState.scheduler.phase === 'awaitingAnswer' ? 'phaseBusy' : 'writerNotAllowed';
+      sandboxModeRef.current.commitPinnedWriter({ source: payload.source, writerBlocked: true, blockedReason });
+      return false;
+    }
+
+    setLastQuestionMessageId(payload.messageId);
+    setLastQuestionMessageHasTag(payload.hasTagToActiveUser);
+    setReplyPreviewSuppressedReason(null);
+    sandboxModeRef.current.commitPromptPinnedRendered(payload.messageId);
+    sandboxModeRef.current.commitPinnedWriter({ source: payload.source, writerBlocked: false, blockedReason: '' });
+    return true;
+  }, []);
+
 
   const rollbackEventCooldown = useCallback((eventKey: StoryEventKey) => {
     eventCooldownsRef.current[eventKey] = 0;
@@ -1942,9 +1965,14 @@ export default function App() {
         markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt: now });
         lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: messageId };
         eventExclusiveStateRef.current.currentLockOwner = questionActor;
-        setLastQuestionMessageId(messageId);
-        setLastQuestionMessageHasTag(true);
-        setReplyPreviewSuppressedReason(null);
+        const pinnedOk = setPinnedQuestionMessage({
+          source: 'qnaEngine',
+          messageId,
+          hasTagToActiveUser: true
+        });
+        if (!pinnedOk) {
+          setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
+        }
         if (debugEnabled) console.debug(`[PIN] set visible text="${text.slice(0, 60)}"`);
       },
       freezeChat: ({ reason }) => {
@@ -2410,6 +2438,8 @@ export default function App() {
     const timer = window.setInterval(() => {
       const now = Date.now();
       modeRef.current.tick(now);
+      const promptBeforeTick = sandboxModeRef.current.getCurrentPrompt();
+      sandboxModeRef.current.commitPromptOverlay(promptBeforeTick?.kind === 'consonant' ? promptBeforeTick.consonant : '');
       const sandboxState = sandboxModeRef.current.getState();
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
       if (modeRef.current.id === 'sandbox_story') {
@@ -2435,6 +2465,25 @@ export default function App() {
         },
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         ghost: { gate: { lastReason: sandboxState.ghostGate?.lastReason ?? '-' } },
+        prompt: {
+          current: {
+            kind: sandboxState.prompt.current?.kind ?? '-',
+            promptId: sandboxState.prompt.current?.promptId ?? '-',
+            pinnedText: sandboxState.prompt.current?.pinnedText ?? '-'
+          },
+          overlay: {
+            consonantShown: sandboxState.prompt.overlay.consonantShown || '-'
+          },
+          pinned: {
+            promptIdRendered: sandboxState.prompt.pinned.promptIdRendered || '-',
+            lastWriter: {
+              source: sandboxState.prompt.pinned.lastWriter.source,
+              blockedReason: sandboxState.prompt.pinned.lastWriter.blockedReason || '-',
+              writerBlocked: sandboxState.prompt.pinned.lastWriter.writerBlocked
+            }
+          },
+          mismatch: sandboxState.prompt.mismatch
+        },
         footsteps: {
           probability: sandboxState.fearSystem.footsteps.probability,
           cooldownRemaining: sandboxState.fearSystem.footsteps.cooldownRemaining,
@@ -3112,11 +3161,12 @@ export default function App() {
       if (modeRef.current.id === 'sandbox_story') {
         const sandboxState = sandboxModeRef.current.getState();
         const node = sandboxModeRef.current.getCurrentNode();
-        if (sandboxState.scheduler.phase === 'awaitingAnswer' && node) {
-          const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: node.char, node });
-          const judge = judgeClassicConsonantAnswer(raw, { nodeChar: node.char, node });
+        const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
+        if (sandboxState.scheduler.phase === 'awaitingAnswer' && node && currentPrompt?.kind === 'consonant') {
+          const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
+          const judge = judgeClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
-          if (judge === 'correct' && parsed.matchedChar === node.char) {
+          if (judge === 'correct' && parsed.matchedChar === currentPrompt.consonant) {
             clearChatFreeze('sandbox_consonant_correct');
             setChatAutoPaused(false);
             sandboxConsonantPromptNodeIdRef.current = null;
@@ -3126,7 +3176,7 @@ export default function App() {
             setInput('');
             return markSent('sandbox_consonant_correct');
           }
-          const hint = getHintForConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUserInitialHandleRef.current || 'you' });
+          const hint = getHintForConsonantPrompt({ nodeChar: currentPrompt.consonant, node, activeUser: activeUserInitialHandleRef.current || 'you' });
           const retryPrefix = judge === 'unknown'
             ? `@${activeUserInitialHandleRef.current || 'you'} 收到「不知道」。`
             : `@${activeUserInitialHandleRef.current || 'you'} 這次還沒對。`;
@@ -3378,9 +3428,14 @@ export default function App() {
     lockStateRef.current = { isLocked: true, target: 'mod_live', startedAt: now, replyingToMessageId: sent.lineId };
     eventExclusiveStateRef.current.currentLockOwner = 'mod_live';
     const hasTagToActiveUser = parseMentionHandles(line).some((handle) => toHandleKey(handle) === toHandleKey(activeUserInitialHandleRef.current));
-    setLastQuestionMessageId(sent.lineId);
-    setLastQuestionMessageHasTag(hasTagToActiveUser);
-    setReplyPreviewSuppressedReason(null);
+    const pinnedOk = setPinnedQuestionMessage({
+      source: modeRef.current.id === 'sandbox_story' ? 'eventEngine' : 'unknown',
+      messageId: sent.lineId,
+      hasTagToActiveUser
+    });
+    if (!pinnedOk) {
+      setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
+    }
     setLastBlockedReason(null);
     if (hasTagToActiveUser) {
       void scrollThenPauseForTaggedQuestion({ questionMessageId: sent.lineId });
@@ -3567,6 +3622,14 @@ export default function App() {
     recoverFromStuckEventState('debug_manual_recover');
   }, [recoverFromStuckEventState]);
 
+  const getSandboxOverlayConsonant = useCallback(() => {
+    if (modeIdRef.current !== 'sandbox_story') return state.currentConsonant.letter;
+    const prompt = sandboxModeRef.current.getCurrentPrompt();
+    const consonantShown = prompt?.kind === 'consonant' ? prompt.consonant : '';
+    sandboxModeRef.current.commitPromptOverlay(consonantShown);
+    return consonantShown;
+  }, [state.currentConsonant.letter]);
+
   const unlockSingleEventDebug = useCallback((eventKey: StoryEventKey) => {
     rollbackEventCooldown(eventKey);
     clearEventAudioPlayingTimeout(eventKey);
@@ -3606,9 +3669,21 @@ export default function App() {
 
     const prompt = getClassicConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUser || 'you' });
     sandboxModeRef.current.setConsonantPromptText(prompt.promptText);
+    const promptId = crypto.randomUUID();
+    const sandboxPrompt: SandboxPrompt = {
+      kind: 'consonant',
+      promptId,
+      consonant: node.char,
+      wordKey: node.id,
+      pinnedText: prompt.promptText,
+      correctKeywords: node.correctKeywords ?? [node.char],
+      unknownKeywords: node.unknownKeywords ?? ['不知道']
+    };
+    sandboxModeRef.current.setCurrentPrompt(sandboxPrompt);
+    sandboxModeRef.current.commitPromptOverlay(sandboxPrompt.consonant);
 
     const line = prompt.promptText;
-    const messageId = crypto.randomUUID();
+    const messageId = promptId;
     await runTagStartFlow({
       tagMessage: {
         id: messageId,
@@ -3630,7 +3705,16 @@ export default function App() {
         setPendingForceScrollReason(`sandbox_consonant_${reason}`);
         await nextAnimationFrame();
       },
-      setPinnedReply: () => {},
+      setPinnedReply: () => {
+        const pinnedOk = setPinnedQuestionMessage({
+          source: 'sandboxPromptCoordinator',
+          messageId,
+          hasTagToActiveUser: true
+        });
+        if (!pinnedOk) {
+          setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
+        }
+      },
       freezeChat: ({ reason }) => {
         const startedAt = Date.now();
         setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt });
@@ -3946,7 +4030,7 @@ export default function App() {
           </button>
           {!hasFatalInitError ? (
             <SceneView
-              targetConsonant={state.currentConsonant.letter}
+              targetConsonant={getSandboxOverlayConsonant()}
               curse={state.curse}
               anchor={state.currentAnchor}
               isDesktopLayout={isDesktopLayout}
@@ -4299,6 +4383,14 @@ export default function App() {
                     <div>audio.pronounce.lastKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.lastKey ?? '-'}</div>
                     <div>audio.pronounce.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.state ?? '-'}</div>
                     <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
+                    <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
+                    <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
+                    <div>sandbox.prompt.overlay.consonantShown: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.overlay?.consonantShown ?? '-'}</div>
+                    <div>sandbox.prompt.pinned.promptIdRendered: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.promptIdRendered ?? '-'}</div>
+                    <div>sandbox.prompt.mismatch: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.mismatch ?? false)}</div>
+                    <div>pinned.lastWriter.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.source ?? '-'}</div>
+                    <div>pinned.lastWriter.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.blockedReason ?? '-'}</div>
+                    <div>pinned.lastWriter.writerBlocked: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.writerBlocked ?? false)}</div>
                     <div>ghost.gate.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghost?.gate?.lastReason ?? '-'}</div>
                     <div>footsteps.probability: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.probability ?? '-'}</div>
                     <div>footsteps.cooldownRemaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.cooldownRemaining ?? '-'}</div>

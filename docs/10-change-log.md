@@ -1,3 +1,16 @@
+## 2026-03-04（sandbox_story PromptCoordinator 單一真相來源）
+
+### Changed
+- [sandbox_story/prompt] 新增 `sandbox.prompt.current`（PromptCoordinator）作為 prompt SSOT，Overlay 與 pinned 統一由此渲染，移除各自讀舊 state 的分叉來源。
+- [sandbox_story/overlay] `SceneView` 的 `targetConsonant` 在 sandbox 改讀 `sandbox.prompt.current.consonant`，並寫入 `sandbox.prompt.overlay.consonantShown`。
+- [sandbox_story/pinned] 新增 sandbox pinned writer guard：僅 `sandboxPromptCoordinator` 可寫入 pinned；`qnaEngine/eventEngine` 寫入會被阻擋並記錄 debug。
+- [sandbox_story/unknown] 「不知道」流程保持同一 promptId，不切換到 comprehension 題；僅發送提示訊息。
+- [debug] 新增題目一致性檢查欄位：`sandbox.prompt.current.kind/promptId`、`sandbox.prompt.overlay.consonantShown`、`sandbox.prompt.pinned.promptIdRendered`、`sandbox.prompt.mismatch`、`pinned.lastWriter.*`。
+
+### Docs
+- README 新增 PromptCoordinator、writer guard 與一致性 debug 欄位說明。
+- PR_NOTES 新增 root-cause 排查與本次驗收 PASS/FAIL。
+
 ## 2026-03-04（sandbox_story Consonant QnA true pass flow）
 
 ### Changed

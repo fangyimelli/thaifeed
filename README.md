@@ -1567,6 +1567,35 @@ Console（debug 模式）可觀察：
 ## README Removed/Deprecated Log
 - 2026-03-04：本次 sandbox_story Consonant QnA 流程為整合更新，無新增移除項。
 
+
+## Sandbox PromptCoordinator（單一真相來源，2026-03-04）
+
+- `sandbox_story` 新增 `sandbox.prompt.current` 作為 prompt SSOT；Overlay 與 pinned 皆只讀此 state。
+- Overlay 子音只在 `sandbox.prompt.current.kind === "consonant"` 時顯示，來源固定為 `sandbox.prompt.current.consonant`。
+- pinned 題目改由 `PromptCoordinator.setCurrentPrompt()` 產生之 promptId 驅動，避免 Overlay/pinned 分別讀舊 state。
+
+### pinned writer guard（sandbox only）
+
+- sandbox 期間，pinned 只允許 `sandboxPromptCoordinator` 寫入。
+- 若 `qnaEngine` / `eventEngine` 嘗試寫入，直接阻擋並寫 debug：
+  - `sandbox.prompt.pinned.lastWriter.source`
+  - `sandbox.prompt.pinned.lastWriter.writerBlocked`
+  - `sandbox.prompt.pinned.lastWriter.blockedReason`
+- `unknown`（不知道）流程不更換 promptId；僅加提示訊息，題目維持同一題。
+
+### Prompt Consistency Debug 欄位
+
+- `sandbox.prompt.current.kind`
+- `sandbox.prompt.current.promptId`
+- `sandbox.prompt.overlay.consonantShown`
+- `sandbox.prompt.pinned.promptIdRendered`
+- `sandbox.prompt.mismatch`
+- `pinned.lastWriter.source`
+- `pinned.lastWriter.blockedReason`
+
+## README Removed/Deprecated Log
+- 2026-03-04：本次 PromptCoordinator 為整合修正，無新增移除項。
+
 ## Sandbox Story（2026-03-04 強制整合）
 
 - 子音題 scheduler（sandbox only）固定為：`awaitingTag → awaitingAnswer → revealingWord`。

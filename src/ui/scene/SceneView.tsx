@@ -310,6 +310,25 @@ declare global {
             timeoutEnabled?: boolean;
           };
         };
+        prompt?: {
+          current?: {
+            kind?: string;
+            promptId?: string;
+            pinnedText?: string;
+          };
+          overlay?: {
+            consonantShown?: string;
+          };
+          pinned?: {
+            promptIdRendered?: string;
+            mismatch?: boolean;
+            lastWriter?: {
+              source?: string;
+              blockedReason?: string;
+              writerBlocked?: boolean;
+            };
+          };
+        };
       };
       fx?: {
         blackout?: {
