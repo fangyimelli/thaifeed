@@ -329,3 +329,16 @@
 ### Docs
 - README 更新 sandbox_story debug tools 說明與 Ghost Event Monitor 欄位。
 - PR_NOTES 同步更新本次變更與驗收結果。
+
+## 2026-03-04（sandbox consonant flow hardening / ghost-footsteps gating）
+
+### Changed
+- [sandbox scheduler] 簡化 sandbox scheduler phase：僅保留 `awaitingTag → awaitingAnswer → revealingWord`，移除 `chatWaveRelated/preNextPrompt` 並改為 PASS 揭示完成後直接切下一題。
+- [sandbox consonant] 修正 PASS 後題目推進與索引同步，debug 可追 `currentIndex/currentConsonant/currentWordKey`。
+- [sandbox hint] `classicConsonantAdapter` 新增 hint 介面；sandbox 的 unknown/wrong 皆走 classic 風格提示且停留同題 `awaitingAnswer`。
+- [sandbox reveal] `WordRevealOverlay` 改為同一文字框顯示 `baseConsonant + appended`，append 以 `Array.from()` 漸進補齊，並調整 reveal 動畫為 fadeIn 800ms / hold 600ms / fogOut 900ms。
+- [sandbox ghost gate] 新增 `canTriggerGhostMotion()` 單一入口；sandbox 子音流程一律阻擋 ghost/TV/light 觸發，並紀錄 `ghost.gate.lastReason`。
+- [sandbox footsteps] 將 footsteps 觸發機率與冷卻綁定 fearLevel，fear 越高機率越高、冷卻越短；debug 新增 probability/cooldownRemaining/lastAt。
+
+### Removed
+- [sandbox] PASS 後 related 討論波與 preNextPrompt 驚訝/猜測波（不再並存舊流程）。

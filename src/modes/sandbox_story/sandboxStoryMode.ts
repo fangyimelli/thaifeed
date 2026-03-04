@@ -4,12 +4,9 @@ import type { GameMode } from '../types';
 
 export type SandboxStoryPhase =
   | 'boot'
-  | 'awaitingConsonantTagPrompt'
-  | 'pinnedFreezeAwaitConsonant'
-  | 'revealingWord'
-  | 'chatWaveRelated'
-  | 'preNextPrompt'
-  | 'awaitingTag';
+  | 'awaitingTag'
+  | 'awaitingAnswer'
+  | 'revealingWord';
 
 export type SandboxRevealPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut' | 'done';
 
@@ -24,6 +21,17 @@ export type SandboxFearDebugState = {
     darkFrame: number;
     ghostNearby: number;
   };
+  footsteps: {
+    probability: number;
+    cooldownMs: number;
+    cooldownRemaining: number;
+    lastAt: number;
+  };
+};
+
+export type SandboxGhostGateResult = {
+  allowed: boolean;
+  reason: string;
 };
 
 export type SandboxStoryState = {
@@ -51,6 +59,7 @@ export type SandboxStoryState = {
     wordKey: string;
   };
   ghostMotion: { lastId: string | null; state: 'idle' | 'playing' };
+  ghostGate: { lastReason: string };
   fearSystem: SandboxFearDebugState;
   wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
   blocked: { reason: '' | 'phaseBusy'; count: number };
@@ -75,6 +84,8 @@ export type SandboxStoryMode = GameMode & {
     judge: 'correct' | 'wrong' | 'unknown' | 'timeout';
   }) => void;
   getFearDebugState: () => SandboxFearDebugState;
+  canTriggerGhostMotion: (ctx: { qnaType: 'consonant' | 'comprehension'; answerResult: 'correct' | 'wrong' | 'unknown' }) => SandboxGhostGateResult;
+  registerFootstepsRoll: (now?: number) => { probability: number; cooldownRemaining: number; lastAt: number; shouldTrigger: boolean };
   debugAddFear: (value?: number) => void;
   debugResetFear: () => void;
   markRevealDone: () => void;
@@ -101,7 +112,15 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     reveal: { visible: false, phase: 'idle', text: '', highlightChar: '', baseConsonant: '', audioKey: '', startedAt: 0, wordKey: '' },
     ghostMotion: { lastId: null, state: 'idle' },
-    fearSystem: { fearLevel: 0, maxFear, pressureLevel: 'low', ghostProbability: 0.1, triggers: { chatSpike: 0, storyEmotion: 0, darkFrame: 0, ghostNearby: 0 } },
+    ghostGate: { lastReason: 'init' },
+    fearSystem: {
+      fearLevel: 0,
+      maxFear,
+      pressureLevel: 'low',
+      ghostProbability: 0.1,
+      triggers: { chatSpike: 0, storyEmotion: 0, darkFrame: 0, ghostNearby: 0 },
+      footsteps: { probability: 0.12, cooldownMs: 38_000, cooldownRemaining: 0, lastAt: 0 }
+    },
     wave: { count: 0, kind: 'related' },
     blocked: { reason: '', count: 0 },
     audio: { lastKey: '', state: 'idle', reason: '' }
@@ -112,14 +131,24 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.consonant.nodeChar = getCurrentNode()?.char ?? '';
   };
   const syncFear = () => {
-    const base = Math.min(90, state.nodeIndex * 6 + (state.scheduler.phase === 'revealingWord' ? 15 : 3) + (state.scheduler.phase === 'chatWaveRelated' ? 10 : 0));
+    const base = Math.min(90, state.nodeIndex * 6 + (state.scheduler.phase === 'revealingWord' ? 15 : 3));
     const fear = Math.max(0, Math.min(maxFear, base + extraFear));
+    const probability = Math.min(0.9, 0.08 + fear / maxFear * 0.55);
+    const cooldownMs = Math.max(7_500, 42_000 - fear * 300);
+    const now = Date.now();
+    const cooldownRemaining = Math.max(0, (state.fearSystem.footsteps.lastAt || 0) + cooldownMs - now);
     state.fearSystem = {
       fearLevel: fear,
       maxFear,
       pressureLevel: fear > 80 ? 'panic' : fear > 60 ? 'high' : fear > 30 ? 'medium' : 'low',
       ghostProbability: Math.min(1, 0.1 + fear / maxFear),
-      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'fogOut' ? 12 : 3, ghostNearby: 4 }
+      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'fogOut' ? 12 : 3, ghostNearby: 4 },
+      footsteps: {
+        probability,
+        cooldownMs,
+        cooldownRemaining,
+        lastAt: state.fearSystem.footsteps.lastAt || 0
+      }
     };
   };
   const startReveal = (node: WordNode | null) => {
@@ -142,7 +171,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     label: 'Sandbox Story Mode',
     init() {
       state.nodeIndex = 0;
-      state.scheduler.phase = 'awaitingConsonantTagPrompt';
+      state.scheduler.phase = 'awaitingTag';
       state.reveal.visible = false;
       state.reveal.phase = 'idle';
       state.wave = { count: 0, kind: 'related' };
@@ -151,12 +180,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
     },
     onIncomingTag() {
-      if (['revealingWord', 'chatWaveRelated', 'preNextPrompt'].includes(state.scheduler.phase)) {
+      if (state.scheduler.phase === 'revealingWord') {
         state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 };
         syncFear();
         return;
       }
-      if (state.scheduler.phase === 'awaitingConsonantTagPrompt' || state.scheduler.phase === 'awaitingTag') state.scheduler.phase = 'pinnedFreezeAwaitConsonant';
+      if (state.scheduler.phase === 'awaitingTag') state.scheduler.phase = 'awaitingAnswer';
       syncFear();
     },
     onPlayerReply() { syncFear(); },
@@ -176,7 +205,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
       return node;
     },
-    forceAskConsonantNow() { state.scheduler.phase = 'awaitingConsonantTagPrompt'; syncFear(); },
+    forceAskConsonantNow() { state.scheduler.phase = 'awaitingTag'; syncFear(); },
     forceAskComprehensionNow() { state.scheduler.phase = 'awaitingTag'; syncFear(); },
     forceGhostMotion(motionId) {
       state.ghostMotion = { lastId: motionId ?? 'disabled_no_ghost_entity', state: 'idle' };
@@ -185,14 +214,14 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     forceAdvanceNode() {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
-      state.scheduler.phase = 'awaitingConsonantTagPrompt';
+      state.scheduler.phase = 'awaitingTag';
       state.reveal = { ...state.reveal, visible: false, phase: 'idle' };
       syncNodeChar();
       syncFear();
     },
     forceWave(kind) {
       state.wave.kind = kind;
-      state.scheduler.phase = kind === 'related' ? 'chatWaveRelated' : 'preNextPrompt';
+      state.scheduler.phase = 'awaitingTag';
       syncFear();
     },
     getSSOT: () => cloneScript(script),
@@ -200,7 +229,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (!nextScript?.nodes?.length) return false;
       script = cloneScript(nextScript);
       state.nodeIndex = 0;
-      state.scheduler.phase = 'awaitingConsonantTagPrompt';
+      state.scheduler.phase = 'awaitingTag';
       syncNodeChar();
       syncFear();
       return true;
@@ -216,17 +245,51 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
     },
     getFearDebugState() { syncFear(); return JSON.parse(JSON.stringify(state.fearSystem)) as SandboxFearDebugState; },
+    canTriggerGhostMotion(ctx) {
+      if (ctx.qnaType !== 'comprehension') {
+        state.ghostGate.lastReason = 'blocked:not_comprehension';
+        return { allowed: false, reason: state.ghostGate.lastReason };
+      }
+      if (ctx.answerResult !== 'correct') {
+        state.ghostGate.lastReason = `blocked:comprehension_${ctx.answerResult}`;
+        return { allowed: false, reason: state.ghostGate.lastReason };
+      }
+      state.ghostGate.lastReason = 'allowed:comprehension_correct';
+      return { allowed: true, reason: state.ghostGate.lastReason };
+    },
+    registerFootstepsRoll(now = Date.now()) {
+      syncFear();
+      const steps = state.fearSystem.footsteps;
+      const cooldownRemaining = Math.max(0, (steps.lastAt || 0) + steps.cooldownMs - now);
+      if (cooldownRemaining > 0) {
+        state.fearSystem.footsteps.cooldownRemaining = cooldownRemaining;
+        return { probability: steps.probability, cooldownRemaining, lastAt: steps.lastAt, shouldTrigger: false };
+      }
+      const shouldTrigger = Math.random() < steps.probability;
+      if (shouldTrigger) {
+        state.fearSystem.footsteps.lastAt = now;
+      }
+      syncFear();
+      return {
+        probability: state.fearSystem.footsteps.probability,
+        cooldownRemaining: state.fearSystem.footsteps.cooldownRemaining,
+        lastAt: state.fearSystem.footsteps.lastAt,
+        shouldTrigger
+      };
+    },
     debugAddFear(value = 10) { extraFear += value; syncFear(); },
     debugResetFear() { extraFear = 0; syncFear(); },
-    markRevealDone() { state.scheduler.phase = 'chatWaveRelated'; state.reveal.visible = false; state.reveal.phase = 'done'; syncFear(); },
+    markRevealDone() {
+      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+      syncNodeChar();
+      state.scheduler.phase = 'awaitingTag';
+      state.reveal.visible = false;
+      state.reveal.phase = 'done';
+      syncFear();
+    },
     markWaveDone(kind, count) {
       state.wave = { kind, count };
-      if (kind === 'related') state.scheduler.phase = 'preNextPrompt';
-      else {
-        state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
-        syncNodeChar();
-        state.scheduler.phase = 'awaitingTag';
-      }
+      state.scheduler.phase = 'awaitingTag';
       syncFear();
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },

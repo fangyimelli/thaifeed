@@ -1,52 +1,58 @@
 ## Summary
-- 補齊 `sandbox_story` 子音 QnA 真流程：題目 tag + pinned render 後 freeze，玩家回覆走同一條 parse+judge（correct/wrong/unknown），並在 correct 時進入既有 WordRevealPipeline（無新增音效）。
-- Consonant Prompt/SSOT 新增 `correctKeywords`、`unknownKeywords`，Night1 每題可定義 keyword。
-- Debug 欄位補齊：`scheduler.phase`、`consonant.prompt.current`、`consonant.judge.lastInput/lastResult`、`word.reveal.phase/wordKey`、`lastWave.count/kind`、`blockedReason`。
+- 只修改 sandbox 範圍：`src/modes/sandbox_story/**`、sandbox 掛載流程（`src/app/App.tsx`）與 sandbox reveal UI；classic mode engine 未改。
+- 修正 sandbox 子音 PASS 不換題問題：PASS reveal 完成後立即推進到下一題，並同步 index/consonant/wordKey debug。
+- 調整 sandbox reveal：同框顯示 baseConsonant + appended（逐字補齊），PASS 後僅 reveal 動畫，不再出 related/preNextPrompt 波。
+- sandbox unknown/wrong 改走 classic 風格提示（adapter 提供 hint），並維持同題 awaitingAnswer 重答。
+- 新增 sandbox ghost gate 與 fear-footsteps 綁定規則，鬼動理由與 footsteps 機率/冷卻可在 debug 觀測。
 
 ## Changed
-- `src/data/night1_words.ts`：每題增加 `correctKeywords`、`unknownKeywords`（含「不知道」族群）。
-- `src/ssot/sandbox_story/types.ts`、`src/ssot/sandbox_story/night1.ts`：WordNode 接入 keyword 欄位。
-- `src/modes/sandbox_story/classicConsonantAdapter.ts`：改為 sandbox keyword prompt + normalize parse + judge（correct/wrong/unknown）。
-- `src/modes/sandbox_story/sandboxStoryMode.ts`：新增 consonant judge debug state，`commitConsonantJudgeResult` 串接 reveal。
-- `src/app/App.tsx`：
-  - sandbox 回覆改走 parse+judge+apply 同一路徑（包含 Debug simulate）。
-  - correct：unfreeze 後 reveal → related wave → preNextPrompt → 下一題/awaitingTag。
-  - unknown：走可持續推進路徑（不會卡死）。
-  - wrong：pressure/retry 提示（不會卡死）。
-  - Debug 面板補齊 judge 與 prompt.current 欄位。
-- `src/ui/scene/SceneView.tsx`：補充 sandbox debug 型別。
+- `src/modes/sandbox_story/sandboxStoryMode.ts`
+  - phase 收斂為 `awaitingTag|awaitingAnswer|revealingWord`
+  - `markRevealDone()` 直接推進下一題
+  - `canTriggerGhostMotion()`、`registerFootstepsRoll()`
+  - fear debug 新增 footsteps probability/cooldown/lastAt
+- `src/modes/sandbox_story/classicConsonantAdapter.ts`
+  - 新增 `getHintForConsonantPrompt()`
+- `src/ui/overlays/WordRevealOverlay.tsx`
+  - 改為 grapheme-safe appended reveal（`Array.from`）
+- `src/styles.css`
+  - reveal 動畫調整：fadeIn 800ms / hold scale / fogOut 900ms，並上移避免壓住 pinned
+- `src/app/App.tsx`
+  - sandbox answer phase 改用 `awaitingAnswer`
+  - unknown/wrong 顯示 classic 風格提示且不推進題目
+  - 移除 PASS 後 related/preNextPrompt wave 流程
+  - sandbox debug 欄位補齊：consonant current*、judge、scheduler.phase、word.reveal.phase、ghost gate、footsteps*
+  - sandbox tick 以 fear 驅動 footsteps roll
+- `src/data/night1_words.ts`
+  - unknownKeywords 補上 `不確定`
 
-## Removed
-- None.
-
-## Docs
-- [x] README.md updated
-- [x] docs/10-change-log.md updated
-- [x] PR_NOTES.md updated
+## Removed/Deprecated Log
+- Removed（sandbox only）
+  - PASS 後 related chatWave
+  - PASS 後 preNextPrompt 驚訝/猜測 wave
 
 ## SSOT
-- [ ] No SSOT changes
-- [x] SSOT changed
-  - `src/ssot/sandbox_story/types.ts`
-  - `src/ssot/sandbox_story/night1.ts`
-  - `src/data/night1_words.ts`
+- No SSOT schema changes.
 
-## Debug fields (新增/調整)
-- `scheduler.phase`（awaitingAnswer|revealingWord|chatWave|preNextPrompt|awaitingTag）
-- `consonant.prompt.current`
-- `consonant.judge.lastInput`
-- `consonant.judge.lastResult`（correct|wrong|unknown|timeout|none）
-- `word.reveal.phase`
-- `word.reveal.wordKey`
-- `lastWave.count`
-- `lastWave.kind`
-- `blockedReason`
+## Debug fields change log
+- Added
+  - `sandbox.consonant.currentIndex`
+  - `sandbox.consonant.currentConsonant`
+  - `sandbox.consonant.currentWordKey`
+  - `sandbox.consonant.judge.lastInput`
+  - `sandbox.consonant.judge.lastResult`
+  - `scheduler.phase`（awaitingTag|awaitingAnswer|revealingWord）
+  - `word.reveal.phase`
+  - `ghost.gate.lastReason`
+  - `footsteps.probability`
+  - `footsteps.cooldownRemaining`
+  - `footsteps.lastAt`
 
 ## Acceptance (PASS/FAIL)
-| Item | Result | Notes |
-|---|---|---|
-| ForceAskConsonantNow 題目流程 | PASS | tag + pinned 完成後才 freeze（沿用 `runTagStartFlow` append→scroll→pin→freeze）。 |
-| 正確子音（如 บ） | PASS | Judge=correct，先 unfreeze，再 reveal → related wave → preNextPrompt → awaitingTag。 |
-| 回覆「不知道」 | PASS | Judge=unknown，走可持續推進路徑（轉入 related wave，不會卡死）。 |
-| 回覆錯誤內容 | PASS | Judge=wrong，給 retry 提示並保持可再次作答，不會卡死。 |
-| Build | PASS | `npm run build` 通過。 |
+1) Sandbox 子音 PASS 會換題：PASS
+2) 單字在子音旁邊逐字補齊（不是另外顯示）：PASS
+3) PASS 後不出觀眾討論波、直接下一題：PASS
+4) 回答「不知道」會出 classic 風格提示且同題可重答：PASS
+5) 子音 PASS 不會觸發鬼動；只有 comprehension correct 才會：PASS（sandbox 子音流程固定 blocked）
+6) 腳步聲頻率隨 SAN（fearLevel）上升而提高：PASS
+7) Classic Isolation（classic 完全不受 sandbox 影響）：PASS

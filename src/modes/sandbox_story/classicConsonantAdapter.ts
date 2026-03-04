@@ -47,3 +47,10 @@ export function judgeClassicConsonantAnswer(input: string, ctx: ClassicConsonant
   if (parsed.ok) return 'correct';
   return normalized ? 'wrong' : 'wrong';
 }
+
+export function getHintForConsonantPrompt(ctx: ClassicConsonantContext): string {
+  const expected = ctx.node?.correctKeywords?.[0] ?? ctx.nodeChar;
+  const aliases = (ctx.node?.correctKeywords ?? [ctx.nodeChar]).filter(Boolean);
+  const aliasHint = aliases.length > 1 ? `（可用：${aliases.join(' / ')}）` : '';
+  return `提示：這題子音是「${expected}」${aliasHint}，請直接輸入子音；不確定可以回「不知道」。`;
+}
