@@ -1620,3 +1620,26 @@ Console（debug 模式）可觀察：
 
 ### README Removed/Deprecated Log
 - 2026-03-04：sandbox 舊「unknown 僅回覆收到不知道」行為視為 deprecated，改為強制提示文字。
+
+## Sandbox WordReveal Overlay 視覺規格（2026-03-04 重做）
+
+- sandbox_story 的 WordRevealOverlay 現在預設採 **B 保底 fullWord 模式**：
+  - 同一行顯示完整 `wordText`。
+  - 不再分離顯示 base 子音容器；改在完整單字中把第一個 grapheme 以 accent 色標示。
+- 若後續要啟用 A 規格，可切 `renderMode="pair"`（目前預設仍為 `fullWord`，確保可驗收穩定）。
+- 動畫 timeline（sandbox only）：
+  - `enter`：200ms fade in
+  - `pulse`：同步閃爍 2 次（2 x 250ms）
+  - `exit`：900ms scale(1→1.18) + opacity(1→0) + translateY(-6px)
+- Thai 最小拆分規則：統一使用 `Array.from(wordText)`，由 state 提供：
+  - `word.reveal.baseChar`
+  - `word.reveal.restTextLen`
+- Debug 驗收欄位（sandbox）：
+  - `word.reveal.renderMode`
+  - `word.reveal.baseChar`
+  - `word.reveal.restTextLen`
+  - `word.reveal.phase`（`idle|enter|pulse|exit|done`）
+
+### README Removed/Deprecated Log
+- 2026-03-04：sandbox WordRevealOverlay 移除舊 `fadeIn/scaleUp/fadeOut` 視覺命名，統一改為 `enter/pulse/exit` 時序。
+- 2026-03-04：sandbox WordRevealOverlay 預設停用舊「子音 + 小補字」雙容器顯示，改採 fullWord 保底模式（第一個 grapheme 上色）。

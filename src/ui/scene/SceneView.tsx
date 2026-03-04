@@ -19,7 +19,7 @@ import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
 import { isDebugEnabled } from '../../debug/debugGate';
-import WordRevealOverlay, { type WordRevealOverlayPhase } from '../overlays/WordRevealOverlay';
+import WordRevealOverlay, { type WordRevealOverlayPhase, type WordRevealRenderMode } from '../overlays/WordRevealOverlay';
 
 export type SceneMissingAsset = {
   name: string;
@@ -53,6 +53,7 @@ type Props = {
   wordReveal?: {
     visible: boolean;
     phase: WordRevealOverlayPhase;
+    renderMode: WordRevealRenderMode;
     wordText: string;
     baseConsonant: string;
     appendedText: string;
@@ -1929,6 +1930,7 @@ export default function SceneView({
             <WordRevealOverlay
               visible={Boolean(wordReveal?.visible)}
               phase={wordReveal?.phase ?? 'idle'}
+              renderMode={wordReveal?.renderMode ?? 'fullWord'}
               wordText={wordReveal?.wordText ?? ''}
               baseConsonant={wordReveal?.baseConsonant ?? ''}
               appendedText={wordReveal?.appendedText ?? ''}

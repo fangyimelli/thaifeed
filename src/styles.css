@@ -598,6 +598,7 @@ body {
   justify-content: flex-start;
   pointer-events: none;
   max-width: min(56vw, 360px);
+  opacity: 0;
 }
 
 .word-reveal-text {
@@ -607,8 +608,13 @@ body {
   background: rgba(6, 10, 20, 0.68);
   color: #edf2ff;
   font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.15;
   letter-spacing: 0.06em;
   text-shadow: 0 0 10px rgba(170, 208, 255, 0.38);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  white-space: pre;
 }
 
 .word-reveal-char-highlight {
@@ -616,32 +622,40 @@ body {
   font-weight: 800;
 }
 
-.word-reveal-suffix {
-  white-space: pre;
+.word-reveal-rest {
+  color: #edf2ff;
+  font-weight: 800;
 }
 
-.word-reveal-overlay.phase-fadeIn {
-  animation: wordRevealFadeIn 520ms ease-out forwards;
+.word-reveal-overlay.phase-enter {
+  animation: wordRevealEnter 200ms ease-out forwards;
 }
 
-.word-reveal-overlay.phase-scaleUp {
+.word-reveal-overlay.phase-pulse {
   opacity: 1;
-  transform: translateY(-50%) scale(1.14);
-  transition: transform 800ms ease-out;
 }
 
-.word-reveal-overlay.phase-fadeOut {
-  animation: wordRevealFadeOut 600ms ease-in forwards;
+.word-reveal-overlay.phase-pulse .word-reveal-text {
+  animation: wordRevealPulse 500ms ease-in-out 2;
 }
 
-@keyframes wordRevealFadeIn {
+.word-reveal-overlay.phase-exit {
+  animation: wordRevealExit 900ms ease-out forwards;
+}
+
+@keyframes wordRevealEnter {
   from { opacity: 0; transform: translateY(-40%) scale(0.96); }
   to { opacity: 1; transform: translateY(-50%) scale(1); }
 }
 
-@keyframes wordRevealFadeOut {
-  from { opacity: 1; filter: blur(0px); transform: translateY(-50%) scale(1.14); }
-  to { opacity: 0; filter: blur(10px); transform: translateY(-56%) scale(1.2); }
+@keyframes wordRevealPulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 10px rgba(170, 208, 255, 0.38); }
+  50% { opacity: 0.35; text-shadow: 0 0 18px rgba(170, 208, 255, 0.82); }
+}
+
+@keyframes wordRevealExit {
+  from { opacity: 1; transform: translateY(-50%) scale(1); }
+  to { opacity: 0; transform: translateY(-56%) scale(1.18); }
 }
 
 @media (max-width: 860px) {
@@ -655,4 +669,3 @@ body {
     padding: 6px 8px;
   }
 }
-

@@ -9,7 +9,8 @@ export type SandboxStoryPhase =
   | 'revealingWord'
   | 'awaitingWave';
 
-export type SandboxRevealPhase = 'idle' | 'fadeIn' | 'scaleUp' | 'fadeOut' | 'done';
+export type SandboxRevealPhase = 'idle' | 'enter' | 'pulse' | 'exit' | 'done';
+export type SandboxRevealRenderMode = 'pair' | 'fullWord';
 
 export type SandboxFearDebugState = {
   fearLevel: number;
@@ -75,6 +76,9 @@ export type SandboxStoryState = {
     highlightChar: string;
     baseConsonant: string;
     appended: string;
+    renderMode: SandboxRevealRenderMode;
+    baseChar: string;
+    restTextLen: number;
     mode: 'correct' | 'wrong' | 'unknown';
     audioKey: string;
     startedAt: number;
@@ -156,7 +160,21 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '' },
       judge: { lastInput: '', lastResult: 'none', timeoutEnabled: false }
     },
-    reveal: { visible: false, phase: 'idle', text: '', highlightChar: '', baseConsonant: '', appended: '', mode: 'correct', audioKey: '', startedAt: 0, wordKey: '' },
+    reveal: {
+      visible: false,
+      phase: 'idle',
+      text: '',
+      highlightChar: '',
+      baseConsonant: '',
+      appended: '',
+      renderMode: 'fullWord',
+      baseChar: '',
+      restTextLen: 0,
+      mode: 'correct',
+      audioKey: '',
+      startedAt: 0,
+      wordKey: ''
+    },
     ghostMotion: { lastId: null, state: 'idle' },
     ghostGate: { lastReason: 'init' },
     fearSystem: {
@@ -184,6 +202,21 @@ export function createSandboxStoryMode(): SandboxStoryMode {
 
 
   const splitGraphemes = (text: string) => Array.from(text || '');
+  const DEFAULT_REVEAL_RENDER_MODE: SandboxRevealRenderMode = 'fullWord';
+  const COMBINING_MARK_REGEX = /\p{Mark}/u;
+  const shouldFallbackToFullWord = (text: string, baseConsonant: string) => {
+    const wordGraphemes = splitGraphemes(text);
+    const baseGraphemes = splitGraphemes(baseConsonant);
+    const firstWordGrapheme = wordGraphemes[0] ?? '';
+    const firstBaseGrapheme = baseGraphemes[0] ?? '';
+    if (!firstWordGrapheme) return true;
+    if (!firstBaseGrapheme) return true;
+    if (baseGraphemes.length !== 1) return true;
+    if (firstWordGrapheme !== firstBaseGrapheme) return true;
+    const secondWordGrapheme = wordGraphemes[1] ?? '';
+    if (secondWordGrapheme && COMBINING_MARK_REGEX.test(secondWordGrapheme)) return true;
+    return false;
+  };
   const pickAppendedByNode = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
     if (!node) return '';
     const all = splitGraphemes(node.wordText);
@@ -224,7 +257,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       maxFear,
       pressureLevel: fear > 80 ? 'panic' : fear > 60 ? 'high' : fear > 30 ? 'medium' : 'low',
       ghostProbability: Math.min(1, 0.1 + fear / maxFear),
-      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'fadeOut' ? 12 : 3, ghostNearby: 4 },
+      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'exit' ? 12 : 3, ghostNearby: 4 },
       footsteps: {
         probability,
         cooldownMs,
@@ -236,13 +269,21 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const startReveal = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
     if (!node) return;
     if (mode === 'correct') state.scheduler.phase = 'revealingWord';
+    const wordGraphemes = splitGraphemes(node.wordText);
+    const baseChar = wordGraphemes[0] ?? '';
+    const restTextLen = Math.max(0, wordGraphemes.length - 1);
+    const canUsePair = !shouldFallbackToFullWord(node.wordText, node.char);
+    const renderMode: SandboxRevealRenderMode = canUsePair ? DEFAULT_REVEAL_RENDER_MODE : 'fullWord';
     state.reveal = {
       visible: true,
-      phase: 'fadeIn',
+      phase: 'enter',
       text: node.wordText,
       highlightChar: node.char,
       baseConsonant: node.char,
       appended: pickAppendedByNode(node, mode),
+      renderMode,
+      baseChar,
+      restTextLen,
       mode,
       audioKey: node.audioKey,
       startedAt: Date.now(),
@@ -283,7 +324,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     tick() {
       if (state.scheduler.phase === 'revealingWord') {
         const elapsed = Date.now() - state.reveal.startedAt;
-        state.reveal.phase = elapsed < 550 ? 'fadeIn' : elapsed < 1350 ? 'scaleUp' : elapsed < 1950 ? 'fadeOut' : 'done';
+        state.reveal.phase = elapsed < 200 ? 'enter' : elapsed < 1200 ? 'pulse' : elapsed < 2100 ? 'exit' : 'done';
       }
       syncFear();
     },
