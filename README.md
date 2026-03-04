@@ -63,6 +63,10 @@ npm run build
 - 其他任何輸入（包含 wrong/unknown/亂打）都不得換題，會記錄 `sandbox.advance.blockedReason=not_correct_or_pass`。
 - `unknown` 關鍵字固定支援：`不知道 / 不確定 / idk / ?`，只顯示提示，不 reveal、不 advance。
 - prompt SSOT 強制只讀 `sandbox.prompt.current`（`id/consonant/wordKey`）；題目、judge、hint、reveal 必須一致，mismatch 時阻擋流程並記錄 `mismatch=true`。
+- 對外 debug/驗收欄位同步提供 `sandbox.currentPrompt`（`id/consonant/wordKey`）做為單一檢查點；內部 `sandbox.prompt.current` 與其保持一致。
+- parser 新增 PASS keyword：`pass / skip / p`，判定 `judge.kind=pass` 後直接 `advancePrompt('debug_pass')`。
+- `unknown`（`不知道 / 不確定 / idk / ?`）僅顯示 hint，保持同一題，不會 advance。
+- hint 只讀 `sandbox.currentPrompt.consonant`（不再從題庫重新抓提示子音）。
 - Word reveal（sandbox only）固定規格：畫面中心、純文字無底框、`4000ms` scale 放大 + opacity 漸淡，結束後才進下一題。
 - Debug 欄位（必看）：
   - `sandbox.prompt.current.id/consonant/wordKey`

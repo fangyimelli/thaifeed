@@ -65,6 +65,20 @@ export function tryParseClassicConsonantAnswer(input: string, ctx: ClassicConson
 } {
   const normalize = normalizeSandboxConsonantInput(input);
   const keywords = (ctx.node?.correctKeywords ?? [ctx.nodeChar]).map((k) => toCompact(k));
+  const passKeywords = ['pass', 'skip', 'p'];
+  if (passKeywords.includes(normalize.compact)) {
+    return {
+      ok: false,
+      debug: {
+        kind: 'pass',
+        matchedAlias: '',
+        inputNorm: normalize.norm,
+        matched: 'pass',
+        blockedReason: '',
+        normalize
+      }
+    };
+  }
   const matchedKeyword = keywords.find((token) => token && (normalize.compact === token || normalize.compact.includes(token)));
   const aliasCandidates = [
     { token: 'a', matched: 'A' },
@@ -93,12 +107,13 @@ export function tryParseClassicConsonantAnswer(input: string, ctx: ClassicConson
   };
 }
 
-export function judgeClassicConsonantAnswer(input: string, ctx: ClassicConsonantContext): 'correct' | 'wrong' | 'unknown' {
+export function judgeClassicConsonantAnswer(input: string, ctx: ClassicConsonantContext): 'correct' | 'wrong' | 'unknown' | 'pass' {
   const normalized = normalizeSandboxConsonantInput(input);
   const compact = normalized.compact;
   const unknownKeywords = (ctx.node?.unknownKeywords ?? ['不知道', '不知', '不確定', 'idk', '不知道欸', '?', '？']).map((k) => toCompact(k));
   if (compact === '?' || compact === '？') return 'unknown';
   if (unknownKeywords.some((token) => token && (compact === token || compact.includes(token)))) return 'unknown';
+  if (compact === 'pass' || compact === 'skip' || compact === 'p') return 'pass';
   const parsed = tryParseClassicConsonantAnswer(input, ctx);
   if (parsed.ok) return 'correct';
   return compact ? 'wrong' : 'wrong';

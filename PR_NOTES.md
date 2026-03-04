@@ -1,3 +1,21 @@
+## 2026-03-04（sandbox only：currentPrompt SSOT + pass keyword fix）
+
+### Changed
+- [sandbox/ssot] 補上 `sandbox.currentPrompt`（`id/consonant/wordKey`）作為驗收 SSOT，並與 `sandbox.prompt.current` 同步輸出到 debug。
+- [sandbox/parser] `tryParseClassicConsonantAnswer` / `judgeClassicConsonantAnswer` 新增 `pass|skip|p`，判定為 `pass`。
+- [sandbox/flow] sandbox 子音送出時 `judge=pass` 直接 `advancePrompt('debug_pass')`，不再走 hint。
+- [sandbox/unknown] unknown 路徑只顯示 hint，不 advance。
+- [sandbox/hint] hint 改為只讀 `currentPrompt.consonant` 產生，不再查題庫字條目。
+- [debug] 新增 `sandbox.currentPrompt.*` 與 `sandbox.parser.result` 顯示，保留 `sandbox.advance.lastReason` 驗收 pass 觸發原因。
+
+### Acceptance
+| Item | Result |
+|---|---|
+| 1) pass / skip / p 立即跳下一題 | PASS |
+| 2) 題目 UI 子音與 hint 子音一致 | PASS |
+| 3) unknown 只顯示提示、不跳題 | PASS |
+| 4) classic mode 不受影響 | PASS |
+
 ## 2026-03-04（sandbox_story only：submit gate + advance one-shot + classic hint shared）
 
 ### Changed
