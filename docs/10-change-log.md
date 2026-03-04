@@ -1,3 +1,16 @@
+## 2026-03-04（sandbox_story Consonant QnA true pass flow）
+
+### Changed
+- [sandbox_story/qna] 子音題改為 sandbox keyword 判定：題目由 `correctKeywords`/`unknownKeywords` 驅動，玩家回覆統一走 normalize + parse + judge（correct/wrong/unknown；timeout debug 先標示未啟用）。
+- [sandbox_story/freeze] 發題仍走 `runTagStartFlow` 單一路徑（append → scroll → pin → freeze），確保 pinned render 後才 freeze。
+- [sandbox_story/pipeline] `Judge=correct` 才會觸發既有 WordRevealPipeline（無新增音效）：reveal → related wave → preNextPrompt → 下一題/awaitingTag。
+- [sandbox_story/recovery] `Judge=unknown` 與 `Judge=wrong` 均有可持續路徑，避免流程卡死。
+- [debug] 補齊欄位：`scheduler.phase`、`consonant.prompt.current`、`consonant.judge.lastInput/lastResult`、`word.reveal.phase/wordKey`、`lastWave.count/kind`、`blockedReason`。
+
+### Docs
+- README 更新 sandbox 子音回答規則與 debug 欄位。
+- PR_NOTES 更新本次 PASS/FAIL。
+
 ## 2026-03-04（sandbox_story Night1 word reveal pipeline）
 
 ### Changed

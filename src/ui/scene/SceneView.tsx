@@ -296,12 +296,18 @@ declare global {
         consonant?: {
           nodeChar?: string;
           promptText?: string;
+          promptCurrent?: string;
           parse?: {
             ok?: boolean;
             matchedChar?: string;
             kind?: string;
             matchedAlias?: string;
             inputNorm?: string;
+          };
+          judge?: {
+            lastInput?: string;
+            lastResult?: string;
+            timeoutEnabled?: boolean;
           };
         };
       };

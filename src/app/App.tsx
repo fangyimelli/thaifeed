@@ -57,7 +57,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import WordRevealOverlay from '../ui/overlays/WordRevealOverlay';
@@ -2402,6 +2402,10 @@ export default function App() {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
         word: { reveal: { phase: sandboxState.reveal.phase, wordKey: sandboxState.reveal.wordKey } },
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
+        consonant: {
+          ...(sandboxState.consonant ?? {}),
+          judge: sandboxState.consonant.judge
+        },
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
         blockedReason: sandboxState.blocked.reason || '-'
@@ -2433,12 +2437,18 @@ export default function App() {
           consonant: {
             nodeChar: sandboxState.consonant.nodeChar ?? '-',
             promptText: sandboxState.consonant.promptText ?? '-',
+            promptCurrent: sandboxState.consonant.promptCurrent ?? '-',
             parse: {
               ok: sandboxState.consonant.parse.ok,
               matchedChar: sandboxState.consonant.parse.matchedChar ?? '-',
               kind: sandboxState.consonant.parse.kind ?? '-',
               matchedAlias: sandboxState.consonant.parse.matchedAlias ?? '-',
               inputNorm: sandboxState.consonant.parse.inputNorm ?? '-'
+            },
+            judge: {
+              lastInput: sandboxState.consonant.judge.lastInput || '-',
+              lastResult: sandboxState.consonant.judge.lastResult,
+              timeoutEnabled: sandboxState.consonant.judge.timeoutEnabled
             }
           }
         },
@@ -3071,9 +3081,10 @@ export default function App() {
         const node = sandboxModeRef.current.getCurrentNode();
         if (sandboxState.scheduler.phase === 'pinnedFreezeAwaitConsonant' && node) {
           const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: node.char, node });
-          sandboxModeRef.current.commitConsonantParseResult(parsed);
+          const judge = judgeClassicConsonantAnswer(raw, { nodeChar: node.char, node });
+          sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
           const latest = sandboxModeRef.current.getState();
-          if (parsed.ok && parsed.matchedChar === node.char) {
+          if (judge === 'correct' && parsed.matchedChar === node.char) {
             clearChatFreeze('sandbox_consonant_correct');
             setChatAutoPaused(false);
             sandboxConsonantPromptNodeIdRef.current = null;
@@ -3082,8 +3093,21 @@ export default function App() {
             tagSlowActiveRef.current = false;
             setInput('');
             return markSent('sandbox_consonant_correct');
+          }
+          clearChatFreeze(`sandbox_consonant_${judge}`);
+          setChatAutoPaused(false);
+          if (judge === 'unknown') {
+            const unknownReply = `@${activeUserInitialHandleRef.current || 'you'} 收到「不知道」，我們先看提示，等等進下一段。`;
+            dispatchChatMessage({
+              id: crypto.randomUUID(),
+              username: sandboxConsonantTagOwnerRef.current || 'mod_live',
+              text: unknownReply,
+              language: 'zh',
+              translation: unknownReply
+            }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_unknown' });
+            sandboxModeRef.current.forceWave('related');
           } else {
-            const retry = `@${activeUserInitialHandleRef.current || 'you'} 我沒抓到子音，再試一次（泰文/拼音/注音都可）`;
+            const retry = `@${activeUserInitialHandleRef.current || 'you'} 判定=${judge}，再試一次：直接輸入子音 keyword，或回覆「不知道」。`;
             dispatchChatMessage({
               id: crypto.randomUUID(),
               username: sandboxConsonantTagOwnerRef.current || 'mod_live',
@@ -3091,20 +3115,20 @@ export default function App() {
               language: 'zh',
               translation: retry
             }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_retry' });
-            const prompt = latest.consonant.promptText || getClassicConsonantPrompt({ nodeChar: node.char, node }).promptText;
-            const line = `@${activeUserInitialHandleRef.current || 'you'} ${prompt.replace(/^@You\s*/i, '')}`;
+            const prompt = latest.consonant.promptText || getClassicConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUserInitialHandleRef.current || 'you' }).promptText;
             dispatchChatMessage({
               id: crypto.randomUUID(),
               username: sandboxConsonantTagOwnerRef.current || 'mod_live',
-              text: line,
+              text: prompt,
               language: 'zh',
-              translation: line
+              translation: prompt
             }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_reprompt' });
-            sendCooldownUntil.current = Date.now() + 350;
-            tagSlowActiveRef.current = false;
-            setInput('');
-            return markSent('sandbox_consonant_retry');
           }
+          sendCooldownUntil.current = Date.now() + 350;
+          tagSlowActiveRef.current = false;
+          setInput('');
+          setSandboxRevealTick(Date.now());
+          return markSent(`sandbox_consonant_${judge}`);
         }
       }
       if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
@@ -3590,10 +3614,10 @@ export default function App() {
     const tagOwner = pickOne(audience.length > 0 ? audience : ['mod_live']);
     sandboxConsonantTagOwnerRef.current = tagOwner;
 
-    const prompt = getClassicConsonantPrompt({ nodeChar: node.char, node });
+    const prompt = getClassicConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUser || 'you' });
     sandboxModeRef.current.setConsonantPromptText(prompt.promptText);
 
-    const line = `@${activeUser || 'you'} ${prompt.promptText.replace(/^@You\s*/i, '')}`;
+    const line = prompt.promptText;
     const messageId = crypto.randomUUID();
     await runTagStartFlow({
       tagMessage: {
@@ -3663,9 +3687,11 @@ export default function App() {
 
   const simulateConsonantAnswer = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
-    setInput('k');
-    void submitChat('k', 'debug_simulate');
-  }, [submitChat]);
+    const node = sandboxModeRef.current.getCurrentNode();
+    const text = input.trim() || node?.correctKeywords?.[0] || 'บ';
+    setInput(text);
+    void submitChat(text, 'debug_simulate');
+  }, [input, submitChat]);
 
   const forceAskComprehensionNow = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -4287,8 +4313,10 @@ export default function App() {
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
-                    <div>sandbox.consonant.nodeChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.nodeChar ?? '-'}</div>
+                    <div>consonant.prompt.current: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptCurrent ?? '-'}</div>
                     <div>sandbox.consonant.promptText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptText ?? '-'}</div>
+                    <div>consonant.judge.lastInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastInput ?? '-'}</div>
+                    <div>consonant.judge.lastResult: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
                     <div>sandbox.consonant.parse.ok: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.ok ?? false)}</div>
                     <div>sandbox.consonant.parse.matchedChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedChar ?? '-'}</div>
                     <div>sandbox.consonant.parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.kind ?? '-'}</div>
