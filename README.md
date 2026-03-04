@@ -943,6 +943,12 @@ npm run build
   - `Force Next Node`
   - `Force Reveal Word`
   - `Force Ghost Motion`
+  - `Trigger Random Ghost`（隨機觸發一個 ready 的鬼動事件）
+  - `Ghost Event Monitor`（每 500ms refresh，顯示 7 個事件的 `status/pre/post/cooldown/lock`）
+    - `ready`（綠色）
+    - `cooldown`（橘色）
+    - `locked`（紅色）
+  - `Ghost System`（`activeEvents` / `queue` / `lastEvent` / `cooldownCount`）
   - `Night Timeline`（顯示 `sandbox.reveal.* / sandbox.consonant.* / sandbox.ghostMotion.*`）
 - 安全保護：`mode !== "sandbox_story"` 時不渲染任何 sandbox debug tools，避免 classic engine 誤觸 sandbox controls。
 

@@ -383,6 +383,25 @@ type EventAudioStatus = {
   playingSince: number | null;
 };
 
+type GhostEventMonitorStatus = 'ready' | 'cooldown' | 'locked';
+type GhostEventMonitorRow = {
+  eventName: StoryEventKey;
+  status: GhostEventMonitorStatus;
+  cooldown: number;
+  lock: boolean;
+  preSound: string;
+  postSound: string;
+};
+type GhostEventManagerDebugState = {
+  events: GhostEventMonitorRow[];
+  ghostSystem: {
+    activeEvents: number;
+    eventQueueLength: number;
+    lastEvent: string;
+    cooldownCount: number;
+  };
+};
+
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -566,6 +585,22 @@ export default function App() {
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const [debugModeOverride, setDebugModeOverride] = useState<'classic' | 'sandbox_story' | null>(() => resolveDebugModeOverride());
   const [sandboxAutoPlayNight, setSandboxAutoPlayNight] = useState(false);
+  const [ghostEventDebugState, setGhostEventDebugState] = useState<GhostEventManagerDebugState>({
+    events: EVENT_TESTER_KEYS.map((eventName) => ({
+      eventName,
+      status: 'ready',
+      cooldown: 0,
+      lock: false,
+      preSound: EVENT_REGISTRY[eventName].preEffect?.sfxKey ?? 'none',
+      postSound: EVENT_REGISTRY[eventName].postEffect?.sfxKey ?? 'none'
+    })),
+    ghostSystem: {
+      activeEvents: 0,
+      eventQueueLength: 0,
+      lastEvent: '-',
+      cooldownCount: 0
+    }
+  });
   const eventRunnerStateRef = useRef<{ inFlight: boolean; currentEventId: string | null; pendingTimers: number[] }>({
     inFlight: false,
     currentEventId: null,
@@ -3565,6 +3600,57 @@ export default function App() {
     setDebugModeOverride(nextMode);
   }, []);
 
+  const getGhostEventManagerDebugState = useCallback((): GhostEventManagerDebugState => {
+    const now = Date.now();
+    const isLocked = Boolean(lockStateRef.current.isLocked);
+    const inFlight = Boolean(eventRunnerStateRef.current.inFlight);
+    const events = EVENT_TESTER_KEYS.map((eventName) => {
+      const def = EVENT_REGISTRY[eventName];
+      const cooldownUntil = eventCooldownsRef.current[eventName] ?? 0;
+      const cooldown = Math.max(0, cooldownUntil - now);
+      const status: GhostEventMonitorStatus = isLocked ? 'locked' : cooldown > 0 ? 'cooldown' : 'ready';
+      return {
+        eventName,
+        status,
+        cooldown,
+        lock: isLocked,
+        preSound: def.preEffect?.sfxKey ?? 'none',
+        postSound: def.postEffect?.sfxKey ?? 'none'
+      };
+    });
+    return {
+      events,
+      ghostSystem: {
+        activeEvents: inFlight ? 1 : 0,
+        eventQueueLength: eventQueueRef.current.length,
+        lastEvent: eventLastKeyRef.current,
+        cooldownCount: events.filter((entry) => entry.status === 'cooldown').length
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'sandbox_story') return;
+    const refresh = () => {
+      setGhostEventDebugState(getGhostEventManagerDebugState());
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 500);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [getGhostEventManagerDebugState, mode]);
+
+  const triggerRandomGhostEvent = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const state = getGhostEventManagerDebugState();
+    const readyEvents = state.events.filter((entry) => entry.status === 'ready').map((entry) => entry.eventName);
+    if (readyEvents.length <= 0) return;
+    const picked = pickOne(readyEvents);
+    triggerEventFromTester(picked);
+    setGhostEventDebugState(getGhostEventManagerDebugState());
+  }, [getGhostEventManagerDebugState, triggerEventFromTester]);
+
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
@@ -3868,6 +3954,32 @@ export default function App() {
                     <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>
                     <button type="button" onClick={forceRevealCurrent}>Force Reveal Word</button>
                     <button type="button" onClick={forceGhostMotionNow}>Force Ghost Motion</button>
+                    <button type="button" onClick={triggerRandomGhostEvent}>Trigger Random Ghost</button>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Ghost Event Monitor</strong></div>
+                    {ghostEventDebugState.events.map((entry) => (
+                      <div key={entry.eventName}>
+                        <div>
+                          <strong>{entry.eventName}</strong>{' '}
+                          <span style={{ color: entry.status === 'ready' ? '#67e8a5' : entry.status === 'cooldown' ? '#f6ad55' : '#ff7b7b' }}>
+                            {entry.status}
+                          </span>
+                        </div>
+                        <div>status: {entry.status}</div>
+                        <div>pre: {entry.preSound}</div>
+                        <div>post: {entry.postSound}</div>
+                        <div>cooldown: {entry.cooldown}</div>
+                        <div>lock: {String(entry.lock)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Ghost System</strong></div>
+                    <div>activeEvents: {ghostEventDebugState.ghostSystem.activeEvents}</div>
+                    <div>queue: {ghostEventDebugState.ghostSystem.eventQueueLength}</div>
+                    <div>lastEvent: {ghostEventDebugState.ghostSystem.lastEvent}</div>
+                    <div>cooldownCount: {ghostEventDebugState.ghostSystem.cooldownCount}</div>
                   </div>
                   <div className="debug-route-meta">
                     <div><strong>Night Timeline</strong></div>
