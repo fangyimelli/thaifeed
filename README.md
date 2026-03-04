@@ -258,6 +258,32 @@ npm run build
   - 點主畫面影片右上角 `Debug` 小按鈕即可開啟 overlay 面板（不使用 `/debug` route）。
   - Event Tester 固定可用；`?debug=1` 仍可開啟額外 SceneView 診斷欄位。
 - 按鈕用途：
+
+## Sandbox Reveal（強制 A 單一路徑）
+
+- Reveal 期間只允許 **1 個 overlay**（`WordRevealOverlay`）；題目子音泡泡會暫時隱藏，避免雙泡泡疊加。
+- Overlay 文字固定為 `baseGrapheme + restText` 同一行顯示，`base/rest` 共用 `revealGlyph`（同 `font-size/line-height`）。
+- 動畫順序固定：`enter → pulse(2x) → exit`。
+  - pulse：base/rest 同步閃爍（同父層動畫）
+  - exit：base/rest 一起 `scale(1→1.18) + opacity(1→0)` 淡出
+- Thai grapheme 拆分規則：
+  - 優先 `Intl.Segmenter('th', { granularity:'grapheme' })`
+  - fallback `Array.from()`
+
+### Sandbox Debug 必看欄位
+
+- `word.reveal.phase`
+- `word.reveal.baseGrapheme`
+- `word.reveal.restText`
+- `word.reveal.restLen`
+- `word.reveal.splitter` (`segmenter|arrayfrom`)
+- `ui.consonantBubble.visible`（reveal 期間必須 `false`）
+- `sandbox.hint.lastText`（unknown/wrong 後必須非空）
+- `lastWave.count / lastWave.kind`（correct 後 related 3~6）
+
+## README Removed/Deprecated Log
+
+- 2026-03-04（sandbox only）：移除 reveal `renderMode(pair|fullWord)` 雙路徑，改為強制 A（單一 overlay + 同步動畫）；不再以 B（完整單字替代）作為預設或保底。
   - `▶ Force LOOP`：直接呼叫 `switchTo('oldhouse_room_loop')`。
   - `▶ Force LOOP2`：直接呼叫 `switchTo('oldhouse_room_loop2')`。
   - `▶ Force MAIN`：直接呼叫 `switchTo('oldhouse_room_loop3')`。

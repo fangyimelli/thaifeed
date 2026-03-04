@@ -19,7 +19,7 @@ import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
 import { isDebugEnabled } from '../../debug/debugGate';
-import WordRevealOverlay, { type WordRevealOverlayPhase, type WordRevealRenderMode } from '../overlays/WordRevealOverlay';
+import WordRevealOverlay, { type WordRevealOverlayPhase } from '../overlays/WordRevealOverlay';
 
 export type SceneMissingAsset = {
   name: string;
@@ -53,9 +53,8 @@ type Props = {
   wordReveal?: {
     visible: boolean;
     phase: WordRevealOverlayPhase;
-    renderMode: WordRevealRenderMode;
     wordText: string;
-    baseConsonant: string;
+    baseText: string;
     appendedText: string;
   };
 };
@@ -1848,6 +1847,7 @@ export default function SceneView({
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
+  const consonantBubbleVisible = !(wordReveal?.visible && wordReveal.phase !== 'idle' && wordReveal.phase !== 'done');
 
   return (
     <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
@@ -1915,24 +1915,25 @@ export default function SceneView({
               left: `${anchorPos.left}%`
             }}
           >
-          <span
-            className="glyph-blink"
-            style={{
-              filter: `contrast(${1 + curse / 180})`,
-              opacity: pulseOpacity,
-              textShadow: `0 0 ${18 + curse / 3}px rgba(134, 217, 255, ${0.7 + curse / 300}), 0 0 ${40 + curse / 2}px rgba(88, 162, 255, ${0.45 + curse / 250})`,
-              animationDuration: `${Math.max(0.45, 1.1 - curse / 200)}s`,
-              transform: `scale(${pulseStrength})`
-            }}
-          >
-            {targetConsonant}
-          </span>
+          {consonantBubbleVisible && (
+            <span
+              className="glyph-blink"
+              style={{
+                filter: `contrast(${1 + curse / 180})`,
+                opacity: pulseOpacity,
+                textShadow: `0 0 ${18 + curse / 3}px rgba(134, 217, 255, ${0.7 + curse / 300}), 0 0 ${40 + curse / 2}px rgba(88, 162, 255, ${0.45 + curse / 250})`,
+                animationDuration: `${Math.max(0.45, 1.1 - curse / 200)}s`,
+                transform: `scale(${pulseStrength})`
+              }}
+            >
+              {targetConsonant}
+            </span>
+          )}
             <WordRevealOverlay
               visible={Boolean(wordReveal?.visible)}
               phase={wordReveal?.phase ?? 'idle'}
-              renderMode={wordReveal?.renderMode ?? 'fullWord'}
               wordText={wordReveal?.wordText ?? ''}
-              baseConsonant={wordReveal?.baseConsonant ?? ''}
+              baseText={wordReveal?.baseText ?? ''}
               appendedText={wordReveal?.appendedText ?? ''}
             />
           </div>

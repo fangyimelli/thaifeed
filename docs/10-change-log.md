@@ -381,3 +381,17 @@
 ### Docs
 - README 補上 sandbox WordRevealOverlay A/B 規格、動畫時序、debug 欄位與 Removed/Deprecated 記錄。
 - PR_NOTES 更新本次驗收項目（尺寸/脈衝/退場/首字上色/Classic isolation）與 debug 值範例。
+
+## 2026-03-04（sandbox reveal 強制 A：單一 overlay、同字級同步動畫）
+
+### Changed
+- [sandbox/reveal] 強制改為 A 模式：reveal 期間只渲染單一 `WordRevealOverlay`，並隱藏題目子音泡泡（避免「子音泡泡 + 補字泡泡」雙元素並存）。
+- [sandbox/reveal] Overlay 文字結構固定 `revealGlyph--base + revealGlyph--rest`，兩段共享 `revealGlyph` 字級與行高（同大小）。
+- [sandbox/reveal] pulse/exit 動畫統一作用於父層：`2x pulse` 後 `scale(1→1.18) + opacity(1→0) + translateY`，base/rest 同步閃爍並一起放大淡出。
+- [sandbox/grapheme] 新增 Thai grapheme splitter：優先 `Intl.Segmenter('th', { granularity:'grapheme' })`，不支援時 fallback `Array.from()`。
+- [sandbox/reveal-data] reveal state 與 debug 欄位改為 `baseGrapheme/restText/restLen/splitter`；correct 取完整 rest，wrong/unknown 取提示用 rest（1~2 grapheme 或節點 hint）。
+- [sandbox/flow] reveal phase tick 改為只看 `reveal.visible`，因此 wrong/unknown 也會完整跑 A 動畫，結束後回 `awaitingAnswer`。
+- [sandbox/debug] 新增 `ui.consonantBubble.visible`、`word.reveal.baseGrapheme`、`word.reveal.restText`、`word.reveal.restLen`、`word.reveal.splitter`。
+
+### Removed
+- [sandbox/deprecated] 移除 reveal `renderMode(fullWord/pair)` 分流；本次固定單一路徑 A，不再保留 B 作為預設/保底。

@@ -10,7 +10,7 @@ export type SandboxStoryPhase =
   | 'awaitingWave';
 
 export type SandboxRevealPhase = 'idle' | 'enter' | 'pulse' | 'exit' | 'done';
-export type SandboxRevealRenderMode = 'pair' | 'fullWord';
+export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
 
 export type SandboxFearDebugState = {
   fearLevel: number;
@@ -76,9 +76,10 @@ export type SandboxStoryState = {
     highlightChar: string;
     baseConsonant: string;
     appended: string;
-    renderMode: SandboxRevealRenderMode;
-    baseChar: string;
-    restTextLen: number;
+    baseGrapheme: string;
+    restText: string;
+    restLen: number;
+    splitter: SandboxRevealSplitter;
     mode: 'correct' | 'wrong' | 'unknown';
     audioKey: string;
     startedAt: number;
@@ -167,9 +168,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       highlightChar: '',
       baseConsonant: '',
       appended: '',
-      renderMode: 'fullWord',
-      baseChar: '',
-      restTextLen: 0,
+      baseGrapheme: '',
+      restText: '',
+      restLen: 0,
+      splitter: 'arrayfrom',
       mode: 'correct',
       audioKey: '',
       startedAt: 0,
@@ -200,32 +202,28 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     }
   };
 
-
-  const splitGraphemes = (text: string) => Array.from(text || '');
-  const DEFAULT_REVEAL_RENDER_MODE: SandboxRevealRenderMode = 'fullWord';
-  const COMBINING_MARK_REGEX = /\p{Mark}/u;
-  const shouldFallbackToFullWord = (text: string, baseConsonant: string) => {
-    const wordGraphemes = splitGraphemes(text);
-    const baseGraphemes = splitGraphemes(baseConsonant);
-    const firstWordGrapheme = wordGraphemes[0] ?? '';
-    const firstBaseGrapheme = baseGraphemes[0] ?? '';
-    if (!firstWordGrapheme) return true;
-    if (!firstBaseGrapheme) return true;
-    if (baseGraphemes.length !== 1) return true;
-    if (firstWordGrapheme !== firstBaseGrapheme) return true;
-    const secondWordGrapheme = wordGraphemes[1] ?? '';
-    if (secondWordGrapheme && COMBINING_MARK_REGEX.test(secondWordGrapheme)) return true;
-    return false;
+  const splitGraphemes = (text: string): { graphemes: string[]; splitter: SandboxRevealSplitter } => {
+    const IntlWithSegmenter = Intl as unknown as { Segmenter?: new (locale: string, opts: { granularity: 'grapheme' }) => { segment: (input: string) => Iterable<{ segment: string }> } };
+    if (typeof Intl !== 'undefined' && typeof IntlWithSegmenter.Segmenter !== 'undefined') {
+      const segmenter = new IntlWithSegmenter.Segmenter('th', { granularity: 'grapheme' });
+      return {
+        graphemes: [...segmenter.segment(text || '')].map((entry) => entry.segment),
+        splitter: 'segmenter'
+      };
+    }
+    return {
+      graphemes: Array.from(text || ''),
+      splitter: 'arrayfrom'
+    };
   };
   const pickAppendedByNode = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
     if (!node) return '';
-    const all = splitGraphemes(node.wordText);
-    const baseLen = splitGraphemes(node.char).length || 1;
-    const appended = all.slice(baseLen).join('');
+    const all = splitGraphemes(node.wordText).graphemes;
+    const appended = all.slice(1).join('');
     if (mode === 'correct') return appended;
     if (node.hintAppend) return node.hintAppend;
     const hintLen = Math.max(1, Math.min(2, node.hintAppendPrefixLen ?? 2));
-    return splitGraphemes(appended).slice(0, hintLen).join('');
+    return splitGraphemes(appended).graphemes.slice(0, hintLen).join('');
   };
 
   const syncPromptMismatch = () => {
@@ -269,21 +267,22 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const startReveal = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
     if (!node) return;
     if (mode === 'correct') state.scheduler.phase = 'revealingWord';
-    const wordGraphemes = splitGraphemes(node.wordText);
-    const baseChar = wordGraphemes[0] ?? '';
-    const restTextLen = Math.max(0, wordGraphemes.length - 1);
-    const canUsePair = !shouldFallbackToFullWord(node.wordText, node.char);
-    const renderMode: SandboxRevealRenderMode = canUsePair ? DEFAULT_REVEAL_RENDER_MODE : 'fullWord';
+    const splitWord = splitGraphemes(node.wordText);
+    const wordGraphemes = splitWord.graphemes;
+    const baseGrapheme = wordGraphemes[0] ?? '';
+    const restText = pickAppendedByNode(node, mode);
+    const restLen = splitGraphemes(restText).graphemes.length;
     state.reveal = {
       visible: true,
       phase: 'enter',
       text: node.wordText,
       highlightChar: node.char,
       baseConsonant: node.char,
-      appended: pickAppendedByNode(node, mode),
-      renderMode,
-      baseChar,
-      restTextLen,
+      appended: restText,
+      baseGrapheme,
+      restText,
+      restLen,
+      splitter: splitWord.splitter,
       mode,
       audioKey: node.audioKey,
       startedAt: Date.now(),
@@ -322,7 +321,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     onPlayerReply() { syncFear(); },
     tick() {
-      if (state.scheduler.phase === 'revealingWord') {
+      if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
         state.reveal.phase = elapsed < 200 ? 'enter' : elapsed < 1200 ? 'pulse' : elapsed < 2100 ? 'exit' : 'done';
       }
