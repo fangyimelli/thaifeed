@@ -1732,3 +1732,21 @@ Console（debug 模式）可觀察：
 
 ### README Removed/Deprecated Log
 - 2026-03-04（sandbox only）：移除舊 `WordRevealOverlay`（含底色文字框樣式 `word-reveal-overlay / revealText / revealGlyph`），統一改為 `SandboxWordRevealText` 純文字疊層渲染。
+
+## 2026-03-04（sandbox only：英文/注音輸入修復 + prompt glyph 藍色恢復）
+
+- sandbox_story 子音答題輸入改為寬鬆 normalize：保留英文（A/B/C）、數字（1/2/3）、注音（U+3100–U+312F + ˇˊˋ˙）、中文、空白與常見標點，不再於 normalize 階段清空英文字或注音。
+- sandbox parser 新增對應：`A/a/1 -> A`、`B/b/2 -> B`、`C/c/3 -> C`；`不知道/不確定/idk/?/？ -> unknown`。
+- 當送出後 normalize 為空字串時，sandbox 會阻擋推題並記錄 `blockedReason=input_sanitized_to_empty`，同時顯示提示文字（對齊 classic 提示路徑）。
+- sandbox prompt glyph（題目子音）恢復藍色 token，並限定於 `.video-area.sandbox-story-mode .sandbox-story-prompt-glyph` 作用域，不影響 classic。
+- sandbox debug 新增/擴充：
+  - `input.raw`（`sandbox.consonant.parse.inputRaw`）
+  - `input.norm`（`sandbox.consonant.parse.inputNorm`）
+  - `input.allowedSetsHit`（latin/bopomofo/thai/cjk）
+  - `parser.kind`（使用 `judge.lastResult`）
+  - `parser.matched`（`A|B|C|unknown|keyword`）
+  - `blockedReason`（含 `input_sanitized_to_empty|parse_none|phaseBusy|...`）
+  - `ui.promptGlyph.className/colorResolved/opacityResolved/source/isBlueExpected`
+
+### README Removed/Deprecated Log
+- 2026-03-04：本次為 sandbox 輸入/樣式整合修正，無新增移除項。

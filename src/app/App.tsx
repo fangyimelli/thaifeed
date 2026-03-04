@@ -57,7 +57,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, normalizeSandboxConsonantInput, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
 import { buildConsonantHint } from '../shared/hints/consonantHint';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
@@ -2522,6 +2522,13 @@ export default function App() {
         ui: {
           consonantBubble: {
             visible: !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
+          },
+          promptGlyph: {
+            className: 'glyph-blink sandbox-story-prompt-glyph',
+            colorResolved: '#8fd6ff',
+            opacityResolved: !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done') ? 'dynamic' : '0',
+            source: 'cssVar',
+            isBlueExpected: true
           }
         },
         word: {
@@ -2668,7 +2675,11 @@ export default function App() {
               matchedChar: sandboxState.consonant.parse.matchedChar ?? '-',
               kind: sandboxState.consonant.parse.kind ?? '-',
               matchedAlias: sandboxState.consonant.parse.matchedAlias ?? '-',
-              inputNorm: sandboxState.consonant.parse.inputNorm ?? '-'
+              inputNorm: sandboxState.consonant.parse.inputNorm ?? '-',
+              inputRaw: sandboxState.consonant.parse.inputRaw ?? '-',
+              allowedSetsHit: sandboxState.consonant.parse.allowedSetsHit,
+              matched: sandboxState.consonant.parse.matched ?? '-',
+              blockedReason: sandboxState.consonant.parse.blockedReason ?? '-'
             },
             judge: {
               lastInput: sandboxState.consonant.judge.lastInput || '-',
@@ -3391,13 +3402,39 @@ export default function App() {
           ? sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === currentPrompt.wordKey) ?? null
           : null;
         if (sandboxState.scheduler.phase === 'awaitingAnswer' && node && currentPrompt?.kind === 'consonant') {
+          const normalizedInput = normalizeSandboxConsonantInput(raw);
           const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
           const parseKind = parsed.debug?.kind ?? '';
           let judge = judgeClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
+          if (!normalizedInput.norm) {
+            parsed.debug = {
+              ...(parsed.debug ?? {}),
+              inputRaw: normalizedInput.raw,
+              inputNorm: normalizedInput.norm,
+              blockedReason: 'input_sanitized_to_empty',
+              normalize: normalizedInput
+            };
+            sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge: 'wrong' });
+            showHintForCurrentPrompt({
+              judge: 'wrong',
+              currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey }
+            });
+            sendCooldownUntil.current = Date.now() + 350;
+            tagSlowActiveRef.current = false;
+            setInput('');
+            setSandboxRevealTick(Date.now());
+            return markSent('sandbox_consonant_blocked_empty');
+          }
           if (!parsed.ok || parseKind === 'none') {
             judge = judge === 'unknown' ? 'unknown' : 'wrong';
             sandboxModeRef.current.commitAdvanceBlockedReason('parse_none');
           }
+          parsed.debug = {
+            ...(parsed.debug ?? {}),
+            inputRaw: normalizedInput.raw,
+            inputNorm: normalizedInput.norm,
+            normalize: normalizedInput
+          };
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
           if (judge === 'correct' && parsed.matchedChar === currentPrompt.consonant) {
             applySandboxCorrect({ input: raw, matchedChar: parsed.matchedChar, source: 'real_answer' });
@@ -4307,7 +4344,7 @@ export default function App() {
             <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
           </div>
         </header>
-        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'}`}>
+        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'} ${mode === 'sandbox_story' ? 'sandbox-story-mode' : ''}`}>
           <button type="button" className="video-debug-toggle" onClick={() => setDebugOpen((prev) => !prev)} aria-expanded={debugOpen}>
             Debug
           </button>
@@ -4319,6 +4356,7 @@ export default function App() {
               isDesktopLayout={isDesktopLayout}
               appStarted={appStarted}
               blackoutState={blackoutState}
+              mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : 'classic'}
               wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
                 const st = sandboxModeRef.current.getState();
                 return {
@@ -4656,6 +4694,11 @@ export default function App() {
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
                     <div>ui.consonantBubble.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.consonantBubble?.visible ?? true)}</div>
+                    <div>ui.promptGlyph.className: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.className ?? '-'}</div>
+                    <div>ui.promptGlyph.colorResolved: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.colorResolved ?? '-'}</div>
+                    <div>ui.promptGlyph.opacityResolved: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.opacityResolved ?? '-'}</div>
+                    <div>ui.promptGlyph.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.source ?? '-'}</div>
+                    <div>ui.promptGlyph.isBlueExpected: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.isBlueExpected ?? false)}</div>
                     <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
                     <div>word.reveal.rest: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'}</div>
                     <div>word.reveal.restLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restLen ?? '-'}</div>
@@ -4675,7 +4718,12 @@ export default function App() {
                     <div>sandbox.consonant.parse.matchedChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedChar ?? '-'}</div>
                     <div>sandbox.consonant.parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.kind ?? '-'}</div>
                     <div>sandbox.consonant.parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedAlias ?? '-'}</div>
+                    <div>sandbox.consonant.parse.inputRaw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputRaw ?? '-'}</div>
                     <div>sandbox.consonant.parse.inputNorm: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputNorm ?? '-'}</div>
+                    <div>sandbox.consonant.parse.allowedSetsHit: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.allowedSetsHit ?? null)}</div>
+                    <div>sandbox.parser.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
+                    <div>sandbox.parser.matched: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matched ?? '-'}</div>
+                    <div>sandbox.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.blockedReason ?? '-'}</div>
                     <div>freeze.active / pinned.text: {String((window.__CHAT_DEBUG__ as any)?.chat?.freeze?.isFrozen ?? false)} / {((window.__CHAT_DEBUG__ as any)?.ui?.pinned?.textPreview ?? '-')}</div>
                     <div>audio.pronounce.lastKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.lastKey ?? '-'}</div>
                     <div>audio.pronounce.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.state ?? '-'}</div>

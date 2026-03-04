@@ -42,3 +42,12 @@
 - 事件效果執行映射：`src/events/eventEffectsRegistry.ts`（由 eventRegistry 推導，不可手動維護第二份真值）。
 - 音效資源 SSOT：`src/audio/SfxRegistry.ts`。
 - Debug 資源對照來源：`src/ui/scene/SceneView.tsx`（loaded audio keys vs event referenced keys vs missing diff）。
+
+## 2026-03-04（sandbox input + prompt glyph）SSOT 補充
+
+- sandbox 子音題輸入 normalize / parser SSOT：`src/modes/sandbox_story/classicConsonantAdapter.ts`
+  - `normalizeSandboxConsonantInput()`
+  - `tryParseClassicConsonantAnswer()`
+  - `judgeClassicConsonantAnswer()`
+- sandbox 子音題 parse/debug state SSOT：`src/modes/sandbox_story/sandboxStoryMode.ts` 的 `state.consonant.parse`。
+- sandbox prompt glyph 顏色 token 與 scope SSOT：`src/styles.css` 的 `.video-area.sandbox-story-mode .sandbox-story-prompt-glyph`。
