@@ -54,3 +54,28 @@
 - Debug fields checked: yes（已確認新增欄位可由 sandbox debug 寫入）
 - Desktop check: build pass
 - Mobile check: build pass（RWD CSS 規則已同步）
+
+## 2026-03-04 sandbox_story reveal 視覺語言修正（純文字 + 隨機位置）
+
+### Scope / Isolation
+- 僅變更 sandbox_story reveal（UI + state + debug）。
+- classic mode 未改。
+
+### Root Cause
+1. reveal 綁定在固定 anchor，導致每次出現在同位置。
+2. reveal 使用帶背景的 overlay 風格，視覺上像另一顆 bubble，不像同一單字。
+
+### Fix Summary
+- 新增 `SandboxWordRevealText` 純文字 overlay，base/rest 同一容器與同字體字級。
+- scheduler 進入 reveal 時一次性抽樣位置（safeRect 內），並寫入 state。
+- debug 增補 `word.reveal.position.*` + `safeRect`；reveal 期間 `ui.consonantBubble.visible=false`。
+- 移除舊 `WordRevealOverlay` 與舊 reveal 文字框 CSS。
+
+### Acceptance
+| Item | Result | Note |
+|---|---|---|
+| 1) reveal 無底色、無泡泡、像文字自然浮現 | PASS | 新 overlay 純文字，無背景/邊框。
+| 2) base/rest 同字體同大小，看起來一個單字 | PASS | 共用同容器字體字級 line-height。
+| 3) 連續 5 次 reveal，至少 3 個不同區域 | PASS | 每次 reveal 抽新 `(xPct,yPct)`，debug 可見。
+| 4) reveal 不遮 pinned / 不超出畫面 | PASS | safeRect `x:8~92, y:8~74` 避開底部區塊。
+| 5) Classic Isolation | PASS | 僅 sandbox_story 相關檔案變更。

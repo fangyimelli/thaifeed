@@ -84,6 +84,16 @@ export type SandboxStoryState = {
     audioKey: string;
     startedAt: number;
     wordKey: string;
+    position: {
+      xPct: number;
+      yPct: number;
+    };
+    safeRect: {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    };
   };
   ghostMotion: { lastId: string | null; state: 'idle' | 'playing' };
   ghostGate: { lastReason: string };
@@ -147,6 +157,18 @@ export type SandboxStoryMode = GameMode & {
 
 const cloneScript = (script: NightScript): NightScript => JSON.parse(JSON.stringify(script)) as NightScript;
 
+const REVEAL_SAFE_RECT = {
+  minX: 8,
+  maxX: 92,
+  minY: 8,
+  maxY: 74
+} as const;
+
+const randomPct = (min: number, max: number): number => {
+  if (max <= min) return min;
+  return Math.random() * (max - min) + min;
+};
+
 export function createSandboxStoryMode(): SandboxStoryMode {
   let script: NightScript = cloneScript(NIGHT1);
   const maxFear = 100;
@@ -175,7 +197,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       mode: 'correct',
       audioKey: '',
       startedAt: 0,
-      wordKey: ''
+      wordKey: '',
+      position: { xPct: 50, yPct: 36 },
+      safeRect: { ...REVEAL_SAFE_RECT }
     },
     ghostMotion: { lastId: null, state: 'idle' },
     ghostGate: { lastReason: 'init' },
@@ -272,6 +296,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     const baseGrapheme = wordGraphemes[0] ?? '';
     const restText = pickAppendedByNode(node, mode);
     const restLen = splitGraphemes(restText).graphemes.length;
+    const position = {
+      xPct: randomPct(REVEAL_SAFE_RECT.minX, REVEAL_SAFE_RECT.maxX),
+      yPct: randomPct(REVEAL_SAFE_RECT.minY, REVEAL_SAFE_RECT.maxY)
+    };
     state.reveal = {
       visible: true,
       phase: 'enter',
@@ -286,7 +314,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       mode,
       audioKey: node.audioKey,
       startedAt: Date.now(),
-      wordKey: node.id
+      wordKey: node.id,
+      position,
+      safeRect: { ...REVEAL_SAFE_RECT }
     };
   };
 

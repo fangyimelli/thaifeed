@@ -19,7 +19,7 @@ import { audioEngine } from '../../audio/AudioEngine';
 import { SFX_REGISTRY, type SfxKey } from '../../audio/SfxRegistry';
 import { distanceApproachPlayer, playSfxApproach, type PlayResult } from '../../audio/distanceApproach';
 import { isDebugEnabled } from '../../debug/debugGate';
-import WordRevealOverlay, { type WordRevealOverlayPhase } from '../overlays/WordRevealOverlay';
+import SandboxWordRevealText, { type SandboxWordRevealTextPhase } from '../overlays/SandboxWordRevealText';
 
 export type SceneMissingAsset = {
   name: string;
@@ -52,10 +52,10 @@ type Props = {
   onSceneError?: (error: SceneInitError) => void;
   wordReveal?: {
     visible: boolean;
-    phase: WordRevealOverlayPhase;
-    wordText: string;
+    phase: SandboxWordRevealTextPhase;
     baseText: string;
-    appendedText: string;
+    restText: string;
+    position: { xPct: number; yPct: number };
   };
 };
 
@@ -1929,14 +1929,14 @@ export default function SceneView({
               {targetConsonant}
             </span>
           )}
-            <WordRevealOverlay
-              visible={Boolean(wordReveal?.visible)}
-              phase={wordReveal?.phase ?? 'idle'}
-              wordText={wordReveal?.wordText ?? ''}
-              baseText={wordReveal?.baseText ?? ''}
-              appendedText={wordReveal?.appendedText ?? ''}
-            />
           </div>
+          <SandboxWordRevealText
+            visible={Boolean(wordReveal?.visible)}
+            phase={wordReveal?.phase ?? 'idle'}
+            baseText={wordReveal?.baseText ?? ''}
+            restText={wordReveal?.restText ?? ''}
+            position={wordReveal?.position}
+          />
           <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
         </div>
 
