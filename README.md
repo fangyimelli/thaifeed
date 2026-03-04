@@ -1685,3 +1685,18 @@ Console（debug 模式）可觀察：
 
 ### README Removed/Deprecated Log
 - 2026-03-04（sandbox only）：移除舊 `WordRevealOverlay`（含底色文字框樣式 `word-reveal-overlay / revealText / revealGlyph`），統一改為 `SandboxWordRevealText` 純文字疊層渲染。
+
+## 2026-03-04 sandbox_story reveal Prompt Glyph Style Token 對齊
+
+- 範圍：**僅 sandbox_story reveal 視覺鏈路**（題目子音與 reveal 共用 token）。
+- 新增 `Prompt Glyph Style Token`（themeToken 來源），統一 `baseColor / opacity / glowCss / filterCss`。
+- reveal 改為同一個 opacity 來源：父層套 `opacity=token.opacity`，base/rest 不再各自設 opacity。
+- reveal `base` 直接使用題目子音 token 色；`rest` 使用白色透明（`rgba(255,255,255, token.opacity)`）。
+- Debug 新增：
+  - `word.reveal.style.baseColor`
+  - `word.reveal.style.opacity`
+  - `word.reveal.style.restColorResolved`
+  - `word.reveal.style.source`（`themeToken`）
+
+### README Removed/Deprecated Log（update）
+- 2026-03-04（sandbox only）：移除 reveal 內獨立藍色/陰影來源，改為完全引用 Prompt Glyph Style Token（避免題目子音與 reveal 配色漂移）。

@@ -79,3 +79,44 @@
 | 3) 連續 5 次 reveal，至少 3 個不同區域 | PASS | 每次 reveal 抽新 `(xPct,yPct)`，debug 可見。
 | 4) reveal 不遮 pinned / 不超出畫面 | PASS | safeRect `x:8~92, y:8~74` 避開底部區塊。
 | 5) Classic Isolation | PASS | 僅 sandbox_story 相關檔案變更。
+
+## 2026-03-04 sandbox_story reveal 色彩/透明度整合（Prompt Glyph Style Token）
+
+### Scope / Isolation
+- 僅調整 sandbox reveal 與其 debug 可觀測欄位。
+- classic mode 未改。
+
+### Changed
+- 新增 `src/modes/sandbox_story/ui/promptGlyphStyle.ts`：
+  - `GlyphStyleToken`（`baseColor`, `opacity`, `glowCss`, `filterCss`, `source`）
+  - `buildSandboxPromptGlyphStyleToken({ curse, opacity })`
+  - `buildRevealRestColor(opacity)`
+- `SceneView` 題目子音與 reveal 共用同一個 token。
+- `SandboxWordRevealText` 父層統一套用 opacity/glow/filter；base 使用 token.baseColor；rest 使用白色透明（alpha=token.opacity）。
+- 移除 reveal CSS 內舊的獨立藍色與 text-shadow。
+- debug 新增：
+  - `word.reveal.style.baseColor`
+  - `word.reveal.style.opacity`
+  - `word.reveal.style.restColorResolved`
+  - `word.reveal.style.source`
+
+### SSOT
+- [ ] No SSOT changes
+- [x] SSOT changed
+  - `src/modes/sandbox_story/ui/promptGlyphStyle.ts`
+    - reveal 與 prompt consonant 共用樣式 token SSOT（themeToken）
+
+### Debug 欄位變更紀錄
+- Added
+  - `word.reveal.style.baseColor`
+  - `word.reveal.style.opacity`
+  - `word.reveal.style.restColorResolved`
+  - `word.reveal.style.source`
+- Removed
+  - 無（僅移除 reveal 內硬編碼視覺值，不移除 debug 欄位）
+
+### Acceptance（本次）
+1) 單字內 base（子音）顏色與題目子音完全一致：PASS
+2) base 與 rest 的透明度一致（跟題目子音一致）：PASS
+3) rest 為白色但透明：PASS
+4) Classic Isolation：PASS

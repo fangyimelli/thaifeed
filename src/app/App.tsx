@@ -2479,6 +2479,10 @@ export default function App() {
               maxX: sandboxState.reveal.safeRect.maxX,
               minY: sandboxState.reveal.safeRect.minY,
               maxY: sandboxState.reveal.safeRect.maxY
+            },
+            style: {
+              ...(((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.style) ?? {}),
+              source: (((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.style?.source) ?? 'themeToken')
             }
           }
         },
@@ -4421,6 +4425,10 @@ export default function App() {
                     <div>word.reveal.position.xPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.xPct ?? '-'}</div>
                     <div>word.reveal.position.yPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.yPct ?? '-'}</div>
                     <div>word.reveal.safeRect: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.safeRect ?? {})}</div>
+                    <div>word.reveal.style.baseColor: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.style?.baseColor ?? '-'}</div>
+                    <div>word.reveal.style.opacity: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.style?.opacity ?? '-'}</div>
+                    <div>word.reveal.style.restColorResolved: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.style?.restColorResolved ?? '-'}</div>
+                    <div>word.reveal.style.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.style?.source ?? '-'}</div>
                     <div>sandbox.consonant.currentIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentIndex ?? '-'}</div>
                     <div>sandbox.consonant.currentConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentConsonant ?? '-'}</div>
                     <div>sandbox.consonant.currentWordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentWordKey ?? '-'}</div>

@@ -1,4 +1,17 @@
 
+## 2026-03-04（sandbox_story reveal glyph style token 對齊）
+
+### Changed
+- [sandbox_story/ui] 新增 `src/modes/sandbox_story/ui/promptGlyphStyle.ts`，抽出 Prompt Glyph Style Token（`baseColor/opacity/glowCss/filterCss`），source 標記為 `themeToken`。
+- [sandbox_story/scene] 題目子音（`glyph-blink`）改為使用同一 token；reveal 文字也改為引用同一 token，確保 opacity/glow/filter 一致。
+- [sandbox_story/reveal] `SandboxWordRevealText` 父層統一套用 `opacity/filter/textShadow`；`base` 用 token 顏色，`rest` 用 `rgba(255,255,255, token.opacity)`。
+- [sandbox_story/debug] 新增 `word.reveal.style.baseColor/opacity/restColorResolved/source`，並維持 source 非 hardcoded。
+- [sandbox_story/cleanup] 移除 reveal 內原本獨立藍色與 text-shadow 設定，避免與題目子音視覺漂移。
+
+### Docs
+- README、PR_NOTES 同步更新本次 token 收斂、Removed/Deprecated、SSOT 與 debug 欄位變更。
+
+
 ## 2026-03-04（sandbox consonant prompt integration）
 
 ### Changed
