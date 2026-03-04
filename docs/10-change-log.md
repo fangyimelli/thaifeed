@@ -1,3 +1,40 @@
+## 2026-03-04（sandbox_story only：submit gate + advance one-shot + classic hint shared）
+
+### Changed
+- [sandbox/submit] 在 sandbox 送出入口加上 submit gate：`sandbox.answer.submitInFlight` / `lastSubmitAt`；重複送出直接阻擋並寫入 `sandbox.advance.blockedReason=double_submit`。
+- [sandbox/advance] `advancePrompt` 與 `markWaveDone` 新增 one-shot token（`sandbox.advance.inFlight` + `sandbox.advance.lastToken`），同 token 或 inFlight 重入會擋下 `double_advance`。
+- [sandbox/prompt-ssot] prompt overlay 改為只讀 `sandbox.prompt.current`，確保「先更新 prompt.current，再渲染 UI」，修正切題時舊題閃回。
+- [sandbox/hint] unknown/wrong 提示統一改由 shared builder `src/shared/hints/consonantHint.ts` 產生；classic adapter 同步改走 shared，輸出文字不變。
+- [sandbox/input] ChatPanel 移除 Enter 與 fallback_click 的第二提交流程，Enter / 按鈕 / 手機輸入法 submit 全部統一走 form submit handler。
+- [debug] 新增驗收欄位：`sandbox.answer.submitInFlight/lastSubmitAt`、`sandbox.judge.lastInput/lastResult`、`sandbox.advance.inFlight/lastAt/lastReason/blockedReason`、`sandbox.prompt.current.id/consonant/wordKey`、`sandbox.hint.lastTextPreview/source`。
+
+### SSOT
+- [x] SSOT changed
+  - sandbox prompt 顯示單一真相改為 `sandbox.prompt.current`，overlay 不再接受外部獨立顯示狀態。
+
+### Debug 欄位變更紀錄
+- 新增：
+  - `sandbox.answer.submitInFlight`
+  - `sandbox.answer.lastSubmitAt`
+  - `sandbox.judge.lastInput`
+  - `sandbox.judge.lastResult`
+  - `sandbox.advance.inFlight`
+  - `sandbox.advance.lastAt`
+  - `sandbox.advance.lastReason`
+  - `sandbox.advance.blockedReason`
+  - `sandbox.prompt.current.id / consonant / wordKey`
+  - `sandbox.hint.lastTextPreview`
+  - `sandbox.hint.source`（固定驗證 `classic_shared`）
+
+### Acceptance
+| Item | Result |
+|---|---|
+| 1) 任意一題送出一次答案，不會要求第二次、不會舊題閃回 | PASS |
+| 2) correct：題目只切一次；單字 4 秒淡出可繼續跑 | PASS |
+| 3) unknown：顯示提示且不跳題；提示與 classic 一致 | PASS |
+| 4) PASS：只跳一次題 | PASS |
+| 5) classic mode 不受影響 | PASS |
+
 ## 2026-03-04（sandbox only：judge gate + prompt/reveal SSOT + 4s reveal）
 
 ### Changed

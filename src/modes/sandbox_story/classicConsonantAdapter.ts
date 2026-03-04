@@ -1,5 +1,6 @@
 import { normalizeInputForMatch } from '../../utils/inputNormalize';
 import type { WordNode } from '../../ssot/sandbox_story/types';
+import { buildConsonantHint } from '../../shared/hints/consonantHint';
 
 export type ClassicConsonantContext = {
   nodeChar: string;
@@ -53,6 +54,5 @@ export function judgeClassicConsonantAnswer(input: string, ctx: ClassicConsonant
 export function getHintForConsonantPrompt(ctx: ClassicConsonantContext): string {
   const expected = ctx.node?.correctKeywords?.[0] ?? ctx.nodeChar;
   const aliases = (ctx.node?.correctKeywords ?? [ctx.nodeChar]).filter(Boolean);
-  const aliasHint = aliases.length > 1 ? `（可用：${aliases.join(' / ')}）` : '';
-  return `提示：這題子音是「${expected}」${aliasHint}，請直接輸入子音；不確定可以回「不知道」。`;
+  return buildConsonantHint({ expected, aliases });
 }

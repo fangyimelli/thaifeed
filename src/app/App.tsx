@@ -58,7 +58,7 @@ import {
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
-import { getSandboxConsonantHint } from '../modes/sandbox_story/classicHintAdapter';
+import { buildConsonantHint } from '../shared/hints/consonantHint';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import { playPronounce } from '../ui/audio/PronounceAudio';
@@ -2557,12 +2557,26 @@ export default function App() {
           currentWordKey: sandboxState.reveal.wordKey || sandboxNode?.id || '-',
           judge: sandboxState.consonant.judge
         },
+        answer: {
+          submitInFlight: sandboxState.answer.submitInFlight,
+          lastSubmitAt: sandboxState.answer.lastSubmitAt || 0
+        },
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         scheduler: {
           phase: sandboxState.scheduler.phase,
           blockedReason: sandboxState.scheduler.blockedReason || '-'
         },
+        judge: {
+          lastInput: sandboxState.consonant.judge.lastInput || '-',
+          lastResult: sandboxState.consonant.judge.lastResult
+        },
         ghost: { gate: { lastReason: sandboxState.ghostGate?.lastReason ?? '-' } },
+        advance: {
+          inFlight: sandboxState.advance.inFlight,
+          lastAt: sandboxState.advance.lastAt || 0,
+          lastReason: sandboxState.advance.lastReason || '-',
+          blockedReason: sandboxState.advance.blockedReason || '-'
+        },
         prompt: {
           current: {
             kind: sandboxState.prompt.current?.kind ?? '-',
@@ -2585,24 +2599,21 @@ export default function App() {
           },
           mismatch: sandboxState.prompt.mismatch
         },
+        hint: {
+          active: sandboxState.hint.active,
+          lastText: sandboxState.hint.lastText || '-',
+          count: sandboxState.hint.count,
+          lastShownAt: sandboxState.hint.lastShownAt,
+          lastTextPreview: (sandboxState.hint.lastText || '').slice(0, 40) || '-',
+          source: sandboxState.hint.source || '-'
+        },
         footsteps: {
           probability: sandboxState.fearSystem.footsteps.probability,
           cooldownRemaining: sandboxState.fearSystem.footsteps.cooldownRemaining,
           lastAt: sandboxState.fearSystem.footsteps.lastAt
         },
-        hint: {
-          active: sandboxState.hint.active,
-          lastText: sandboxState.hint.lastText || '-',
-          count: sandboxState.hint.count,
-          lastShownAt: sandboxState.hint.lastShownAt
-        },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
         blockedReason: sandboxState.blocked.reason || '-',
-        advance: {
-          lastAt: sandboxState.advance.lastAt,
-          lastReason: sandboxState.advance.lastReason || '-',
-          blockedReason: sandboxState.advance.blockedReason || '-'
-        },
         reveal: {
           visible: sandboxState.reveal.visible,
           phase: sandboxState.reveal.phase,
@@ -3236,14 +3247,12 @@ export default function App() {
     setSandboxRevealTick(Date.now());
   }, [clearChatFreeze]);
 
-  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string }; activeUser: string }) => {
+  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string } }) => {
     const node = sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === params.currentPrompt.wordKey) ?? null;
-    const hint = getSandboxConsonantHint({ nodeChar: params.currentPrompt.consonant, node, activeUser: params.activeUser });
-    const retryPrefix = params.judge === 'unknown'
-      ? `@${params.activeUser} 收到「不知道」。`
-      : `@${params.activeUser} 這次還沒對。`;
-    const hintLine = `${retryPrefix} ${hint}`;
-    sandboxModeRef.current.commitHintText(hintLine);
+    const expected = node?.correctKeywords?.[0] ?? params.currentPrompt.consonant;
+    const aliases = (node?.correctKeywords ?? [params.currentPrompt.consonant]).filter(Boolean);
+    const hintLine = buildConsonantHint({ expected, aliases });
+    sandboxModeRef.current.commitHintText(hintLine, 'classic_shared');
     dispatchChatMessage({
       id: crypto.randomUUID(),
       username: sandboxConsonantTagOwnerRef.current || 'mod_live',
@@ -3319,6 +3328,17 @@ export default function App() {
     setReplyTarget(nextReplyTarget);
     setMentionTarget(nextMentionTarget);
 
+    let sandboxSubmitGateAcquired = false;
+    if (modeRef.current.id === 'sandbox_story') {
+      const sandboxState = sandboxModeRef.current.getState();
+      if (sandboxState.answer.submitInFlight) {
+        sandboxModeRef.current.commitAdvanceBlockedReason('double_submit');
+        return markBlocked('sandbox_double_submit');
+      }
+      sandboxSubmitGateAcquired = true;
+      sandboxModeRef.current.setSubmitInFlight(true, now);
+    }
+
     setIsSending(true);
     const submitDelayMs = randomInt(1000, 5000);
     const attemptDebug = {
@@ -3385,8 +3405,7 @@ export default function App() {
           }
           showHintForCurrentPrompt({
             judge: judge === 'unknown' ? 'unknown' : 'wrong',
-            currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey },
-            activeUser: activeUserInitialHandleRef.current || 'you'
+            currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey }
           });
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
@@ -3512,6 +3531,9 @@ export default function App() {
       logSendDebug('error', { source, errorMessage });
       return { ok: false, status: 'error', errorMessage };
     } finally {
+      if (sandboxSubmitGateAcquired && modeRef.current.id === 'sandbox_story') {
+        sandboxModeRef.current.setSubmitInFlight(false, Date.now());
+      }
       setIsSending(false);
     }
   }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, consumePlayerReply, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, showHintForCurrentPrompt, state, tryTriggerStoryEvent, updateChatDebug]);

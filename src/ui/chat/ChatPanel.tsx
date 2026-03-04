@@ -97,7 +97,6 @@ export default function ChatPanel({
   const inputRef = useRef<HTMLInputElement>(null);
   const keyboardSinkRef = useRef<HTMLButtonElement>(null);
   const inputFormRef = useRef<HTMLFormElement>(null);
-  const submitPendingRef = useRef(false);
   const idleTimer = useRef<number>(0);
   const isComposingRef = useRef(false);
   const viewportSyncUntilRef = useRef(0);
@@ -459,7 +458,6 @@ export default function ChatPanel({
         className="chat-input input-surface"
         onSubmit={(event) => {
           event.preventDefault();
-          submitPendingRef.current = false;
           void handleMessageSubmit('submit');
         }}
       >
@@ -478,9 +476,8 @@ export default function ChatPanel({
           onKeyDown={(event) => {
             const nativeIsComposing = (event.nativeEvent as KeyboardEvent).isComposing;
             const isImeEnter = event.keyCode === 229;
-            if (event.key === 'Enter' && !event.shiftKey && !isComposingRef.current && !nativeIsComposing && !isImeEnter) {
+            if (event.key === 'Enter' && !event.shiftKey && (isComposingRef.current || nativeIsComposing || isImeEnter)) {
               event.preventDefault();
-              void handleMessageSubmit('submit');
             }
           }}
           placeholder="傳送訊息"
@@ -490,12 +487,6 @@ export default function ChatPanel({
           disabled={isSending || !isReady}
           onClick={() => {
             onSendButtonClick?.();
-            submitPendingRef.current = true;
-            window.setTimeout(() => {
-              if (!submitPendingRef.current) return;
-              submitPendingRef.current = false;
-              void handleMessageSubmit('fallback_click');
-            }, 0);
           }}
         >
           {!isReady ? '初始化中…' : isSending ? '送出中…' : '送出'}

@@ -103,9 +103,10 @@ export type SandboxStoryState = {
   fearSystem: SandboxFearDebugState;
   wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
   blocked: { reason: '' | 'phaseBusy'; count: number };
-  advance: { lastAt: number; lastReason: string; blockedReason: string };
+  answer: { submitInFlight: boolean; lastSubmitAt: number };
+  advance: { inFlight: boolean; lastToken: string; lastAt: number; lastReason: string; blockedReason: string };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
-  hint: { active: boolean; lastText: string; count: number; lastShownAt: number };
+  hint: { active: boolean; lastText: string; count: number; lastShownAt: number; source: '' | 'classic_shared' };
   prompt: {
     current: SandboxPrompt | null;
     overlay: { consonantShown: string };
@@ -163,7 +164,8 @@ export type SandboxStoryMode = GameMode & {
     writerBlocked: boolean;
     blockedReason?: '' | 'notSandbox' | 'phaseBusy' | 'writerNotAllowed';
   }) => void;
-  commitHintText: (text: string) => void;
+  commitHintText: (text: string, source?: '' | 'classic_shared') => void;
+  setSubmitInFlight: (inFlight: boolean, timestamp?: number) => void;
 };
 
 const cloneScript = (script: NightScript): NightScript => JSON.parse(JSON.stringify(script)) as NightScript;
@@ -228,9 +230,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     wave: { count: 0, kind: 'related' },
     blocked: { reason: '', count: 0 },
-    advance: { lastAt: 0, lastReason: '', blockedReason: '' },
+    answer: { submitInFlight: false, lastSubmitAt: 0 },
+    advance: { inFlight: false, lastToken: '', lastAt: 0, lastReason: '', blockedReason: '' },
     audio: { lastKey: '', state: 'idle', reason: '' },
-    hint: { active: false, lastText: '', count: 0, lastShownAt: 0 },
+    hint: { active: false, lastText: '', count: 0, lastShownAt: 0, source: '' },
     prompt: {
       current: null,
       overlay: { consonantShown: '' },
@@ -372,9 +375,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.prompt.overlay.consonantShown = '';
     state.prompt.pinned.promptIdRendered = '';
     state.hint = { ...state.hint, active: false };
+    state.answer.submitInFlight = false;
   };
-  const advancePromptInternal = (reason: string) => {
-    state.advance = { lastAt: Date.now(), lastReason: reason, blockedReason: '' };
+  const advancePromptInternal = (reason: string, token: string) => {
+    state.advance = { ...state.advance, inFlight: true, lastToken: token, lastAt: Date.now(), lastReason: reason, blockedReason: '' };
     state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
     syncNodeChar();
     state.scheduler.phase = 'awaitingTag';
@@ -382,6 +386,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     resetPromptRuntimeState();
     syncPromptMismatch();
     state.mismatch.promptVsReveal = false;
+    state.advance.inFlight = false;
     syncFear();
   };
 
@@ -396,14 +401,15 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.reveal.phase = 'idle';
       state.reveal.appended = '';
       state.reveal.doneAt = 0;
-      state.hint = { active: false, lastText: '', count: 0, lastShownAt: 0 };
+      state.hint = { active: false, lastText: '', count: 0, lastShownAt: 0, source: '' };
       state.wave = { count: 0, kind: 'related' };
       state.blocked = { reason: '', count: 0 };
+      state.answer = { submitInFlight: false, lastSubmitAt: 0 };
       state.prompt.current = null;
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
       state.prompt.pinned.lastWriter = { source: 'unknown', writerBlocked: false, blockedReason: '' };
-      state.advance.blockedReason = '';
+      state.advance = { inFlight: false, lastToken: '', lastAt: 0, lastReason: '', blockedReason: '' };
       state.mismatch.promptVsReveal = false;
       syncPromptMismatch();
       syncNodeChar();
@@ -447,7 +453,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       return null;
     },
     forceAdvanceNode() {
-      state.advance = { lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
+      state.advance = { ...state.advance, inFlight: false, lastToken: '', lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       state.scheduler.phase = 'awaitingTag';
       clearSchedulerBlockedReason();
@@ -576,6 +582,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         state.advance = { ...state.advance, blockedReason: 'not_correct_or_pass', lastReason: 'blocked', lastAt: Date.now() };
         return;
       }
+      const token = `${reason}:${state.prompt.current?.promptId ?? 'none'}:${state.nodeIndex}`;
+      if (state.advance.inFlight || state.advance.lastToken === token) {
+        state.advance = { ...state.advance, blockedReason: 'double_advance', lastReason: 'blocked', lastAt: Date.now() };
+        return;
+      }
       if (state.prompt.mismatch || state.mismatch.promptVsReveal) {
         state.advance = { ...state.advance, blockedReason: 'mismatch', lastReason: 'blocked', lastAt: Date.now() };
         state.scheduler.blockedReason = 'mismatch';
@@ -584,11 +595,16 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (state.scheduler.phase === 'revealingWord' && reason === 'debug_pass') {
         resetPromptRuntimeState();
       }
-      advancePromptInternal(reason);
+      advancePromptInternal(reason, token);
     },
     markWaveDone(kind, count) {
+      const token = `wave:${kind}:${count}:${state.prompt.current?.promptId ?? 'none'}:${state.nodeIndex}`;
+      if (state.advance.inFlight || state.advance.lastToken === token) {
+        state.advance = { ...state.advance, blockedReason: 'double_advance', lastReason: 'blocked', lastAt: Date.now() };
+        return;
+      }
       state.wave = { kind, count };
-      advancePromptInternal(`markWaveDone:${kind}:${count}`);
+      advancePromptInternal(`markWaveDone:${kind}:${count}`, token);
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
     notifyBlockedByPhase() {
@@ -602,8 +618,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     setCurrentPrompt(prompt) {
       state.prompt.current = prompt;
+      state.prompt.overlay.consonantShown = prompt?.kind === 'consonant' ? prompt.consonant : '';
       if (!prompt) {
-        state.prompt.overlay.consonantShown = '';
         state.prompt.pinned.promptIdRendered = '';
       }
       syncPromptMismatch();
@@ -611,8 +627,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     getCurrentPrompt() {
       return state.prompt.current ? JSON.parse(JSON.stringify(state.prompt.current)) as SandboxPrompt : null;
     },
-    commitPromptOverlay(consonantShown) {
-      state.prompt.overlay.consonantShown = consonantShown;
+    commitPromptOverlay(_consonantShown) {
+      state.prompt.overlay.consonantShown = state.prompt.current?.kind === 'consonant' ? state.prompt.current.consonant : '';
       syncPromptMismatch();
     },
     commitPromptPinnedRendered(promptIdRendered) {
@@ -626,8 +642,15 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         blockedReason: payload.blockedReason ?? ''
       };
     },
-    commitHintText(text) {
-      state.hint = { active: Boolean(text), lastText: text, count: state.hint.count + 1, lastShownAt: Date.now() };
+    commitHintText(text, source = '') {
+      state.hint = { active: Boolean(text), lastText: text, count: state.hint.count + 1, lastShownAt: Date.now(), source };
+    },
+    setSubmitInFlight(inFlight, timestamp = Date.now()) {
+      state.answer.submitInFlight = inFlight;
+      state.answer.lastSubmitAt = timestamp;
+      if (!inFlight) {
+        state.advance.blockedReason = state.advance.blockedReason === 'double_submit' ? '' : state.advance.blockedReason;
+      }
     }
   };
 }
