@@ -590,7 +590,7 @@ body {
 .word-reveal-overlay {
   position: absolute;
   left: 50%;
-  top: clamp(18%, 24vh, 34%);
+  top: clamp(10%, 16vh, 22%);
   transform: translateX(-50%);
   z-index: 26;
   display: flex;
@@ -625,10 +625,12 @@ body {
 
 .word-reveal-overlay.phase-hold {
   opacity: 1;
+  transform: translateX(-50%) scale(1.06);
+  transition: transform 600ms ease-out;
 }
 
 .word-reveal-overlay.phase-fogOut {
-  animation: wordRevealFogOut 1200ms ease-in forwards;
+  animation: wordRevealFogOut 900ms ease-in forwards;
 }
 
 @keyframes wordRevealFadeIn {
@@ -637,6 +639,6 @@ body {
 }
 
 @keyframes wordRevealFogOut {
-  from { opacity: 1; filter: blur(0px); transform: translateY(0); clip-path: inset(0 0 0 0); }
-  to { opacity: 0; filter: blur(12px); transform: translateY(-8px); clip-path: inset(0 0 100% 0); }
+  from { opacity: 1; filter: blur(0px); transform: translateX(-50%) scale(1.08) translateY(0); clip-path: inset(0 0 0 0); }
+  to { opacity: 0; filter: blur(12px); transform: translateX(-50%) scale(1.14) translateY(-8px); clip-path: inset(0 0 100% 0); }
 }

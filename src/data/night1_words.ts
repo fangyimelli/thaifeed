@@ -18,7 +18,7 @@ export type Night1WordEntry = {
   };
 };
 
-const DEFAULT_UNKNOWN_KEYWORDS = ['不知道', '不知', '不知道欸', 'ไม่รู้'];
+const DEFAULT_UNKNOWN_KEYWORDS = ['不知道', '不知', '不確定', '不知道欸', 'ไม่รู้'];
 
 export const NIGHT1_WORDS: Night1WordEntry[] = [
   { consonant: 'บ', correctKeywords: ['บ'], unknownKeywords: DEFAULT_UNKNOWN_KEYWORDS, wordText: 'บ้าน', audioKey: 'baan', comprehension: { question: '第一塊碎片指向哪個地點？', options: ['บ้าน', 'ต้นไม้', 'ประตู', '不知道'], correct: 'บ้าน', keyword: 'บ้าน', unknown: '不知道' }, talkSeeds: { related: ['像在說房子的事', '感覺是熟悉的地方'], surprise: ['欸怎麼是บ้าน', '突然有點安靜'], guess: ['下一個可能是門邊線索', '會不會跟屋內位置有關'] } },

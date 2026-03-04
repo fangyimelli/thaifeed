@@ -57,7 +57,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getClassicConsonantPrompt, getHintForConsonantPrompt, judgeClassicConsonantAnswer, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import WordRevealOverlay from '../ui/overlays/WordRevealOverlay';
@@ -301,11 +301,9 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
-function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'chatWave' | 'preNextPrompt' | 'awaitingTag' {
-  if (phase === 'pinnedFreezeAwaitConsonant') return 'awaitingAnswer';
+function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' {
+  if (phase === 'awaitingAnswer') return 'awaitingAnswer';
   if (phase === 'revealingWord') return 'revealingWord';
-  if (phase === 'chatWaveRelated') return 'chatWave';
-  if (phase === 'preNextPrompt') return 'preNextPrompt';
   return 'awaitingTag';
 }
 
@@ -433,6 +431,12 @@ const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
     storyEmotion: 0,
     darkFrame: 0,
     ghostNearby: 0
+  },
+  footsteps: {
+    probability: 0,
+    cooldownMs: 0,
+    cooldownRemaining: 0,
+    lastAt: 0
   }
 };
 
@@ -553,8 +557,6 @@ export default function App() {
   });
   const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
   const sandboxRevealAudioStampRef = useRef<string>('');
-  const sandboxWaveStampRef = useRef<string>('');
-  const sandboxPrePromptStampRef = useRef<string>('');
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
@@ -1972,6 +1974,10 @@ export default function App() {
     const target = audienceUsers.length > 0 ? pickOne(audienceUsers) : null;
     const pending = pendingReplyEventRef.current;
     const isLocked = lockStateRef.current.isLocked && Boolean(lockStateRef.current.target);
+    const canSandboxGhostMotion = () => {
+      if (modeRef.current.id !== 'sandbox_story') return { allowed: true, reason: 'classic_mode' };
+      return sandboxModeRef.current.canTriggerGhostMotion({ qnaType: 'consonant', answerResult: 'correct' });
+    };
 
     if (!appStarted) return;
 
@@ -2028,6 +2034,8 @@ export default function App() {
       const repliedNo = /沒有/.test(raw);
       const repliedBrave = /不怕/.test(raw);
       if (pending.key === 'VOICE_CONFIRM' && repliedYes) {
+        const gate = canSandboxGhostMotion();
+        if (!gate.allowed) return;
         const played = playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0, endVolume: 1, rampSec: 3 });
         if (played) {
           postFollowUpLine(pending.target, 'VOICE_CONFIRM');
@@ -2037,6 +2045,8 @@ export default function App() {
         }
       }
       if (pending.key === 'GHOST_PING') {
+        const gate = canSandboxGhostMotion();
+        if (!gate.allowed) return;
         const played = playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 3000, startVolume: 1, endVolume: 1, rampSec: 0 });
         if (played) {
           scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
@@ -2049,6 +2059,8 @@ export default function App() {
         }
       }
       if (pending.key === 'TV_EVENT' && repliedNo) {
+        const gate = canSandboxGhostMotion();
+        if (!gate.allowed) return;
         requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: 'loop4', reason: reasonBase, sourceEventKey: 'TV_EVENT', delayMs: 2000 });
         postFollowUpLine(pending.target, 'TV_EVENT');
         const topic: EventTopic = Math.random() < 0.5 ? 'light' : 'ghost';
@@ -2056,6 +2068,8 @@ export default function App() {
         if (eventLifecycleRef.current) eventLifecycleRef.current.topic = topic;
       }
       if (pending.key === 'NAME_CALL') {
+        const gate = canSandboxGhostMotion();
+        if (!gate.allowed) return;
         const played = playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.8, endVolume: 1, rampSec: 0.2 });
         if (played) {
           scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
@@ -2064,6 +2078,8 @@ export default function App() {
         }
       }
       if (pending.key === 'VIEWER_SPIKE') {
+        const gate = canSandboxGhostMotion();
+        if (!gate.allowed) return;
         const played = playSfx('footsteps', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key });
         if (played) {
           scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12000, pulseAtMs: 4000, pulseDurationMs: 180 });
@@ -2072,6 +2088,8 @@ export default function App() {
         }
       }
       if (pending.key === 'FEAR_CHALLENGE' && repliedBrave) {
+        const gate = canSandboxGhostMotion();
+        if (!gate.allowed) return;
         const chooseGhost = Math.random() < 0.5;
         const played = chooseGhost
           ? playSfx('ghost_female', { reason: reasonBase, source: 'event', eventId: pending.eventId, eventKey: pending.key, delayMs: 2000, startVolume: 0.95, endVolume: 1, rampSec: 0.2 })
@@ -2394,7 +2412,13 @@ export default function App() {
       modeRef.current.tick(now);
       const sandboxState = sandboxModeRef.current.getState();
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
-      if (modeRef.current.id === 'sandbox_story' && (sandboxState.scheduler.phase === 'awaitingConsonantTagPrompt' || sandboxState.scheduler.phase === 'awaitingTag')) {
+      if (modeRef.current.id === 'sandbox_story') {
+        const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);
+        if (footstepRoll.shouldTrigger) {
+          playSfx('footsteps', { reason: 'sandbox:fear_roll', source: 'event', allowBeforeStarterTag: true });
+        }
+      }
+      if (modeRef.current.id === 'sandbox_story' && sandboxState.scheduler.phase === 'awaitingTag') {
         void askSandboxConsonantNow();
       }
       setSandboxRevealTick(now);
@@ -2404,9 +2428,18 @@ export default function App() {
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
         consonant: {
           ...(sandboxState.consonant ?? {}),
+          currentIndex: sandboxState.nodeIndex,
+          currentConsonant: sandboxState.consonant.nodeChar ?? '-',
+          currentWordKey: sandboxState.reveal.wordKey || sandboxNode?.id || '-',
           judge: sandboxState.consonant.judge
         },
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
+        ghost: { gate: { lastReason: sandboxState.ghostGate?.lastReason ?? '-' } },
+        footsteps: {
+          probability: sandboxState.fearSystem.footsteps.probability,
+          cooldownRemaining: sandboxState.fearSystem.footsteps.cooldownRemaining,
+          lastAt: sandboxState.fearSystem.footsteps.lastAt
+        },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
         blockedReason: sandboxState.blocked.reason || '-'
       };
@@ -3079,11 +3112,10 @@ export default function App() {
       if (modeRef.current.id === 'sandbox_story') {
         const sandboxState = sandboxModeRef.current.getState();
         const node = sandboxModeRef.current.getCurrentNode();
-        if (sandboxState.scheduler.phase === 'pinnedFreezeAwaitConsonant' && node) {
+        if (sandboxState.scheduler.phase === 'awaitingAnswer' && node) {
           const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: node.char, node });
           const judge = judgeClassicConsonantAnswer(raw, { nodeChar: node.char, node });
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
-          const latest = sandboxModeRef.current.getState();
           if (judge === 'correct' && parsed.matchedChar === node.char) {
             clearChatFreeze('sandbox_consonant_correct');
             setChatAutoPaused(false);
@@ -3094,36 +3126,18 @@ export default function App() {
             setInput('');
             return markSent('sandbox_consonant_correct');
           }
-          clearChatFreeze(`sandbox_consonant_${judge}`);
-          setChatAutoPaused(false);
-          if (judge === 'unknown') {
-            const unknownReply = `@${activeUserInitialHandleRef.current || 'you'} 收到「不知道」，我們先看提示，等等進下一段。`;
-            dispatchChatMessage({
-              id: crypto.randomUUID(),
-              username: sandboxConsonantTagOwnerRef.current || 'mod_live',
-              text: unknownReply,
-              language: 'zh',
-              translation: unknownReply
-            }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_unknown' });
-            sandboxModeRef.current.forceWave('related');
-          } else {
-            const retry = `@${activeUserInitialHandleRef.current || 'you'} 判定=${judge}，再試一次：直接輸入子音 keyword，或回覆「不知道」。`;
-            dispatchChatMessage({
-              id: crypto.randomUUID(),
-              username: sandboxConsonantTagOwnerRef.current || 'mod_live',
-              text: retry,
-              language: 'zh',
-              translation: retry
-            }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_retry' });
-            const prompt = latest.consonant.promptText || getClassicConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUserInitialHandleRef.current || 'you' }).promptText;
-            dispatchChatMessage({
-              id: crypto.randomUUID(),
-              username: sandboxConsonantTagOwnerRef.current || 'mod_live',
-              text: prompt,
-              language: 'zh',
-              translation: prompt
-            }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_reprompt' });
-          }
+          const hint = getHintForConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUserInitialHandleRef.current || 'you' });
+          const retryPrefix = judge === 'unknown'
+            ? `@${activeUserInitialHandleRef.current || 'you'} 收到「不知道」。`
+            : `@${activeUserInitialHandleRef.current || 'you'} 這次還沒對。`;
+          const hintLine = `${retryPrefix} ${hint}`;
+          dispatchChatMessage({
+            id: crypto.randomUUID(),
+            username: sandboxConsonantTagOwnerRef.current || 'mod_live',
+            text: hintLine,
+            language: 'zh',
+            translation: hintLine
+          }, { source: 'sandbox_consonant', sourceTag: judge === 'unknown' ? 'sandbox_consonant_hint_unknown' : 'sandbox_consonant_hint_wrong' });
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
           setInput('');
@@ -3573,40 +3587,16 @@ export default function App() {
   }, []);
 
 
-  const sendSandboxWave = useCallback((kind: 'related' | 'surprise' | 'guess', count: number) => {
-    if (modeRef.current.id !== 'sandbox_story') return 0;
-    if (chatFreeze.isFrozen) return 0;
-    const node = sandboxModeRef.current.getCurrentNode();
-    if (!node) return 0;
-    const ssot = sandboxModeRef.current.getSSOT();
-    const activeUser = normalizeHandle(activeUserInitialHandleRef.current || '');
-    const audience = separateChatActorState(sortedMessages, activeUser).audienceUsers.filter((name) => name && name !== 'system' && name !== activeUser);
-    const pool = audience.length > 0 ? audience : ['mod_live', 'ink31'];
-    const templates = kind === 'related' ? ssot.chatTemplates.relatedTalk : kind === 'surprise' ? ssot.chatTemplates.surprise : ssot.chatTemplates.guess;
-    const seeds = kind === 'related' ? node.talkSeeds.related : kind === 'surprise' ? node.talkSeeds.surprise : node.talkSeeds.guess;
-    for (let i = 0; i < count; i += 1) {
-      const actor = pickOne(pool);
-      const seed = pickOne(seeds) || '';
-      const template = pickOne(templates) || '{word}';
-      const text = (template.replace('{word}', node.wordText) + (seed ? `｜${seed}` : '')).replace(/@\w+/g, '').trim();
-      if (!text) continue;
-      dispatchChatMessage({
-        id: crypto.randomUUID(),
-        username: actor,
-        text,
-        language: 'zh',
-        translation: text
-      }, { source: 'sandbox_consonant', sourceTag: `sandbox_wave_${kind}` });
-    }
-    return count;
-  }, [chatFreeze.isFrozen, sortedMessages]);
+
+
+
 
   async function askSandboxConsonantNow() {
     if (modeRef.current.id !== 'sandbox_story') return;
     const sandboxState = sandboxModeRef.current.getState();
     const node = sandboxModeRef.current.getCurrentNode();
     if (!node) return;
-    if (sandboxState.scheduler.phase !== 'awaitingConsonantTagPrompt' && sandboxState.scheduler.phase !== 'awaitingTag') return;
+    if (sandboxState.scheduler.phase !== 'awaitingTag') return;
     if (sandboxConsonantPromptNodeIdRef.current === node.id) return;
 
     const activeUser = normalizeHandle(activeUserInitialHandleRef.current || '');
@@ -3756,27 +3746,7 @@ export default function App() {
       setSandboxRevealTick(Date.now());
       return;
     }
-    if (sandboxState.scheduler.phase === 'chatWaveRelated') {
-      const stamp = `${sandboxState.nodeIndex}-related-${reveal.wordKey}`;
-      if (sandboxWaveStampRef.current !== stamp) {
-        sandboxWaveStampRef.current = stamp;
-        const count = sendSandboxWave('related', randomInt(3, 6));
-        sandboxModeRef.current.markWaveDone('related', count);
-        setSandboxRevealTick(Date.now());
-      }
-      return;
-    }
-    if (sandboxState.scheduler.phase === 'preNextPrompt') {
-      const stamp = `${sandboxState.nodeIndex}-pre-${reveal.wordKey}`;
-      if (sandboxPrePromptStampRef.current !== stamp) {
-        sandboxPrePromptStampRef.current = stamp;
-        sendSandboxWave('surprise', randomInt(2, 3));
-        const guessCount = sendSandboxWave('guess', randomInt(1, 2));
-        sandboxModeRef.current.markWaveDone('guess', guessCount);
-        setSandboxRevealTick(Date.now());
-      }
-    }
-  }, [sandboxRevealTick, sendSandboxWave]);
+  }, [sandboxRevealTick]);
 
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
@@ -4313,6 +4283,9 @@ export default function App() {
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
+                    <div>sandbox.consonant.currentIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentIndex ?? '-'}</div>
+                    <div>sandbox.consonant.currentConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentConsonant ?? '-'}</div>
+                    <div>sandbox.consonant.currentWordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentWordKey ?? '-'}</div>
                     <div>consonant.prompt.current: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptCurrent ?? '-'}</div>
                     <div>sandbox.consonant.promptText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptText ?? '-'}</div>
                     <div>consonant.judge.lastInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastInput ?? '-'}</div>
@@ -4326,6 +4299,10 @@ export default function App() {
                     <div>audio.pronounce.lastKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.lastKey ?? '-'}</div>
                     <div>audio.pronounce.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.state ?? '-'}</div>
                     <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
+                    <div>ghost.gate.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghost?.gate?.lastReason ?? '-'}</div>
+                    <div>footsteps.probability: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.probability ?? '-'}</div>
+                    <div>footsteps.cooldownRemaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.cooldownRemaining ?? '-'}</div>
+                    <div>footsteps.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.lastAt ?? '-'}</div>
                     <div>lastWave.count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.count ?? 0}</div>
                     <div>lastWave.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.kind ?? '-'}</div>
                     <div>blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedReason ?? '-'}</div>

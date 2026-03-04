@@ -10,15 +10,18 @@ type Props = {
 };
 
 function resolveSuffixByPhase(wordText: string, baseConsonant: string, phase: WordRevealOverlayPhase) {
-  const suffix = wordText.startsWith(baseConsonant) ? wordText.slice(baseConsonant.length) : wordText;
-  if (phase === 'fadeIn') return suffix.slice(0, Math.max(1, Math.ceil(suffix.length * 0.5)));
+  const graphemes = Array.from(wordText);
+  const baseGraphemes = Array.from(baseConsonant || '');
+  const suffix = graphemes.slice(baseGraphemes.length).join('');
+  const suffixGraphemes = Array.from(suffix);
+  if (phase === 'fadeIn') return suffixGraphemes.slice(0, Math.ceil(suffixGraphemes.length * 0.45)).join('');
   if (phase === 'hold' || phase === 'fogOut' || phase === 'done') return suffix;
   return '';
 }
 
 export default function WordRevealOverlay({ visible, phase, text, wordText, highlightChar, baseConsonant }: Props) {
   const resolvedText = wordText ?? text ?? '';
-  const resolvedBase = baseConsonant ?? highlightChar ?? resolvedText.slice(0, 1);
+  const resolvedBase = baseConsonant ?? highlightChar ?? Array.from(resolvedText)[0] ?? '';
   if (!visible || !resolvedText || phase === 'idle' || phase === 'done') return null;
   const suffix = resolveSuffixByPhase(resolvedText, resolvedBase, phase);
   return (

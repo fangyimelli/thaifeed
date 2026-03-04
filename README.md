@@ -1566,3 +1566,18 @@ Console（debug 模式）可觀察：
 
 ## README Removed/Deprecated Log
 - 2026-03-04：本次 sandbox_story Consonant QnA 流程為整合更新，無新增移除項。
+
+## Sandbox Story（2026-03-04 強制整合）
+
+- 子音題 scheduler（sandbox only）固定為：`awaitingTag → awaitingAnswer → revealingWord`。
+- PASS 後行為固定：`單字放大 + 霧化淡出 → 直接下一題`，不再觸發 related/preNextPrompt chat wave。
+- 「不知道 / 不知 / 不確定」會走 classic 風格提示，提示後維持同題重答（不推進 index）。
+- 鬼動（ghost voice / TV / light glitch）在 sandbox 只能由 `canTriggerGhostMotion()` 放行；子音題固定阻擋。
+- footsteps（sandbox）改為 fear 綁定：fearLevel 越高，觸發機率越高且冷卻越短。
+- Debug 核對欄位：
+  - `sandbox.consonant.currentIndex/currentConsonant/currentWordKey`
+  - `sandbox.consonant.judge.lastInput/lastResult`
+  - `scheduler.phase`
+  - `word.reveal.phase`
+  - `ghost.gate.lastReason`
+  - `footsteps.probability/cooldownRemaining/lastAt`
