@@ -74,8 +74,23 @@ npm run build
 ### Removed / Deprecated Log
 
 - 已移除「debug PASS 只改 state、不走引擎流程」舊行為。
-- 原因：會造成 reveal/prompt 推進分叉，導致 PASS 後卡題。
+- 已移除 ChatPanel 的 `fallback_click` 提交分流與 Enter 直送第二路徑，改為單一路徑 form submit handler。
+- 原因：會造成 reveal/prompt 推進分叉，導致 PASS 後卡題，且在部份裝置觸發重複提交。
 
+
+
+## Sandbox submit/advance 防重入整合（2026-03-04）
+
+- sandbox 玩家送出改為 submit gate：`sandbox.answer.submitInFlight` 進入判定前設為 `true`，流程完成（hint/reveal/advance）才釋放，重複送出會記錄 `sandbox.advance.blockedReason=double_submit`。
+- `advancePrompt` / `markWaveDone` 新增 one-shot token（`sandbox.advance.inFlight` + `sandbox.advance.lastToken`），同一次回答流程重入會被擋下並記錄 `double_advance`。
+- prompt 顯示順序固定：先更新 `sandbox.prompt.current`，overlay 只讀 current prompt，避免切題時先渲染舊題造成閃回。
+- sandbox `unknown` hint 改用與 classic 同一個 shared builder：`src/shared/hints/consonantHint.ts`，debug 會標示 `sandbox.hint.source=classic_shared`。
+- Debug 驗收重點：
+  - `sandbox.answer.submitInFlight / sandbox.answer.lastSubmitAt`
+  - `sandbox.judge.lastInput / sandbox.judge.lastResult`
+  - `sandbox.advance.inFlight / lastAt / lastReason / blockedReason`
+  - `sandbox.prompt.current.id/consonant/wordKey`
+  - `sandbox.hint.lastTextPreview / sandbox.hint.source`
 
 ## Actor Pool Separation
 
