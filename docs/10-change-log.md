@@ -1,3 +1,14 @@
+## 2026-03-04（sandbox_story fear meter debug monitor）
+
+### Changed
+- [sandbox_story/debug] Debug Panel 新增 `Fear System` 區塊（`fearLevel` / `pressureLevel` / `ghostProbability`），且僅在 `mode === "sandbox_story"` 顯示。
+- [sandbox_story/debug] 新增 `Fear Meter` 視覺化 bar（`fearLevel / maxFear`）與 `Triggers`（`chatSpike` / `storyEmotion` / `darkFrame` / `ghostNearby`）。
+- [sandbox_story/debug] 新增 debug controls：`Add Fear +10`、`Reset Fear`，透過 `fearSystem.getDebugState()`（`getFearDebugState()`）每 500ms refresh。
+- [classic] 無邏輯變更（classic mode 0 變動）。
+
+### Docs
+- README、PR_NOTES 同步 Fear Meter Monitor 規格、顯示條件與驗收結果。
+
 ## 2026-03-04（debug panel mode-aware tools）
 
 ### Changed

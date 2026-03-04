@@ -949,6 +949,13 @@ npm run build
     - `cooldown`（橘色）
     - `locked`（紅色）
   - `Ghost System`（`activeEvents` / `queue` / `lastEvent` / `cooldownCount`）
+  - `Fear System`（每 500ms refresh，僅 sandbox_story 顯示）
+    - `fearLevel`
+    - `pressureLevel`（`low=灰 / medium=黃 / high=橘 / panic=紅`）
+    - `ghostProbability`（`baseProbability + fearLevelFactor`，顯示 `0.00~1.00`）
+  - `Fear Meter`（`fearLevel/maxFear` 視覺化 `██████░░░░`）
+  - `Triggers`（`chatSpike / storyEmotion / darkFrame / ghostNearby` + 加成值）
+  - Debug 快捷按鈕：`Add Fear +10` / `Reset Fear`
   - `Night Timeline`（顯示 `sandbox.reveal.* / sandbox.consonant.* / sandbox.ghostMotion.*`）
 - 安全保護：`mode !== "sandbox_story"` 時不渲染任何 sandbox debug tools，避免 classic engine 誤觸 sandbox controls。
 
