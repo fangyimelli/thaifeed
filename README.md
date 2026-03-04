@@ -1200,6 +1200,7 @@ npm run build
 - sandbox 玩家回覆命中有效選項（`穩住/衝/不知道`）時，必須走單一路徑：`consumePlayerReply() -> parsePlayerReplyToOption() -> resolveQna()`，禁止只 append 訊息不 resolve。
 - `resolveQna()` 會同步：`qna.awaitingReply=false`、`qna.status=RESOLVED`、解除 freeze、清空 reply UI（`replyBarVisible=false`、`replyToMessageId=null`、pinned/quote 清空）。
 - 若命中有效選項後 `ui.replyBarVisible` 仍為 `true`，會立即強制 `clearReplyUi()` 並記錄 anomaly（`sandbox.qna.lastAnomaly`）。
+- sandbox 在 `consumePlayerReply()` 命中後會立即 `markSent('sandbox_qna_consumed')` 並短路後續流程；同一送出循環禁止再進 `tryTriggerStoryEvent('user_input')`，避免已 resolve 被舊 retry 邏輯覆寫。
 - sandbox debug tester 新增：`ForceResolveQna`（resolve+clear UI）與 `ClearReplyUi`（只清 UI，隔離 UI 問題）。
 
 ## QNA Flow（Keyword + 不知道）
