@@ -586,3 +586,49 @@ body {
   background: rgba(9, 14, 24, 0.5);
   font-size: 11px;
 }
+
+.word-reveal-overlay {
+  position: absolute;
+  inset: 12% 0 auto 0;
+  z-index: 26;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.word-reveal-text {
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: rgba(6, 10, 20, 0.68);
+  color: #edf2ff;
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 12px rgba(170, 208, 255, 0.4);
+}
+
+.word-reveal-char-highlight {
+  color: #8fd6ff;
+  font-weight: 800;
+}
+
+.word-reveal-overlay.phase-fadeIn {
+  animation: wordRevealFadeIn 800ms ease-out forwards;
+}
+
+.word-reveal-overlay.phase-hold {
+  opacity: 1;
+}
+
+.word-reveal-overlay.phase-fogOut {
+  animation: wordRevealFogOut 1200ms ease-in forwards;
+}
+
+@keyframes wordRevealFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wordRevealFogOut {
+  from { opacity: 1; filter: blur(0px); }
+  to { opacity: 0; filter: blur(10px); }
+}

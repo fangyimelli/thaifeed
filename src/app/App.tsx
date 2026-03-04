@@ -57,6 +57,11 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode } from '../modes/sandbox_story/sandboxStoryMode';
+import { NIGHT1 } from '../ssot/sandbox_story/night1';
+import type { NightScript } from '../ssot/sandbox_story/types';
+import WordRevealOverlay from '../ui/overlays/WordRevealOverlay';
+import { playPronounce } from '../ui/audio/PronounceAudio';
+import { playGhostMotion } from '../core/ghostMotionPlayer';
 import type { GameMode } from '../modes/types';
 
 type EventStartBlockedReason =
@@ -353,6 +358,7 @@ const EVENT_TOPIC_WEIGHT: TopicWeightProfile = {
 const DEBUG_SEED_USERS = ['ink31', 'mew88', 'koo_77', 'nana23'];
 const EVENT_TESTER_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_EVENT', 'NAME_CALL', 'VIEWER_SPIKE', 'LIGHT_GLITCH', 'FEAR_CHALLENGE'];
 const EVENT_AUDIO_PLAYING_TIMEOUT_MS = 10_000;
+const SANDBOX_SSOT_STORAGE_KEY = 'thaifeed.sandbox_story.ssot';
 
 type EventAudioState = 'idle' | 'playing' | 'cooldown';
 type EventAudioResult = 'TRIGGERED' | 'SKIPPED' | 'FAILED' | '-';
@@ -419,6 +425,8 @@ export default function App() {
   const chatAreaRef = useRef<HTMLElement>(null);
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
+  const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
     mode: 'full',
@@ -1190,6 +1198,9 @@ export default function App() {
       tagTarget: actorHandle
     }, { source: resolvedSendSource, sourceTag: `event:${source}` });
     if (!sent.ok) return { ok: false, blockedReason: sent.blockedReason };
+    if (modeRef.current.id === 'sandbox_story') {
+      modeRef.current.onIncomingTag(line);
+    }
     return { ok: true, lineId: messageId };
   }, [appStarted, chatAutoPaused, chatFreeze.isFrozen, dispatchChatMessage, updateEventDebug]);
 
@@ -2226,6 +2237,7 @@ export default function App() {
       modeRef.current.tick(now);
       const sandboxState = sandboxModeRef.current.getState();
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
+      setSandboxRevealTick(now);
       updateEventDebug({
         mode: {
           id: modeRef.current.id
@@ -2234,6 +2246,17 @@ export default function App() {
           nodeIndex: sandboxState.nodeIndex,
           scheduler: {
             phase: sandboxState.scheduler.phase
+          },
+          reveal: {
+            visible: sandboxState.reveal.visible,
+            phase: sandboxState.reveal.phase
+          },
+          ghostMotion: {
+            lastId: sandboxState.ghostMotion.lastId ?? '-',
+            state: sandboxState.ghostMotion.state
+          },
+          ssot: {
+            version: sandboxSsotVersion
           },
           currentNode: {
             word: sandboxNode?.word ?? '-',
@@ -2279,7 +2302,7 @@ export default function App() {
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [updateEventDebug]);
+  }, [sandboxSsotVersion, updateEventDebug]);
 
   useEffect(() => {
     if (!isReady || !appStarted) return;
@@ -2861,6 +2884,9 @@ export default function App() {
         source: 'player_input',
         sourceTag: source
       });
+      if (modeRef.current.id === 'sandbox_story') {
+        modeRef.current.onPlayerReply(outgoingText);
+      }
       if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
         markQnaResolved(qnaStateRef.current, Date.now());
         qnaStateRef.current.awaitingReply = false;
@@ -3302,6 +3328,61 @@ export default function App() {
     }, 3000);
   }, []);
 
+  const forceRevealCurrent = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const node = sandboxModeRef.current.forceRevealCurrent();
+    if (!node) return;
+    void playPronounce(node.audioKey);
+    setSandboxRevealTick(Date.now());
+  }, []);
+
+  const forceAskComprehensionNow = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.forceAskComprehensionNow();
+  }, []);
+
+  const forceGhostMotionNow = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const motionId = sandboxModeRef.current.forceGhostMotion();
+    const currentNode = sandboxModeRef.current.getCurrentNode();
+    const pack = sandboxModeRef.current.getSSOT().ghostMotions.find((item) => item.id === motionId);
+    if (pack) {
+      playGhostMotion(pack);
+      scheduleBlackoutFlicker({ delayMs: 1000, durationMs: 12_000, pulseAtMs: 4000, pulseDurationMs: 180 });
+    }
+    if (currentNode?.audioKey) {
+      void playPronounce(currentNode.audioKey);
+    }
+  }, [scheduleBlackoutFlicker]);
+
+  const forceAdvanceSandboxNode = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.forceAdvanceNode();
+    setSandboxRevealTick(Date.now());
+  }, []);
+
+  const exportSandboxSSOT = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const ssot = sandboxModeRef.current.getSSOT();
+    localStorage.setItem(SANDBOX_SSOT_STORAGE_KEY, JSON.stringify(ssot));
+    setSandboxSsotVersion(ssot.meta.version);
+  }, []);
+
+  const importSandboxSSOT = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const raw = localStorage.getItem(SANDBOX_SSOT_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as NightScript;
+      const ok = sandboxModeRef.current.importSSOT(parsed);
+      if (ok) {
+        setSandboxSsotVersion(parsed.meta.version ?? NIGHT1.meta.version);
+      }
+    } catch {
+      // no throw in debug import path
+    }
+  }, []);
+
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
     lastHighlightReasonRef.current = payload.reason;
@@ -3355,6 +3436,18 @@ export default function App() {
               初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
             </div>
           )}
+          {modeIdRef.current === 'sandbox_story' && (() => {
+            const sandboxState = sandboxModeRef.current.getState();
+            return (
+              <WordRevealOverlay
+                key={`${sandboxState.nodeIndex}-${sandboxRevealTick}`}
+                visible={sandboxState.reveal.visible}
+                phase={sandboxState.reveal.phase}
+                text={sandboxState.reveal.text}
+                highlightChar={sandboxState.reveal.highlightChar}
+              />
+            );
+          })()}
           {!appStarted && (
             <div className="startup-overlay" role="dialog" aria-modal="true" aria-label="Enter your name">
               <div className="startup-card">
@@ -3450,6 +3543,12 @@ export default function App() {
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
                   <button type="button" onClick={forceUnlockDebug}>Reset Stuck State</button>
                   <button type="button" onClick={forceShowLoop4Debug}>Force Show loop4 (3s)</button>
+                  <button type="button" onClick={forceRevealCurrent}>ForceRevealCurrent</button>
+                  <button type="button" onClick={forceAskComprehensionNow}>ForceAskComprehensionNow</button>
+                  <button type="button" onClick={forceGhostMotionNow}>ForceGhostMotion</button>
+                  <button type="button" onClick={forceAdvanceSandboxNode}>ForceAdvanceNode</button>
+                  <button type="button" onClick={exportSandboxSSOT}>ExportSSOT</button>
+                  <button type="button" onClick={importSandboxSSOT}>ImportSSOT</button>
                 </div>
               </div>
               <div className="debug-route-meta">
@@ -3568,6 +3667,11 @@ export default function App() {
                 <div>audio.lastApproach.durationMs: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.durationMs ?? 0}</div>
                 <div>audio.lastApproach.startGain/endGain: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startGain ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.endGain ?? '-'}</div>
                 <div>audio.lastApproach.startLPF/endLPF: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startLPF ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.endLPF ?? '-'}</div>
+                <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
+                <div>sandbox.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.phase ?? '-'}</div>
+                <div>sandbox.ghostMotion.lastId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.lastId ?? '-'}</div>
+                <div>sandbox.ghostMotion.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.state ?? '-'}</div>
+                <div>sandbox.ssot.version: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ssot?.version ?? '-'}</div>
                 <div>fx.blackout.isActive: {String((window.__CHAT_DEBUG__ as any)?.fx?.blackout?.isActive ?? false)}</div>
                 <div>fx.blackout.mode: {(window.__CHAT_DEBUG__ as any)?.fx?.blackout?.mode ?? '-'}</div>
                 <div>fx.blackout.endsInMs: {(window.__CHAT_DEBUG__ as any)?.fx?.blackout?.endsInMs ?? 0}</div>

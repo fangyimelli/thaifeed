@@ -277,6 +277,17 @@ declare global {
         scheduler?: {
           phase?: string;
         };
+        reveal?: {
+          visible?: boolean;
+          phase?: string;
+        };
+        ghostMotion?: {
+          lastId?: string;
+          state?: string;
+        };
+        ssot?: {
+          version?: string;
+        };
         currentNode?: {
           word?: string;
           char?: string;
