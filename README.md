@@ -1669,3 +1669,19 @@ Console（debug 模式）可觀察：
 ### README Removed/Deprecated Log
 - 2026-03-04：sandbox WordRevealOverlay 移除舊 `fadeIn/scaleUp/fadeOut` 視覺命名，統一改為 `enter/pulse/exit` 時序。
 - 2026-03-04：sandbox WordRevealOverlay 預設停用舊「子音 + 小補字」雙容器顯示，改採 fullWord 保底模式（第一個 grapheme 上色）。
+
+## 2026-03-04（sandbox_story reveal 純文字浮現 + 隨機安全區位置）
+
+- 本次僅調整 `sandbox_story`：reveal 改為純文字 `SandboxWordRevealText`，不使用底色/邊框/泡泡樣式。
+- `base/rest` 於同一文字容器、同字體同字級同 line-height，僅 `base` 使用 accent 顏色。
+- reveal 位置在每次進入 `revealingWord` 時抽樣一次，並固定整段 reveal 期間不變；下一次 reveal 重新抽樣。
+- safeRect 固定為：`minX=8, maxX=92, minY=8, maxY=74`（底部預留約 26% 避開 pinned/input 區）。
+- debug 欄位：
+  - `word.reveal.phase`
+  - `word.reveal.base / word.reveal.rest / word.reveal.restLen`
+  - `word.reveal.position.xPct / word.reveal.position.yPct`
+  - `word.reveal.safeRect`
+  - `ui.consonantBubble.visible`（reveal 期間必須 `false`）
+
+### README Removed/Deprecated Log
+- 2026-03-04（sandbox only）：移除舊 `WordRevealOverlay`（含底色文字框樣式 `word-reveal-overlay / revealText / revealGlyph`），統一改為 `SandboxWordRevealText` 純文字疊層渲染。

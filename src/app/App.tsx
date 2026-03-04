@@ -2464,12 +2464,22 @@ export default function App() {
           reveal: {
             phase: sandboxState.reveal.phase,
             wordKey: sandboxState.reveal.wordKey,
-            base: sandboxState.reveal.baseConsonant || '-',
-            appended: sandboxState.reveal.appended || '-',
+            base: sandboxState.reveal.baseGrapheme || '-',
+            rest: sandboxState.reveal.restText || '-',
             baseGrapheme: sandboxState.reveal.baseGrapheme || '-',
             restText: sandboxState.reveal.restText || '-',
             restLen: sandboxState.reveal.restLen,
-            splitter: sandboxState.reveal.splitter
+            splitter: sandboxState.reveal.splitter,
+            position: {
+              xPct: sandboxState.reveal.position.xPct,
+              yPct: sandboxState.reveal.position.yPct
+            },
+            safeRect: {
+              minX: sandboxState.reveal.safeRect.minX,
+              maxX: sandboxState.reveal.safeRect.maxX,
+              minY: sandboxState.reveal.safeRect.minY,
+              maxY: sandboxState.reveal.safeRect.maxY
+            }
           }
         },
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
@@ -4079,9 +4089,9 @@ export default function App() {
                 return {
                   visible: st.reveal.visible,
                   phase: st.reveal.phase,
-                  wordText: st.reveal.text,
                   baseText: st.reveal.baseGrapheme,
-                  appendedText: st.reveal.restText
+                  restText: st.reveal.restText,
+                  position: st.reveal.position
                 };
               })() : undefined}
             />
@@ -4403,13 +4413,14 @@ export default function App() {
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
                     <div>ui.consonantBubble.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.consonantBubble?.visible ?? true)}</div>
-                    <div>word.reveal.baseGrapheme: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.baseGrapheme ?? '-'}</div>
-                    <div>word.reveal.restText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restText ?? '-'}</div>
+                    <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
+                    <div>word.reveal.rest: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'}</div>
                     <div>word.reveal.restLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restLen ?? '-'}</div>
                     <div>word.reveal.splitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.splitter ?? '-'}</div>
-                    <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
-                    <div>word.reveal.appended: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.appended ?? '-'}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
+                    <div>word.reveal.position.xPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.xPct ?? '-'}</div>
+                    <div>word.reveal.position.yPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.yPct ?? '-'}</div>
+                    <div>word.reveal.safeRect: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.safeRect ?? {})}</div>
                     <div>sandbox.consonant.currentIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentIndex ?? '-'}</div>
                     <div>sandbox.consonant.currentConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentConsonant ?? '-'}</div>
                     <div>sandbox.consonant.currentWordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentWordKey ?? '-'}</div>

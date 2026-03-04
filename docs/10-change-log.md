@@ -395,3 +395,19 @@
 
 ### Removed
 - [sandbox/deprecated] 移除 reveal `renderMode(fullWord/pair)` 分流；本次固定單一路徑 A，不再保留 B 作為預設/保底。
+
+## 2026-03-04（sandbox reveal 純文字 + 隨機位置安全區）
+
+### Changed
+- [sandbox/reveal-ui] 新增 `SandboxWordRevealText`，reveal 改為純文字浮現（無背景、無邊框、無泡泡 class）。
+- [sandbox/reveal-typography] `base/rest` 統一同字體、同字級、同 line-height，視覺上為同一單字；`base` 僅做 accent 色。
+- [sandbox/reveal-motion] 動畫維持 `enter → pulse(2x) → exit`，pulse 改為文字亮度/透明度脈衝，exit 為 scale up + opacity fade。
+- [sandbox/reveal-position] 每次 reveal 開始時生成一次 `position(xPct,yPct)`，safeRect 固定 `x:8~92, y:8~74`；reveal 期間位置固定，下一次 reveal 重新抽樣。
+- [sandbox/debug] 新增 `word.reveal.position.*` 與 `word.reveal.safeRect`，並保留 `word.reveal.phase/base/rest/restLen`、`ui.consonantBubble.visible` 觀測。
+- [sandbox/isolation] 變更僅在 sandbox_story reveal pipeline；classic mode 無改動。
+
+### Removed
+- [sandbox/deprecated] 移除舊 `WordRevealOverlay.tsx` 與其底色文字框 CSS（`word-reveal-overlay/revealText/revealGlyph`）。
+
+### Docs
+- README、PR_NOTES 同步本次 reveal 視覺規格、安全區與驗收表。
