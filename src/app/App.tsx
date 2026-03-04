@@ -677,6 +677,19 @@ export default function App() {
   const sandboxRevealDoneTimerRef = useRef<number | null>(null);
   const sandboxAdvanceRetryTimerRef = useRef<number | null>(null);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_applyCorrect' | 'state_only' }>({ clickedAt: 0, action: 'none' });
+  const sandboxQnaDebugRef = useRef<{
+    lastResolveAt: number;
+    lastResolveReason: string;
+    lastClearReplyUiAt: number;
+    lastClearReplyUiReason: string;
+    lastAnomaly: string;
+  }>({
+    lastResolveAt: 0,
+    lastResolveReason: '-',
+    lastClearReplyUiAt: 0,
+    lastClearReplyUiReason: '-',
+    lastAnomaly: '-'
+  });
 
   const qnaStateRef = useRef(createInitialQnaState());
   const messageSeqRef = useRef(0);
@@ -1394,6 +1407,51 @@ export default function App() {
   const resetQnaUiState = useCallback(() => {
     setReplyPreviewSuppressedReason(null);
   }, []);
+
+  const clearReplyUi = useCallback((reason: string) => {
+    const now = Date.now();
+    lockStateRef.current = {
+      ...lockStateRef.current,
+      isLocked: false,
+      target: null,
+      startedAt: 0,
+      replyingToMessageId: null
+    };
+    qnaStateRef.current.active.questionMessageId = null;
+    setLastQuestionMessageId(null);
+    setLastQuestionMessageHasTag(false);
+    resetQnaUiState();
+    sandboxQnaDebugRef.current.lastClearReplyUiAt = now;
+    sandboxQnaDebugRef.current.lastClearReplyUiReason = reason;
+  }, [resetQnaUiState]);
+
+  const resolveQna = useCallback((reason: string) => {
+    const now = Date.now();
+    markQnaResolved(qnaStateRef.current, now);
+    qnaStateRef.current.awaitingReply = false;
+    qnaStateRef.current.active.status = 'RESOLVED';
+    qnaStateRef.current.active.resolvedAt = now;
+    sandboxQnaDebugRef.current.lastResolveAt = now;
+    sandboxQnaDebugRef.current.lastResolveReason = reason;
+    clearReplyUi(`resolve:${reason}`);
+    if (chatFreeze.isFrozen || chatAutoScrollMode !== 'FOLLOW') {
+      clearChatFreeze(`qna_resolved:${reason}`);
+    }
+  }, [chatAutoScrollMode, chatFreeze.isFrozen, clearChatFreeze, clearReplyUi]);
+
+  const consumePlayerReply = useCallback((raw: string) => {
+    if (!(qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply)) return false;
+    const stripped = raw.replace(/^[\s\u3000]*@[^\s\u3000]+[\s\u3000]*/u, '').trim();
+    const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
+    if (!parsed) return false;
+    qnaStateRef.current.matched = { optionId: parsed.optionId, keyword: parsed.matchedKeyword, at: Date.now() };
+    resolveQna(`parsed:${parsed.optionId}`);
+    if ((window.__CHAT_DEBUG__?.ui as { replyBarVisible?: boolean } | undefined)?.replyBarVisible) {
+      clearReplyUi('anomaly_reply_bar_still_visible_after_resolve');
+      sandboxQnaDebugRef.current.lastAnomaly = 'replyBarVisible_after_resolve';
+    }
+    return true;
+  }, [clearReplyUi, resolveQna]);
 
   const setPinnedQuestionMessage = useCallback((payload: { source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'unknown'; messageId: string; hasTagToActiveUser: boolean }) => {
     if (modeRef.current.id !== 'sandbox_story') {
@@ -2961,11 +3019,23 @@ export default function App() {
           }
         },
         event: snapshot,
+        sandbox: {
+          ...((window.__CHAT_DEBUG__ as { sandbox?: Record<string, unknown> } | undefined)?.sandbox ?? {}),
+          qna: {
+            ...(((window.__CHAT_DEBUG__ as { sandbox?: { qna?: Record<string, unknown> } } | undefined)?.sandbox?.qna ?? {})),
+            lastResolveAt: sandboxQnaDebugRef.current.lastResolveAt,
+            lastResolveReason: sandboxQnaDebugRef.current.lastResolveReason,
+            lastClearReplyUiAt: sandboxQnaDebugRef.current.lastClearReplyUiAt,
+            lastClearReplyUiReason: sandboxQnaDebugRef.current.lastClearReplyUiReason,
+            lastAnomaly: sandboxQnaDebugRef.current.lastAnomaly
+          }
+        },
         ui: {
           ...(window.__CHAT_DEBUG__?.ui ?? {}),
           replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-',
           replyPinMounted,
           replyBarVisible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
+          replyToMessageId: lockStateRef.current.replyingToMessageId,
           freezeGuard: (window.__CHAT_DEBUG__?.event as { freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean } } | undefined)?.freezeGuard ?? { hasRealTag: false, replyUIReady: false, freezeAllowed: false },
           replyBarMessageFound: Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId)),
           replyPinContainerLocation: 'input_overlay',
@@ -3265,10 +3335,11 @@ export default function App() {
         source: 'player_input',
         sourceTag: source
       });
+      const sandboxQnaConsumed = modeRef.current.id === 'sandbox_story' ? consumePlayerReply(outgoingText) : false;
       if (modeRef.current.id === 'sandbox_story') {
         modeRef.current.onPlayerReply(outgoingText);
       }
-      if (modeRef.current.id === 'sandbox_story') {
+      if (modeRef.current.id === 'sandbox_story' && !sandboxQnaConsumed) {
         const sandboxState = sandboxModeRef.current.getState();
         const node = sandboxModeRef.current.getCurrentNode();
         const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
@@ -3300,7 +3371,7 @@ export default function App() {
           return markSent(`sandbox_consonant_${judge}`);
         }
       }
-      if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
+      if (!sandboxQnaConsumed && qnaStateRef.current.active.status === 'AWAITING_REPLY') {
         markQnaResolved(qnaStateRef.current, Date.now());
         qnaStateRef.current.awaitingReply = false;
         lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
@@ -3410,7 +3481,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
+  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, consumePlayerReply, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {
@@ -3860,6 +3931,16 @@ export default function App() {
     const node = sandboxModeRef.current.getCurrentNode();
     applySandboxCorrect({ input: '__debug_pass__', matchedChar: node?.char, source: 'debug_pass_button' });
   }, [applySandboxCorrect]);
+
+  const forceResolveQna = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    resolveQna('debug_force_resolve');
+  }, [resolveQna]);
+
+  const handleClearReplyUi = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    clearReplyUi('debug_button_clear_reply_ui');
+  }, [clearReplyUi]);
 
   const forceAskConsonantNow = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -4379,11 +4460,14 @@ export default function App() {
                 <div>qna.askerActorId: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.askerActorId ?? '-'}</div>
                 <div>qna.taggedUserHandle: {(window.__CHAT_DEBUG__?.event?.qna as any)?.active?.taggedUserHandle ?? '-'}</div>
                 <div>ui.replyBarVisible: {String((window.__CHAT_DEBUG__?.ui as any)?.replyBarVisible ?? false)}</div>
+                <div>ui.replyToMessageId: {(window.__CHAT_DEBUG__?.ui as any)?.replyToMessageId ?? '-'}</div>
                 <div>ui.replyBarMessageFound: {String((window.__CHAT_DEBUG__?.ui as any)?.replyBarMessageFound ?? false)}</div>
                 <div>qna.lastBlockedReason: {window.__CHAT_DEBUG__?.event?.qna?.lastBlockedReason ?? '-'}</div>
                 <div>ui.replyPreviewSuppressed: {window.__CHAT_DEBUG__?.ui?.replyPreviewSuppressed ?? '-'}</div>
                 <div>ui.replyPinMounted/pinned.visible: {String((window.__CHAT_DEBUG__?.ui as { replyPinMounted?: boolean; pinned?: { visible?: boolean } } | undefined)?.replyPinMounted ?? false)} / {String((window.__CHAT_DEBUG__?.ui as { pinned?: { visible?: boolean } } | undefined)?.pinned?.visible ?? false)}</div>
                 <div>ui.qnaQuestionMessageIdRendered/pinned.textPreview: {String((window.__CHAT_DEBUG__?.ui as { qnaQuestionMessageIdRendered?: boolean; pinned?: { textPreview?: string } } | undefined)?.qnaQuestionMessageIdRendered ?? false)} / {((window.__CHAT_DEBUG__?.ui as { pinned?: { textPreview?: string } } | undefined)?.pinned?.textPreview ?? '-')}</div>
+                <div>sandbox.qna.lastResolveAt/reason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.qna?.lastResolveAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.qna?.lastResolveReason ?? '-'}</div>
+                <div>sandbox.qna.lastClearReplyUiAt/reason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.qna?.lastClearReplyUiAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.qna?.lastClearReplyUiReason ?? '-'}</div>
                 <div>chat.pause.isPaused/setAt/reason: {String((window.__CHAT_DEBUG__?.chat as { pause?: { isPaused?: boolean; setAt?: number; reason?: string } } | undefined)?.pause?.isPaused ?? false)} / {((window.__CHAT_DEBUG__?.chat as { pause?: { setAt?: number } } | undefined)?.pause?.setAt ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { pause?: { reason?: string } } | undefined)?.pause?.reason ?? '-')}</div>
                 <div>chat.scroll.containerFound/lastForceReason/result: {String((window.__CHAT_DEBUG__?.chat as { scroll?: { containerFound?: boolean; lastForceReason?: string; lastForceResult?: string } } | undefined)?.scroll?.containerFound ?? false)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { lastForceReason?: string } } | undefined)?.scroll?.lastForceReason ?? '-')} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { lastForceResult?: string } } | undefined)?.scroll?.lastForceResult ?? '-')}</div>
                 <div>chat.scroll.metrics(top/height/client): {((window.__CHAT_DEBUG__?.chat as { scroll?: { metrics?: { top?: number; height?: number; clientHeight?: number } } } | undefined)?.scroll?.metrics?.top ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { metrics?: { height?: number } } } | undefined)?.scroll?.metrics?.height ?? 0)} / {((window.__CHAT_DEBUG__?.chat as { scroll?: { metrics?: { clientHeight?: number } } } | undefined)?.scroll?.metrics?.clientHeight ?? 0)}</div>
@@ -4432,6 +4516,8 @@ export default function App() {
                       Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
                     </button>
                     <button type="button" onClick={handleSandboxDebugPass}>PASS (applyCorrect)</button>
+                    <button type="button" onClick={forceResolveQna}>ForceResolveQna</button>
+                    <button type="button" onClick={handleClearReplyUi}>ClearReplyUi</button>
                     <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>
                     <button type="button" onClick={forceRevealCurrent}>Force Reveal Word</button>
                     <button type="button" onClick={forcePlayPronounce}>ForcePlayPronounce</button>
