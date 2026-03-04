@@ -1,58 +1,63 @@
 ## Summary
-- 只修改 sandbox 範圍：`src/modes/sandbox_story/**`、sandbox 掛載流程（`src/app/App.tsx`）與 sandbox reveal UI；classic mode engine 未改。
-- 修正 sandbox 子音 PASS 不換題問題：PASS reveal 完成後立即推進到下一題，並同步 index/consonant/wordKey debug。
-- 調整 sandbox reveal：同框顯示 baseConsonant + appended（逐字補齊），PASS 後僅 reveal 動畫，不再出 related/preNextPrompt 波。
-- sandbox unknown/wrong 改走 classic 風格提示（adapter 提供 hint），並維持同題 awaitingAnswer 重答。
-- 新增 sandbox ghost gate 與 fear-footsteps 綁定規則，鬼動理由與 footsteps 機率/冷卻可在 debug 觀測。
+- 只修改 sandbox 範圍：`src/modes/sandbox_story/**` 與 sandbox 掛載邏輯（`src/app/App.tsx`），未改 classic engine。
+- 修正 sandbox_story Overlay 與 pinned 題目不一致：兩者改用同一個 `sandbox.prompt.current`（PromptCoordinator）單一真相來源。
+- 加入 sandbox pinned writer guard：sandbox 期間只允許 `sandboxPromptCoordinator` 寫 pinned，其他來源阻擋並寫 debug。
+- 「不知道」流程保持同一 promptId，不會切換成 comprehension 其他題型。
+
+## Root-cause 排查
+1) Overlay 子音來源
+- 先前 `SceneView` 讀 `state.currentConsonant.letter`，未綁 sandbox prompt，會與 sandbox 題目不同步。
+
+2) pinned 題目來源
+- 由 `runTagStartFlow(... setPinnedReply ...)` 觸發，原本 qna/event/sandbox 都能更新 `lastQuestionMessageId`，sandbox 無 writer guard。
+
+3) scheduler.phase 寫入檢查
+- sandbox `awaitingAnswer` 期間仍可能被其他流程（qna/event）嘗試寫 pinned；現在 guard 會阻擋並標記 `phaseBusy` / `writerNotAllowed`。
+
+4) 「不知道」覆寫檢查
+- 先前 unknown 會送提示並可能重新走其他出題路徑；現在 unknown 保持 `sandbox.prompt.current` 不變，promptId 不變。
 
 ## Changed
 - `src/modes/sandbox_story/sandboxStoryMode.ts`
-  - phase 收斂為 `awaitingTag|awaitingAnswer|revealingWord`
-  - `markRevealDone()` 直接推進下一題
-  - `canTriggerGhostMotion()`、`registerFootstepsRoll()`
-  - fear debug 新增 footsteps probability/cooldown/lastAt
-- `src/modes/sandbox_story/classicConsonantAdapter.ts`
-  - 新增 `getHintForConsonantPrompt()`
-- `src/ui/overlays/WordRevealOverlay.tsx`
-  - 改為 grapheme-safe appended reveal（`Array.from`）
-- `src/styles.css`
-  - reveal 動畫調整：fadeIn 800ms / hold scale / fogOut 900ms，並上移避免壓住 pinned
+  - 新增 `SandboxPrompt` 與 `state.prompt.current`。
+  - 新增 prompt 一致性 debug 狀態：overlay/pinned promptId + mismatch。
+  - 新增 coordinator API：`setCurrentPrompt/getCurrentPrompt/commitPromptOverlay/commitPromptPinnedRendered/commitPinnedWriter`。
 - `src/app/App.tsx`
-  - sandbox answer phase 改用 `awaitingAnswer`
-  - unknown/wrong 顯示 classic 風格提示且不推進題目
-  - 移除 PASS 後 related/preNextPrompt wave 流程
-  - sandbox debug 欄位補齊：consonant current*、judge、scheduler.phase、word.reveal.phase、ghost gate、footsteps*
-  - sandbox tick 以 fear 驅動 footsteps roll
-- `src/data/night1_words.ts`
-  - unknownKeywords 補上 `不確定`
+  - sandbox 出題時建立 `SandboxPrompt`，messageId 與 promptId 綁定。
+  - 新增 `setPinnedQuestionMessage()` writer guard（sandbox only）。
+  - Overlay 顯示改讀 `getSandboxOverlayConsonant()`（來自 prompt.current）。
+  - sandbox 答題解析改讀 current prompt（不是直接依 node state）。
+  - debug 新增 `sandbox.prompt.*` 與 `pinned.lastWriter.*`。
+- `src/ui/scene/SceneView.tsx`
+  - 擴充 debug 型別，加入 `sandbox.prompt.*` 結構。
+- `README.md`
+  - 新增 Sandbox PromptCoordinator / pinned writer guard / 一致性 debug 欄位。
+- `docs/10-change-log.md`
+  - 新增本次變更記錄。
 
 ## Removed/Deprecated Log
 - Removed（sandbox only）
-  - PASS 後 related chatWave
-  - PASS 後 preNextPrompt 驚訝/猜測 wave
+  - 無（本次為整合修正，不新增移除項）。
 
 ## SSOT
-- No SSOT schema changes.
+- Added（sandbox only）
+  - `sandbox.prompt.current`（PromptCoordinator 單一真相來源）。
+- Classic SSOT
+  - 無變更。
 
 ## Debug fields change log
 - Added
-  - `sandbox.consonant.currentIndex`
-  - `sandbox.consonant.currentConsonant`
-  - `sandbox.consonant.currentWordKey`
-  - `sandbox.consonant.judge.lastInput`
-  - `sandbox.consonant.judge.lastResult`
-  - `scheduler.phase`（awaitingTag|awaitingAnswer|revealingWord）
-  - `word.reveal.phase`
-  - `ghost.gate.lastReason`
-  - `footsteps.probability`
-  - `footsteps.cooldownRemaining`
-  - `footsteps.lastAt`
+  - `sandbox.prompt.current.kind`
+  - `sandbox.prompt.current.promptId`
+  - `sandbox.prompt.overlay.consonantShown`
+  - `sandbox.prompt.pinned.promptIdRendered`
+  - `sandbox.prompt.mismatch`
+  - `sandbox.prompt.pinned.lastWriter.source`
+  - `sandbox.prompt.pinned.lastWriter.writerBlocked`
+  - `sandbox.prompt.pinned.lastWriter.blockedReason`
 
 ## Acceptance (PASS/FAIL)
-1) Sandbox 子音 PASS 會換題：PASS
-2) 單字在子音旁邊逐字補齊（不是另外顯示）：PASS
-3) PASS 後不出觀眾討論波、直接下一題：PASS
-4) 回答「不知道」會出 classic 風格提示且同題可重答：PASS
-5) 子音 PASS 不會觸發鬼動；只有 comprehension correct 才會：PASS（sandbox 子音流程固定 blocked）
-6) 腳步聲頻率隨 SAN（fearLevel）上升而提高：PASS
-7) Classic Isolation（classic 完全不受 sandbox 影響）：PASS
+1) sandbox_story 畫面顯示「ฉ」時，pinned 同題子音題：PASS
+2) 回覆「不知道」後 promptId 不變、同題維持：PASS
+3) Debug `sandbox.prompt.mismatch` 永遠為 false：PASS
+4) Classic Isolation（classic pinned/overlay 行為不變，且 classic 不 import sandbox coordinator）：PASS

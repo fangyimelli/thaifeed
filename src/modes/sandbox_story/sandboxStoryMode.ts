@@ -34,6 +34,25 @@ export type SandboxGhostGateResult = {
   reason: string;
 };
 
+export type SandboxPrompt =
+  | {
+      kind: 'consonant';
+      promptId: string;
+      consonant: string;
+      wordKey: string;
+      pinnedText: string;
+      correctKeywords: string[];
+      unknownKeywords: string[];
+    }
+  | {
+      kind: 'comprehension';
+      promptId: string;
+      questionKey: string;
+      pinnedText: string;
+      options: string[];
+      correctOptionId: string;
+    };
+
 export type SandboxStoryState = {
   nodeIndex: number;
   scheduler: { phase: SandboxStoryPhase };
@@ -64,6 +83,19 @@ export type SandboxStoryState = {
   wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
   blocked: { reason: '' | 'phaseBusy'; count: number };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
+  prompt: {
+    current: SandboxPrompt | null;
+    overlay: { consonantShown: string };
+    pinned: {
+      promptIdRendered: string;
+      lastWriter: {
+        source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'unknown';
+        writerBlocked: boolean;
+        blockedReason: '' | 'notSandbox' | 'phaseBusy' | 'writerNotAllowed';
+      };
+    };
+    mismatch: boolean;
+  };
 };
 
 export type SandboxStoryMode = GameMode & {
@@ -92,6 +124,15 @@ export type SandboxStoryMode = GameMode & {
   markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
   notifyBlockedByPhase: () => void;
+  setCurrentPrompt: (prompt: SandboxPrompt | null) => void;
+  getCurrentPrompt: () => SandboxPrompt | null;
+  commitPromptOverlay: (consonantShown: string) => void;
+  commitPromptPinnedRendered: (promptIdRendered: string) => void;
+  commitPinnedWriter: (payload: {
+    source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'unknown';
+    writerBlocked: boolean;
+    blockedReason?: '' | 'notSandbox' | 'phaseBusy' | 'writerNotAllowed';
+  }) => void;
 };
 
 const cloneScript = (script: NightScript): NightScript => JSON.parse(JSON.stringify(script)) as NightScript;
@@ -123,7 +164,29 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     wave: { count: 0, kind: 'related' },
     blocked: { reason: '', count: 0 },
-    audio: { lastKey: '', state: 'idle', reason: '' }
+    audio: { lastKey: '', state: 'idle', reason: '' },
+    prompt: {
+      current: null,
+      overlay: { consonantShown: '' },
+      pinned: {
+        promptIdRendered: '',
+        lastWriter: { source: 'unknown', writerBlocked: false, blockedReason: '' }
+      },
+      mismatch: false
+    }
+  };
+
+  const syncPromptMismatch = () => {
+    const currentPrompt = state.prompt.current;
+    const overlayConsonant = state.prompt.overlay.consonantShown;
+    const pinnedPromptId = state.prompt.pinned.promptIdRendered;
+    const overlayMismatch = currentPrompt?.kind === 'consonant'
+      ? overlayConsonant !== currentPrompt.consonant
+      : overlayConsonant.length > 0;
+    const pinnedMismatch = currentPrompt
+      ? pinnedPromptId !== currentPrompt.promptId
+      : pinnedPromptId.length > 0;
+    state.prompt.mismatch = overlayMismatch || pinnedMismatch;
   };
 
   const getCurrentNode = () => script.nodes[state.nodeIndex] ?? null;
@@ -176,6 +239,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.reveal.phase = 'idle';
       state.wave = { count: 0, kind: 'related' };
       state.blocked = { reason: '', count: 0 };
+      state.prompt.current = null;
+      state.prompt.overlay.consonantShown = '';
+      state.prompt.pinned.promptIdRendered = '';
+      state.prompt.pinned.lastWriter = { source: 'unknown', writerBlocked: false, blockedReason: '' };
+      syncPromptMismatch();
       syncNodeChar();
       syncFear();
     },
@@ -216,6 +284,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       state.scheduler.phase = 'awaitingTag';
       state.reveal = { ...state.reveal, visible: false, phase: 'idle' };
+      state.prompt.current = null;
+      state.prompt.overlay.consonantShown = '';
+      state.prompt.pinned.promptIdRendered = '';
+      syncPromptMismatch();
       syncNodeChar();
       syncFear();
     },
@@ -230,6 +302,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       script = cloneScript(nextScript);
       state.nodeIndex = 0;
       state.scheduler.phase = 'awaitingTag';
+      state.prompt.current = null;
+      state.prompt.overlay.consonantShown = '';
+      state.prompt.pinned.promptIdRendered = '';
+      syncPromptMismatch();
       syncNodeChar();
       syncFear();
       return true;
@@ -285,6 +361,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.scheduler.phase = 'awaitingTag';
       state.reveal.visible = false;
       state.reveal.phase = 'done';
+      state.prompt.current = null;
+      state.prompt.overlay.consonantShown = '';
+      state.prompt.pinned.promptIdRendered = '';
+      syncPromptMismatch();
       syncFear();
     },
     markWaveDone(kind, count) {
@@ -293,6 +373,32 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
-    notifyBlockedByPhase() { state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 }; syncFear(); }
+    notifyBlockedByPhase() { state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 }; syncFear(); },
+    setCurrentPrompt(prompt) {
+      state.prompt.current = prompt;
+      if (!prompt) {
+        state.prompt.overlay.consonantShown = '';
+        state.prompt.pinned.promptIdRendered = '';
+      }
+      syncPromptMismatch();
+    },
+    getCurrentPrompt() {
+      return state.prompt.current ? JSON.parse(JSON.stringify(state.prompt.current)) as SandboxPrompt : null;
+    },
+    commitPromptOverlay(consonantShown) {
+      state.prompt.overlay.consonantShown = consonantShown;
+      syncPromptMismatch();
+    },
+    commitPromptPinnedRendered(promptIdRendered) {
+      state.prompt.pinned.promptIdRendered = promptIdRendered;
+      syncPromptMismatch();
+    },
+    commitPinnedWriter(payload) {
+      state.prompt.pinned.lastWriter = {
+        source: payload.source,
+        writerBlocked: payload.writerBlocked,
+        blockedReason: payload.blockedReason ?? ''
+      };
+    }
   };
 }
