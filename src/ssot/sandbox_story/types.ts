@@ -20,6 +20,8 @@ export type TalkSeeds = {
 export type WordNode = {
   id: string;
   char: string;
+  correctKeywords: string[];
+  unknownKeywords: string[];
   word: string;
   wordText: string;
   highlightChar: string;

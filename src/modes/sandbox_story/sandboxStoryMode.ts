@@ -32,7 +32,13 @@ export type SandboxStoryState = {
   consonant: {
     nodeChar: string;
     promptText: string;
+    promptCurrent: string;
     parse: { ok: boolean; matchedChar: string; kind: string; matchedAlias: string; inputNorm: string };
+    judge: {
+      lastInput: string;
+      lastResult: 'correct' | 'wrong' | 'unknown' | 'timeout' | 'none';
+      timeoutEnabled: boolean;
+    };
   };
   reveal: {
     visible: boolean;
@@ -63,10 +69,10 @@ export type SandboxStoryMode = GameMode & {
   getSSOT: () => NightScript;
   importSSOT: (nextScript: NightScript) => boolean;
   setConsonantPromptText: (promptText: string) => void;
-  commitConsonantParseResult: (result: {
-    ok: boolean;
-    matchedChar?: string;
-    debug?: { kind?: string; matchedAlias?: string; inputNorm?: string };
+  commitConsonantJudgeResult: (result: {
+    input: string;
+    parsed: { ok: boolean; matchedChar?: string; debug?: { kind?: string; matchedAlias?: string; inputNorm?: string } };
+    judge: 'correct' | 'wrong' | 'unknown' | 'timeout';
   }) => void;
   getFearDebugState: () => SandboxFearDebugState;
   debugAddFear: (value?: number) => void;
@@ -86,7 +92,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const state: SandboxStoryState = {
     nodeIndex: 0,
     scheduler: { phase: 'boot' },
-    consonant: { nodeChar: '', promptText: '', parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '' } },
+    consonant: {
+      nodeChar: '',
+      promptText: '',
+      promptCurrent: '',
+      parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '' },
+      judge: { lastInput: '', lastResult: 'none', timeoutEnabled: false }
+    },
     reveal: { visible: false, phase: 'idle', text: '', highlightChar: '', baseConsonant: '', audioKey: '', startedAt: 0, wordKey: '' },
     ghostMotion: { lastId: null, state: 'idle' },
     fearSystem: { fearLevel: 0, maxFear, pressureLevel: 'low', ghostProbability: 0.1, triggers: { chatSpike: 0, storyEmotion: 0, darkFrame: 0, ghostNearby: 0 } },
@@ -193,10 +205,14 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
       return true;
     },
-    setConsonantPromptText(promptText) { state.consonant.promptText = promptText; },
-    commitConsonantParseResult(result) {
-      state.consonant.parse = { ok: result.ok, matchedChar: result.matchedChar ?? '', kind: result.debug?.kind ?? '', matchedAlias: result.debug?.matchedAlias ?? '', inputNorm: result.debug?.inputNorm ?? '' };
-      if (result.ok && result.matchedChar === state.consonant.nodeChar) startReveal(getCurrentNode());
+    setConsonantPromptText(promptText) {
+      state.consonant.promptText = promptText;
+      state.consonant.promptCurrent = getCurrentNode()?.char ?? '';
+    },
+    commitConsonantJudgeResult(result) {
+      state.consonant.parse = { ok: result.parsed.ok, matchedChar: result.parsed.matchedChar ?? '', kind: result.parsed.debug?.kind ?? '', matchedAlias: result.parsed.debug?.matchedAlias ?? '', inputNorm: result.parsed.debug?.inputNorm ?? '' };
+      state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
+      if (result.judge === 'correct' && result.parsed.matchedChar === state.consonant.nodeChar) startReveal(getCurrentNode());
       syncFear();
     },
     getFearDebugState() { syncFear(); return JSON.parse(JSON.stringify(state.fearSystem)) as SandboxFearDebugState; },

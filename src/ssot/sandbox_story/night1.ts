@@ -12,6 +12,8 @@ export const NIGHT1: NightScript = {
   nodes: NIGHT1_WORDS.map((entry, index) => ({
     id: `n1-node-${String(index + 1).padStart(3, '0')}`,
     char: entry.consonant,
+    correctKeywords: entry.correctKeywords,
+    unknownKeywords: entry.unknownKeywords,
     word: entry.wordText,
     wordText: entry.wordText,
     highlightChar: entry.consonant,

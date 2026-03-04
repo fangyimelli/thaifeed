@@ -1425,7 +1425,7 @@ npm run build
   - 立刻解除 freeze/pause，並重置 qna/event queue，避免 hard-freeze 卡死。
 
 ## README Removed/Deprecated Log
-- 本次無新增移除項。
+- 2026-03-04：本次 sandbox_story Consonant QnA 流程為整合更新，無新增移除項。
 
 ## 2026-03-02 事件 registry / SFX 對照修正
 
@@ -1523,17 +1523,27 @@ Console（debug 模式）可觀察：
   - `sandbox.currentNode.word/char`
 
 
-## Sandbox Story Mode（Classic Consonant Adapter）
+## Sandbox Story Mode（Consonant QnA True Flow）
 
-- sandbox_story 現在先跑 classic 規則的子音答題（泰文/拼音/注音），答對後才進 SSOT 單字顯示與後續節點。
-- 新增 sandbox adapter：`src/modes/sandbox_story/classicConsonantAdapter.ts`
-  - parser 直接呼叫 classic `isAnswerCorrect`，不改 classic。
-  - prompt 在 sandbox 端組裝，並以 tag + pinned + freeze 顯示。
-- Debug 面板新增：
+- `sandbox_story` 子音答題採 sandbox keyword 規則（不改 classic mode）：
+  - 每題 SSOT 定義 `correctKeywords`、`unknownKeywords`（`src/data/night1_words.ts`）。
+  - prompt 明確提示：`@{activeUser} 請回覆本題子音（直接輸入：{keyword}），或回覆：不知道`。
+  - 玩家回覆統一走同一條 `parse + judge + apply`。
+- Judge 結果：
+  - `correct`：先 unfreeze，再進 `revealingWord -> chatWaveRelated -> preNextPrompt -> awaitingTag/next`。
+  - `unknown`：走可持續推進路徑（不會卡死）。
+  - `wrong`：給 retry 提示，可持續重答（不會卡死）。
+  - `timeout`：debug 欄位保留，當前標示未啟用。
+- freeze 規則：沿用 `runTagStartFlow`，固定 `append -> scroll -> pin -> freeze`，確保 pinned render 後才 freeze。
+- Debug 面板：
   - `ForceAskConsonantNow`
-  - `SimulateConsonantAnswer(text)`
-  - `sandbox.consonant.*` 一組欄位
-  - `freeze.active / pinned.text`
+  - `SimulateConsonantAnswer(text)`（直接走與玩家輸入相同流程）
+  - `scheduler.phase`
+  - `consonant.prompt.current`
+  - `consonant.judge.lastInput / consonant.judge.lastResult`
+  - `word.reveal.phase / word.reveal.wordKey`
+  - `lastWave.count / lastWave.kind`
+  - `blockedReason`
 
 - 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
 
@@ -1555,4 +1565,4 @@ Console（debug 模式）可觀察：
   - 命名：拉丁小寫 + 底線（例如 `klang_kuen`, `tonmai`, `pratu`）。
 
 ## README Removed/Deprecated Log
-- 本次無新增移除項。
+- 2026-03-04：本次 sandbox_story Consonant QnA 流程為整合更新，無新增移除項。
