@@ -674,6 +674,9 @@ export default function App() {
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
   const sandboxConsonantTagOwnerRef = useRef<string>('mod_live');
   const sandboxWaveRunningRef = useRef(false);
+  const sandboxRevealDoneTimerRef = useRef<number | null>(null);
+  const sandboxAdvanceRetryTimerRef = useRef<number | null>(null);
+  const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_applyCorrect' | 'state_only' }>({ clickedAt: 0, action: 'none' });
 
   const qnaStateRef = useRef(createInitialQnaState());
   const messageSeqRef = useRef(0);
@@ -2491,6 +2494,10 @@ export default function App() {
           judge: sandboxState.consonant.judge
         },
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
+        scheduler: {
+          phase: sandboxState.scheduler.phase,
+          blockedReason: sandboxState.scheduler.blockedReason || '-'
+        },
         ghost: { gate: { lastReason: sandboxState.ghostGate?.lastReason ?? '-' } },
         prompt: {
           current: {
@@ -2520,7 +2527,25 @@ export default function App() {
         },
         hint: { lastText: sandboxState.hint.lastText || '-', count: sandboxState.hint.count },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
-        blockedReason: sandboxState.blocked.reason || '-'
+        blockedReason: sandboxState.blocked.reason || '-',
+        advance: {
+          lastAt: sandboxState.advance.lastAt,
+          lastReason: sandboxState.advance.lastReason || '-'
+        },
+        reveal: {
+          visible: sandboxState.reveal.visible,
+          phase: sandboxState.reveal.phase,
+          doneAt: sandboxState.reveal.doneAt
+        },
+        debug: {
+          pass: {
+            clickedAt: sandboxDebugPassRef.current.clickedAt,
+            action: sandboxDebugPassRef.current.action
+          }
+        },
+        promptNext: {
+          id: (sandboxModeRef.current.getSSOT().nodes[sandboxState.nodeIndex + 1]?.id) ?? '-'
+        }
       };
       updateEventDebug({
         mode: {
@@ -3083,6 +3108,61 @@ export default function App() {
     });
   }, [debugComposingOverride, input, isComposing, isReady, isSending, mentionTarget, replyTarget, sendDebug, updateChatDebug]);
 
+  const clearSandboxAdvanceRetry = useCallback(() => {
+    if (sandboxAdvanceRetryTimerRef.current != null) {
+      window.clearTimeout(sandboxAdvanceRetryTimerRef.current);
+      sandboxAdvanceRetryTimerRef.current = null;
+    }
+  }, []);
+
+  const clearSandboxRevealDoneTimer = useCallback(() => {
+    if (sandboxRevealDoneTimerRef.current != null) {
+      window.clearTimeout(sandboxRevealDoneTimerRef.current);
+      sandboxRevealDoneTimerRef.current = null;
+    }
+  }, []);
+
+  const advanceSandboxPrompt = useCallback((reason: string, retryCount = 0) => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const st = sandboxModeRef.current.getState();
+    if (st.scheduler.phase === 'awaitingTag') {
+      sandboxModeRef.current.advancePrompt(reason);
+      sandboxConsonantPromptNodeIdRef.current = null;
+      clearSandboxAdvanceRetry();
+      setSandboxRevealTick(Date.now());
+      return;
+    }
+    const blockedReason = `phaseBusy:${st.scheduler.phase}`;
+    sandboxModeRef.current.notifyBlockedByPhase();
+    if (retryCount >= 10) {
+      sandboxModeRef.current.advancePrompt(`${reason}:retry_limit`);
+      sandboxConsonantPromptNodeIdRef.current = null;
+      clearSandboxAdvanceRetry();
+      setSandboxRevealTick(Date.now());
+      return;
+    }
+    clearSandboxAdvanceRetry();
+    sandboxAdvanceRetryTimerRef.current = window.setTimeout(() => {
+      advanceSandboxPrompt(`${reason}:retry:${blockedReason}`, retryCount + 1);
+    }, 200);
+  }, [clearSandboxAdvanceRetry]);
+
+  const applySandboxCorrect = useCallback((payload?: { input?: string; matchedChar?: string; source?: string }) => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.applyCorrect({ input: payload?.input, matchedChar: payload?.matchedChar });
+    clearChatFreeze('sandbox_consonant_correct');
+    setChatAutoPaused(false);
+    sendCooldownUntil.current = Date.now() + 350;
+    tagSlowActiveRef.current = false;
+    setInput('');
+    setSandboxRevealTick(Date.now());
+  }, [clearChatFreeze]);
+
+  useEffect(() => () => {
+    clearSandboxAdvanceRetry();
+    clearSandboxRevealDoneTimer();
+  }, [clearSandboxAdvanceRetry, clearSandboxRevealDoneTimer]);
+
   const submitChat = useCallback(async (rawText: string, source: SendSource): Promise<SendResult> => {
     const now = Date.now();
     const markBlocked = (reason: string): SendResult => {
@@ -3197,13 +3277,7 @@ export default function App() {
           const judge = judgeClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
           if (judge === 'correct' && parsed.matchedChar === currentPrompt.consonant) {
-            clearChatFreeze('sandbox_consonant_correct');
-            setChatAutoPaused(false);
-            sandboxConsonantPromptNodeIdRef.current = null;
-            setSandboxRevealTick(Date.now());
-            sendCooldownUntil.current = Date.now() + 350;
-            tagSlowActiveRef.current = false;
-            setInput('');
+            applySandboxCorrect({ input: raw, matchedChar: parsed.matchedChar, source: 'real_answer' });
             return markSent('sandbox_consonant_correct');
           }
           const hint = getSandboxConsonantHint({ nodeChar: currentPrompt.consonant, node, activeUser: activeUserInitialHandleRef.current || 'you' });
@@ -3336,7 +3410,7 @@ export default function App() {
     } finally {
       setIsSending(false);
     }
-  }, [appStarted, chatAutoPaused, chatAutoScrollMode, clearChatFreeze, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
+  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, state, tryTriggerStoryEvent, updateChatDebug]);
 
   const submit = useCallback((source: SendSource) => {
     if (source === 'submit') {
@@ -3682,9 +3756,6 @@ export default function App() {
 
 
 
-
-
-
   async function askSandboxConsonantNow() {
     if (modeRef.current.id !== 'sandbox_story') return;
     const sandboxState = sandboxModeRef.current.getState();
@@ -3783,6 +3854,13 @@ export default function App() {
     setSandboxRevealTick(Date.now());
   }, []);
 
+  const handleSandboxDebugPass = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxDebugPassRef.current = { clickedAt: Date.now(), action: 'called_applyCorrect' };
+    const node = sandboxModeRef.current.getCurrentNode();
+    applySandboxCorrect({ input: '__debug_pass__', matchedChar: node?.char, source: 'debug_pass_button' });
+  }, [applySandboxCorrect]);
+
   const forceAskConsonantNow = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
     sandboxConsonantPromptNodeIdRef.current = null;
@@ -3849,8 +3927,20 @@ export default function App() {
     if (reveal.visible && reveal.phase === 'enter') {
       sandboxModeRef.current.setPronounceState('idle', { key: reveal.audioKey, reason: 'reserved_no_side_effect' });
     }
+    if (reveal.visible && reveal.mode === 'correct' && reveal.startedAt > 0) {
+      clearSandboxRevealDoneTimer();
+      const elapsed = Date.now() - reveal.startedAt;
+      const remainMs = Math.max(0, 2100 - elapsed);
+      sandboxRevealDoneTimerRef.current = window.setTimeout(() => {
+        sandboxModeRef.current.forceRevealDone();
+        sandboxModeRef.current.markRevealDone();
+        advanceSandboxPrompt('correct_reveal_done');
+        setSandboxRevealTick(Date.now());
+      }, remainMs);
+    }
     if (reveal.visible && reveal.phase === 'done') {
       sandboxModeRef.current.markRevealDone();
+      advanceSandboxPrompt('correct_reveal_phase_done');
       setSandboxRevealTick(Date.now());
       return;
     }
@@ -3878,7 +3968,10 @@ export default function App() {
         }, i * randomInt(220, 360));
       }
     }
-  }, [sandboxRevealTick]);
+    return () => {
+      clearSandboxRevealDoneTimer();
+    };
+  }, [advanceSandboxPrompt, clearSandboxRevealDoneTimer, sandboxRevealTick]);
 
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
@@ -4338,6 +4431,7 @@ export default function App() {
                     <button type="button" onClick={() => setSandboxAutoPlayNight((prev) => !prev)}>
                       Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
                     </button>
+                    <button type="button" onClick={handleSandboxDebugPass}>PASS (applyCorrect)</button>
                     <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>
                     <button type="button" onClick={forceRevealCurrent}>Force Reveal Word</button>
                     <button type="button" onClick={forcePlayPronounce}>ForcePlayPronounce</button>
@@ -4437,10 +4531,17 @@ export default function App() {
                     <div>audio.pronounce.lastKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.lastKey ?? '-'}</div>
                     <div>audio.pronounce.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.state ?? '-'}</div>
                     <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
+                    <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
                     <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
                     <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
                     <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
                     <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
+                    <div>sandbox.prompt.next.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.promptNext?.id ?? '-'}</div>
+                    <div>sandbox.advance.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastAt ?? 0}</div>
+                    <div>sandbox.advance.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastReason ?? '-'}</div>
+                    <div>sandbox.reveal.doneAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.doneAt ?? 0}</div>
+                    <div>debug.pass.clickedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.clickedAt ?? 0}</div>
+                    <div>debug.pass.action: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.action ?? 'none'}</div>
                     <div>sandbox.prompt.overlay.consonantShown: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.overlay?.consonantShown ?? '-'}</div>
                     <div>sandbox.prompt.pinned.promptIdRendered: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.promptIdRendered ?? '-'}</div>
                     <div>sandbox.prompt.mismatch: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.mismatch ?? false)}</div>

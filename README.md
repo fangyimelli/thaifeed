@@ -55,6 +55,26 @@ npm run build
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
 - [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
+## Sandbox PASS / Reveal / Advance（2026-03-04 修正）
+
+- sandbox 的「真實答對」與 debug 面板 `PASS` 已統一走同一路徑：`applyCorrect() → startReveal() → reveal done → advancePrompt()`。
+- reveal pipeline 新增保底：即使動畫或 rerender 異常，`2100ms` 後也會強制 `done`，並觸發 `advancePrompt('correct')`。
+- 若推進時被 gate 擋住（phaseBusy），不再 silent fail：會記錄 `scheduler.blockedReason` 並每 `200ms` retry（最多 10 次）。
+- prompt 單一真相維持 `prompt.current`；push 到下一題時由 `advancePrompt()` 統一更新 prompt/node。
+- sandbox debug 新增欄位：
+  - `scheduler.phase`
+  - `scheduler.blockedReason`
+  - `sandbox.prompt.current.(id/consonant/wordKey)`
+  - `sandbox.prompt.next.id`
+  - `sandbox.advance.lastAt/lastReason`
+  - `sandbox.reveal.phase/doneAt`
+  - `debug.pass.clickedAt/action`
+
+### Removed / Deprecated Log
+
+- 已移除「debug PASS 只改 state、不走引擎流程」舊行為。
+- 原因：會造成 reveal/prompt 推進分叉，導致 PASS 後卡題。
+
 
 ## Actor Pool Separation
 

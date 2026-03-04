@@ -57,7 +57,7 @@ export type SandboxPrompt =
 
 export type SandboxStoryState = {
   nodeIndex: number;
-  scheduler: { phase: SandboxStoryPhase };
+  scheduler: { phase: SandboxStoryPhase; blockedReason: string };
   consonant: {
     nodeChar: string;
     promptText: string;
@@ -83,6 +83,7 @@ export type SandboxStoryState = {
     mode: 'correct' | 'wrong' | 'unknown';
     audioKey: string;
     startedAt: number;
+    doneAt: number;
     wordKey: string;
     position: {
       xPct: number;
@@ -100,6 +101,7 @@ export type SandboxStoryState = {
   fearSystem: SandboxFearDebugState;
   wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
   blocked: { reason: '' | 'phaseBusy'; count: number };
+  advance: { lastAt: number; lastReason: string };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
   hint: { lastText: string; count: number };
   prompt: {
@@ -140,6 +142,9 @@ export type SandboxStoryMode = GameMode & {
   debugAddFear: (value?: number) => void;
   debugResetFear: () => void;
   markRevealDone: () => void;
+  forceRevealDone: () => void;
+  applyCorrect: (payload?: { input?: string; matchedChar?: string }) => void;
+  advancePrompt: (reason: string) => void;
   markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
   notifyBlockedByPhase: () => void;
@@ -175,7 +180,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   let extraFear = 0;
   const state: SandboxStoryState = {
     nodeIndex: 0,
-    scheduler: { phase: 'boot' },
+    scheduler: { phase: 'boot', blockedReason: '' },
     consonant: {
       nodeChar: '',
       promptText: '',
@@ -197,6 +202,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       mode: 'correct',
       audioKey: '',
       startedAt: 0,
+      doneAt: 0,
       wordKey: '',
       position: { xPct: 50, yPct: 36 },
       safeRect: { ...REVEAL_SAFE_RECT }
@@ -213,6 +219,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     wave: { count: 0, kind: 'related' },
     blocked: { reason: '', count: 0 },
+    advance: { lastAt: 0, lastReason: '' },
     audio: { lastKey: '', state: 'idle', reason: '' },
     hint: { lastText: '', count: 0 },
     prompt: {
@@ -264,6 +271,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   };
 
   const getCurrentNode = () => script.nodes[state.nodeIndex] ?? null;
+  const clearSchedulerBlockedReason = () => {
+    state.scheduler.blockedReason = '';
+  };
   const syncNodeChar = () => {
     state.consonant.nodeChar = getCurrentNode()?.char ?? '';
   };
@@ -291,6 +301,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const startReveal = (node: WordNode | null, mode: 'correct' | 'wrong' | 'unknown') => {
     if (!node) return;
     if (mode === 'correct') state.scheduler.phase = 'revealingWord';
+    clearSchedulerBlockedReason();
     const splitWord = splitGraphemes(node.wordText);
     const wordGraphemes = splitWord.graphemes;
     const baseGrapheme = wordGraphemes[0] ?? '';
@@ -314,10 +325,24 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       mode,
       audioKey: node.audioKey,
       startedAt: Date.now(),
+      doneAt: 0,
       wordKey: node.id,
       position,
       safeRect: { ...REVEAL_SAFE_RECT }
     };
+  };
+  const advancePromptInternal = (reason: string) => {
+    state.advance = { lastAt: Date.now(), lastReason: reason };
+    state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+    syncNodeChar();
+    state.scheduler.phase = 'awaitingTag';
+    clearSchedulerBlockedReason();
+    state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: state.reveal.doneAt || Date.now() };
+    state.prompt.current = null;
+    state.prompt.overlay.consonantShown = '';
+    state.prompt.pinned.promptIdRendered = '';
+    syncPromptMismatch();
+    syncFear();
   };
 
   return {
@@ -326,9 +351,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     init() {
       state.nodeIndex = 0;
       state.scheduler.phase = 'awaitingTag';
+      clearSchedulerBlockedReason();
       state.reveal.visible = false;
       state.reveal.phase = 'idle';
       state.reveal.appended = '';
+      state.reveal.doneAt = 0;
       state.hint = { lastText: '', count: 0 };
       state.wave = { count: 0, kind: 'related' };
       state.blocked = { reason: '', count: 0 };
@@ -343,6 +370,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     onIncomingTag() {
       if (state.scheduler.phase === 'revealingWord') {
         state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 };
+        state.scheduler.blockedReason = 'phaseBusy:incoming_tag';
         syncFear();
         return;
       }
@@ -354,6 +382,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
         state.reveal.phase = elapsed < 200 ? 'enter' : elapsed < 1200 ? 'pulse' : elapsed < 2100 ? 'exit' : 'done';
+        if (state.reveal.phase === 'done' && !state.reveal.doneAt) {
+          state.reveal.doneAt = Date.now();
+        }
       }
       syncFear();
     },
@@ -374,9 +405,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       return null;
     },
     forceAdvanceNode() {
+      state.advance = { lastAt: Date.now(), lastReason: 'forceAdvanceNode' };
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       state.scheduler.phase = 'awaitingTag';
-      state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0 };
+      clearSchedulerBlockedReason();
+      state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: 0 };
       state.prompt.current = null;
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
@@ -387,6 +420,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     forceWave(kind) {
       state.wave.kind = kind;
       state.scheduler.phase = 'awaitingTag';
+      clearSchedulerBlockedReason();
       syncFear();
     },
     getSSOT: () => cloneScript(script),
@@ -395,6 +429,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       script = cloneScript(nextScript);
       state.nodeIndex = 0;
       state.scheduler.phase = 'awaitingTag';
+      clearSchedulerBlockedReason();
       state.prompt.current = null;
       state.prompt.overlay.consonantShown = '';
       state.prompt.pinned.promptIdRendered = '';
@@ -451,29 +486,53 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     debugAddFear(value = 10) { extraFear += value; syncFear(); },
     debugResetFear() { extraFear = 0; syncFear(); },
     markRevealDone() {
+      state.reveal.doneAt = state.reveal.doneAt || Date.now();
       if (state.reveal.mode === 'correct') {
         state.scheduler.phase = 'awaitingWave';
       } else {
         state.scheduler.phase = 'awaitingAnswer';
       }
+      clearSchedulerBlockedReason();
       state.reveal.visible = false;
       state.reveal.phase = 'done';
       syncFear();
     },
-    markWaveDone(kind, count) {
-      state.wave = { kind, count };
-      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
-      syncNodeChar();
-      state.scheduler.phase = 'awaitingTag';
-      state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0 };
-      state.prompt.current = null;
-      state.prompt.overlay.consonantShown = '';
-      state.prompt.pinned.promptIdRendered = '';
-      syncPromptMismatch();
+    forceRevealDone() {
+      state.reveal.visible = true;
+      state.reveal.phase = 'done';
+      state.reveal.doneAt = Date.now();
       syncFear();
     },
+    applyCorrect(payload) {
+      const node = getCurrentNode();
+      state.consonant.parse = {
+        ok: true,
+        matchedChar: payload?.matchedChar ?? node?.char ?? '',
+        kind: 'debug_apply_correct',
+        matchedAlias: '',
+        inputNorm: payload?.input ?? ''
+      };
+      state.consonant.judge = {
+        ...state.consonant.judge,
+        lastInput: payload?.input ?? state.consonant.judge.lastInput,
+        lastResult: 'correct'
+      };
+      startReveal(node, 'correct');
+      syncFear();
+    },
+    advancePrompt(reason) {
+      advancePromptInternal(reason);
+    },
+    markWaveDone(kind, count) {
+      state.wave = { kind, count };
+      advancePromptInternal(`markWaveDone:${kind}:${count}`);
+    },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
-    notifyBlockedByPhase() { state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 }; syncFear(); },
+    notifyBlockedByPhase() {
+      state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 };
+      state.scheduler.blockedReason = 'phaseBusy';
+      syncFear();
+    },
     setCurrentPrompt(prompt) {
       state.prompt.current = prompt;
       if (!prompt) {

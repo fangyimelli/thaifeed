@@ -411,3 +411,29 @@
 
 ### Docs
 - README、PR_NOTES 同步本次 reveal 視覺規格、安全區與驗收表。
+
+## 2026-03-04（sandbox PASS 不跳題修正：統一 correct pipeline + reveal done 保底）
+
+### Scope / Isolation
+- 僅調整 sandbox_story 流程與 debug 面板；classic mode 未改。
+
+### Changed
+- [sandbox/correct] 統一真實答對與 debug PASS 行為，兩者都走 `applyCorrect() → startReveal() → done → advancePrompt()`。
+- [sandbox/reveal] 新增 reveal done 保底（總時長 2100ms），即使動畫/rerender 異常，仍會強制進入 done。
+- [sandbox/advance] done 後一律嘗試 `advancePrompt("correct")`；若被 gate 擋住則記錄 `scheduler.blockedReason` 並每 200ms 重試，最多 10 次。
+- [sandbox/ssot] prompt 推進改由單一路徑 `advancePrompt()` 處理，更新 node 與 prompt.current（避免分叉）。
+- [sandbox/debug] 新增欄位：
+  - `scheduler.blockedReason`
+  - `sandbox.prompt.next.id`
+  - `sandbox.advance.lastAt/lastReason`
+  - `sandbox.reveal.doneAt`
+  - `sandbox.debug.pass.clickedAt/action`
+
+### Removed / Deprecated
+- [sandbox/deprecated] 移除 debug PASS 以 state-only 直接改結果的舊行為（不再允許繞過引擎流程）。
+
+### Acceptance
+- 按一次 PASS：reveal 完成後會跳下一題（`prompt.current.id` 變更）：PASS。
+- 真實答對：同樣會跳下一題：PASS。
+- 被 gate 擋住時：debug 可見 `blockedReason`：PASS。
+- Classic mode 不受影響：PASS。
