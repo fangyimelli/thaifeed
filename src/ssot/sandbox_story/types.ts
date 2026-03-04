@@ -7,35 +7,31 @@ export type ComprehensionQuestion = {
   text: string;
   options: ComprehensionOption[];
   correctOptionId: string;
-  ghostMotionOnCorrect: string;
+  keyword: string;
+  unknownKeyword: string;
+};
+
+export type TalkSeeds = {
+  related: string[];
+  surprise: string[];
+  guess: string[];
 };
 
 export type WordNode = {
   id: string;
   char: string;
   word: string;
+  wordText: string;
   highlightChar: string;
   audioKey: string;
-  story: {
-    identity: string;
-    emotion: string;
-    hintZH: string;
-  };
-  relatedTalk: string[];
   comprehensionQuestion: ComprehensionQuestion;
-};
-
-export type GhostMotionPack = {
-  id: string;
-  description: string;
-  motionKeys: string[];
+  talkSeeds: TalkSeeds;
 };
 
 export type ChatTemplates = {
-  relatedTalkLead: string[];
-  comprehensionPrompt: string[];
-  onCorrect: string[];
-  onWrong: string[];
+  relatedTalk: string[];
+  surprise: string[];
+  guess: string[];
 };
 
 export type NightScript = {
@@ -46,6 +42,11 @@ export type NightScript = {
     locale: 'zh-TW';
   };
   nodes: WordNode[];
-  ghostMotions: GhostMotionPack[];
   chatTemplates: ChatTemplates;
+};
+
+export type GhostMotionPack = {
+  id: string;
+  description: string;
+  motionKeys: string[];
 };

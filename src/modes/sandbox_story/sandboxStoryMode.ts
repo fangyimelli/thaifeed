@@ -8,57 +8,48 @@ export type SandboxStoryPhase =
   | 'pinnedFreezeAwaitConsonant'
   | 'revealingWord'
   | 'chatWaveRelated'
-  | 'awaitingComprehensionTag'
-  | 'pinnedFreezeAwaitAnswer'
-  | 'resolvingComprehension'
-  | 'ghostMotionPlaying'
-  | 'postMotionWrapUp';
+  | 'preNextPrompt'
+  | 'awaitingTag';
 
-export type SandboxRevealPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut';
+export type SandboxRevealPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut' | 'done';
+
+export type SandboxFearDebugState = {
+  fearLevel: number;
+  maxFear: number;
+  pressureLevel: 'low' | 'medium' | 'high' | 'panic';
+  ghostProbability: number;
+  triggers: {
+    chatSpike: number;
+    storyEmotion: number;
+    darkFrame: number;
+    ghostNearby: number;
+  };
+};
 
 export type SandboxStoryState = {
   nodeIndex: number;
-  scheduler: {
-    phase: SandboxStoryPhase;
-  };
+  scheduler: { phase: SandboxStoryPhase };
   consonant: {
     nodeChar: string;
     promptText: string;
-    parse: {
-      ok: boolean;
-      matchedChar: string;
-      kind: string;
-      matchedAlias: string;
-      inputNorm: string;
-    };
+    parse: { ok: boolean; matchedChar: string; kind: string; matchedAlias: string; inputNorm: string };
   };
   reveal: {
     visible: boolean;
     phase: SandboxRevealPhase;
     text: string;
     highlightChar: string;
+    baseConsonant: string;
     audioKey: string;
     startedAt: number;
+    wordKey: string;
   };
-  ghostMotion: {
-    lastId: string | null;
-    state: 'idle' | 'playing';
-  };
-  fearSystem: {
-    fearLevel: number;
-    maxFear: number;
-    pressureLevel: 'low' | 'medium' | 'high' | 'panic';
-    ghostProbability: number;
-    triggers: {
-      chatSpike: number;
-      storyEmotion: number;
-      darkFrame: number;
-      ghostNearby: number;
-    };
-  };
+  ghostMotion: { lastId: string | null; state: 'idle' | 'playing' };
+  fearSystem: SandboxFearDebugState;
+  wave: { count: number; kind: 'related' | 'surprise' | 'guess' };
+  blocked: { reason: '' | 'phaseBusy'; count: number };
+  audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
 };
-
-export type SandboxFearDebugState = SandboxStoryState['fearSystem'];
 
 export type SandboxStoryMode = GameMode & {
   getState: () => SandboxStoryState;
@@ -68,6 +59,7 @@ export type SandboxStoryMode = GameMode & {
   forceAskComprehensionNow: () => void;
   forceGhostMotion: (motionId?: string) => string | null;
   forceAdvanceNode: () => void;
+  forceWave: (kind: 'related' | 'surprise' | 'guess') => void;
   getSSOT: () => NightScript;
   importSSOT: (nextScript: NightScript) => boolean;
   setConsonantPromptText: (promptText: string) => void;
@@ -79,141 +71,58 @@ export type SandboxStoryMode = GameMode & {
   getFearDebugState: () => SandboxFearDebugState;
   debugAddFear: (value?: number) => void;
   debugResetFear: () => void;
+  markRevealDone: () => void;
+  markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
+  setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
+  notifyBlockedByPhase: () => void;
 };
-
-const PHASE_SEQUENCE: SandboxStoryPhase[] = [
-  'awaitingConsonantTagPrompt',
-  'pinnedFreezeAwaitConsonant',
-  'revealingWord',
-  'chatWaveRelated',
-  'awaitingComprehensionTag',
-  'pinnedFreezeAwaitAnswer',
-  'resolvingComprehension',
-  'ghostMotionPlaying',
-  'postMotionWrapUp'
-];
 
 const cloneScript = (script: NightScript): NightScript => JSON.parse(JSON.stringify(script)) as NightScript;
 
 export function createSandboxStoryMode(): SandboxStoryMode {
+  let script: NightScript = cloneScript(NIGHT1);
   const maxFear = 100;
-  const baseProbability = 0.1;
-
+  let extraFear = 0;
   const state: SandboxStoryState = {
     nodeIndex: 0,
-    scheduler: {
-      phase: 'boot'
-    },
-    consonant: {
-      nodeChar: '',
-      promptText: '',
-      parse: {
-        ok: false,
-        matchedChar: '',
-        kind: '',
-        matchedAlias: '',
-        inputNorm: ''
-      }
-    },
-    reveal: {
-      visible: false,
-      phase: 'idle',
-      text: '',
-      highlightChar: '',
-      audioKey: '',
-      startedAt: 0
-    },
-    ghostMotion: {
-      lastId: null,
-      state: 'idle'
-    },
-    fearSystem: {
-      fearLevel: 0,
-      maxFear,
-      pressureLevel: 'low',
-      ghostProbability: baseProbability,
-      triggers: {
-        chatSpike: 0,
-        storyEmotion: 0,
-        darkFrame: 0,
-        ghostNearby: 0
-      }
-    }
+    scheduler: { phase: 'boot' },
+    consonant: { nodeChar: '', promptText: '', parse: { ok: false, matchedChar: '', kind: '', matchedAlias: '', inputNorm: '' } },
+    reveal: { visible: false, phase: 'idle', text: '', highlightChar: '', baseConsonant: '', audioKey: '', startedAt: 0, wordKey: '' },
+    ghostMotion: { lastId: null, state: 'idle' },
+    fearSystem: { fearLevel: 0, maxFear, pressureLevel: 'low', ghostProbability: 0.1, triggers: { chatSpike: 0, storyEmotion: 0, darkFrame: 0, ghostNearby: 0 } },
+    wave: { count: 0, kind: 'related' },
+    blocked: { reason: '', count: 0 },
+    audio: { lastKey: '', state: 'idle', reason: '' }
   };
-
-  let script: NightScript = cloneScript(NIGHT1);
-  let debugStoryEmotionBonus = 0;
 
   const getCurrentNode = () => script.nodes[state.nodeIndex] ?? null;
-
   const syncNodeChar = () => {
-    const node = getCurrentNode();
-    state.consonant.nodeChar = node?.char ?? '';
+    state.consonant.nodeChar = getCurrentNode()?.char ?? '';
   };
-
-  const applyRevealFromNode = (node: WordNode | null) => {
+  const syncFear = () => {
+    const base = Math.min(90, state.nodeIndex * 6 + (state.scheduler.phase === 'revealingWord' ? 15 : 3) + (state.scheduler.phase === 'chatWaveRelated' ? 10 : 0));
+    const fear = Math.max(0, Math.min(maxFear, base + extraFear));
+    state.fearSystem = {
+      fearLevel: fear,
+      maxFear,
+      pressureLevel: fear > 80 ? 'panic' : fear > 60 ? 'high' : fear > 30 ? 'medium' : 'low',
+      ghostProbability: Math.min(1, 0.1 + fear / maxFear),
+      triggers: { chatSpike: Math.min(30, state.wave.count * 4), storyEmotion: Math.min(35, state.reveal.visible ? 20 : 8), darkFrame: state.reveal.phase === 'fogOut' ? 12 : 3, ghostNearby: 4 }
+    };
+  };
+  const startReveal = (node: WordNode | null) => {
     if (!node) return;
+    state.scheduler.phase = 'revealingWord';
     state.reveal = {
       visible: true,
       phase: 'fadeIn',
-      text: node.word,
-      highlightChar: node.highlightChar,
+      text: node.wordText,
+      highlightChar: node.char,
+      baseConsonant: node.char,
       audioKey: node.audioKey,
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      wordKey: node.id
     };
-  };
-
-  const toPressureLevel = (fearLevel: number): SandboxFearDebugState['pressureLevel'] => {
-    if (fearLevel >= 80) return 'panic';
-    if (fearLevel >= 60) return 'high';
-    if (fearLevel >= 30) return 'medium';
-    return 'low';
-  };
-
-  const computeFearDebugState = (): SandboxFearDebugState => {
-    const chatSpike = Math.min(30, state.nodeIndex * 3 + (state.scheduler.phase === 'chatWaveRelated' ? 6 : 2));
-    const storyEmotion = Math.min(35, state.nodeIndex * 7 + (state.reveal.visible ? 8 : 0) + debugStoryEmotionBonus);
-    const darkFrame = state.reveal.visible && state.reveal.phase === 'fogOut' ? 12 : 3;
-    const ghostNearby = state.ghostMotion.state === 'playing' ? 16 : 4;
-    const fearLevel = Math.max(0, Math.min(maxFear, chatSpike + storyEmotion + darkFrame + ghostNearby));
-    const fearLevelFactor = fearLevel / maxFear;
-    const ghostProbability = Math.max(0, Math.min(1, baseProbability + fearLevelFactor));
-    return {
-      fearLevel,
-      maxFear,
-      pressureLevel: toPressureLevel(fearLevel),
-      ghostProbability,
-      triggers: {
-        chatSpike,
-        storyEmotion,
-        darkFrame,
-        ghostNearby
-      }
-    };
-  };
-
-  const syncFearState = () => {
-    state.fearSystem = computeFearDebugState();
-  };
-
-  const toNextPhase = () => {
-    if (state.scheduler.phase === 'boot') {
-      state.scheduler.phase = PHASE_SEQUENCE[0];
-      return;
-    }
-    const phaseIndex = PHASE_SEQUENCE.indexOf(state.scheduler.phase);
-    if (phaseIndex < 0) {
-      state.scheduler.phase = PHASE_SEQUENCE[0];
-      return;
-    }
-    const next = PHASE_SEQUENCE[phaseIndex + 1];
-    if (!next) {
-      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
-      syncNodeChar();
-      state.scheduler.phase = 'awaitingConsonantTagPrompt';
-      return;
-    }
-    state.scheduler.phase = next;
   };
 
   return {
@@ -221,173 +130,90 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     label: 'Sandbox Story Mode',
     init() {
       state.nodeIndex = 0;
-      state.scheduler.phase = 'boot';
+      state.scheduler.phase = 'awaitingConsonantTagPrompt';
+      state.reveal.visible = false;
+      state.reveal.phase = 'idle';
+      state.wave = { count: 0, kind: 'related' };
+      state.blocked = { reason: '', count: 0 };
       syncNodeChar();
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
-      state.ghostMotion = { lastId: null, state: 'idle' };
-      debugStoryEmotionBonus = 0;
-      toNextPhase();
-      syncFearState();
+      syncFear();
     },
     onIncomingTag() {
-      if (state.scheduler.phase === 'awaitingComprehensionTag') {
-        state.scheduler.phase = 'pinnedFreezeAwaitAnswer';
+      if (['revealingWord', 'chatWaveRelated', 'preNextPrompt'].includes(state.scheduler.phase)) {
+        state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 };
+        syncFear();
+        return;
       }
-      if (state.scheduler.phase === 'awaitingConsonantTagPrompt') {
-        state.scheduler.phase = 'pinnedFreezeAwaitConsonant';
-      }
-      syncFearState();
+      if (state.scheduler.phase === 'awaitingConsonantTagPrompt' || state.scheduler.phase === 'awaitingTag') state.scheduler.phase = 'pinnedFreezeAwaitConsonant';
+      syncFear();
     },
-    onPlayerReply() {
-      if (state.scheduler.phase === 'pinnedFreezeAwaitAnswer') {
-        state.scheduler.phase = 'resolvingComprehension';
-      }
-      syncFearState();
-    },
+    onPlayerReply() { syncFear(); },
     tick() {
       if (state.scheduler.phase === 'revealingWord') {
-        if (!state.reveal.visible) {
-          applyRevealFromNode(getCurrentNode());
-        }
-        const elapsed = Math.max(0, Date.now() - state.reveal.startedAt);
-        if (elapsed < 800) {
-          state.reveal.phase = 'fadeIn';
-          syncFearState();
-          return;
-        }
-        if (elapsed < 1700) {
-          state.reveal.phase = 'hold';
-          syncFearState();
-          return;
-        }
-        if (elapsed < 2900) {
-          state.reveal.phase = 'fogOut';
-          syncFearState();
-          return;
-        }
-        state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
-        state.scheduler.phase = 'chatWaveRelated';
-        syncFearState();
-        return;
+        const elapsed = Date.now() - state.reveal.startedAt;
+        state.reveal.phase = elapsed < 800 ? 'fadeIn' : elapsed < 1700 ? 'hold' : elapsed < 2900 ? 'fogOut' : 'done';
       }
-      if (state.scheduler.phase === 'ghostMotionPlaying' || state.scheduler.phase === 'pinnedFreezeAwaitConsonant' || state.scheduler.phase === 'pinnedFreezeAwaitAnswer') {
-        syncFearState();
-        return;
-      }
-      toNextPhase();
-      syncFearState();
+      syncFear();
     },
-    dispose() {
-      state.nodeIndex = 0;
-      state.scheduler.phase = 'boot';
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
-      state.ghostMotion = { lastId: null, state: 'idle' };
-      debugStoryEmotionBonus = 0;
-      syncFearState();
-    },
-    getState: () => ({
-      nodeIndex: state.nodeIndex,
-      scheduler: {
-        phase: state.scheduler.phase
-      },
-      consonant: {
-        nodeChar: state.consonant.nodeChar,
-        promptText: state.consonant.promptText,
-        parse: {
-          ...state.consonant.parse
-        }
-      },
-      reveal: {
-        ...state.reveal
-      },
-      ghostMotion: {
-        ...state.ghostMotion
-      },
-      fearSystem: {
-        ...state.fearSystem,
-        triggers: {
-          ...state.fearSystem.triggers
-        }
-      }
-    }),
+    dispose() {},
+    getState: () => JSON.parse(JSON.stringify(state)) as SandboxStoryState,
     getCurrentNode,
     forceRevealCurrent() {
       const node = getCurrentNode();
-      applyRevealFromNode(node);
-      syncFearState();
+      startReveal(node);
+      syncFear();
       return node;
     },
-    forceAskConsonantNow() {
-      state.scheduler.phase = 'awaitingConsonantTagPrompt';
-      syncFearState();
-    },
-    forceAskComprehensionNow() {
-      state.scheduler.phase = 'awaitingComprehensionTag';
-      syncFearState();
-    },
+    forceAskConsonantNow() { state.scheduler.phase = 'awaitingConsonantTagPrompt'; syncFear(); },
+    forceAskComprehensionNow() { state.scheduler.phase = 'awaitingTag'; syncFear(); },
     forceGhostMotion(motionId) {
-      const node = getCurrentNode();
-      const selectedId = motionId ?? node?.comprehensionQuestion.ghostMotionOnCorrect ?? null;
-      if (!selectedId) return null;
-      state.scheduler.phase = 'ghostMotionPlaying';
-      state.ghostMotion = {
-        lastId: selectedId,
-        state: 'playing'
-      };
-      syncFearState();
-      return selectedId;
+      state.ghostMotion = { lastId: motionId ?? 'disabled_no_ghost_entity', state: 'idle' };
+      syncFear();
+      return null;
     },
     forceAdvanceNode() {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
-      syncNodeChar();
       state.scheduler.phase = 'awaitingConsonantTagPrompt';
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
-      state.ghostMotion = { ...state.ghostMotion, state: 'idle' };
-      syncFearState();
+      state.reveal = { ...state.reveal, visible: false, phase: 'idle' };
+      syncNodeChar();
+      syncFear();
+    },
+    forceWave(kind) {
+      state.wave.kind = kind;
+      state.scheduler.phase = kind === 'related' ? 'chatWaveRelated' : 'preNextPrompt';
+      syncFear();
     },
     getSSOT: () => cloneScript(script),
     importSSOT(nextScript) {
       if (!nextScript?.nodes?.length) return false;
       script = cloneScript(nextScript);
       state.nodeIndex = 0;
-      syncNodeChar();
       state.scheduler.phase = 'awaitingConsonantTagPrompt';
-      state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '', audioKey: '', startedAt: 0 };
-      state.ghostMotion = { lastId: null, state: 'idle' };
-      debugStoryEmotionBonus = 0;
-      syncFearState();
+      syncNodeChar();
+      syncFear();
       return true;
     },
-    setConsonantPromptText(promptText) {
-      state.consonant.promptText = promptText;
-      syncFearState();
-    },
+    setConsonantPromptText(promptText) { state.consonant.promptText = promptText; },
     commitConsonantParseResult(result) {
-      state.consonant.parse = {
-        ok: result.ok,
-        matchedChar: result.matchedChar ?? '',
-        kind: result.debug?.kind ?? '',
-        matchedAlias: result.debug?.matchedAlias ?? '',
-        inputNorm: result.debug?.inputNorm ?? ''
-      };
-      syncFearState();
+      state.consonant.parse = { ok: result.ok, matchedChar: result.matchedChar ?? '', kind: result.debug?.kind ?? '', matchedAlias: result.debug?.matchedAlias ?? '', inputNorm: result.debug?.inputNorm ?? '' };
+      if (result.ok && result.matchedChar === state.consonant.nodeChar) startReveal(getCurrentNode());
+      syncFear();
     },
-    getFearDebugState() {
-      syncFearState();
-      return {
-        ...state.fearSystem,
-        triggers: {
-          ...state.fearSystem.triggers
-        }
-      };
+    getFearDebugState() { syncFear(); return JSON.parse(JSON.stringify(state.fearSystem)) as SandboxFearDebugState; },
+    debugAddFear(value = 10) { extraFear += value; syncFear(); },
+    debugResetFear() { extraFear = 0; syncFear(); },
+    markRevealDone() { state.scheduler.phase = 'chatWaveRelated'; state.reveal.visible = false; state.reveal.phase = 'done'; syncFear(); },
+    markWaveDone(kind, count) {
+      state.wave = { kind, count };
+      if (kind === 'related') state.scheduler.phase = 'preNextPrompt';
+      else {
+        state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+        syncNodeChar();
+        state.scheduler.phase = 'awaitingTag';
+      }
+      syncFear();
     },
-    debugAddFear(value = 10) {
-      debugStoryEmotionBonus = Math.max(0, debugStoryEmotionBonus + value);
-      syncFearState();
-    },
-    debugResetFear() {
-      debugStoryEmotionBonus = 0;
-      syncFearState();
-    }
+    setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
+    notifyBlockedByPhase() { state.blocked = { reason: 'phaseBusy', count: state.blocked.count + 1 }; syncFear(); }
   };
 }

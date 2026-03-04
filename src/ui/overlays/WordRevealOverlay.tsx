@@ -1,56 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
-
-export type WordRevealOverlayPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut';
+export type WordRevealOverlayPhase = 'idle' | 'fadeIn' | 'hold' | 'fogOut' | 'done';
 
 type Props = {
   visible: boolean;
   phase: WordRevealOverlayPhase;
-  text: string;
-  highlightChar: string;
+  text?: string;
+  wordText?: string;
+  highlightChar?: string;
+  baseConsonant?: string;
 };
 
-function renderHighlightedText(text: string, highlightChar: string) {
-  if (!text) return null;
-  const parts = text.split('');
-  return parts.map((char, index) => {
-    const key = `${char}-${index}`;
-    if (char === highlightChar) {
-      return <strong key={key} className="word-reveal-char-highlight">{char}</strong>;
-    }
-    return <span key={key}>{char}</span>;
-  });
+function resolveSuffixByPhase(wordText: string, baseConsonant: string, phase: WordRevealOverlayPhase) {
+  const suffix = wordText.startsWith(baseConsonant) ? wordText.slice(baseConsonant.length) : wordText;
+  if (phase === 'fadeIn') return suffix.slice(0, Math.max(1, Math.ceil(suffix.length * 0.5)));
+  if (phase === 'hold' || phase === 'fogOut' || phase === 'done') return suffix;
+  return '';
 }
 
-export default function WordRevealOverlay({ visible, phase, text, highlightChar }: Props) {
-  const [internalPhase, setInternalPhase] = useState<WordRevealOverlayPhase>(phase);
-
-  useEffect(() => {
-    if (!visible || !text) {
-      setInternalPhase('idle');
-      return;
-    }
-    setInternalPhase('fadeIn');
-    const holdTimer = window.setTimeout(() => setInternalPhase('hold'), 800);
-    const fogTimer = window.setTimeout(() => setInternalPhase('fogOut'), 1700);
-    const idleTimer = window.setTimeout(() => setInternalPhase('idle'), 2900);
-    return () => {
-      window.clearTimeout(holdTimer);
-      window.clearTimeout(fogTimer);
-      window.clearTimeout(idleTimer);
-    };
-  }, [visible, text]);
-
-  const resolvedPhase = useMemo<WordRevealOverlayPhase>(() => {
-    if (!visible) return 'idle';
-    if (phase !== 'idle') return phase;
-    return internalPhase;
-  }, [internalPhase, phase, visible]);
-
-  if (!visible || !text || resolvedPhase === 'idle') return null;
-
+export default function WordRevealOverlay({ visible, phase, text, wordText, highlightChar, baseConsonant }: Props) {
+  const resolvedText = wordText ?? text ?? '';
+  const resolvedBase = baseConsonant ?? highlightChar ?? resolvedText.slice(0, 1);
+  if (!visible || !resolvedText || phase === 'idle' || phase === 'done') return null;
+  const suffix = resolveSuffixByPhase(resolvedText, resolvedBase, phase);
   return (
-    <div className={`word-reveal-overlay phase-${resolvedPhase}`} aria-live="polite">
-      <div className="word-reveal-text">{renderHighlightedText(text, highlightChar)}</div>
+    <div className={`word-reveal-overlay phase-${phase}`} aria-live="polite">
+      <div className="word-reveal-text">
+        <strong className="word-reveal-char-highlight">{resolvedBase}</strong>
+        <span className="word-reveal-suffix">{suffix}</span>
+      </div>
     </div>
   );
 }
