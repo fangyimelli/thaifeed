@@ -589,19 +589,22 @@ body {
 }
 
 .sandbox-word-reveal-text {
-  position: absolute;
+  position: fixed;
+  left: 50%;
+  top: 50%;
   transform: translate(-50%, -50%);
-  z-index: 28;
+  z-index: 280;
   display: inline-flex;
   justify-content: center;
   pointer-events: none;
   opacity: 0;
   white-space: pre;
+  animation: sandboxWordRevealCore 4000ms linear forwards;
 }
 
 .sandbox-word-reveal-text__word {
   color: #edf2ff;
-  font-size: clamp(62px, 6.4vw, 92px);
+  font-size: clamp(88px, 10vw, 140px);
   line-height: 1;
   letter-spacing: 0.04em;
   text-shadow: 0 0 16px rgba(170, 208, 255, 0.42);
@@ -623,39 +626,23 @@ body {
   color: #edf2ff;
 }
 
-.sandbox-word-reveal-text.phase-enter {
-  animation: sandboxWordRevealEnter 220ms ease-out forwards;
-}
-
-.sandbox-word-reveal-text.phase-pulse {
-  opacity: 1;
-}
-
-.sandbox-word-reveal-text.phase-pulse .pulseAndScaleFade {
-  animation: sandboxWordRevealPulse 500ms ease-in-out 2;
-}
-
-.sandbox-word-reveal-text.phase-exit {
-  animation: sandboxWordRevealExit 900ms ease-out forwards;
-}
-
-@keyframes sandboxWordRevealEnter {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-@keyframes sandboxWordRevealPulse {
-  0%, 100% { opacity: 1; filter: brightness(1); }
-  50% { opacity: 0.38; filter: brightness(1.2); }
-}
-
-@keyframes sandboxWordRevealExit {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(1.18); }
+@keyframes sandboxWordRevealCore {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35);
+  }
 }
 
 @media (max-width: 860px) {
   .sandbox-word-reveal-text__word {
-    font-size: clamp(44px, 8vw, 62px);
+    font-size: clamp(68px, 14vw, 108px);
   }
 }

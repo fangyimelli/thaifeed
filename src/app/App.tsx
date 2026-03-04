@@ -2526,8 +2526,11 @@ export default function App() {
         },
         word: {
           reveal: {
+            active: sandboxState.reveal.visible,
             phase: sandboxState.reveal.phase,
             wordKey: sandboxState.reveal.wordKey,
+            consonantFromPrompt: sandboxState.reveal.consonantFromPrompt || '-',
+            durationMs: sandboxState.reveal.durationMs,
             base: sandboxState.reveal.baseGrapheme || '-',
             rest: sandboxState.reveal.restText || '-',
             baseGrapheme: sandboxState.reveal.baseGrapheme || '-',
@@ -2563,6 +2566,7 @@ export default function App() {
         prompt: {
           current: {
             kind: sandboxState.prompt.current?.kind ?? '-',
+            id: sandboxState.prompt.current?.promptId ?? '-',
             promptId: sandboxState.prompt.current?.promptId ?? '-',
             consonant: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '-',
             wordKey: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.wordKey : '-',
@@ -2591,7 +2595,8 @@ export default function App() {
         blockedReason: sandboxState.blocked.reason || '-',
         advance: {
           lastAt: sandboxState.advance.lastAt,
-          lastReason: sandboxState.advance.lastReason || '-'
+          lastReason: sandboxState.advance.lastReason || '-',
+          blockedReason: sandboxState.advance.blockedReason || '-'
         },
         reveal: {
           visible: sandboxState.reveal.visible,
@@ -2606,6 +2611,9 @@ export default function App() {
         },
         promptNext: {
           id: (sandboxModeRef.current.getSSOT().nodes[sandboxState.nodeIndex + 1]?.id) ?? '-'
+        },
+        mismatch: {
+          promptVsReveal: sandboxState.mismatch.promptVsReveal
         }
       };
       updateEventDebug({
@@ -3195,7 +3203,7 @@ export default function App() {
     }
   }, []);
 
-  const advanceSandboxPrompt = useCallback((reason: string, retryCount = 0) => {
+  const advanceSandboxPrompt = useCallback((reason: 'correct' | 'wrong' | 'unknown', retryCount = 0) => {
     if (modeRef.current.id !== 'sandbox_story') return;
     const st = sandboxModeRef.current.getState();
     if (st.scheduler.phase === 'awaitingTag') {
@@ -3205,10 +3213,9 @@ export default function App() {
       setSandboxRevealTick(Date.now());
       return;
     }
-    const blockedReason = `phaseBusy:${st.scheduler.phase}`;
     sandboxModeRef.current.notifyBlockedByPhase();
     if (retryCount >= 10) {
-      sandboxModeRef.current.advancePrompt(`${reason}:retry_limit`);
+      sandboxModeRef.current.advancePrompt(reason);
       sandboxConsonantPromptNodeIdRef.current = null;
       clearSandboxAdvanceRetry();
       setSandboxRevealTick(Date.now());
@@ -3216,7 +3223,7 @@ export default function App() {
     }
     clearSandboxAdvanceRetry();
     sandboxAdvanceRetryTimerRef.current = window.setTimeout(() => {
-      advanceSandboxPrompt(`${reason}:retry:${blockedReason}`, retryCount + 1);
+      advanceSandboxPrompt(reason, retryCount + 1);
     }, 200);
   }, [clearSandboxAdvanceRetry]);
 
@@ -3344,11 +3351,18 @@ export default function App() {
       }
       if (modeRef.current.id === 'sandbox_story' && !sandboxQnaConsumed) {
         const sandboxState = sandboxModeRef.current.getState();
-        const node = sandboxModeRef.current.getCurrentNode();
         const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
+        const node = currentPrompt?.kind === 'consonant'
+          ? sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === currentPrompt.wordKey) ?? null
+          : null;
         if (sandboxState.scheduler.phase === 'awaitingAnswer' && node && currentPrompt?.kind === 'consonant') {
           const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
-          const judge = judgeClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
+          const parseKind = parsed.debug?.kind ?? '';
+          let judge = judgeClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
+          if (!parsed.ok || parseKind === 'none') {
+            judge = judge === 'unknown' ? 'unknown' : 'wrong';
+            sandboxModeRef.current.commitAdvanceBlockedReason('parse_none');
+          }
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
           if (judge === 'correct' && parsed.matchedChar === currentPrompt.consonant) {
             applySandboxCorrect({ input: raw, matchedChar: parsed.matchedChar, source: 'real_answer' });
@@ -4023,17 +4037,17 @@ export default function App() {
     if (reveal.visible && reveal.mode === 'correct' && reveal.startedAt > 0) {
       clearSandboxRevealDoneTimer();
       const elapsed = Date.now() - reveal.startedAt;
-      const remainMs = Math.max(0, 2100 - elapsed);
+      const remainMs = Math.max(0, 4000 - elapsed);
       sandboxRevealDoneTimerRef.current = window.setTimeout(() => {
         sandboxModeRef.current.forceRevealDone();
         sandboxModeRef.current.markRevealDone();
-        advanceSandboxPrompt('correct_reveal_done');
+        advanceSandboxPrompt('correct');
         setSandboxRevealTick(Date.now());
       }, remainMs);
     }
     if (reveal.visible && reveal.phase === 'done') {
       sandboxModeRef.current.markRevealDone();
-      advanceSandboxPrompt('correct_reveal_phase_done');
+      advanceSandboxPrompt('correct');
       setSandboxRevealTick(Date.now());
       return;
     }
@@ -4275,9 +4289,11 @@ export default function App() {
                 return {
                   visible: st.reveal.visible,
                   phase: st.reveal.phase,
-                  baseText: st.reveal.baseGrapheme,
-                  restText: st.reveal.restText,
-                  position: st.reveal.position
+                  wordKey: st.reveal.wordKey,
+                  consonantFromPrompt: st.reveal.consonantFromPrompt,
+                  mismatch: st.mismatch.promptVsReveal,
+                  durationMs: st.reveal.durationMs,
+                  wordText: st.reveal.text
                 };
               })() : undefined}
             />
@@ -4631,12 +4647,19 @@ export default function App() {
                     <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
                     <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
                     <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
+                    <div>sandbox.prompt.current.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.id ?? '-'}</div>
                     <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
                     <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
                     <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
                     <div>sandbox.prompt.next.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.promptNext?.id ?? '-'}</div>
+                    <div>word.reveal.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.active ?? false)}</div>
+                    <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
+                    <div>word.reveal.consonantFromPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.consonantFromPrompt ?? '-'}</div>
+                    <div>word.reveal.durationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.durationMs ?? '-'}</div>
                     <div>sandbox.advance.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastAt ?? 0}</div>
                     <div>sandbox.advance.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastReason ?? '-'}</div>
+                    <div>sandbox.advance.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.blockedReason ?? '-'}</div>
+                    <div>mismatch.promptVsReveal: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.mismatch?.promptVsReveal ?? false)}</div>
                     <div>sandbox.reveal.doneAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.doneAt ?? 0}</div>
                     <div>debug.pass.clickedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.clickedAt ?? 0}</div>
                     <div>debug.pass.action: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.action ?? 'none'}</div>

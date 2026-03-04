@@ -53,9 +53,11 @@ type Props = {
   wordReveal?: {
     visible: boolean;
     phase: SandboxWordRevealTextPhase;
-    baseText: string;
-    restText: string;
-    position: { xPct: number; yPct: number };
+    wordKey: string;
+    consonantFromPrompt: string;
+    mismatch: boolean;
+    durationMs: number;
+    wordText: string;
   };
 };
 
@@ -1933,9 +1935,11 @@ export default function SceneView({
           <SandboxWordRevealText
             visible={Boolean(wordReveal?.visible)}
             phase={wordReveal?.phase ?? 'idle'}
-            baseText={wordReveal?.baseText ?? ''}
-            restText={wordReveal?.restText ?? ''}
-            position={wordReveal?.position}
+            wordKey={wordReveal?.wordKey}
+            consonantFromPrompt={wordReveal?.consonantFromPrompt}
+            mismatch={wordReveal?.mismatch}
+            durationMs={wordReveal?.durationMs}
+            wordText={wordReveal?.wordText}
           />
           <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
         </div>
