@@ -292,6 +292,17 @@ declare global {
           word?: string;
           char?: string;
         };
+        consonant?: {
+          nodeChar?: string;
+          promptText?: string;
+          parse?: {
+            ok?: boolean;
+            matchedChar?: string;
+            kind?: string;
+            matchedAlias?: string;
+            inputNorm?: string;
+          };
+        };
       };
       fx?: {
         blackout?: {

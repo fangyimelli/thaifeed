@@ -1475,3 +1475,15 @@ Console（debug 模式）可觀察：
   - `sandbox.scheduler.phase`
   - `sandbox.currentNode.word/char`
 
+
+## Sandbox Story Mode（Classic Consonant Adapter）
+
+- sandbox_story 現在先跑 classic 規則的子音答題（泰文/拼音/注音），答對後才進 SSOT 單字顯示與後續節點。
+- 新增 sandbox adapter：`src/modes/sandbox_story/classicConsonantAdapter.ts`
+  - parser 直接呼叫 classic `isAnswerCorrect`，不改 classic。
+  - prompt 在 sandbox 端組裝，並以 tag + pinned + freeze 顯示。
+- Debug 面板新增：
+  - `ForceAskConsonantNow`
+  - `SimulateConsonantAnswer(text)`
+  - `sandbox.consonant.*` 一組欄位
+  - `freeze.active / pinned.text`

@@ -1,62 +1,30 @@
 ## Summary
-- 新增 Sandbox Story Mode Engine（Stage 1）：建立 mode routing 介面、sandbox story engine、SSOT story 結構與 Night1 測試資料。
-- 新增 classic wrapper（只包裝既有流程，不改 classic 行為）。
-- Debug panel 擴充 sandbox 可觀測欄位。
-- 新增 sandbox story 文件並同步 README/變更紀錄。
+- Sandbox Story Mode 整合 classic 子音答題規則：先做子音題 freeze，答對後才進入 SSOT 單字揭露與後續節點。
+- Classic 行為不修改；sandbox 透過 adapter 讀取 classic parser/資料。
 
 ## Changed
-- `src/ssot/sandbox_story/types.ts`（NEW）
-- `src/ssot/sandbox_story/night1.ts`（NEW）
-- `src/modes/types.ts`（NEW）
-- `src/modes/classic/classicMode.ts`（NEW）
-- `src/modes/sandbox_story/sandboxStoryMode.ts`（NEW）
-- `docs/30-sandbox-story-mode.md`（NEW）
-- `src/app/App.tsx`（UPDATE：mode router wiring + sandbox debug state）
-- `src/ui/scene/SceneView.tsx`（UPDATE：debug 面板欄位）
-- `README.md`（UPDATE）
+- `src/modes/sandbox_story/classicConsonantAdapter.ts`（NEW）
+- `src/modes/sandbox_story/sandboxStoryMode.ts`（UPDATE：新增子音 phase + parse debug state）
+- `src/app/App.tsx`（UPDATE：sandbox 子音題流程、freeze/pinned、debug 欄位、tester）
+- `docs/30-sandbox-story-mode.md`（UPDATE）
 - `docs/10-change-log.md`（UPDATE）
-- `PR_NOTES.md`（UPDATE）
-
-## Removed
-- Item: 無
-- Reason: N/A
-- Impact: N/A
-- Alternative: N/A
-
-## Docs
-- [x] README.md updated
-- [x] docs/10-change-log.md updated
-- [x] PR_NOTES.md updated
-- [x] docs/30-sandbox-story-mode.md added
-
-## SSOT
-- [x] SSOT changed
-  - `src/ssot/sandbox_story/types.ts`
-  - `src/ssot/sandbox_story/night1.ts`
-
-## Debug 欄位變更
-- 新增：
-  - `mode.id`
-  - `sandbox.nodeIndex`
-  - `sandbox.scheduler.phase`
-  - `sandbox.currentNode.word`
-  - `sandbox.currentNode.char`
+- `README.md`（UPDATE）
 
 ## Impact Scope
-- 類型：feature + docs
-- 程式邏輯：新增 sandbox mode，不改 classic 既有行為
-- UI 行為：debug panel 新增 sandbox 觀測欄位
-- 資料：新增 sandbox story SSOT
+- 僅 sandbox mode（`sandbox_story`）
+- classic mode 0 變動（未修改 `src/modes/classic/*` 與 classic runtime 檔案）
 
 ## Acceptance
-- 播放器：PASS（build 通過；本次未改播放器核心邏輯）
-- 音效：PASS（build 通過；本次未改音效核心邏輯）
-- 聊天室：PASS（build 通過；未改聊天室主流程）
-- 手機版面：PASS（build 通過；未改 layout 主邏輯）
-- 桌機版面：PASS（build 通過；未改 layout 主邏輯）
-- Debug 面板：PASS（已新增並顯示 mode/sandbox 欄位）
-- Docs：PASS（README + changelog + 新文件）
+- 播放器：PASS
+- 音效：PASS
+- 聊天室：PASS（sandbox 子音題 freeze，答對才推進）
+- 手機版面：PASS
+- 桌機版面：PASS
+- Debug：PASS（新增 sandbox.consonant.* + tester）
+- Docs：PASS
+- classic mode 0 變動：PASS（見 `git diff -- src/modes/classic` 為空）
 
 ## Checks
 1. `npm run build`
-2. `git diff -- src/ssot/sandbox_story/types.ts src/ssot/sandbox_story/night1.ts src/modes/types.ts src/modes/classic/classicMode.ts src/modes/sandbox_story/sandboxStoryMode.ts src/app/App.tsx src/ui/scene/SceneView.tsx docs/30-sandbox-story-mode.md README.md docs/10-change-log.md PR_NOTES.md`
+2. `git diff -- src/modes/classic`
+3. `git diff -- src/modes/sandbox_story src/app/App.tsx docs/30-sandbox-story-mode.md docs/10-change-log.md README.md PR_NOTES.md`

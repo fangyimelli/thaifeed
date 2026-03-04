@@ -4,7 +4,8 @@ import type { GameMode } from '../types';
 
 export type SandboxStoryPhase =
   | 'boot'
-  | 'awaitingQuestionReady'
+  | 'awaitingConsonantTagPrompt'
+  | 'pinnedFreezeAwaitConsonant'
   | 'revealingWord'
   | 'chatWaveRelated'
   | 'awaitingComprehensionTag'
@@ -19,6 +20,17 @@ export type SandboxStoryState = {
   nodeIndex: number;
   scheduler: {
     phase: SandboxStoryPhase;
+  };
+  consonant: {
+    nodeChar: string;
+    promptText: string;
+    parse: {
+      ok: boolean;
+      matchedChar: string;
+      kind: string;
+      matchedAlias: string;
+      inputNorm: string;
+    };
   };
   reveal: {
     visible: boolean;
@@ -36,15 +48,23 @@ export type SandboxStoryMode = GameMode & {
   getState: () => SandboxStoryState;
   getCurrentNode: () => WordNode | null;
   forceRevealCurrent: () => WordNode | null;
+  forceAskConsonantNow: () => void;
   forceAskComprehensionNow: () => void;
   forceGhostMotion: (motionId?: string) => string | null;
   forceAdvanceNode: () => void;
   getSSOT: () => NightScript;
   importSSOT: (nextScript: NightScript) => boolean;
+  setConsonantPromptText: (promptText: string) => void;
+  commitConsonantParseResult: (result: {
+    ok: boolean;
+    matchedChar?: string;
+    debug?: { kind?: string; matchedAlias?: string; inputNorm?: string };
+  }) => void;
 };
 
 const PHASE_SEQUENCE: SandboxStoryPhase[] = [
-  'awaitingQuestionReady',
+  'awaitingConsonantTagPrompt',
+  'pinnedFreezeAwaitConsonant',
   'revealingWord',
   'chatWaveRelated',
   'awaitingComprehensionTag',
@@ -62,6 +82,17 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     scheduler: {
       phase: 'boot'
     },
+    consonant: {
+      nodeChar: '',
+      promptText: '',
+      parse: {
+        ok: false,
+        matchedChar: '',
+        kind: '',
+        matchedAlias: '',
+        inputNorm: ''
+      }
+    },
     reveal: {
       visible: false,
       phase: 'idle',
@@ -77,6 +108,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   let script: NightScript = cloneScript(NIGHT1);
 
   const getCurrentNode = () => script.nodes[state.nodeIndex] ?? null;
+
+  const syncNodeChar = () => {
+    const node = getCurrentNode();
+    state.consonant.nodeChar = node?.char ?? '';
+  };
 
   const applyRevealFromNode = (node: WordNode | null) => {
     if (!node) return;
@@ -101,7 +137,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     const next = PHASE_SEQUENCE[phaseIndex + 1];
     if (!next) {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
-      state.scheduler.phase = 'awaitingQuestionReady';
+      syncNodeChar();
+      state.scheduler.phase = 'awaitingConsonantTagPrompt';
       return;
     }
     state.scheduler.phase = next;
@@ -113,6 +150,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     init() {
       state.nodeIndex = 0;
       state.scheduler.phase = 'boot';
+      syncNodeChar();
       state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
       state.ghostMotion = { lastId: null, state: 'idle' };
       toNextPhase();
@@ -121,6 +159,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (state.scheduler.phase === 'awaitingComprehensionTag') {
         state.scheduler.phase = 'pinnedFreezeAwaitAnswer';
       }
+      if (state.scheduler.phase === 'awaitingConsonantTagPrompt') {
+        state.scheduler.phase = 'pinnedFreezeAwaitConsonant';
+      }
     },
     onPlayerReply() {
       if (state.scheduler.phase === 'pinnedFreezeAwaitAnswer') {
@@ -128,7 +169,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       }
     },
     tick() {
-      if (state.scheduler.phase === 'ghostMotionPlaying') {
+      if (state.scheduler.phase === 'ghostMotionPlaying' || state.scheduler.phase === 'pinnedFreezeAwaitConsonant' || state.scheduler.phase === 'pinnedFreezeAwaitAnswer') {
         return;
       }
       toNextPhase();
@@ -147,6 +188,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       scheduler: {
         phase: state.scheduler.phase
       },
+      consonant: {
+        nodeChar: state.consonant.nodeChar,
+        promptText: state.consonant.promptText,
+        parse: {
+          ...state.consonant.parse
+        }
+      },
       reveal: {
         ...state.reveal
       },
@@ -159,6 +207,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       const node = getCurrentNode();
       applyRevealFromNode(node);
       return node;
+    },
+    forceAskConsonantNow() {
+      state.scheduler.phase = 'awaitingConsonantTagPrompt';
     },
     forceAskComprehensionNow() {
       state.scheduler.phase = 'awaitingComprehensionTag';
@@ -176,7 +227,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     forceAdvanceNode() {
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
-      state.scheduler.phase = 'awaitingQuestionReady';
+      syncNodeChar();
+      state.scheduler.phase = 'awaitingConsonantTagPrompt';
       state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
       state.ghostMotion = { ...state.ghostMotion, state: 'idle' };
     },
@@ -185,10 +237,26 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (!nextScript?.nodes?.length) return false;
       script = cloneScript(nextScript);
       state.nodeIndex = 0;
-      state.scheduler.phase = 'awaitingQuestionReady';
+      syncNodeChar();
+      state.scheduler.phase = 'awaitingConsonantTagPrompt';
       state.reveal = { visible: false, phase: 'idle', text: '', highlightChar: '' };
       state.ghostMotion = { lastId: null, state: 'idle' };
       return true;
+    },
+    setConsonantPromptText(promptText) {
+      state.consonant.promptText = promptText;
+    },
+    commitConsonantParseResult(result) {
+      state.consonant.parse = {
+        ok: result.ok,
+        matchedChar: result.matchedChar ?? '',
+        kind: result.debug?.kind ?? '',
+        matchedAlias: result.debug?.matchedAlias ?? '',
+        inputNorm: result.debug?.inputNorm ?? ''
+      };
+      if (result.ok && result.matchedChar === state.consonant.nodeChar) {
+        state.scheduler.phase = 'revealingWord';
+      }
     }
   };
 }
