@@ -53,3 +53,49 @@
 - 3) tag 後回覆「不知道」：同上（且會進提示流程）：PASS
 - 4) debug 顯示 qna.awaitingReply true→false，ui.replyBarVisible true→false：PASS
 - 5) classic mode 不受影響：PASS
+
+## 2026-03-04（sandbox only：換題鎖定流程）
+
+### Summary
+- 修正 sandbox 任意輸入會跳題：現在只允許 `correct_done` 或 `debug_pass` 換題。
+- 修正 unknown 分流：`不知道 / 不確定 / idk / ?` 一律判定 unknown，僅顯示 hint，不 reveal、不前進。
+- 修正 reveal 規則：僅 correct 觸發，置中顯示完整單字，4000ms 放大淡出，結束後自動前進。
+- Debug PASS 改為真正 skip：直接 `advancePrompt('debug_pass')`，並清理 reply/freeze/reveal 狀態。
+
+### Changed Files
+- `src/app/App.tsx`
+- `src/modes/sandbox_story/sandboxStoryMode.ts`
+- `src/modes/sandbox_story/classicConsonantAdapter.ts`
+- `src/ui/overlays/SandboxWordRevealText.tsx`
+- `src/ui/scene/SceneView.tsx`
+- `README.md`
+- `docs/10-change-log.md`
+
+### SSOT
+- [x] SSOT changed
+  - sandbox prompt 單一真相維持 `sandbox.prompt.current`，題目/判定/hint/reveal 共用同一來源。
+
+### Debug 欄位變更紀錄
+- 新增 / 明確化：
+  - `sandbox.prompt.current.id`
+  - `sandbox.prompt.current.consonant`
+  - `sandbox.prompt.current.wordKey`
+  - `judge.lastInput`
+  - `judge.lastResult`
+  - `hint.active`
+  - `hint.lastShownAt`
+  - `word.reveal.active`
+  - `word.reveal.wordKey`
+  - `word.reveal.durationMs`
+  - `advance.lastAt`
+  - `advance.lastReason`
+  - `advance.blockedReason`
+
+### Acceptance
+| Item | Result |
+|---|---|
+| 1) 玩家輸入「不知道」：出現提示，prompt 不變 | PASS |
+| 2) 玩家亂打字（非正確、非不知道）：不換題 | PASS |
+| 3) 玩家答對：置中單字放大 4 秒淡出，結束後自動換題 | PASS |
+| 4) 按 PASS：立即換題（不需答對） | PASS |
+| 5) Classic mode 不受影響 | PASS |

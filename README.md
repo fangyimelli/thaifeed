@@ -55,24 +55,21 @@ npm run build
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
 - [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
-## Sandbox PASS / Reveal / Advance（2026-03-04 修正）
+## Sandbox 換題鎖定規則（2026-03-04）
 
-- sandbox 的「真實答對」與 debug 面板 `PASS` 已統一走同一路徑：`applyCorrect() → startReveal() → reveal done → advancePrompt()`。
-- reveal pipeline 新增保底：即使動畫或 rerender 異常，`4000ms` 後也會強制 `done`，並觸發 `advancePrompt('correct')`。
-- 若推進時被 gate 擋住（phaseBusy），不再 silent fail：會記錄 `scheduler.blockedReason` 並每 `200ms` retry（最多 10 次）。
-- prompt 單一真相維持 `prompt.current`；push 到下一題時由 `advancePrompt()` 統一更新 prompt/node。
-
-- sandbox prompt SSOT 強制一致：`sandbox.prompt.current`（`id/consonant/wordKey`）同時提供題目子音、judge 與 reveal；reveal 不可自行選字或 fallback 第一個藍字。
-- 只有在判定結果已落地（`correct/wrong/unknown`）後才可推進；`parse.none` / `parse.ok=false` 會標記 `sandbox.advance.blockedReason=parse_none`，不得當作 correct 直接推進。
-- reveal 視覺規格（sandbox only）：固定螢幕中心、純文字無底框、總時長 4000ms；`0~1000ms scale 1.0→1.15 + opacity 1`，`1000~4000ms scale 1.15→1.35 + opacity 1→0`。
-- sandbox debug 新增欄位：
-  - `scheduler.phase`
-  - `scheduler.blockedReason`
-  - `sandbox.prompt.current.(id/consonant/wordKey)`
-  - `sandbox.prompt.next.id`
-  - `sandbox.advance.lastAt/lastReason`
-  - `sandbox.reveal.phase/doneAt`
-  - `debug.pass.clickedAt/action`
+- 只允許兩種情況換題：
+  1) `correct` 完成 reveal 後自動 `advancePrompt('correct_done')`
+  2) Debug PASS 直接 `advancePrompt('debug_pass')`
+- 其他任何輸入（包含 wrong/unknown/亂打）都不得換題，會記錄 `sandbox.advance.blockedReason=not_correct_or_pass`。
+- `unknown` 關鍵字固定支援：`不知道 / 不確定 / idk / ?`，只顯示提示，不 reveal、不 advance。
+- prompt SSOT 強制只讀 `sandbox.prompt.current`（`id/consonant/wordKey`）；題目、judge、hint、reveal 必須一致，mismatch 時阻擋流程並記錄 `mismatch=true`。
+- Word reveal（sandbox only）固定規格：畫面中心、純文字無底框、`4000ms` scale 放大 + opacity 漸淡，結束後才進下一題。
+- Debug 欄位（必看）：
+  - `sandbox.prompt.current.id/consonant/wordKey`
+  - `judge.lastInput / judge.lastResult`
+  - `hint.active / hint.lastShownAt`
+  - `word.reveal.active / word.reveal.wordKey / word.reveal.durationMs`
+  - `advance.lastAt / advance.lastReason / advance.blockedReason`
 
 ### Removed / Deprecated Log
 

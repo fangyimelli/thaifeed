@@ -481,3 +481,31 @@
 - 真實答對：同樣會跳下一題：PASS。
 - 被 gate 擋住時：debug 可見 `blockedReason`：PASS。
 - Classic mode 不受影響：PASS。
+
+## 2026-03-04（sandbox only：換題鎖定 + unknown hint + 4s reveal + debug PASS）
+
+### Scope / Isolation
+- 僅調整 `sandbox_story`；classic mode 無邏輯變更。
+
+### Changed
+- [sandbox/advance-gate] `advancePrompt()` 僅接受 `correct_done | debug_pass`，其餘 reason 一律 blocked（`not_correct_or_pass`）。
+- [sandbox/unknown] `unknown` 解析補齊 `不知道 / 不確定 / idk / ?`，unknown 僅顯示 hint，不 reveal、不 advance。
+- [sandbox/judge] wrong 與 unknown 都不會觸發 reveal，也不會推題。
+- [sandbox/reveal] reveal 只在 correct 啟動，固定中心、4000ms 動畫，完成後自動 `advancePrompt('correct_done')`。
+- [sandbox/debug-pass] Debug PASS 改為直接 `advancePrompt('debug_pass')`，並重置 reply/freeze/reveal 相關狀態。
+- [sandbox/debug-fields] 補齊欄位：`hint.active/lastShownAt`、`word.reveal.active/wordKey/durationMs`、`advance.*`、`prompt.current.*`、`judge.*`。
+
+### Removed / Deprecated
+- [sandbox/deprecated] 移除「wrong/unknown 進 reveal」舊路徑。
+- [sandbox/deprecated] 移除「PASS 走 applyCorrect 再 reveal」舊行為，改為強制跳題用途。
+
+### SSOT / Debug 記錄
+- SSOT 維持 `sandbox.prompt.current` 單一來源，題目顯示與 judge/hint/reveal 全部共用同一 prompt。
+- mismatch（UI consonant vs current prompt）時，流程阻擋並寫入 `advance.blockedReason=mismatch`。
+
+### 驗收表
+- 1) 玩家輸入「不知道」：出現提示，prompt 不變：PASS
+- 2) 玩家亂打字（非正確、非不知道）：不換題：PASS
+- 3) 玩家答對：顯示置中單字放大 4 秒淡出，結束後自動換題：PASS
+- 4) 按 PASS：立即換題（不需答對）：PASS
+- 5) Classic mode 不受影響：PASS
