@@ -891,10 +891,14 @@ npm run build
 
 - 入口：主畫面影片右上角小型 `Debug` 按鈕（overlay 模式，不跳頁）。
 - DebugPanel 改為 mode-aware，分成三塊：
-  - `Mode Debug`：顯示 `currentMode: classic|sandbox_story`。
+  - `Mode Debug`：顯示 `currentMode`，並在面板最上方提供 `Switch to Classic` / `Switch to Sandbox (sandbox_story)`。
   - `Classic Debug Tools`：僅在 `mode === "classic"` 時顯示。
   - `Sandbox Story Debug Tools`：僅在 `mode === "sandbox_story"` 時顯示。
-- `getActiveMode()` 優先序：`debug.modeOverride` → `urlMode` → `defaultMode(classic)`。
+- Mode SSOT：沿用既有 `mode` query param（`?mode=classic|sandbox_story`），debug-only switcher 會同步寫入 `localStorage['app.currentMode']` 並立即 reload 生效。
+- 啟動時 mode 決策：
+  - `mode` query param（最高優先）
+  - 若 `debug=1` 才允許讀取 `localStorage['app.currentMode']`
+  - fallback `classic`
 - `Classic Debug Tools` 內固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
   - Trigger VOICE_CONFIRM
   - Trigger GHOST_PING
@@ -938,7 +942,6 @@ npm run build
   - `event.lastReactions.lastReactionActors`
   - `violation=reaction_actor_system=true`（若反應誤用 system）
 - `Sandbox Story Debug Tools` 包含：
-  - `Mode Switcher`
   - `Auto Play Night`
   - `Force Next Node`
   - `Force Reveal Word`
@@ -958,6 +961,11 @@ npm run build
   - Debug 快捷按鈕：`Add Fear +10` / `Reset Fear`
   - `Night Timeline`（顯示 `sandbox.reveal.* / sandbox.consonant.* / sandbox.ghostMotion.*`）
 - 安全保護：`mode !== "sandbox_story"` 時不渲染任何 sandbox debug tools，避免 classic engine 誤觸 sandbox controls。
+- Debug-only Mode Switcher 驗收：
+  1. 以 `?debug=1` 開啟 Debug Panel。
+  2. 點 `Switch to Sandbox (sandbox_story)` 後會 reload，`currentMode` 應變成 `sandbox_story`。
+  3. 點 `Switch to Classic` 後會 reload，`currentMode` 應回 `classic`。
+  4. 未開啟 debug 時不顯示該切換 UI。
 
 ## System message 使用邊界（SSOT）
 
@@ -1487,8 +1495,7 @@ Console（debug 模式）可觀察：
 - `[PAUSE] set reason=tag_wait_reply`
 
 ## README Removed/Deprecated Log
-- 本次無新增移除項。
-
+- 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
 
 ## Sandbox Story Mode（Stage 1）
 
@@ -1513,3 +1520,5 @@ Console（debug 模式）可觀察：
   - `SimulateConsonantAnswer(text)`
   - `sandbox.consonant.*` 一組欄位
   - `freeze.active / pinned.text`
+
+- 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
