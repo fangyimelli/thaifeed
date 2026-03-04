@@ -1,3 +1,14 @@
+## 2026-03-04（sandbox classic consonant adapter）
+
+### Changed
+- [sandbox_story] phase 改為先 `awaitingConsonantTagPrompt -> pinnedFreezeAwaitConsonant`，答對才進 `revealingWord`。
+- [sandbox_story] 新增 `classicConsonantAdapter`，parser 直接重用 classic `isAnswerCorrect` 與 `normalizeInputForMatch` 規則。
+- [sandbox_story/debug] 新增 `sandbox.consonant.*`、`freeze.active / pinned.text`，並加入 `ForceAskConsonantNow`、`SimulateConsonantAnswer(text)`。
+
+### Docs
+- 更新 `docs/30-sandbox-story-mode.md`：補 classic 子音系統 repo mapping、reuse/adpater/fallback 說明。
+- README、PR_NOTES 同步本次 sandbox-only 整合內容。
+
 ## 2026-03-03（sandbox story mode engine stage 1）
 
 ### Changed
