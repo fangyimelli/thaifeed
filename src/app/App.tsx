@@ -2455,15 +2455,21 @@ export default function App() {
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
+        ui: {
+          consonantBubble: {
+            visible: !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
+          }
+        },
         word: {
           reveal: {
             phase: sandboxState.reveal.phase,
             wordKey: sandboxState.reveal.wordKey,
             base: sandboxState.reveal.baseConsonant || '-',
             appended: sandboxState.reveal.appended || '-',
-            renderMode: sandboxState.reveal.renderMode,
-            baseChar: sandboxState.reveal.baseChar || '-',
-            restTextLen: sandboxState.reveal.restTextLen
+            baseGrapheme: sandboxState.reveal.baseGrapheme || '-',
+            restText: sandboxState.reveal.restText || '-',
+            restLen: sandboxState.reveal.restLen,
+            splitter: sandboxState.reveal.splitter
           }
         },
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
@@ -4073,10 +4079,9 @@ export default function App() {
                 return {
                   visible: st.reveal.visible,
                   phase: st.reveal.phase,
-                  renderMode: st.reveal.renderMode,
                   wordText: st.reveal.text,
-                  baseConsonant: st.reveal.baseConsonant,
-                  appendedText: st.reveal.appended
+                  baseText: st.reveal.baseGrapheme,
+                  appendedText: st.reveal.restText
                 };
               })() : undefined}
             />
@@ -4397,9 +4402,11 @@ export default function App() {
                     <div><strong>Night Timeline</strong></div>
                     <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
-                    <div>word.reveal.renderMode: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.renderMode ?? '-'}</div>
-                    <div>word.reveal.baseChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.baseChar ?? '-'}</div>
-                    <div>word.reveal.restTextLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restTextLen ?? '-'}</div>
+                    <div>ui.consonantBubble.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.consonantBubble?.visible ?? true)}</div>
+                    <div>word.reveal.baseGrapheme: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.baseGrapheme ?? '-'}</div>
+                    <div>word.reveal.restText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restText ?? '-'}</div>
+                    <div>word.reveal.restLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restLen ?? '-'}</div>
+                    <div>word.reveal.splitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.splitter ?? '-'}</div>
                     <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
                     <div>word.reveal.appended: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.appended ?? '-'}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>

@@ -590,41 +590,46 @@ body {
 
 .word-reveal-overlay {
   position: absolute;
-  left: calc(100% + 10px);
+  left: 50%;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate(-50%, -50%);
   z-index: 28;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   pointer-events: none;
-  max-width: min(56vw, 360px);
+  max-width: min(64vw, 420px);
   opacity: 0;
 }
 
-.word-reveal-text {
+.revealText {
   padding: 8px 12px;
   backdrop-filter: blur(2px);
   border-radius: 10px;
   background: rgba(6, 10, 20, 0.68);
   color: #edf2ff;
-  font-size: clamp(24px, 3vw, 34px);
-  line-height: 1.15;
+  font-size: clamp(62px, 6.4vw, 92px);
+  line-height: 1;
   letter-spacing: 0.06em;
-  text-shadow: 0 0 10px rgba(170, 208, 255, 0.38);
+  text-shadow: 0 0 16px rgba(170, 208, 255, 0.42);
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0;
   white-space: pre;
+  font-family: 'Noto Sans Thai', 'Noto Sans TC', sans-serif;
 }
 
-.word-reveal-char-highlight {
+.revealGlyph {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 800;
+}
+
+.revealGlyph--base {
   color: #8fd6ff;
-  font-weight: 800;
 }
 
-.word-reveal-rest {
+.revealGlyph--rest {
   color: #edf2ff;
-  font-weight: 800;
 }
 
 .word-reveal-overlay.phase-enter {
@@ -635,7 +640,7 @@ body {
   opacity: 1;
 }
 
-.word-reveal-overlay.phase-pulse .word-reveal-text {
+.word-reveal-overlay.phase-pulse .pulseAndExit {
   animation: wordRevealPulse 500ms ease-in-out 2;
 }
 
@@ -660,12 +665,11 @@ body {
 
 @media (max-width: 860px) {
   .word-reveal-overlay {
-    left: calc(100% + 4px);
-    max-width: 40vw;
+    max-width: 56vw;
   }
 
-  .word-reveal-text {
-    font-size: clamp(18px, 4.4vw, 24px);
+  .revealText {
+    font-size: clamp(44px, 8vw, 62px);
     padding: 6px 8px;
   }
 }

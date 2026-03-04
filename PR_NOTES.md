@@ -1,64 +1,56 @@
 ## Summary
-- 僅修改 sandbox 範圍（sandbox_story mode state、sandbox 掛載 overlay、sandbox debug 欄位）；classic mode 無流程變更。
-- 重做 WordRevealOverlay 並落地 A/B 規格管線：
-  - 提供 `renderMode: "pair" | "fullWord"`。
-  - 預設強制 `fullWord`（B 保底）確保可驗收。
-  - 單一 text container 呈現，同字級同層級。
-- reveal 時序改為 `enter -> pulse -> exit`：
-  - enter 200ms fade in
-  - pulse 同步閃爍 2 次（2 x 250ms）
-  - exit 900ms scale up + fade out + translateY
+- 本次僅修改 sandbox_story 範圍，將 reveal 強制收斂為 A：單一 overlay、同字級雙段字、同步閃爍、整體一起放大淡出。
+- 移除舊有 `renderMode`（pair/fullWord）分流，避免 B 路徑與 A 並存造成視覺衝突。
+- 加入 Thai grapheme splitter（`Intl.Segmenter` 優先，`Array.from` fallback）並擴充 debug 欄位。
 
-## Changed Files
+## Changed
 - `src/modes/sandbox_story/sandboxStoryMode.ts`
-  - reveal phase 改名：`fadeIn/scaleUp/fadeOut` → `enter/pulse/exit`。
-  - reveal state 新增：`renderMode/baseChar/restTextLen`。
-  - 以 `Array.from(wordText)` 取得 `baseChar/rest`，並預設 `renderMode=fullWord`。
-  - 若存在 Thai 組字疑慮（如 Mark 分離）直接 fallback fullWord。
+  - reveal state 改為 `baseGrapheme/restText/restLen/splitter`。
+  - appended 計算固定以第一個 grapheme 之後為 rest。
+  - wrong/unknown 維持 hint rest（1~2 grapheme 或節點 hint），correct 則顯示完整 rest。
+  - reveal phase tick 改為 `reveal.visible` 驅動，wrong/unknown 也完整跑 enter/pulse/exit。
 - `src/ui/overlays/WordRevealOverlay.tsx`
-  - 重做 overlay，使用單一 `<div class="word-reveal-text">` + spans。
-  - fullWord 模式下顯示完整字，第一個 grapheme accent 上色。
+  - 重做為單一 overlay，結構固定：`revealGlyph--base + revealGlyph--rest`。
 - `src/ui/scene/SceneView.tsx`
-  - overlay props 新增 `renderMode` 傳遞。
+  - reveal 期間隱藏子音泡泡（guard 只在 sandbox reveal 活躍時成立）。
 - `src/styles.css`
-  - 動畫重做：`phase-enter` / `phase-pulse` / `phase-exit`。
-  - pulse 改為同一文字容器同步閃爍 2 次；exit 改為 900ms 放大淡出。
+  - base/rest 共用 `revealGlyph` 字級/行高。
+  - pulse 套在父層（2x），exit 套在父層（scale+fade+translate）。
 - `src/app/App.tsx`
-  - sandbox debug 新增：`word.reveal.renderMode/baseChar/restTextLen`。
-  - scene 掛載 overlay 時傳入 `renderMode`。
-  - pronounce 保留無 side effect。
-- `README.md` / `docs/10-change-log.md`
-  - 補上本次 A/B 規格、debug 欄位、Removed/Deprecated 記錄。
+  - scene props 改為傳 `baseText/restText`。
+  - debug 改為輸出 `word.reveal.baseGrapheme/restText/restLen/splitter` 與 `ui.consonantBubble.visible`。
 
-## Removed/Deprecated Log
-- Deprecated（sandbox only）
-  - 舊 `fadeIn/scaleUp/fadeOut` reveal phase 命名。
-  - 舊「子音 + 小補字」雙容器非同字級顯示（預設改 fullWord）。
+## Removed
+- Item: sandbox reveal `renderMode`（pair/fullWord）分流與其 debug 欄位。
+- Reason: 本次需求強制 A 單一路徑，禁止 B 作為預設或保底。
+- Impact: reveal 一律同版型與同動畫，不再出現雙元素/雙字級視覺偏差。
+- Alternative: 無（本次明確禁止 A/B 共存）。
 
-## SSOT 變更
-- `SandboxRevealPhase`: `idle | enter | pulse | exit | done`
-- 新增 sandbox reveal debug/狀態欄位：
-  - `renderMode: "pair" | "fullWord"`
-  - `baseChar: string`
-  - `restTextLen: number`
+## Docs
+- [x] README.md updated
+- [x] docs/10-change-log.md updated
+- [x] PR_NOTES.md updated
+
+## SSOT
+- [ ] No SSOT changes
+- [x] SSOT changed (list files + reasons below)
+  - `src/modes/sandbox_story/sandboxStoryMode.ts`
+    - reveal state SSOT：`baseGrapheme/restText/restLen/splitter`
+    - grapheme splitter SSOT：`segmenter|arrayfrom`
 
 ## Debug 欄位變更紀錄
 - Added
+  - `ui.consonantBubble.visible`
+  - `word.reveal.baseGrapheme`
+  - `word.reveal.restText`
+  - `word.reveal.restLen`
+  - `word.reveal.splitter`
+- Removed
   - `word.reveal.renderMode`
   - `word.reveal.baseChar`
   - `word.reveal.restTextLen`
-- Updated
-  - `word.reveal.phase` 值域改為 `idle|enter|pulse|exit|done`
 
-## Acceptance (PASS/FAIL)
-1) 顯示尺寸：補字與子音同大小（或 fullWord 保底）: PASS（fullWord 預設）
-2) 閃爍：至少 2 次同步 pulse: PASS（`phase-pulse` 2 iterations）
-3) 動畫：變大後漸漸消失: PASS（`phase-exit` 900ms）
-4) base 子音上色：fullWord 下第一個 grapheme 不同色: PASS
-5) Classic Isolation: PASS（變更僅 sandbox 流程與 sandbox 掛載）
-
-## Debug 驗收值（預期）
-- `word.reveal.renderMode = fullWord`
-- `word.reveal.baseChar = <wordText 第一個 grapheme>`
-- `word.reveal.restTextLen = <wordText.length(Array.from)-1>`
-- `word.reveal.phase` 會依序進入 `enter -> pulse -> exit -> done`
+## Acceptance
+- Debug fields checked: yes（已確認新增欄位可由 sandbox debug 寫入）
+- Desktop check: build pass
+- Mobile check: build pass（RWD CSS 規則已同步）
