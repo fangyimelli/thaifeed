@@ -890,7 +890,12 @@ npm run build
 ## Debug Overlay Event Tester（2026-02）
 
 - 入口：主畫面影片右上角小型 `Debug` 按鈕（overlay 模式，不跳頁）。
-- DebugPanel 固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
+- DebugPanel 改為 mode-aware，分成三塊：
+  - `Mode Debug`：顯示 `currentMode: classic|sandbox_story`。
+  - `Classic Debug Tools`：僅在 `mode === "classic"` 時顯示。
+  - `Sandbox Story Debug Tools`：僅在 `mode === "sandbox_story"` 時顯示。
+- `getActiveMode()` 優先序：`debug.modeOverride` → `urlMode` → `defaultMode(classic)`。
+- `Classic Debug Tools` 內固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
   - Trigger VOICE_CONFIRM
   - Trigger GHOST_PING
   - Trigger TV_EVENT
@@ -899,7 +904,7 @@ npm run build
   - Trigger LIGHT_GLITCH
   - Trigger FEAR_CHALLENGE
 - 每顆按鈕都走同一套 production 入口 `startEvent(eventKey, ctx)`，不繞過 tag/lock/gating。
-- DebugPanel 額外顯示：
+- `Classic Debug Tools` 額外顯示：
   - `event.registry.count`
   - `chat.activeUsers.count`
   - `lastEvent.key`
@@ -932,6 +937,14 @@ npm run build
   - `event.lastReactions.count`
   - `event.lastReactions.lastReactionActors`
   - `violation=reaction_actor_system=true`（若反應誤用 system）
+- `Sandbox Story Debug Tools` 包含：
+  - `Mode Switcher`
+  - `Auto Play Night`
+  - `Force Next Node`
+  - `Force Reveal Word`
+  - `Force Ghost Motion`
+  - `Night Timeline`（顯示 `sandbox.reveal.* / sandbox.consonant.* / sandbox.ghostMotion.*`）
+- 安全保護：`mode !== "sandbox_story"` 時不渲染任何 sandbox debug tools，避免 classic engine 誤觸 sandbox controls。
 
 ## System message 使用邊界（SSOT）
 

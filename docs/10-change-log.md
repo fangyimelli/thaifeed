@@ -1,3 +1,13 @@
+## 2026-03-04（debug panel mode-aware tools）
+
+### Changed
+- [debug] Debug Panel 拆分為 `Mode Debug`、`Classic Debug Tools`、`Sandbox Story Debug Tools` 三塊。
+- [debug] 新增 `getActiveMode()` 顯示/判定（優先序：`debug.modeOverride` → `urlMode` → `defaultMode`）。
+- [debug] classic / sandbox_story 改為互斥顯示工具，避免 classic runtime 誤觸 sandbox debug controls。
+
+### Docs
+- README、PR_NOTES 同步本次 mode-aware debug 行為。
+
 ## 2026-03-04（sandbox classic consonant adapter）
 
 ### Changed

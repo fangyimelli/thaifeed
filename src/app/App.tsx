@@ -256,6 +256,12 @@ function resolveModeFromQuery(): 'classic' | 'sandbox_story' {
   return mode === 'sandbox_story' ? 'sandbox_story' : 'classic';
 }
 
+function resolveDebugModeOverride(): 'classic' | 'sandbox_story' | null {
+  const modeOverride = (window.__CHAT_DEBUG__ as any)?.debug?.modeOverride;
+  if (modeOverride === 'classic' || modeOverride === 'sandbox_story') return modeOverride;
+  return null;
+}
+
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
 }
@@ -558,6 +564,8 @@ export default function App() {
   const npcSpawnBlockedByFreezeRef = useRef(0);
   const ghostBlockedByFreezeRef = useRef(0);
   const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
+  const [debugModeOverride, setDebugModeOverride] = useState<'classic' | 'sandbox_story' | null>(() => resolveDebugModeOverride());
+  const [sandboxAutoPlayNight, setSandboxAutoPlayNight] = useState(false);
   const eventRunnerStateRef = useRef<{ inFlight: boolean; currentEventId: string | null; pendingTimers: number[] }>({
     inFlight: false,
     currentEventId: null,
@@ -3541,6 +3549,22 @@ export default function App() {
     });
   }, [updateChatDebug]);
 
+  const getActiveMode = useCallback((): 'classic' | 'sandbox_story' => {
+    const defaultMode: 'classic' = 'classic';
+    const urlMode = resolveModeFromQuery();
+    return debugModeOverride ?? resolveDebugModeOverride() ?? urlMode ?? defaultMode;
+  }, [debugModeOverride]);
+  const mode = getActiveMode();
+
+  const applyDebugModeOverride = useCallback((nextMode: 'classic' | 'sandbox_story' | null) => {
+    const chatDebug = (window.__CHAT_DEBUG__ ??= {} as any) as any;
+    chatDebug.debug = {
+      ...(chatDebug.debug ?? {}),
+      modeOverride: nextMode
+    };
+    setDebugModeOverride(nextMode);
+  }, []);
+
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
       <LoadingOverlay
@@ -3621,8 +3645,15 @@ export default function App() {
           {debugOpen && (
             <aside className="video-debug-panel" aria-label="Debug Panel">
               <button type="button" className="video-debug-close" onClick={() => setDebugOpen(false)} aria-label="Close debug panel">×</button>
+              <div className="debug-event-tester" aria-label="Mode Debug">
+                <h4>Mode Debug</h4>
+                <div>currentMode: {mode}</div>
+              </div>
+              {mode === 'classic' && (
+                <>
               <div className="debug-event-tester" aria-label="Event Tester">
-                <h4>Event Tester</h4>
+                <h4>Classic Debug Tools</h4>
+                <div><strong>Event Tester</strong></div>
                 <div><strong>Events</strong></div>
                 <div className="debug-route-controls">
                   {EVENT_TESTER_KEYS.map((eventKey) => {
@@ -3808,23 +3839,54 @@ export default function App() {
                 <div>audio.lastApproach.durationMs: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.durationMs ?? 0}</div>
                 <div>audio.lastApproach.startGain/endGain: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startGain ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.endGain ?? '-'}</div>
                 <div>audio.lastApproach.startLPF/endLPF: {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.startLPF ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.audio?.lastApproach?.endLPF ?? '-'}</div>
-                <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
-                <div>sandbox.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.phase ?? '-'}</div>
-                <div>sandbox.consonant.nodeChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.nodeChar ?? '-'}</div>
-                <div>sandbox.consonant.promptText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptText ?? '-'}</div>
-                <div>sandbox.consonant.parse.ok: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.ok ?? false)}</div>
-                <div>sandbox.consonant.parse.matchedChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedChar ?? '-'}</div>
-                <div>sandbox.consonant.parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.kind ?? '-'}</div>
-                <div>sandbox.consonant.parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedAlias ?? '-'}</div>
-                <div>sandbox.consonant.parse.inputNorm: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputNorm ?? '-'}</div>
-                <div>freeze.active / pinned.text: {String((window.__CHAT_DEBUG__ as any)?.chat?.freeze?.isFrozen ?? false)} / {((window.__CHAT_DEBUG__ as any)?.ui?.pinned?.textPreview ?? '-')}</div>
-                <div>sandbox.ghostMotion.lastId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.lastId ?? '-'}</div>
-                <div>sandbox.ghostMotion.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.state ?? '-'}</div>
-                <div>sandbox.ssot.version: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ssot?.version ?? '-'}</div>
                 <div>fx.blackout.isActive: {String((window.__CHAT_DEBUG__ as any)?.fx?.blackout?.isActive ?? false)}</div>
                 <div>fx.blackout.mode: {(window.__CHAT_DEBUG__ as any)?.fx?.blackout?.mode ?? '-'}</div>
                 <div>fx.blackout.endsInMs: {(window.__CHAT_DEBUG__ as any)?.fx?.blackout?.endsInMs ?? 0}</div>
               </div>
+                </>
+              )}
+              {mode === 'sandbox_story' && (
+                <div className="debug-event-tester" aria-label="Sandbox Story Debug Tools">
+                  <h4>Sandbox Story Debug Tools</h4>
+                  <div className="debug-route-controls">
+                    <label>
+                      Mode Switcher
+                      <select
+                        value={mode}
+                        onChange={(event) => {
+                          const nextMode = event.target.value === 'sandbox_story' ? 'sandbox_story' : 'classic';
+                          applyDebugModeOverride(nextMode);
+                        }}
+                      >
+                        <option value="classic">classic</option>
+                        <option value="sandbox_story">sandbox_story</option>
+                      </select>
+                    </label>
+                    <button type="button" onClick={() => setSandboxAutoPlayNight((prev) => !prev)}>
+                      Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
+                    </button>
+                    <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>
+                    <button type="button" onClick={forceRevealCurrent}>Force Reveal Word</button>
+                    <button type="button" onClick={forceGhostMotionNow}>Force Ghost Motion</button>
+                  </div>
+                  <div className="debug-route-meta">
+                    <div><strong>Night Timeline</strong></div>
+                    <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
+                    <div>sandbox.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.phase ?? '-'}</div>
+                    <div>sandbox.consonant.nodeChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.nodeChar ?? '-'}</div>
+                    <div>sandbox.consonant.promptText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptText ?? '-'}</div>
+                    <div>sandbox.consonant.parse.ok: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.ok ?? false)}</div>
+                    <div>sandbox.consonant.parse.matchedChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedChar ?? '-'}</div>
+                    <div>sandbox.consonant.parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.kind ?? '-'}</div>
+                    <div>sandbox.consonant.parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedAlias ?? '-'}</div>
+                    <div>sandbox.consonant.parse.inputNorm: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputNorm ?? '-'}</div>
+                    <div>freeze.active / pinned.text: {String((window.__CHAT_DEBUG__ as any)?.chat?.freeze?.isFrozen ?? false)} / {((window.__CHAT_DEBUG__ as any)?.ui?.pinned?.textPreview ?? '-')}</div>
+                    <div>sandbox.ghostMotion.lastId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.lastId ?? '-'}</div>
+                    <div>sandbox.ghostMotion.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.state ?? '-'}</div>
+                    <div>sandbox.ssot.version: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ssot?.version ?? '-'}</div>
+                  </div>
+                </div>
+              )}
             </aside>
           )}
         </section>
