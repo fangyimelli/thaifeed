@@ -1,3 +1,16 @@
+## 2026-03-04（sandbox_story Night1 word reveal pipeline）
+
+### Changed
+- [sandbox_story/ssot] Night 1 改為 10 個拼圖字結構稿（子音→單字→理解題→talkSeeds），並接入 `src/data/night1_words.ts`、`src/data/chat_templates.ts` 與 `src/ssot/sandbox_story/night1.ts`。
+- [sandbox_story/pipeline] correct 後流程改為 `revealingWord -> chatWaveRelated -> preNextPrompt -> awaitingTag`，reveal 與聊天波互斥，busy phase 會回報 `blockedReason=phaseBusy`。
+- [ui/overlay] `WordRevealOverlay` 改為「左側 baseConsonant + 右側逐字補齊」並支援霧化散去動畫。
+- [audio] 發音播放固定使用 `/assets/phonetics/${audioKey}.mp3`，缺檔不拋錯。
+- [debug] 新增可觀測欄位：`word.reveal.phase`、`word.reveal.wordKey`、`audio.pronounce.lastKey/state`、`scheduler.phase`、`lastWave.count/kind`、`blockedReason`；Tester 新增 ForceRevealWord / ForcePlayPronounce / ForceWave(kind)。
+
+### Docs
+- README 新增 Word Reveal Pipeline 與 phonetics 路徑/命名規範。
+- PR_NOTES 更新驗收 PASS/FAIL 表格。
+
 ## 2026-03-04（debug gate ssot + mode switch debug_disabled fix）
 
 ### Changed

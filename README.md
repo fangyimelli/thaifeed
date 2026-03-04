@@ -1536,3 +1536,23 @@ Console（debug 模式）可觀察：
   - `freeze.active / pinned.text`
 
 - 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
+
+## Sandbox Story：Word Reveal Pipeline（Night 1）
+
+- sandbox_story Night 1 已升級為 10 個拼圖字結構稿，資料 SSOT 來源：
+  - `src/data/night1_words.ts`
+  - `src/data/chat_templates.ts`
+  - `src/ssot/sandbox_story/night1.ts`
+- 正確答題後固定流程：
+  1. `revealingWord`：中央顯示 base 子音，右側逐字補齊單字（`fadeIn 800ms → hold 900ms → fogOut 1200ms`）。
+  2. 同步播放發音（`/assets/phonetics/${audioKey}.mp3`）。
+  3. `chatWave`：related 討論波 3~6 則。
+  4. `preNextPrompt`：surprise 2~3 則 + guess 1~2 則（不 tag 玩家）。
+  5. `awaitingTag`：下一題才允許 tag/freeze 流程。
+- 發音檔固定路徑與命名：
+  - 路徑：`public/assets/phonetics/`
+  - 播放：`/assets/phonetics/${audioKey}.mp3`
+  - 命名：拉丁小寫 + 底線（例如 `klang_kuen`, `tonmai`, `pratu`）。
+
+## README Removed/Deprecated Log
+- 本次無新增移除項。
