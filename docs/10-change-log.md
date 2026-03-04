@@ -1,3 +1,16 @@
+## 2026-03-04（debug mode switcher classic/sandbox_story）
+
+### Changed
+- [debug/ui] 在共用 Debug Panel 頂部新增 `DebugModeSwitcher`（`Switch to Classic` / `Switch to Sandbox (sandbox_story)`），並顯示 `currentMode`。
+- [debug/ssot] Mode 切換不新增第二套狀態：沿用既有 `mode` query param，切換時同步寫入 `localStorage['app.currentMode']` 供 debug session 持久化。
+- [debug/bootstrap] 切換 mode 後立即 reload 生效，確保 App 重新走對應 mode 初始化（classic 或 sandbox_story）。
+- [debug-only] 啟動時僅在 `debug=1` 允許從 `localStorage['app.currentMode']` 覆寫 mode；非 debug 維持既有 mode 決策行為。
+- [classic] 無 runtime/event/chat/audio 邏輯變更。
+
+### Docs
+- README 新增 Debug Mode Switcher 使用方式（位置、按鈕、reload、生效條件）。
+- PR_NOTES 記錄驗收步驟、風險與回退。
+
 ## 2026-03-04（sandbox_story fear meter debug monitor）
 
 ### Changed

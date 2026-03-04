@@ -251,15 +251,26 @@ function isPassCommand(raw: string) {
 }
 
 
-function resolveModeFromQuery(): 'classic' | 'sandbox_story' {
+function resolveModeFromQuery(): 'classic' | 'sandbox_story' | null {
   const mode = new URLSearchParams(window.location.search).get('mode');
-  return mode === 'sandbox_story' ? 'sandbox_story' : 'classic';
+  if (mode === 'classic' || mode === 'sandbox_story') return mode;
+  return null;
 }
 
-function resolveDebugModeOverride(): 'classic' | 'sandbox_story' | null {
-  const modeOverride = (window.__CHAT_DEBUG__ as any)?.debug?.modeOverride;
-  if (modeOverride === 'classic' || modeOverride === 'sandbox_story') return modeOverride;
+function resolveModeFromStorage(): 'classic' | 'sandbox_story' | null {
+  const mode = window.localStorage.getItem(DEBUG_MODE_STORAGE_KEY);
+  if (mode === 'classic' || mode === 'sandbox_story') return mode;
   return null;
+}
+
+function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' {
+  const modeFromQuery = resolveModeFromQuery();
+  if (modeFromQuery) return modeFromQuery;
+  if (debugEnabled) {
+    const modeFromStorage = resolveModeFromStorage();
+    if (modeFromStorage) return modeFromStorage;
+  }
+  return 'classic';
 }
 
 function normalizeHandle(raw: string): string {
@@ -368,6 +379,7 @@ const DEBUG_SEED_USERS = ['ink31', 'mew88', 'koo_77', 'nana23'];
 const EVENT_TESTER_KEYS: StoryEventKey[] = ['VOICE_CONFIRM', 'GHOST_PING', 'TV_EVENT', 'NAME_CALL', 'VIEWER_SPIKE', 'LIGHT_GLITCH', 'FEAR_CHALLENGE'];
 const EVENT_AUDIO_PLAYING_TIMEOUT_MS = 10_000;
 const SANDBOX_SSOT_STORAGE_KEY = 'thaifeed.sandbox_story.ssot';
+const DEBUG_MODE_STORAGE_KEY = 'app.currentMode';
 
 type EventAudioState = 'idle' | 'playing' | 'cooldown';
 type EventAudioResult = 'TRIGGERED' | 'SKIPPED' | 'FAILED' | '-';
@@ -415,6 +427,29 @@ const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
   }
 };
 
+
+
+type DebugModeSwitcherProps = {
+  currentMode: 'classic' | 'sandbox_story';
+  onSwitch: (mode: 'classic' | 'sandbox_story') => void;
+};
+
+function DebugModeSwitcher({ currentMode, onSwitch }: DebugModeSwitcherProps) {
+  return (
+    <div className="debug-event-tester" aria-label="Debug Mode Switcher">
+      <h4>Mode Debug</h4>
+      <div>currentMode: {currentMode}</div>
+      <div className="debug-route-controls">
+        <button type="button" disabled={currentMode === 'classic'} onClick={() => onSwitch('classic')}>
+          {currentMode === 'classic' ? 'Classic (Current)' : 'Switch to Classic'}
+        </button>
+        <button type="button" disabled={currentMode === 'sandbox_story'} onClick={() => onSwitch('sandbox_story')}>
+          {currentMode === 'sandbox_story' ? 'Sandbox (Current)' : 'Switch to Sandbox (sandbox_story)'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -570,9 +605,10 @@ export default function App() {
   const eventLastKeyRef = useRef('-');
   const eventLastAtRef = useRef(0);
   const eventNextDueAtRef = useRef(0);
+  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
   const modeRef = useRef<GameMode>(createClassicMode());
   const sandboxModeRef = useRef(createSandboxStoryMode());
-  const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveModeFromQuery());
+  const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveInitialMode(debugEnabled));
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
   const sandboxConsonantTagOwnerRef = useRef<string>('mod_live');
 
@@ -595,8 +631,6 @@ export default function App() {
   const blockedActiveUserAutoSpeakCountRef = useRef(0);
   const npcSpawnBlockedByFreezeRef = useRef(0);
   const ghostBlockedByFreezeRef = useRef(0);
-  const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1';
-  const [debugModeOverride, setDebugModeOverride] = useState<'classic' | 'sandbox_story' | null>(() => resolveDebugModeOverride());
   const [sandboxAutoPlayNight, setSandboxAutoPlayNight] = useState(false);
   const [fearDebugState, setFearDebugState] = useState<SandboxFearDebugState>(EMPTY_FEAR_DEBUG_STATE);
   const [ghostEventDebugState, setGhostEventDebugState] = useState<GhostEventManagerDebugState>({
@@ -3598,21 +3632,21 @@ export default function App() {
     });
   }, [updateChatDebug]);
 
-  const getActiveMode = useCallback((): 'classic' | 'sandbox_story' => {
-    const defaultMode: 'classic' = 'classic';
-    const urlMode = resolveModeFromQuery();
-    return debugModeOverride ?? resolveDebugModeOverride() ?? urlMode ?? defaultMode;
-  }, [debugModeOverride]);
-  const mode = getActiveMode();
+  const mode = modeIdRef.current;
 
-  const applyDebugModeOverride = useCallback((nextMode: 'classic' | 'sandbox_story' | null) => {
+  const switchDebugMode = useCallback((nextMode: 'classic' | 'sandbox_story') => {
+    if (!debugEnabled || nextMode === modeIdRef.current) return;
+    window.localStorage.setItem(DEBUG_MODE_STORAGE_KEY, nextMode);
     const chatDebug = (window.__CHAT_DEBUG__ ??= {} as any) as any;
     chatDebug.debug = {
       ...(chatDebug.debug ?? {}),
-      modeOverride: nextMode
+      modeOverride: nextMode,
+      modeOverrideSource: 'debug_mode_switcher'
     };
-    setDebugModeOverride(nextMode);
-  }, []);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('mode', nextMode);
+    window.location.href = nextUrl.toString();
+  }, [debugEnabled]);
 
   const getGhostEventManagerDebugState = useCallback((): GhostEventManagerDebugState => {
     const now = Date.now();
@@ -3761,10 +3795,7 @@ export default function App() {
           {debugOpen && (
             <aside className="video-debug-panel" aria-label="Debug Panel">
               <button type="button" className="video-debug-close" onClick={() => setDebugOpen(false)} aria-label="Close debug panel">×</button>
-              <div className="debug-event-tester" aria-label="Mode Debug">
-                <h4>Mode Debug</h4>
-                <div>currentMode: {mode}</div>
-              </div>
+              <DebugModeSwitcher currentMode={mode} onSwitch={switchDebugMode} />
               {mode === 'classic' && (
                 <>
               <div className="debug-event-tester" aria-label="Event Tester">
@@ -3965,19 +3996,6 @@ export default function App() {
                 <div className="debug-event-tester" aria-label="Sandbox Story Debug Tools">
                   <h4>Sandbox Story Debug Tools</h4>
                   <div className="debug-route-controls">
-                    <label>
-                      Mode Switcher
-                      <select
-                        value={mode}
-                        onChange={(event) => {
-                          const nextMode = event.target.value === 'sandbox_story' ? 'sandbox_story' : 'classic';
-                          applyDebugModeOverride(nextMode);
-                        }}
-                      >
-                        <option value="classic">classic</option>
-                        <option value="sandbox_story">sandbox_story</option>
-                      </select>
-                    </label>
                     <button type="button" onClick={() => setSandboxAutoPlayNight((prev) => !prev)}>
                       Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
                     </button>

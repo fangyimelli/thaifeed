@@ -18,6 +18,7 @@
 | SFX 註冊 | `src/audio/SfxRegistry.ts` | 音效 key 與資源映射、可播放鍵值 |
 | 音訊引擎 | `src/audio/AudioEngine.ts` | fan_loop WebAudio 排程、SFX 播放流程 |
 | 素材路徑與 base path | `src/config/assetUrls.ts`、`src/config/assetManifest.ts` | `assets/...` 相對路徑與 base URL 解析 |
+| Mode Router（classic/sandbox_story） | `src/app/App.tsx` | 以 `?mode=` 為主、debug-only 可讀 `localStorage['app.currentMode']` 的單一路徑 mode 決策 |
 | 主頁整合入口 | `src/app/App.tsx`、`src/ui/scene/SceneView.tsx` | 系統初始化、畫面組裝、debug overlay |
 
 ## Base path 規範
