@@ -1,6 +1,6 @@
 import { SandboxUserGenerator } from './user_generator';
 import { CHAT_POOLS, assertChatPoolsCounts } from './chat_pools';
-import { PREHEAT_SCRIPT } from './preheat_script';
+import { SandboxChatDirector } from './chat_director';
 import { SANDBOX_VIP } from './vip_identity';
 
 const SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/] as const;
@@ -26,6 +26,8 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
+  flowStep: 'PREHEAT' | 'ASK_CONSONANT' | 'WAIT_PLAYER_CONSONANT' | 'GLITCH_BURST_AFTER_CONSONANT' | 'REVEAL_WORD' | 'WORD_RIOT' | 'VIP_TRANSLATE' | 'MEANING_GUESS' | 'ASK_PLAYER_MEANING' | 'WAIT_PLAYER_MEANING' | 'GLITCH_BURST_AFTER_MEANING' | 'ADVANCE_NEXT';
+  stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
   freeze: { frozen: boolean; reason: 'NONE' | 'AWAIT_PLAYER_INPUT' };
@@ -67,6 +69,8 @@ export class ChatEngine {
     san: 100,
     playerHandle: 'player',
     phase: 'boot',
+    flowStep: 'PREHEAT',
+    stepStartedAt: 0,
     introStartedAt: 0,
     isEnding: false,
     freeze: { frozen: false, reason: 'NONE' },
@@ -81,7 +85,7 @@ export class ChatEngine {
   private waveTotal = 0;
   private collapseQueue: ChatMessage[] = [];
   private supernaturalQueue: ChatMessage[] = [];
-  private preheatScriptCursor = 0;
+  private readonly director = new SandboxChatDirector();
 
   constructor(options: ChatEngineOptions) {
     this.options = options;
@@ -117,9 +121,6 @@ export class ChatEngine {
     if (this.context.phase === 'vipTranslate' && this.lastPhase !== 'vipTranslate' && this.supernaturalQueue.length === 0) {
       this.supernaturalQueue = [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), SANDBOX_VIP.handle, true)];
     }
-    if (this.context.phase === 'intro' && this.lastPhase !== 'intro') {
-      this.preheatScriptCursor = 0;
-    }
     this.lastPhase = this.context.phase;
     if (this.context.isEnding && this.collapseQueue.length === 0) {
       this.prepareCollapse();
@@ -144,14 +145,16 @@ export class ChatEngine {
       return this.formatLine(this.pickStringPool('san_idle'));
     }
 
-    if (this.context.phase === 'intro') {
-      const scripted = this.nextPreheatScriptMessage();
-      if (scripted) return scripted;
-      if (this.preheatScriptCursor >= PREHEAT_SCRIPT.length) {
-        return Math.random() < 0.5
-          ? this.formatLine(this.pickStringPool('casual_pool'))
-          : this.formatLine(this.pickStringPool('observation_pool'));
-      }
+    const directed = this.director.getNextDirectedLine({
+      introStartedAt: this.context.introStartedAt,
+      playerHandle: this.context.playerHandle,
+      flowStep: this.context.flowStep,
+      stepStartedAt: this.context.stepStartedAt,
+      freeze: this.context.freeze,
+      glitchBurst: this.context.glitchBurst
+    });
+    if (directed) {
+      return this.formatLine(this.applyPlayerHandle(directed.text), directed.speaker, Boolean(directed.vip));
     }
 
     if (this.supernaturalQueue.length > 0) {
@@ -195,10 +198,6 @@ export class ChatEngine {
       };
     }
 
-    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.25) {
-      return this.formatLine(this.applyPlayerHandle(this.pickStringPool('tag_player')));
-    }
-
     if (this.context.phase === 'revealingWord' && Math.random() < 0.3) {
       return this.formatLine(this.pickStringPool('guess_character'));
     }
@@ -220,9 +219,33 @@ export class ChatEngine {
       return this.formatLine(this.pickStringPool('final_fear'));
     }
 
-    const fearRate = this.context.san <= 35 ? 0.62 : this.context.san <= 60 ? 0.4 : 0.22;
-    if (Math.random() < fearRate) return this.formatLine(this.pickStringPool('fear_pool'));
-    if (Math.random() < 0.5) return this.formatLine(this.pickStringPool('observation_pool'));
+    const weights = this.director.getRandomPoolWeights({
+      introStartedAt: this.context.introStartedAt,
+      playerHandle: this.context.playerHandle,
+      flowStep: this.context.flowStep,
+      stepStartedAt: this.context.stepStartedAt,
+      freeze: this.context.freeze,
+      glitchBurst: this.context.glitchBurst
+    });
+
+    const weightedPool: Array<{ key: 'casual_pool' | 'observation_pool' | 'fear_pool' | 'theory_pool' | 'vip_summary' | 'final_fear' | 'san_idle'; weight: number }> = [
+      { key: 'casual_pool', weight: weights.casual },
+      { key: 'observation_pool', weight: weights.observation },
+      { key: 'fear_pool', weight: weights.fear },
+      { key: 'theory_pool', weight: weights.theory },
+      { key: 'vip_summary', weight: weights.vip_summary },
+      { key: 'final_fear', weight: weights.final_fear },
+      { key: 'san_idle', weight: weights.san_idle }
+    ];
+    const total = weightedPool.reduce((acc, item) => acc + item.weight, 0);
+    let roll = Math.random() * total;
+    for (const item of weightedPool) {
+      roll -= item.weight;
+      if (roll <= 0) {
+        if (item.key === 'vip_summary') return this.formatLine(this.pickStringPool(item.key), SANDBOX_VIP.handle, true);
+        return this.formatLine(this.pickStringPool(item.key));
+      }
+    }
     return this.formatLine(this.pickStringPool('casual_pool'));
   }
 
@@ -264,8 +287,27 @@ export class ChatEngine {
   }
 
   emitTagPlayerPrompt(): ChatMessage {
-    const line = this.applyPlayerHandle(this.pickStringPool('tag_player'));
-    return this.formatLine(line, 'mod_live');
+    const directed = this.director.getNextDirectedLine({
+      introStartedAt: this.context.introStartedAt,
+      playerHandle: this.context.playerHandle,
+      flowStep: this.context.flowStep,
+      stepStartedAt: this.context.stepStartedAt,
+      freeze: this.context.freeze,
+      glitchBurst: this.context.glitchBurst
+    });
+    if (directed) return this.formatLine(this.applyPlayerHandle(directed.text), directed.speaker, Boolean(directed.vip));
+    return this.formatLine(this.applyPlayerHandle(this.pickStringPool('tag_player')), SANDBOX_VIP.handle, true);
+  }
+
+  shouldEmitJoin(): boolean {
+    return this.director.shouldEmitJoin({
+      introStartedAt: this.context.introStartedAt,
+      playerHandle: this.context.playerHandle,
+      flowStep: this.context.flowStep,
+      stepStartedAt: this.context.stepStartedAt,
+      freeze: this.context.freeze,
+      glitchBurst: this.context.glitchBurst
+    });
   }
 
   private buildSupernaturalQueue(): ChatMessage[] {
@@ -283,22 +325,6 @@ export class ChatEngine {
 
   private applyPlayerHandle(template: string): string {
     return template.replace(/\{\{PLAYER\}\}/g, `@${this.context.playerHandle}`).replace(/\$\{playerHandle\}/g, `@${this.context.playerHandle}`);
-  }
-
-
-  private nextPreheatScriptMessage(now = Date.now()): ChatMessage | null {
-    if (this.preheatScriptCursor >= PREHEAT_SCRIPT.length) return null;
-    const event = PREHEAT_SCRIPT[this.preheatScriptCursor];
-    if (!event) return null;
-    const introStartedAt = this.context.introStartedAt || now;
-    const elapsed = Math.max(0, now - introStartedAt);
-    if (elapsed < event.atMs) return null;
-    this.preheatScriptCursor += 1;
-    const text = this.applyPlayerHandle(event.text);
-    if (event.speaker === 'system') return this.formatLine(text, 'system', false);
-    if (event.speaker === 'vip' || event.speaker === SANDBOX_VIP) return this.formatLine(text, SANDBOX_VIP.handle, true);
-    if (event.speaker === 'mod') return this.formatLine(text, 'mod_live', false);
-    return this.formatLine(text, this.pickUser(), false);
   }
 
   private pickSupernaturalEvent(): SupernaturalEvent {

@@ -604,8 +604,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
       return node;
     },
-    forceAskConsonantNow() { setFlowStepInternal('ASK_CONSONANT', 'force_ask_consonant'); syncFear(); },
-    forceAskComprehensionNow() { setFlowStepInternal('ASK_CONSONANT', 'force_ask_comprehension'); syncFear(); },
+    forceAskConsonantNow() { if (!state.introGate.passed) return; setFlowStepInternal('ASK_CONSONANT', 'force_ask_consonant'); syncFear(); },
+    forceAskComprehensionNow() { if (!state.introGate.passed) return; setFlowStepInternal('ASK_CONSONANT', 'force_ask_comprehension'); syncFear(); },
     forceGhostMotion(motionId) {
       state.ghostMotion = { lastId: motionId ?? 'disabled_no_ghost_entity', state: 'idle' };
       syncFear();

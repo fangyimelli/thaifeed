@@ -1874,3 +1874,11 @@ Console（debug 模式）可觀察：
 
 - 移除舊的 sandbox 數字 step（0~9）語意，改為具名 `SandboxFlowStep` 枚舉，避免第 2 題後重入卡住。
 - 移除「等待玩家期間仍持續刷 chat」舊行為，統一改為 freeze gate。
+
+
+## Sandbox Hybrid Chat（Director SSOT）
+
+- sandbox 聊天改為 `Chat Director` 單一節奏來源：`PREHEAT / RANDOM / REACTIVE / FROZEN / GLITCH_BURST`。
+- 預熱 30 秒採軟編排：0~20 秒保證 VIP 出場至少一次、5~25 秒保證 VIP 至少一次 `@玩家`。
+- 問玩家（子音/意思）後立即 freeze，聊天室 0 output；玩家回覆後立即 glitch burst（預設 10 則、250~450ms/則）再繼續流程。
+- sandbox VIP 固定 `👑 behindyou`（`src/sandbox/chat/vip_identity.ts`），classic mode 不受影響。
