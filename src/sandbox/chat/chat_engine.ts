@@ -5,7 +5,7 @@ import { SANDBOX_VIP } from './vip_identity';
 
 const SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/] as const;
 const SANDBOX_POOL_REROLL_MAX = 5;
-const SAN_IDLE_GLITCH_PATTERNS = [/lag/i, /送不出去/, /靜音/, /回個1/, /網路怪怪/, /聊天室卡住/, /訊號/];
+const SAN_IDLE_GLITCH_PATTERNS = [/lag/i, /送不出去/, /靜音/, /回個1/, /網路怪怪/, /卡住/, /訊號/];
 
 export type ChatMessage = {
   user: string;
@@ -27,7 +27,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
-  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
+  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
   stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
@@ -164,12 +164,16 @@ export class ChatEngine {
   }
 
   nextMessage(): ChatMessage | null {
+    if (this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2' || this.context.flowStep === 'WAIT_REPLY_3') {
+      return null;
+    }
+
     if (this.context.freeze.frozen && !this.context.glitchBurst.pending) {
       return null;
     }
 
     if (this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0) {
-      return this.captureMessage(this.formatLine(this.pickSanIdleLine('glitch')), 'GLITCH_BURST');
+      return this.captureMessage(this.formatLine(this.pickSanIdleLine('general')), 'GLITCH_BURST');
     }
 
     const directed = this.director.getNextDirectedLine({
@@ -389,7 +393,7 @@ export class ChatEngine {
   private captureMessage(message: ChatMessage | null, emitKey: string): ChatMessage | null {
     if (!message) return null;
     const now = Date.now();
-    if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2')) {
+    if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2' || this.context.flowStep === 'WAIT_REPLY_3')) {
       this.freezeLeakCount += 1;
     }
     const speaker = message.user;

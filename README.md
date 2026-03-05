@@ -1930,3 +1930,12 @@ Console（debug 模式）可觀察：
 - 接著第二次由 `mod_live` 或 `👑 behindyou` 再 `@玩家` 問「所以到底怎麼唸？」並啟用 reply-to（不可取消）；reply-to active 期間聊天室 0 output。
 - 技術故障改為 backlog：在 `WAIT_REPLY_1/WAIT_REPLY_2` 期間每 30 秒累積 2 則（含「奇怪卡了大約 X 分鐘」），玩家回覆後於 `FLUSH_TECH_BACKLOG` 一次吐出（最多 8 則）再推進下一題。
 - classic mode 未修改。
+
+## 2026-03-06（sandbox only：tech backlog 僅 Tag#3 WAIT 啟用）
+
+- sandbox flow 改為三段強制 tag 回覆：`TAG_PLAYER_1 -> WAIT_REPLY_1 -> ... -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> TAG_PLAYER_3_MEANING -> WAIT_REPLY_3 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
+- `SandboxStoryState.flow` 新增 `currentTagIndex: 1|2|3`，並以 `isTechBacklogEnabled = currentTagIndex===3 && flow.step===WAIT_REPLY_3` 作為唯一 tech backlog 開關。
+- Tag#1 / Tag#2 的 WAIT 僅維持 reply-to + freeze 的 0 output；禁止累積與輸出任何技術故障文字。
+- 只有 Tag#3 WAIT 期間，且 reply-to active 時，才每 30 秒背景累積 2 則 tech backlog（第二則固定為「奇怪卡了大約 X 分鐘」）。
+- 玩家回覆 Tag#3 後才進 `FLUSH_TECH_BACKLOG`，一次 flush（最多 8 則，含最後分鐘訊息）再推進下一題。
+- classic mode 未修改。
