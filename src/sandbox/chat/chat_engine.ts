@@ -5,6 +5,7 @@ import { SANDBOX_VIP } from './vip_identity';
 
 const SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/] as const;
 const SANDBOX_POOL_REROLL_MAX = 5;
+const SAN_IDLE_GLITCH_PATTERNS = [/lag/i, /送不出去/, /靜音/, /回個1/, /網路怪怪/, /聊天室卡住/, /訊號/];
 
 export type ChatMessage = {
   user: string;
@@ -89,8 +90,11 @@ export class ChatEngine {
   private lastEmitKey = '';
   private lastSpeaker = '';
   private sameEmitKeyStreak = 0;
-  private sameSpeakerStreak = 0;
   private recentEmitKeys: string[] = [];
+  private recentEmitKeyAt = new Map<string, number>();
+  private lastEmitAtMs = 0;
+  private sameSpeakerRunCount = 0;
+  private readonly emitKeyCooldownMs = 3500;
   private duplicateSpamCount = 0;
   private speakerSpamCount = 0;
   private freezeLeakCount = 0;
@@ -103,6 +107,9 @@ export class ChatEngine {
       assertChatPoolsCounts();
     }
     for (let i = 0; i < 16; i += 1) this.users.push(this.userGen.next());
+    if (import.meta.env.DEV && this.getSanIdleGlitchPool().length === 0) {
+      throw new Error('[sandbox/chat] san_idle_glitch pool must not be empty');
+    }
   }
 
   start(): void {
@@ -152,7 +159,7 @@ export class ChatEngine {
     }
 
     if (this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0) {
-      return this.captureMessage(this.formatLine(this.pickStringPool('san_idle')), 'san_idle');
+      return this.captureMessage(this.formatLine(this.pickSanIdleLine('glitch')), 'GLITCH_BURST');
     }
 
     const directed = this.director.getNextDirectedLine({
@@ -177,7 +184,7 @@ export class ChatEngine {
 
     if (Date.now() - this.lastPlayerReplyAt >= 10_000) {
       this.lastPlayerReplyAt = Date.now();
-      return this.captureMessage(this.formatLine(this.pickStringPool('san_idle')), 'san_idle');
+      return this.captureMessage(this.formatLine(this.pickSanIdleLine('general')), 'san_idle_general');
     }
 
     if (this.waveRemaining > 0) {
@@ -223,7 +230,7 @@ export class ChatEngine {
     }
 
     if (this.context.phase === 'supernaturalEvent' && Math.random() < 0.65) {
-      return this.captureMessage(this.formatLine(this.pickStringPool('san_idle')), 'san_idle');
+      return this.captureMessage(this.formatLine(this.pickSanIdleLine('general')), 'san_idle_general');
     }
 
     const isHighPressure = this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent';
@@ -255,6 +262,7 @@ export class ChatEngine {
       roll -= item.weight;
       if (roll <= 0) {
         if (item.key === 'vip_summary') return this.captureMessage(this.formatLine(this.pickStringPool(item.key), SANDBOX_VIP.handle, true), item.key);
+        if (item.key === 'san_idle') return this.captureMessage(this.formatLine(this.pickSanIdleLine('general')), 'san_idle_general');
         return this.captureMessage(this.formatLine(this.pickStringPool(item.key)), item.key);
       }
     }
@@ -322,6 +330,7 @@ export class ChatEngine {
     duplicateSpamCount: number;
     speakerSpamCount: number;
     freezeLeakCount: number;
+    lastEmitAtMs: number;
     thaiViewer: { lastUsedField: 'thai' | 'text'; count: number };
   } {
     return {
@@ -331,6 +340,7 @@ export class ChatEngine {
       duplicateSpamCount: this.duplicateSpamCount,
       speakerSpamCount: this.speakerSpamCount,
       freezeLeakCount: this.freezeLeakCount,
+      lastEmitAtMs: this.lastEmitAtMs,
       thaiViewer: {
         lastUsedField: this.thaiViewerLastUsedField,
         count: this.thaiViewerUseCount
@@ -338,19 +348,70 @@ export class ChatEngine {
     };
   }
 
+  private normalizeEmitTemplate(text: string): string {
+    return text.replace(/@[\w_]+/g, '@{PLAYER}').replace(/\s+/g, ' ').trim();
+  }
+
+  private buildEmitKey(message: ChatMessage, emitKey: string): string {
+    const template = this.normalizeEmitTemplate(message.translation || message.text || emitKey);
+    return `${message.user}|${this.context.flowStep}|${template}`;
+  }
+
+  private getSanIdleGeneralPool(): string[] {
+    return CHAT_POOLS.san_idle.filter((line) => !SAN_IDLE_GLITCH_PATTERNS.some((pattern) => pattern.test(line)));
+  }
+
+  private getSanIdleGlitchPool(): string[] {
+    return CHAT_POOLS.san_idle.filter((line) => SAN_IDLE_GLITCH_PATTERNS.some((pattern) => pattern.test(line)));
+  }
+
+  private pickSanIdleLine(kind: 'general' | 'glitch'): string {
+    const source = kind === 'glitch' ? this.getSanIdleGlitchPool() : this.getSanIdleGeneralPool();
+    if (source.length > 0) return this.pickSafeArray(source);
+    return this.safeFallbackObservationLine();
+  }
+
   private captureMessage(message: ChatMessage | null, emitKey: string): ChatMessage | null {
     if (!message) return null;
+    const now = Date.now();
     if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_PLAYER_CONSONANT' || this.context.flowStep === 'WAIT_PLAYER_MEANING')) {
       this.freezeLeakCount += 1;
     }
     const speaker = message.user;
-    this.sameEmitKeyStreak = this.lastEmitKey === emitKey ? this.sameEmitKeyStreak + 1 : 1;
-    this.sameSpeakerStreak = this.lastSpeaker === speaker ? this.sameSpeakerStreak + 1 : 1;
+    const effectiveEmitKey = this.buildEmitKey(message, emitKey);
+    const lastSeenAt = this.recentEmitKeyAt.get(effectiveEmitKey) ?? 0;
+    if (lastSeenAt > 0 && now - lastSeenAt < this.emitKeyCooldownMs) {
+      this.duplicateSpamCount += 1;
+      if (emitKey === 'tag_player_phase') {
+        const fallback = this.formatLine(this.pickStringPool('observation_pool'));
+        return this.captureMessage(fallback, 'anti_spam_fallback_observation');
+      }
+      return null;
+    }
+    this.sameSpeakerRunCount = this.lastSpeaker === speaker ? this.sameSpeakerRunCount + 1 : 1;
+    if (this.sameSpeakerRunCount > 2) {
+      this.speakerSpamCount += 1;
+      if (emitKey === 'tag_player_phase') {
+        const fallback = this.formatLine(this.pickStringPool('casual_pool'));
+        return this.captureMessage(fallback, 'anti_spam_fallback_casual');
+      }
+      return null;
+    }
+    if (emitKey === 'tag_player_phase' && (this.context.flowStep === 'ASK_PLAYER_MEANING' || this.context.flowStep === 'WAIT_PLAYER_MEANING') && this.context.stepStartedAt > 0 && now - this.context.stepStartedAt > 3000) {
+      this.duplicateSpamCount += 1;
+      return null;
+    }
+
+    this.sameEmitKeyStreak = this.lastEmitKey === effectiveEmitKey ? this.sameEmitKeyStreak + 1 : 1;
     if (this.sameEmitKeyStreak > 2) this.duplicateSpamCount += 1;
-    if (this.sameSpeakerStreak > 3) this.speakerSpamCount += 1;
-    this.lastEmitKey = emitKey;
+    this.lastEmitKey = effectiveEmitKey;
     this.lastSpeaker = speaker;
-    this.recentEmitKeys = [...this.recentEmitKeys, emitKey].slice(-20);
+    this.lastEmitAtMs = now;
+    this.recentEmitKeyAt.set(effectiveEmitKey, now);
+    this.recentEmitKeys = [...this.recentEmitKeys, effectiveEmitKey].slice(-20);
+    for (const [key, at] of this.recentEmitKeyAt.entries()) {
+      if (now - at > this.emitKeyCooldownMs * 2) this.recentEmitKeyAt.delete(key);
+    }
     return message;
   }
 

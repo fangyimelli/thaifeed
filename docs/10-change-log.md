@@ -867,3 +867,20 @@
 - 2) 0~30 秒不出題且不顯示子音 overlay：PASS
 - 3) 30 秒到點才出第一題子音：PASS
 - 4) classic mode 未修改：PASS
+
+
+## 2026-03-06（sandbox only：freeze 外層總閘 / glitch 分流 / anti-spam hard guard / WORD_RIOT 第2題卡死修補）
+
+### Changed
+- [sandbox/emit-gate] 在 `App.tsx` 的 sandbox chat 單一 dispatch 入口新增 `canSandboxEmitChat()` 總閘；`freeze.frozen=true` 時僅允許 `GLITCH_BURST`，其餘來源一律硬擋。
+- [sandbox/glitch-pool] `chat_engine` 將 `san_idle` 於 engine 內部分流為 `san_idle_general` 與 `san_idle_glitch`；一般路由不再抽 glitch 語氣，burst 專用 glitch 子集；並新增 dev assert 確保 glitch 子集非空。
+- [sandbox/anti-spam] `chat_engine` 新增可真正 skip 的 anti-spam guard：emitKey cooldown（3.5s）、speaker run guard、tag_player 問句重覆抑制與 fallback（observation/casual）。
+- [sandbox/ask-player] `ASK_PLAYER_MEANING` 改為 once-per-step：送出成功即 `tagAskedThisStep=true`、切 `WAIT_PLAYER_MEANING` 並 freeze；重入時不再重複發問。
+- [sandbox/word-riot] 修正 `sandboxWaveRunningRef` 題間 reset 與推進 SSOT：`WORD_RIOT -> VIP_TRANSLATE` 改成 timer 單一路徑推進，並在離開/advance 時強制 reset lock，避免第二題後卡死。
+- [sandbox/intro-gate] 新增 `canAskConsonantNow()`，force ask/debug ask 入口統一共用，封住 intro gate 旁路。
+
+### Root Cause（第2題卡死）
+- `WORD_RIOT` 同時存在多條可能推進路徑（step 內直接推進 + 其他 callback 路徑），且 wave lock 沒有每題保證 reset；第二題後可能保持 `sandboxWaveRunningRef=true`，造成後續無法再進入有效 riot 推進。
+
+### Scope Guard
+- 僅 sandbox 路徑修改；classic mode 未修改。

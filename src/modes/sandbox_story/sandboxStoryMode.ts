@@ -229,6 +229,7 @@ export type SandboxStoryMode = GameMode & {
   commitHintText: (text: string, source?: '' | 'classic_shared') => void;
   setSubmitInFlight: (inFlight: boolean, timestamp?: number) => void;
   setFlowStep: (step: SandboxFlowStep, reason?: string, now?: number) => void;
+  markTagAskedThisStep: (askedAt?: number) => void;
   setFreeze: (payload: Partial<SandboxStoryState['freeze']>) => void;
   setGlitchBurst: (payload: Partial<SandboxStoryState['glitchBurst']>) => void;
   setPlayerIdentity: (payload: { handle: string; id?: string }) => void;
@@ -927,6 +928,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     setFlowStep(step, reason = '', now = Date.now()) {
       setFlowStepInternal(step, reason, now);
       syncFear();
+    },
+    markTagAskedThisStep(askedAt = Date.now()) {
+      state.flow = {
+        ...state.flow,
+        tagAskedThisStep: true,
+        tagAskedAt: askedAt
+      };
     },
     setFreeze(payload) {
       state.freeze = { ...state.freeze, ...payload };
