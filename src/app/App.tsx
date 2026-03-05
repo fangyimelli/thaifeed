@@ -1533,6 +1533,7 @@ export default function App() {
         sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
         sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
         setChatAutoPaused(false);
+        sandboxModeRef.current.setGlitchBurst({ pending: true, remaining: 10, lastEmitAt: 0 });
         sandboxModeRef.current.setFlowStep('GLITCH_BURST_AFTER_MEANING', 'player_meaning_replied');
         setSandboxRevealTick(Date.now());
         return true;
@@ -2663,7 +2664,7 @@ export default function App() {
             sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
           }
           if (Math.random() < 0.18) {
-            const vipLine = `@${sandboxState.player.handle || '000'} 嗨嗨第一次看嗎？`;
+            const vipLine = 'VIP：先暖場一下，等等再進主題';
             dispatchChatMessage({ id: crypto.randomUUID(), username: 'VIP', type: 'chat', text: vipLine, language: 'zh', translation: vipLine, isVip: 'VIP_NORMAL' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_vip_tag' });
           }
         }
@@ -2675,7 +2676,7 @@ export default function App() {
           sandboxChatEngineRef.current?.triggerGhostHintEvent();
         }
       }
-      if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'ASK_CONSONANT' && sandboxStoryPhaseGateRef.current.phase === 'N1_QUIZ_LOOP') {
+      if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'ASK_CONSONANT' && sandboxState.introGate.passed && sandboxStoryPhaseGateRef.current.phase === 'N1_QUIZ_LOOP') {
         void askSandboxConsonantNow();
       }
       if (modeRef.current.id === 'sandbox_story' && (sandboxState.flow.step === 'WAIT_PLAYER_CONSONANT' || sandboxState.flow.step === 'WAIT_PLAYER_MEANING')) {
@@ -3719,6 +3720,7 @@ export default function App() {
           }
 
           if (judge === 'pass') {
+            sandboxModeRef.current.setGlitchBurst({ pending: true, remaining: 10, lastEmitAt: 0 });
             sandboxModeRef.current.setFlowStep('GLITCH_BURST_AFTER_CONSONANT', 'answer_passed');
             clearReplyUi('sandbox_consonant_pass');
             clearChatFreeze('sandbox_consonant_pass');
@@ -3727,6 +3729,7 @@ export default function App() {
             setInput('');
             return markSent('sandbox_consonant_pass');
           }
+          sandboxModeRef.current.setGlitchBurst({ pending: true, remaining: 10, lastEmitAt: 0 });
           sandboxModeRef.current.setFlowStep('GLITCH_BURST_AFTER_CONSONANT', 'answer_received');
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
@@ -4441,10 +4444,7 @@ export default function App() {
     if (sandboxState.flow.step === 'GLITCH_BURST_AFTER_CONSONANT' || sandboxState.flow.step === 'GLITCH_BURST_AFTER_MEANING') {
       const glitchPool = ['訊息送不出去', '聊天室卡住', 'lag 超怪', '網路怪怪的', '我這邊一直轉圈', '封包好像炸了'];
       const now = Date.now();
-      if (!sandboxState.glitchBurst.pending) {
-        sandboxModeRef.current.setGlitchBurst({ pending: true, remaining: 10, lastEmitAt: 0 });
-      }
-      if ((sandboxState.glitchBurst.lastEmitAt ?? 0) + randomInt(250, 450) <= now && sandboxState.glitchBurst.remaining > 0) {
+      if (sandboxState.glitchBurst.pending && (sandboxState.glitchBurst.lastEmitAt ?? 0) + randomInt(250, 450) <= now && sandboxState.glitchBurst.remaining > 0) {
         const line = pickOne(glitchPool);
         dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_answer_glitch_flood' });
         sandboxModeRef.current.setGlitchBurst({
@@ -4454,7 +4454,7 @@ export default function App() {
         });
         setSandboxRevealTick(now);
       }
-      if (sandboxState.glitchBurst.remaining <= 0) {
+      if (sandboxState.glitchBurst.pending && sandboxState.glitchBurst.remaining <= 0) {
         sandboxModeRef.current.setGlitchBurst({ pending: false, remaining: 0, lastEmitAt: now });
         sandboxModeRef.current.setFlowStep(sandboxState.flow.step === 'GLITCH_BURST_AFTER_MEANING' ? 'ADVANCE_NEXT' : 'REVEAL_WORD', 'glitch_flood_done');
         setSandboxRevealTick(now);

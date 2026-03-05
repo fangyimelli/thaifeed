@@ -1,6 +1,9 @@
 import { SandboxUserGenerator } from './user_generator';
 import { CHAT_POOLS, assertChatPoolsCounts } from './chat_pools';
 
+const SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/] as const;
+const SANDBOX_POOL_REROLL_MAX = 5;
+
 export type ChatMessage = {
   user: string;
   text: string;
@@ -106,7 +109,7 @@ export class ChatEngine {
       this.supernaturalQueue = this.buildSupernaturalQueue();
     }
     if (this.context.phase === 'vipTranslate' && this.lastPhase !== 'vipTranslate' && this.supernaturalQueue.length === 0) {
-      this.supernaturalQueue = [this.formatLine(this.pickArray(VIP_TRANSLATE_LINES), 'VIP', true)];
+      this.supernaturalQueue = [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true)];
     }
     this.lastPhase = this.context.phase;
     if (this.context.isEnding && this.collapseQueue.length === 0) {
@@ -124,12 +127,12 @@ export class ChatEngine {
   }
 
   nextMessage(): ChatMessage | null {
-    if (this.context.freeze.frozen) {
+    if (this.context.freeze.frozen && !this.context.glitchBurst.pending) {
       return null;
     }
 
     if (this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0) {
-      return this.formatLine(this.pick('san_idle'));
+      return this.formatLine(this.pickStringPool('san_idle'));
     }
 
     if (this.supernaturalQueue.length > 0) {
@@ -142,7 +145,7 @@ export class ChatEngine {
 
     if (Date.now() - this.lastPlayerReplyAt >= 10_000) {
       this.lastPlayerReplyAt = Date.now();
-      return this.formatLine(this.pick('san_idle'));
+      return this.formatLine(this.pickStringPool('san_idle'));
     }
 
     if (this.waveRemaining > 0) {
@@ -150,7 +153,7 @@ export class ChatEngine {
       if (this.waveRemaining === 0) {
         this.options.onWaveResolved?.(this.waveTotal);
       }
-      return this.formatLine(this.pick('observation_pool'));
+      return this.formatLine(this.pickStringPool('observation_pool'));
     }
 
     this.sinceThai += 1;
@@ -159,12 +162,12 @@ export class ChatEngine {
 
     if (this.sinceVip >= this.randomRange(15, 25)) {
       this.sinceVip = 0;
-      return this.formatLine(this.pick('vip_summary'), 'VIP', true);
+      return this.formatLine(this.pickStringPool('vip_summary'), 'VIP', true);
     }
 
     if (this.sinceThai >= this.randomRange(5, 8)) {
       this.sinceThai = 0;
-      const line = this.pick('thai_viewer_pool');
+      const line = this.pickThaiViewerLine();
       return {
         user: line.user,
         text: `${line.user}: ${line.text}`,
@@ -174,34 +177,34 @@ export class ChatEngine {
     }
 
     if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.25) {
-      return this.formatLine(this.applyPlayerHandle(this.pick('tag_player')));
+      return this.formatLine(this.applyPlayerHandle(this.pickStringPool('tag_player')));
     }
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.3) {
-      return this.formatLine(this.pick('guess_character'));
+      return this.formatLine(this.pickStringPool('guess_character'));
     }
 
     if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.4) {
-      return this.formatLine(this.pick('fear_pool'));
+      return this.formatLine(this.pickStringPool('fear_pool'));
     }
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.28) {
-      return this.formatLine(this.pick('theory_pool'));
+      return this.formatLine(this.pickStringPool('theory_pool'));
     }
 
     if (this.context.phase === 'supernaturalEvent' && Math.random() < 0.65) {
-      return this.formatLine(this.pick('san_idle'));
+      return this.formatLine(this.pickStringPool('san_idle'));
     }
 
     const isHighPressure = this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent';
     if (isHighPressure && Math.random() < 0.5) {
-      return this.formatLine(this.pick('final_fear'));
+      return this.formatLine(this.pickStringPool('final_fear'));
     }
 
     const fearRate = this.context.san <= 35 ? 0.62 : this.context.san <= 60 ? 0.4 : 0.22;
-    if (Math.random() < fearRate) return this.formatLine(this.pick('fear_pool'));
-    if (Math.random() < 0.5) return this.formatLine(this.pick('observation_pool'));
-    return this.formatLine(this.pick('casual_pool'));
+    if (Math.random() < fearRate) return this.formatLine(this.pickStringPool('fear_pool'));
+    if (Math.random() < 0.5) return this.formatLine(this.pickStringPool('observation_pool'));
+    return this.formatLine(this.pickStringPool('casual_pool'));
   }
 
   private scheduleNext(): void {
@@ -231,31 +234,31 @@ export class ChatEngine {
     const queue: ChatMessage[] = [];
     queue.push(this.formatLine(`[GHOST_HINT_EVENT] ${hint.toUpperCase()}`, 'system', false));
     for (let i = 0; i < 3; i += 1) {
-      queue.push(this.formatLine(this.pickArray(GHOST_HINT_REASONING)));
+      queue.push(this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)));
     }
     return queue;
   }
 
   emitReasoningWave(count = 2): ChatMessage[] {
     const size = Math.max(1, Math.min(4, count));
-    return Array.from({ length: size }).map(() => this.formatLine(this.pickArray(GHOST_HINT_REASONING)));
+    return Array.from({ length: size }).map(() => this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)));
   }
 
   emitTagPlayerPrompt(): ChatMessage {
-    const line = this.applyPlayerHandle(this.pick('tag_player'));
+    const line = this.applyPlayerHandle(this.pickStringPool('tag_player'));
     return this.formatLine(line, 'mod_live');
   }
 
   private buildSupernaturalQueue(): ChatMessage[] {
     const eventType = this.pickSupernaturalEvent();
-    if (eventType === 'none') return [this.formatLine(this.pickArray(VIP_TRANSLATE_LINES), 'VIP', true)];
+    if (eventType === 'none') return [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true)];
     const queue: ChatMessage[] = [];
     queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${eventType.toUpperCase()}`, 'system', false));
     if (eventType === 'footsteps') {
       queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${this.pickFootstepDistance().toUpperCase()}`, 'system', false));
     }
-    queue.push(this.formatLine(this.pick('fear_pool')));
-    queue.push(this.formatLine(this.pickArray(VIP_TRANSLATE_LINES), 'VIP', true));
+    queue.push(this.formatLine(this.pickStringPool('fear_pool')));
+    queue.push(this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true));
     return queue;
   }
 
@@ -288,6 +291,43 @@ export class ChatEngine {
   private pick<K extends keyof typeof CHAT_POOLS>(key: K): (typeof CHAT_POOLS)[K][number] {
     const pool = CHAT_POOLS[key];
     return pool[Math.floor(Math.random() * pool.length)] as (typeof CHAT_POOLS)[K][number];
+  }
+
+  private containsBannedText(text: string): boolean {
+    return SANDBOX_BANNED_PATTERNS.some((pattern) => pattern.test(text));
+  }
+
+  private pickSafeArray<T extends string>(pool: readonly T[]): T {
+    for (let attempt = 0; attempt < SANDBOX_POOL_REROLL_MAX; attempt += 1) {
+      const candidate = this.pickArray(pool);
+      if (!this.containsBannedText(candidate)) return candidate;
+    }
+    return this.safeFallbackObservationLine() as T;
+  }
+
+  private pickStringPool<K extends Exclude<keyof typeof CHAT_POOLS, 'thai_viewer_pool'>>(key: K): string {
+    for (let attempt = 0; attempt < SANDBOX_POOL_REROLL_MAX; attempt += 1) {
+      const candidate = this.pick(key) as unknown as string;
+      if (!this.containsBannedText(candidate)) return candidate;
+    }
+    return this.safeFallbackObservationLine();
+  }
+
+  private pickThaiViewerLine(): (typeof CHAT_POOLS)['thai_viewer_pool'][number] {
+    for (let attempt = 0; attempt < SANDBOX_POOL_REROLL_MAX; attempt += 1) {
+      const candidate = this.pick('thai_viewer_pool');
+      if (!this.containsBannedText(candidate.text)) return candidate;
+    }
+    const fallback = this.safeFallbackObservationLine();
+    return { user: CHAT_POOLS.thai_viewer_pool[0]?.user ?? 'somchai', text: fallback, thai: fallback, translation: fallback };
+  }
+
+  private safeFallbackObservationLine(): string {
+    for (let attempt = 0; attempt < SANDBOX_POOL_REROLL_MAX; attempt += 1) {
+      const candidate = this.pick('observation_pool') as string;
+      if (!this.containsBannedText(candidate)) return candidate;
+    }
+    return '畫面有點怪 先盯著看';
   }
 
   private pickArray<T>(pool: readonly T[]): T {

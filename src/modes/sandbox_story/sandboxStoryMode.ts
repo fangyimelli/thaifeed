@@ -391,11 +391,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     return 'awaitingTag';
   };
   const setFlowStepInternal = (step: SandboxFlowStep, reason = '', now = Date.now()) => {
+    const prevStep = state.flow.step;
     state.flow = { ...state.flow, step, stepStartedAt: now, tagAskedThisStep: false };
     state.scheduler.phase = schedulerPhaseByStep(step);
     clearSchedulerBlockedReason();
     if (import.meta.env.DEV) {
-      console.debug('[sandbox.flow]', `${state.flow.step} -> ${step}`, reason || '-');
+      console.debug('[sandbox.flow]', `${prevStep} -> ${step}`, reason || '-');
     }
   };
   const clearSchedulerBlockedReason = () => {
