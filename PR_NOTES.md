@@ -1,10 +1,13 @@
 ## Summary
-- 修正 sandbox NIGHT_01 進房立即出題問題：新增 30 秒 `N1_INTRO_CHAT` gate，倒數後才進 `N1_QUIZ_LOOP` 出第一題。
-- 修正 sandbox 同題多次輸入僅第一次有反應：加入 input lock 回覆與同題 prompt recover 機制，避免沉默/卡題。
-- 修正 sandbox 混入 classic 「選項模板」：新增 sandbox emit gate，阻擋任何 `（選項：...）` 話術。
-- 新增 message emit source debug：`chat.lastEmit.source/sourceTag/sourceMode`，並在 sandbox debug 顯示 `storyPhaseGate`。
+- 完成 sandbox NIGHT_01 P0 修復：加入 `introGate`（30 秒預熱）、固定 pipeline（`reveal -> riot -> supernatural -> VIP -> reasoning -> tag -> next`）、revisit queue、tag phase timeout/recovery 固定文案與 options guard。
+- `sandbox_story` 狀態機新增 `intro/reasoningPhase/tagPlayerPhase`，且 `init()` 改為 `intro` 起始，僅在 gate 通過後才允許出題。
+- `chat_engine` 修正 wave resolved 計數：回傳實際 wave 長度，不再固定 `3`。
+- `App` 加入 sandbox options 防護（含 payload options 與「選項：」文字），並在 debug 記錄 `blockedOptionsCount`。
+- debug 追蹤補齊：`introGate.remainingMs`、`pendingQuestions.length/revisiting`、`blockedOptionsCount`。
 
 ## Changed files
+- src/modes/sandbox_story/sandboxStoryMode.ts
+- src/sandbox/chat/chat_engine.ts
 - src/app/App.tsx
 - README.md
 - docs/10-change-log.md

@@ -118,12 +118,24 @@ npm run build
 - Prompt Gate：`askSandboxConsonantNow()` 僅在 `phase=awaitingTag` 且 story gate 已進入 `N1_QUIZ_LOOP` 才會送題，避免一進房立即出題。
 - Pipeline/Input Lock：sandbox submit in-flight 時，重複輸入會回覆「收到，等一下，正在處理上一題。」並阻擋重入，不再沉默。
 - Solved 同步：同題 prompt 若已存在但未前進，會在 3 秒後允許重送同題 prompt（recover），避免「題目已 solved 但仍催同題」卡住。
-- Classic 隔離：sandbox 模式下阻擋含「（選項：...）」模板的非玩家訊息，避免 classic QNA 話術混入。
+- Pipeline 強制化：每次答對後固定走 `reveal -> chatRiot -> supernaturalEvent -> vipTranslate -> reasoningPhase -> tagPlayerPhase -> next`，不再有隨機缺步。
+- Revisit Queue：`sandbox.pendingQuestions.queue` 採 FIFO；tagPlayer 未命中 `woman/girl/boy` 時先 enqueue 並先進下一題，之後優先回補直到命中才 dequeue。
+- SAN timeout/recovery（sandbox 專用）：進入 `tagPlayerPhase` 後固定 8~12 秒 timeout 刷屏 `奇怪 / 我訊息送不出去 / 聊天室卡住? / 網路怪怪的`；玩家回覆後固定刷 `喔喔喔 / 終於 / 剛剛卡住`。
+- Sandbox options guard：sandbox emit 層會擋下「payload 含 options」或文字含 `選項：` 的訊息，並累計 `sandbox.blockedOptionsCount` debug 計數。
 - Message Source Debug：新增 `chat.lastEmit.source/sourceTag/sourceMode`（sandbox/classic/system）以追蹤每次訊息 emit 來源。
+
+### Debug 欄位變更紀錄（本次）
+
+- 新增：
+  - `sandbox.introGate.startedAt/minDurationMs/passed/remainingMs`
+  - `sandbox.pendingQuestions.length`
+  - `sandbox.pendingQuestions.revisiting`
+  - `sandbox.blockedOptionsCount`
+  - `sandbox.scheduler.phase=reasoningPhase|tagPlayerPhase`
 
 ### Removed / Deprecated Log
 
-- Deprecated（sandbox）：禁止 sandbox 期間送出 classic 風格選項模板（`（選項：...）`），違規訊息會被 emit gate 擋下。
+- Deprecated（sandbox）：禁止 sandbox 期間送出任何 options 型訊息（包含 `（選項：...）` 與 payload `options`），違規訊息會被 emit gate 擋下並計數。
 
 ## Actor Pool Separation
 

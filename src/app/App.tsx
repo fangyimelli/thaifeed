@@ -301,12 +301,15 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
-function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' {
+function mapSandboxSchedulerPhase(phase: string): 'intro' | 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' | 'reasoningPhase' | 'tagPlayerPhase' {
+  if (phase === 'intro') return 'intro';
   if (phase === 'awaitingAnswer') return 'awaitingAnswer';
   if (phase === 'revealingWord') return 'revealingWord';
   if (phase === 'chatRiot') return 'chatRiot';
   if (phase === 'supernaturalEvent') return 'supernaturalEvent';
   if (phase === 'vipTranslate') return 'vipTranslate';
+  if (phase === 'reasoningPhase') return 'reasoningPhase';
+  if (phase === 'tagPlayerPhase') return 'tagPlayerPhase';
   return 'awaitingTag';
 }
 
@@ -687,6 +690,9 @@ export default function App() {
   const sandboxVipTranslateTimerRef = useRef<number | null>(null);
   const sandboxRevealDoneTimerRef = useRef<number | null>(null);
   const sandboxAdvanceRetryTimerRef = useRef<number | null>(null);
+  const sandboxTagPhaseTimeoutRef = useRef<number | null>(null);
+  const sandboxTagPhaseTimeoutFiredRef = useRef(false);
+  const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxQnaDebugRef = useRef<{
     lastResolveAt: number;
@@ -991,8 +997,20 @@ export default function App() {
       return { ok: false, blockedReason: 'activeUser_auto_speak_blocked' };
     }
 
-    if (modeRef.current.id === 'sandbox_story' && source !== 'player_input' && /(?:\(|（)\s*選項\s*[:：]/u.test(message.text || '')) {
-      return { ok: false, blockedReason: 'sandbox_classic_option_template_blocked' };
+    if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
+      const hasOptionPayload = Boolean((message as ChatMessage & { options?: unknown[] }).options?.length);
+      const hasOptionTemplate = /(?:\(|（)\s*選項\s*[:：]/u.test(message.text || '') || /選項\s*[:：]/u.test(message.translation || '');
+      if (hasOptionPayload || hasOptionTemplate) {
+        sandboxBlockedOptionsCountRef.current += 1;
+        window.__CHAT_DEBUG__ = {
+          ...(window.__CHAT_DEBUG__ ?? {}),
+          sandbox: {
+            ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
+            blockedOptionsCount: sandboxBlockedOptionsCountRef.current
+          }
+        } as any;
+        return { ok: false, blockedReason: 'sandbox_classic_option_template_blocked' };
+      }
     }
 
     if (source === 'unknown') {
@@ -1507,6 +1525,16 @@ export default function App() {
   }, [chatAutoScrollMode, chatFreeze.isFrozen, clearChatFreeze, clearReplyUi]);
 
   const consumePlayerReply = useCallback((raw: string) => {
+    if (modeRef.current.id === 'sandbox_story') {
+      const sandboxState = sandboxModeRef.current.getState();
+      if (sandboxState.scheduler.phase === 'tagPlayerPhase') {
+        const stripped = raw.replace(/^[\s\u3000]*@[^\s\u3000]+[\s\u3000]*/u, '').trim().toLowerCase();
+        const isHit = /(woman|girl|boy)/u.test(stripped);
+        sandboxModeRef.current.resolveTagPlayerPhase(isHit ? 'hit' : 'miss');
+        setSandboxRevealTick(Date.now());
+        return true;
+      }
+    }
     if (!(qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply)) return false;
     const stripped = raw.replace(/^[\s\u3000]*@[^\s\u3000]+[\s\u3000]*/u, '').trim();
     const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
@@ -2665,6 +2693,12 @@ export default function App() {
           introEndsAt: sandboxStoryPhaseGateRef.current.introEndsAt,
           introRemainingMs: Math.max(0, sandboxStoryPhaseGateRef.current.introEndsAt - now)
         },
+        introGate: sandboxState.introGate,
+        pendingQuestions: {
+          length: sandboxState.pendingQuestions.queue.length,
+          revisiting: sandboxState.pendingQuestions.revisiting
+        },
+        blockedOptionsCount: sandboxBlockedOptionsCountRef.current,
         judge: {
           lastInput: sandboxState.consonant.judge.lastInput || '-',
           lastResult: sandboxState.consonant.judge.lastResult
@@ -3340,6 +3374,14 @@ export default function App() {
     }
   }, []);
 
+  const clearSandboxTagPhaseTimeout = useCallback(() => {
+    if (sandboxTagPhaseTimeoutRef.current != null) {
+      window.clearTimeout(sandboxTagPhaseTimeoutRef.current);
+      sandboxTagPhaseTimeoutRef.current = null;
+    }
+    sandboxTagPhaseTimeoutFiredRef.current = false;
+  }, []);
+
   const advanceSandboxPrompt = useCallback((reason: 'correct_done' | 'debug_pass') => {
     if (modeRef.current.id !== 'sandbox_story') return;
     const st = sandboxModeRef.current.getState();
@@ -3381,6 +3423,7 @@ export default function App() {
   useEffect(() => () => {
     clearSandboxAdvanceRetry();
     clearSandboxRevealDoneTimer();
+    clearSandboxTagPhaseTimeout();
     if (sandboxSupernaturalTimerRef.current != null) {
       window.clearTimeout(sandboxSupernaturalTimerRef.current);
       sandboxSupernaturalTimerRef.current = null;
@@ -3389,7 +3432,7 @@ export default function App() {
       window.clearTimeout(sandboxVipTranslateTimerRef.current);
       sandboxVipTranslateTimerRef.current = null;
     }
-  }, [clearSandboxAdvanceRetry, clearSandboxRevealDoneTimer]);
+  }, [clearSandboxAdvanceRetry, clearSandboxRevealDoneTimer, clearSandboxTagPhaseTimeout]);
 
   const submitChat = useCallback(async (rawText: string, source: SendSource): Promise<SendResult> => {
     const now = Date.now();
@@ -3515,6 +3558,20 @@ export default function App() {
       sandboxChatEngineRef.current?.markPlayerReply(Date.now());
       const sandboxQnaConsumed = modeRef.current.id === 'sandbox_story' ? consumePlayerReply(outgoingText) : false;
       if (modeRef.current.id === 'sandbox_story') {
+        if (sandboxTagPhaseTimeoutFiredRef.current) {
+          const recoveryLines = ['喔喔喔', '終於', '剛剛卡住'];
+          recoveryLines.forEach((line) => {
+            dispatchChatMessage({
+              id: crypto.randomUUID(),
+              username: 'mod_live',
+              type: 'chat',
+              text: line,
+              language: 'zh',
+              translation: line
+            }, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_timeout_recovery' });
+          });
+          clearSandboxTagPhaseTimeout();
+        }
         modeRef.current.onPlayerReply(outgoingText);
       }
       if (modeRef.current.id === 'sandbox_story' && !sandboxQnaConsumed) {
@@ -4087,6 +4144,7 @@ export default function App() {
     const node = sandboxModeRef.current.getCurrentNode();
     if (!node) return;
     if (sandboxState.scheduler.phase !== 'awaitingTag') return;
+    if (!sandboxState.introGate.passed) return;
     if (sandboxStoryPhaseGateRef.current.phase !== 'N1_QUIZ_LOOP') return;
 
     const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
@@ -4325,10 +4383,41 @@ export default function App() {
       window.clearTimeout(sandboxVipTranslateTimerRef.current);
       sandboxVipTranslateTimerRef.current = null;
     }
+    if (sandboxState.scheduler.phase === 'reasoningPhase') {
+      const reasoningMessages = sandboxChatEngineRef.current?.emitReasoningWave(randomInt(1, 3)) ?? [];
+      reasoningMessages.forEach((message) => {
+        dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_reasoning_phase' });
+      });
+      sandboxModeRef.current.markReasoningDone(reasoningMessages.length);
+      setSandboxRevealTick(Date.now());
+    }
+    if (sandboxState.scheduler.phase === 'tagPlayerPhase' && sandboxTagPhaseTimeoutRef.current == null) {
+      const prompt = sandboxChatEngineRef.current?.emitTagPlayerPrompt() ?? { user: 'mod_live', text: 'mod_live: 你先說你覺得是 woman/girl/boy 哪個？' };
+      dispatchChatMessage(convertSandboxChatMessage(prompt), { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_phase' });
+      const timeoutLines = ['奇怪', '我訊息送不出去', '聊天室卡住?', '網路怪怪的'];
+      sandboxTagPhaseTimeoutRef.current = window.setTimeout(() => {
+        sandboxTagPhaseTimeoutRef.current = null;
+        sandboxTagPhaseTimeoutFiredRef.current = true;
+        timeoutLines.forEach((line) => {
+          dispatchChatMessage({
+            id: crypto.randomUUID(),
+            username: 'mod_live',
+            type: 'chat',
+            text: line,
+            language: 'zh',
+            translation: line
+          }, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_timeout' });
+        });
+      }, randomInt(8000, 12000));
+    }
+    if (sandboxState.scheduler.phase !== 'tagPlayerPhase' && sandboxTagPhaseTimeoutRef.current != null) {
+      window.clearTimeout(sandboxTagPhaseTimeoutRef.current);
+      sandboxTagPhaseTimeoutRef.current = null;
+    }
     return () => {
       clearSandboxRevealDoneTimer();
     };
-  }, [advanceSandboxPrompt, clearSandboxRevealDoneTimer, sandboxRevealTick]);
+  }, [advanceSandboxPrompt, clearSandboxRevealDoneTimer, convertSandboxChatMessage, sandboxRevealTick]);
 
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
@@ -4912,6 +5001,10 @@ export default function App() {
                     <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
                     <div>storyPhaseGate.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.storyPhaseGate?.phase ?? '-'}</div>
                     <div>storyPhaseGate.introRemainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.storyPhaseGate?.introRemainingMs ?? '-'}</div>
+                    <div>introGate.remainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.introGate?.remainingMs ?? '-'}</div>
+                    <div>pendingQuestions.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.length ?? 0}</div>
+                    <div>pendingQuestions.revisiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.revisiting ?? false)}</div>
+                    <div>blockedOptionsCount: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedOptionsCount ?? 0}</div>
                     <div>sandbox.currentPrompt.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.id ?? '-'}</div>
                     <div>sandbox.currentPrompt.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.consonant ?? '-'}</div>
                     <div>sandbox.currentPrompt.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.wordKey ?? '-'}</div>

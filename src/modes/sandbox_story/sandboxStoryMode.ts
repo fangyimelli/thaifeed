@@ -4,12 +4,15 @@ import type { GameMode } from '../types';
 
 export type SandboxStoryPhase =
   | 'boot'
+  | 'intro'
   | 'awaitingTag'
   | 'awaitingAnswer'
   | 'revealingWord'
   | 'chatRiot'
   | 'supernaturalEvent'
-  | 'vipTranslate';
+  | 'vipTranslate'
+  | 'reasoningPhase'
+  | 'tagPlayerPhase';
 
 export type SandboxRevealPhase = 'idle' | 'enter' | 'pulse' | 'exit' | 'done';
 export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
@@ -59,6 +62,9 @@ export type SandboxPrompt =
 
 export type SandboxStoryState = {
   nodeIndex: number;
+  introGate: { startedAt: number; minDurationMs: number; passed: boolean; remainingMs: number };
+  pendingQuestions: { queue: string[]; revisiting: boolean };
+  pipeline: { reasoningCount: number; tagPrompted: boolean };
   scheduler: { phase: SandboxStoryPhase; blockedReason: string };
   consonant: {
     nodeChar: string;
@@ -168,6 +174,8 @@ export type SandboxStoryMode = GameMode & {
   markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
   markSupernaturalDone: () => void;
   markVipTranslateDone: () => void;
+  markReasoningDone: (count: number) => void;
+  resolveTagPlayerPhase: (result: 'hit' | 'miss') => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
   notifyBlockedByPhase: () => void;
   commitAdvanceBlockedReason: (reason: string) => void;
@@ -205,6 +213,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const REVEAL_DURATION_MS = 4000;
   const state: SandboxStoryState = {
     nodeIndex: 0,
+    introGate: { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 },
+    pendingQuestions: { queue: [], revisiting: false },
+    pipeline: { reasoningCount: 0, tagPrompted: false },
     scheduler: { phase: 'boot', blockedReason: '' },
     consonant: {
       nodeChar: '',
@@ -303,7 +314,18 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.prompt.mismatch = overlayMismatch || pinnedMismatch;
   };
 
+  let nextLinearNodeIndex = 1;
   const getCurrentNode = () => script.nodes[state.nodeIndex] ?? null;
+  const syncIntroGate = (now = Date.now()) => {
+    const remainingMs = Math.max(0, state.introGate.startedAt + state.introGate.minDurationMs - now);
+    state.introGate.remainingMs = remainingMs;
+    if (!state.introGate.passed && remainingMs <= 0) {
+      state.introGate.passed = true;
+      if (state.scheduler.phase === 'intro') {
+        state.scheduler.phase = 'awaitingTag';
+      }
+    }
+  };
   const clearSchedulerBlockedReason = () => {
     state.scheduler.blockedReason = '';
   };
@@ -394,10 +416,34 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.prompt.pinned.promptIdRendered = '';
     state.hint = { ...state.hint, active: false };
     state.answer.submitInFlight = false;
+    state.pipeline = { reasoningCount: 0, tagPrompted: false };
+  };
+  const enqueueCurrentNodeForRevisit = () => {
+    const currentNode = getCurrentNode();
+    if (!currentNode) return;
+    if (!state.pendingQuestions.queue.includes(currentNode.id)) {
+      state.pendingQuestions.queue = [...state.pendingQuestions.queue, currentNode.id];
+    }
+  };
+  const selectNextNodeIndex = () => {
+    const pendingNodeId = state.pendingQuestions.queue[0];
+    if (pendingNodeId) {
+      const revisitIndex = script.nodes.findIndex((node) => node.id === pendingNodeId);
+      if (revisitIndex >= 0) {
+        state.pendingQuestions.revisiting = true;
+        state.nodeIndex = revisitIndex;
+        return;
+      }
+      state.pendingQuestions.queue = state.pendingQuestions.queue.slice(1);
+    }
+    state.pendingQuestions.revisiting = false;
+    const clamped = Math.max(0, Math.min(script.nodes.length - 1, nextLinearNodeIndex));
+    state.nodeIndex = clamped;
+    nextLinearNodeIndex = Math.max(nextLinearNodeIndex, Math.min(clamped + 1, Math.max(script.nodes.length - 1, 0)));
   };
   const advancePromptInternal = (reason: string, token: string) => {
     state.advance = { ...state.advance, inFlight: true, lastToken: token, lastAt: Date.now(), lastReason: reason, blockedReason: '' };
-    state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+    selectNextNodeIndex();
     syncNodeChar();
     state.scheduler.phase = 'awaitingTag';
     clearSchedulerBlockedReason();
@@ -413,7 +459,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     label: 'Sandbox Story Mode',
     init() {
       state.nodeIndex = 0;
-      state.scheduler.phase = 'awaitingTag';
+      nextLinearNodeIndex = 1;
+      state.introGate = { startedAt: Date.now(), minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
+      state.pendingQuestions = { queue: [], revisiting: false };
+      state.pipeline = { reasoningCount: 0, tagPrompted: false };
+      state.scheduler.phase = 'intro';
       clearSchedulerBlockedReason();
       state.reveal.visible = false;
       state.reveal.phase = 'idle';
@@ -445,6 +495,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     onPlayerReply() { syncFear(); },
     tick() {
+      syncIntroGate();
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
         state.reveal.phase = elapsed < 1000 ? 'enter' : elapsed < REVEAL_DURATION_MS ? 'pulse' : 'done';
@@ -472,7 +523,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     forceAdvanceNode() {
       state.advance = { ...state.advance, inFlight: false, lastToken: '', lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
-      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
+      selectNextNodeIndex();
       state.scheduler.phase = 'awaitingTag';
       clearSchedulerBlockedReason();
       state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: 0 };
@@ -495,7 +546,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (!nextScript?.nodes?.length) return false;
       script = cloneScript(nextScript);
       state.nodeIndex = 0;
-      state.scheduler.phase = 'awaitingTag';
+      nextLinearNodeIndex = 1;
+      state.introGate = { startedAt: Date.now(), minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
+      state.pendingQuestions = { queue: [], revisiting: false };
+      state.pipeline = { reasoningCount: 0, tagPrompted: false };
+      state.scheduler.phase = 'intro';
       clearSchedulerBlockedReason();
       state.prompt.current = null;
       state.prompt.overlay.consonantShown = '';
@@ -663,12 +718,32 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
     },
     markVipTranslateDone() {
-      const token = `vipTranslate:${state.prompt.current?.promptId ?? 'none'}:${state.nodeIndex}`;
+      state.scheduler.phase = 'reasoningPhase';
+      clearSchedulerBlockedReason();
+      syncFear();
+    },
+    markReasoningDone(count) {
+      state.pipeline.reasoningCount = count;
+      state.scheduler.phase = 'tagPlayerPhase';
+      clearSchedulerBlockedReason();
+      syncFear();
+    },
+    resolveTagPlayerPhase(result) {
+      if (result !== 'hit') {
+        enqueueCurrentNodeForRevisit();
+      } else if (state.pendingQuestions.queue.length > 0 && state.pendingQuestions.revisiting) {
+        const currentNode = getCurrentNode();
+        if (currentNode && state.pendingQuestions.queue[0] === currentNode.id) {
+          state.pendingQuestions.queue = state.pendingQuestions.queue.slice(1);
+        }
+      }
+      const token = `tagPlayer:${state.prompt.current?.promptId ?? 'none'}:${state.nodeIndex}:${result}`;
       if (state.advance.inFlight || state.advance.lastToken === token) {
         state.advance = { ...state.advance, blockedReason: 'double_advance', lastReason: 'blocked', lastAt: Date.now() };
         return;
       }
-      advancePromptInternal('vipTranslateDone', token);
+      state.pipeline.tagPrompted = true;
+      advancePromptInternal(`tagPlayer:${result}`, token);
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
     notifyBlockedByPhase() {
