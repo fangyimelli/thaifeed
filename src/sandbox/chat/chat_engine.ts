@@ -20,6 +20,8 @@ type ChatEngineContext = {
   playerHandle: string;
   phase: StoryPhase;
   isEnding: boolean;
+  freeze: { frozen: boolean; reason: 'NONE' | 'AWAIT_PLAYER_INPUT' };
+  glitchBurst: { pending: boolean; remaining: number };
 };
 
 type ChatEngineOptions = {
@@ -53,7 +55,14 @@ export class ChatEngine {
   private readonly users: string[] = [];
   private timer: number | null = null;
   private running = false;
-  private context: ChatEngineContext = { san: 100, playerHandle: 'player', phase: 'boot', isEnding: false };
+  private context: ChatEngineContext = {
+    san: 100,
+    playerHandle: 'player',
+    phase: 'boot',
+    isEnding: false,
+    freeze: { frozen: false, reason: 'NONE' },
+    glitchBurst: { pending: false, remaining: 0 }
+  };
   private messageCount = 0;
   private sinceThai = 0;
   private sinceVip = 0;
@@ -115,6 +124,14 @@ export class ChatEngine {
   }
 
   nextMessage(): ChatMessage | null {
+    if (this.context.freeze.frozen) {
+      return null;
+    }
+
+    if (this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0) {
+      return this.formatLine(this.pick('san_idle'));
+    }
+
     if (this.supernaturalQueue.length > 0) {
       return this.supernaturalQueue.shift() ?? null;
     }
@@ -191,7 +208,9 @@ export class ChatEngine {
     if (!this.running) return;
     const message = this.nextMessage();
     if (message) this.options.onMessage(message);
-    const delay = this.randomRange(1500, 3000);
+    const delay = this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0
+      ? this.randomRange(250, 450)
+      : this.randomRange(800, 1600);
     this.timer = window.setTimeout(() => this.scheduleNext(), delay);
   }
 

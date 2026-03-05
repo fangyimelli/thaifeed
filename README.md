@@ -1839,3 +1839,17 @@ Console（debug 模式）可觀察：
   - 鬼是不是在等我們拼出什麼
 - `footsteps` 新增距離分層輸出：`footstep_far / footstep_mid / footstep_near`。
 - NIGHT_01 phase 與 supernatural events 已在 sandbox flow 整合，並維持 quiz/consonant 主流程不被破壞（只在 `chatRiot/supernaturalEvent/vipTranslate` 鏈條中插入）。
+
+
+## Sandbox Chat Flow（PREHEAT / Freeze / GlitchBurst）
+
+- Sandbox 現在採單一 step-driven flow：`PREHEAT -> ASK_CONSONANT -> WAIT_PLAYER_CONSONANT -> GLITCH_BURST_AFTER_CONSONANT -> REVEAL_WORD -> WORD_RIOT -> VIP_TRANSLATE -> MEANING_GUESS -> ASK_PLAYER_MEANING -> WAIT_PLAYER_MEANING -> GLITCH_BURST_AFTER_MEANING -> ADVANCE_NEXT`。
+- `player.handle` 在 sandbox init 即建立（優先 `chat.activeUser.handle` 等價來源，fallback `000`），確保預熱期就可被 VIP `@`。
+- `WAIT_PLAYER_CONSONANT` 與 `WAIT_PLAYER_MEANING` 進入後，啟動 `freeze.reason=AWAIT_PLAYER_INPUT`，聊天室輸出為 0（非 bug，debug 可見）。
+- 玩家回覆後觸發 glitch burst（10 則，250~450ms 快刷）後再恢復正常節奏。
+- Sandbox chat 平時節奏對齊 classic 常態區間（約 800~1600ms），但 freeze 期間 0 output、glitch 期間快刷。
+
+### Removed / Deprecated Log（本次）
+
+- 移除舊的 sandbox 數字 step（0~9）語意，改為具名 `SandboxFlowStep` 枚舉，避免第 2 題後重入卡住。
+- 移除「等待玩家期間仍持續刷 chat」舊行為，統一改為 freeze gate。

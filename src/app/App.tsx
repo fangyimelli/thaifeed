@@ -1245,6 +1245,7 @@ export default function App() {
     const mode = selectedMode === 'sandbox_story' ? sandboxModeRef.current : createClassicMode();
     modeRef.current = mode;
     mode.init();
+    sandboxModeRef.current.setPlayerIdentity({ handle: normalizeHandle(activeUserInitialHandleRef.current || '000') || '000', id: 'activeUser' });
     return () => {
       mode.dispose();
     };
@@ -1528,8 +1529,11 @@ export default function App() {
   const consumePlayerReply = useCallback((raw: string) => {
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
-      if (sandboxState.flow.step === 8) {
-        sandboxModeRef.current.setFlowStep(9, 'player_meaning_replied');
+      if (sandboxState.flow.step === 'WAIT_PLAYER_MEANING') {
+        sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
+        sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
+        setChatAutoPaused(false);
+        sandboxModeRef.current.setFlowStep('GLITCH_BURST_AFTER_MEANING', 'player_meaning_replied');
         setSandboxRevealTick(Date.now());
         return true;
       }
@@ -2641,15 +2645,17 @@ export default function App() {
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
       sandboxChatEngineRef.current?.setContext({
         san: state.curse,
-        playerHandle: normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player',
+        playerHandle: normalizeHandle(sandboxState.player.handle || activeUserInitialHandleRef.current || '000') || '000',
         phase: sandboxState.scheduler.phase,
-        isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'chatRiot')
+        isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'chatRiot'),
+        freeze: sandboxState.freeze,
+        glitchBurst: sandboxState.glitchBurst
       });
       if (modeRef.current.id === 'sandbox_story') {
         if (sandboxStoryPhaseGateRef.current.phase === 'N1_INTRO_CHAT' && now >= sandboxStoryPhaseGateRef.current.introEndsAt) {
           sandboxStoryPhaseGateRef.current.phase = 'N1_QUIZ_LOOP';
         }
-        if (sandboxState.flow.step === 0) {
+        if (sandboxState.flow.step === 'PREHEAT') {
           const preheatGap = now - (sandboxState.preheat.lastJoinAt || 0);
           if (preheatGap >= randomInt(4000, 7000)) {
             const joinName = `viewer_${Math.floor(Math.random() * 899 + 100)}`;
@@ -2657,7 +2663,7 @@ export default function App() {
             sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
           }
           if (Math.random() < 0.18) {
-            const vipLine = `@${normalizeHandle(activeUserInitialHandleRef.current || 'player')} 嗨嗨第一次看嗎？`;
+            const vipLine = `@${sandboxState.player.handle || '000'} 嗨嗨第一次看嗎？`;
             dispatchChatMessage({ id: crypto.randomUUID(), username: 'VIP', type: 'chat', text: vipLine, language: 'zh', translation: vipLine, isVip: 'VIP_NORMAL' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_vip_tag' });
           }
         }
@@ -2669,17 +2675,12 @@ export default function App() {
           sandboxChatEngineRef.current?.triggerGhostHintEvent();
         }
       }
-      if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 1 && sandboxStoryPhaseGateRef.current.phase === 'N1_QUIZ_LOOP') {
+      if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'ASK_CONSONANT' && sandboxStoryPhaseGateRef.current.phase === 'N1_QUIZ_LOOP') {
         void askSandboxConsonantNow();
       }
-      if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 2 && sandboxState.answerGate.waiting && !sandboxState.answerGate.pausedChat) {
-        if (now - sandboxState.answerGate.askedAt >= sandboxState.answerGate.timeoutMs) {
-          sandboxModeRef.current.setAnswerGate({ pausedChat: true });
-          sandboxModeRef.current.commitAdvanceBlockedReason('waiting_player_reply');
-          setChatAutoPaused(true);
-          dispatch({ type: 'INCREASE_CURSE_IDLE', payload: { amount: 1 } });
-          dispatchChatMessage({ id: crypto.randomUUID(), username: 'system', type: 'system', text: '等你回覆（sandbox：玩家必回）', language: 'zh' }, { source: 'system_ui', sourceTag: 'sandbox_waiting_player' });
-        }
+      if (modeRef.current.id === 'sandbox_story' && (sandboxState.flow.step === 'WAIT_PLAYER_CONSONANT' || sandboxState.flow.step === 'WAIT_PLAYER_MEANING')) {
+        sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: sandboxState.freeze.frozenAt || now });
+        setChatAutoPaused(true);
       }
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
@@ -2741,6 +2742,9 @@ export default function App() {
           gatePausedChat: sandboxState.answerGate.pausedChat
         },
         flow: sandboxState.flow,
+        freeze: sandboxState.freeze,
+        glitchBurst: sandboxState.glitchBurst,
+        player: sandboxState.player,
         last: sandboxState.last,
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         scheduler: {
@@ -3652,9 +3656,10 @@ export default function App() {
         const node = currentPrompt?.kind === 'consonant'
           ? sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === currentPrompt.wordKey) ?? null
           : null;
-        if (sandboxState.flow.step === 2 && node && currentPrompt?.kind === 'consonant') {
+        if (sandboxState.flow.step === 'WAIT_PLAYER_CONSONANT' && node && currentPrompt?.kind === 'consonant') {
           sandboxModeRef.current.setLastTimestamps({ lastAnswerAt: Date.now() });
           sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
+          sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
           clearChatFreeze('sandbox_player_replied');
           setChatAutoPaused(false);
           const normalizedInput = normalizeSandboxConsonantInput(raw);
@@ -3714,7 +3719,7 @@ export default function App() {
           }
 
           if (judge === 'pass') {
-            sandboxModeRef.current.setFlowStep(3, 'answer_passed');
+            sandboxModeRef.current.setFlowStep('GLITCH_BURST_AFTER_CONSONANT', 'answer_passed');
             clearReplyUi('sandbox_consonant_pass');
             clearChatFreeze('sandbox_consonant_pass');
             sendCooldownUntil.current = Date.now() + 350;
@@ -3722,7 +3727,7 @@ export default function App() {
             setInput('');
             return markSent('sandbox_consonant_pass');
           }
-          sandboxModeRef.current.setFlowStep(3, 'answer_received');
+          sandboxModeRef.current.setFlowStep('GLITCH_BURST_AFTER_CONSONANT', 'answer_received');
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
           setInput('');
@@ -3875,6 +3880,7 @@ export default function App() {
     activeUserProfileRef.current = nextProfile;
     usersByIdRef.current.set(nextProfile.id, nextProfile);
     usersByHandleRef.current.set(toHandleKey(nextProfile.handle), nextProfile);
+    sandboxModeRef.current.setPlayerIdentity({ handle: nextProfile.handle, id: nextProfile.id });
     return true;
   }, []);
 
@@ -4211,7 +4217,7 @@ export default function App() {
     const sandboxState = sandboxModeRef.current.getState();
     const node = sandboxModeRef.current.getCurrentNode();
     if (!node) return;
-    if (sandboxState.flow.step !== 1) return;
+    if (sandboxState.flow.step !== 'ASK_CONSONANT') return;
     if (!sandboxState.introGate.passed) return;
     if (sandboxStoryPhaseGateRef.current.phase !== 'N1_QUIZ_LOOP') return;
     if (sandboxState.last.lastAskAt && sandboxState.last.lastAskAt >= sandboxState.flow.stepStartedAt) return;
@@ -4286,8 +4292,11 @@ export default function App() {
     });
     modeRef.current.onIncomingTag(line);
     sandboxModeRef.current.setLastTimestamps({ lastAskAt: Date.now() });
-    sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false });
-    sandboxModeRef.current.setFlowStep(2, 'ask_consonant_done');
+    sandboxModeRef.current.setFlowStep('WAIT_PLAYER_CONSONANT', 'ask_consonant_enter_wait');
+    sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: Date.now() });
+    sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: true });
+    setChatAutoPaused(true);
+    clearChatFreeze('sandbox_story_step_freeze_owned');
     sandboxConsonantPromptNodeIdRef.current = node.id;
     sandboxPromptIssuedAtRef.current = Date.now();
   }
@@ -4429,16 +4438,29 @@ export default function App() {
       setSandboxRevealTick(Date.now());
       return;
     }
-    if (sandboxState.flow.step === 3) {
-      const burst = randomInt(6, 12);
-      for (let i = 0; i < burst; i += 1) {
-        const line = sandboxChatEngineRef.current?.nextMessage()?.translation ?? pickOne(['訊息送不出去', '聊天室卡住?', '網路怪怪的']);
-        dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_answer_glitch_flood' });
+    if (sandboxState.flow.step === 'GLITCH_BURST_AFTER_CONSONANT' || sandboxState.flow.step === 'GLITCH_BURST_AFTER_MEANING') {
+      const glitchPool = ['訊息送不出去', '聊天室卡住', 'lag 超怪', '網路怪怪的', '我這邊一直轉圈', '封包好像炸了'];
+      const now = Date.now();
+      if (!sandboxState.glitchBurst.pending) {
+        sandboxModeRef.current.setGlitchBurst({ pending: true, remaining: 10, lastEmitAt: 0 });
       }
-      sandboxModeRef.current.setFlowStep(4, 'glitch_flood_done');
-      setSandboxRevealTick(Date.now());
+      if ((sandboxState.glitchBurst.lastEmitAt ?? 0) + randomInt(250, 450) <= now && sandboxState.glitchBurst.remaining > 0) {
+        const line = pickOne(glitchPool);
+        dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_answer_glitch_flood' });
+        sandboxModeRef.current.setGlitchBurst({
+          pending: true,
+          remaining: Math.max(0, sandboxState.glitchBurst.remaining - 1),
+          lastEmitAt: now
+        });
+        setSandboxRevealTick(now);
+      }
+      if (sandboxState.glitchBurst.remaining <= 0) {
+        sandboxModeRef.current.setGlitchBurst({ pending: false, remaining: 0, lastEmitAt: now });
+        sandboxModeRef.current.setFlowStep(sandboxState.flow.step === 'GLITCH_BURST_AFTER_MEANING' ? 'ADVANCE_NEXT' : 'REVEAL_WORD', 'glitch_flood_done');
+        setSandboxRevealTick(now);
+      }
     }
-    if (sandboxState.flow.step === 4) {
+    if (sandboxState.flow.step === 'REVEAL_WORD') {
       if ((sandboxState.last.lastRevealAt ?? 0) >= sandboxState.flow.stepStartedAt) {
         return () => {
           clearSandboxRevealDoneTimer();
@@ -4447,48 +4469,54 @@ export default function App() {
       applySandboxCorrect({ input: '[flow-reveal]', matchedChar: sandboxState.consonant.nodeChar, source: 'flow_step' });
       sandboxModeRef.current.setLastTimestamps({ lastRevealAt: Date.now() });
       window.setTimeout(() => {
-        sandboxModeRef.current.setFlowStep(5, 'reveal_wait_done');
+        sandboxModeRef.current.setFlowStep('WORD_RIOT', 'reveal_wait_done');
         setSandboxRevealTick(Date.now());
       }, 1200);
     }
-    if (sandboxState.flow.step === 5 && !sandboxWaveRunningRef.current) {
+    if (sandboxState.flow.step === 'WORD_RIOT' && !sandboxWaveRunningRef.current) {
       sandboxWaveRunningRef.current = true;
       const riot = sandboxChatEngineRef.current?.emitReasoningWave(randomInt(2, 4)) ?? [];
       riot.forEach((message) => {
         dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_word_riot' });
       });
-      sandboxModeRef.current.setFlowStep(6, 'word_riot_done');
+      sandboxModeRef.current.setFlowStep('VIP_TRANSLATE', 'word_riot_done');
       setSandboxRevealTick(Date.now());
     }
-    if (sandboxState.flow.step === 6) {
+    if (sandboxState.flow.step === 'VIP_TRANSLATE') {
       const meaning = sandboxState.reveal.text || '（查不到）';
       const vipText = `VIP 翻譯：我剛剛查中文是：${meaning}`;
       dispatchChatMessage({ id: crypto.randomUUID(), username: 'VIP', type: 'chat', text: vipText, language: 'zh', translation: vipText, isVip: 'VIP_NORMAL' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_translate' });
-      sandboxModeRef.current.setFlowStep(7, 'vip_translate_done');
+      sandboxModeRef.current.setFlowStep('MEANING_GUESS', 'vip_translate_done');
       setSandboxRevealTick(Date.now());
     }
-    if (sandboxState.flow.step === 7) {
+    if (sandboxState.flow.step === 'MEANING_GUESS') {
       const reasoningMessages = sandboxChatEngineRef.current?.emitReasoningWave(randomInt(1, 3)) ?? [];
       reasoningMessages.forEach((message) => {
         dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_reasoning_phase' });
       });
       window.setTimeout(() => {
-        sandboxModeRef.current.setFlowStep(8, 'meaning_guess_done');
+        sandboxModeRef.current.setFlowStep('ASK_PLAYER_MEANING', 'meaning_guess_done');
         setSandboxRevealTick(Date.now());
       }, randomInt(3000, 6000));
       setSandboxRevealTick(Date.now());
     }
-    if (sandboxState.flow.step === 8 && sandboxTagPhaseTimeoutRef.current == null) {
+    if (sandboxState.flow.step === 'ASK_PLAYER_MEANING' && sandboxTagPhaseTimeoutRef.current == null) {
       const prompt = sandboxChatEngineRef.current?.emitTagPlayerPrompt() ?? { user: 'mod_live', text: 'mod_live: @player 你是在說誰??????' };
       dispatchChatMessage(convertSandboxChatMessage(prompt), { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_phase' });
+      sandboxModeRef.current.setFlowStep('WAIT_PLAYER_MEANING', 'ask_player_meaning_once');
+      sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: Date.now() });
+      sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt: Date.now(), pausedChat: true });
+      setChatAutoPaused(true);
+      clearChatFreeze('sandbox_story_meaning_freeze_owned');
+      setSandboxRevealTick(Date.now());
     }
-    if (sandboxState.flow.step !== 8 && sandboxTagPhaseTimeoutRef.current != null) {
+    if (sandboxState.flow.step !== 'WAIT_PLAYER_MEANING' && sandboxTagPhaseTimeoutRef.current != null) {
       window.clearTimeout(sandboxTagPhaseTimeoutRef.current);
       sandboxTagPhaseTimeoutRef.current = null;
     }
-    if (sandboxState.flow.step === 9) {
+    if (sandboxState.flow.step === 'ADVANCE_NEXT') {
       sandboxModeRef.current.forceAdvanceNode();
-      sandboxModeRef.current.setFlowStep(1, 'advance_next');
+      sandboxModeRef.current.setFlowStep('ASK_CONSONANT', 'advance_next');
       sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
       sandboxModeRef.current.setLastTimestamps({ lastAskAt: 0 });
       sandboxConsonantPromptNodeIdRef.current = null;
