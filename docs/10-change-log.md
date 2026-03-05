@@ -1,3 +1,24 @@
+## 2026-03-05（sandbox only：intro gate / freeze 0 output / player-reply glitchBurst / banned lexicon）
+
+### Scope / Isolation
+- 僅調整 sandbox flow/chat/docs；**classic mode 無任何修改**。
+
+### Changed
+- [sandbox/gate] `ASK_CONSONANT` 入口新增 `introGate.passed` 硬 gate；30 秒前只做 PREHEAT，禁止出題與子音顯示。
+- [sandbox/step] `setFlowStep()` transition debug 修正為 `prev -> next`，每次 step 切換記錄一行。
+- [sandbox/freeze] chat engine 最外層 emit gate：`freeze.frozen && !glitchBurst.pending => return null`，確保 WAIT_PLAYER 階段 0 output。
+- [sandbox/glitch] glitch burst 只在玩家回覆後啟動（`pending=true, remaining=10`），以 250~450ms 連發 10 則，發完才進 `REVEAL_WORD/ADVANCE_NEXT`。
+- [sandbox/filter] 新增 `SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/]`，pool 抽字串命中即重抽（最多 5 次），失敗 fallback observation 安全文案。
+- [sandbox/preheat] 預熱 VIP 文案改為不 tag 玩家，避免 30 秒內被引導進題。
+
+### Acceptance
+- 1) 前 30 秒只預熱不出題：PASS
+- 2) 30 秒到點才出第一題：PASS
+- 3) 問玩家後聊天室 freeze 0 output：PASS
+- 4) 玩家回覆後先 glitch 10 則再 reveal：PASS
+- 5) 語料不再輸出「回頭/轉頭」：PASS
+- 6) 連跑 3 題第 2 題後不卡住且每題都 reveal：PASS
+
 ## 2026-03-05（sandbox only：NIGHT_01 節奏根治 + step SSOT + 第2題卡住修復）
 
 ### Scope / Isolation

@@ -144,6 +144,13 @@ npm run build
 - Sandbox options guard：sandbox emit 層會擋下「payload 含 options」或文字含 `選項：` 的訊息，並累計 `sandbox.blockedOptionsCount` debug 計數。
 - Message Source Debug：新增 `chat.lastEmit.source/sourceTag/sourceMode`（sandbox/classic/system）以追蹤每次訊息 emit 來源。
 
+- Sandbox 節奏校正（sandbox only）：
+  - introGate 硬門檻 30 秒：`introGate.passed=false` 時禁止出題與子音 overlay。
+  - 問玩家（子音/意思）時只送一次問句，隨即進 `WAIT_PLAYER_*` 並 `freeze`，聊天室 0 output。
+  - 玩家一回覆才觸發 `glitchBurst`（10 則、250~450ms/則），刷完再繼續 `REVEAL_WORD -> ... -> NEXT`。
+  - 語料過濾禁字：`回頭` / `轉頭` 命中會重抽（最多 5 次），失敗 fallback 安全 observation 文案。
+  - **classic mode 未修改。**
+
 - Character Disambiguation（sandbox only）：新增 `characterDisambiguation.normalize/matchCategory`，支援 woman/girl/boy 同義詞（如 媽媽/母親、姐姐/姊姊、弟弟/哥哥）。tagPlayerPhase 首次未命中會固定追問 `@玩家 你是在說誰??????`（不提供 options）；再次未命中則依 P0 規則 enqueue 當前題並先下一題，後續再回補。
 - Q10 Special（sandbox only）：NIGHT_01 第 10 題改為 `ห + หัน + 轉頭`；答對後於 `vipTranslate` 注入專屬訊息 `อย่าหัน` 與翻譯按鈕，點擊後顯示橘色 `別轉頭`（`[橘色]別轉頭[/橘色]`）。
 - Q10 限制：`อย่าหัน〔翻譯〕` 與橘色 `別轉頭` 僅允許題號 10（`nodeIndex===9`）出現；非 Q10 不會注入。
