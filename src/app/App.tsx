@@ -301,11 +301,8 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
-function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'awaitingWave' {
-  if (phase === 'awaitingAnswer') return 'awaitingAnswer';
-  if (phase === 'revealingWord') return 'revealingWord';
-  if (phase === 'awaitingWave') return 'awaitingWave';
-  return 'awaitingTag';
+function mapSandboxSchedulerPhase(phase: string): string {
+  return phase || 'awaitingTag';
 }
 
 function nextJoinDelayMs() {
@@ -2548,8 +2545,8 @@ export default function App() {
       sandboxChatEngineRef.current?.setContext({
         san: state.curse,
         playerHandle: normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player',
-        phase: sandboxState.scheduler.phase,
-        isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'awaitingWave')
+        phase: sandboxState.story.phase,
+        isEnding: ['N1_VIP_FINAL_TAG','N1_VIP_DISAPPEAR','N1_GHOST_ESCALATION','N1_CHAT_COLLAPSE','N1_BLACKOUT_ENDING','N1_GUESTHOUSE_TYPING'].includes(sandboxState.story.phase)
       });
       if (modeRef.current.id === 'sandbox_story') {
         const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);
@@ -2557,7 +2554,7 @@ export default function App() {
           playSfx('footsteps', { reason: 'sandbox:fear_roll', source: 'event', allowBeforeStarterTag: true });
         }
       }
-      if (modeRef.current.id === 'sandbox_story' && sandboxState.scheduler.phase === 'awaitingTag') {
+      if (modeRef.current.id === 'sandbox_story' && (sandboxState.story.phase === 'N1_QUIZ_LOOP' || sandboxState.story.phase === 'N1_Q10_SPECIAL') && sandboxState.scheduler.phase === 'awaitingTag') {
         void askSandboxConsonantNow();
       }
       setSandboxRevealTick(now);
@@ -2618,7 +2615,7 @@ export default function App() {
         },
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         scheduler: {
-          phase: sandboxState.scheduler.phase,
+          phase: sandboxState.story.phase,
           blockedReason: sandboxState.scheduler.blockedReason || '-'
         },
         judge: {
@@ -3463,7 +3460,7 @@ export default function App() {
         const node = currentPrompt?.kind === 'consonant'
           ? sandboxModeRef.current.getSSOT().nodes.find((item) => item.id === currentPrompt.wordKey) ?? null
           : null;
-        if (sandboxState.scheduler.phase === 'awaitingAnswer' && node && currentPrompt?.kind === 'consonant') {
+        if ((sandboxState.story.phase === 'N1_QUIZ_LOOP' || sandboxState.story.phase === 'N1_Q10_SPECIAL') && sandboxState.scheduler.phase === 'awaitingAnswer' && node && currentPrompt?.kind === 'consonant') {
           const normalizedInput = normalizeSandboxConsonantInput(raw);
           const classic = parseAndJudgeUsingClassic(raw, { nodeChar: currentPrompt.consonant, node });
           const parsed = {
@@ -4018,6 +4015,7 @@ export default function App() {
     const sandboxState = sandboxModeRef.current.getState();
     const node = sandboxModeRef.current.getCurrentNode();
     if (!node) return;
+    if (!(sandboxState.story.phase === 'N1_QUIZ_LOOP' || sandboxState.story.phase === 'N1_Q10_SPECIAL')) return;
     if (sandboxState.scheduler.phase !== 'awaitingTag') return;
     if (sandboxConsonantPromptNodeIdRef.current === node.id) return;
 

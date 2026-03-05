@@ -1775,3 +1775,14 @@ Console（debug 模式）可觀察：
 - 新增 sandbox 專用聊天室訊息生成系統，透過 `src/sandbox/chat/chat_engine.ts` 以 1.5~3 秒節奏自動產生訊息。
 - 支援一般觀眾、恐懼升級、中泰混合、tag 玩家、角色猜測、VIP 摘要與結尾崩潰流程。
 - 使用 `src/sandbox/chat/user_generator.ts` 生成不重複的 PTT/Twitch 風格帳號。
+
+## 2026-03-05（sandbox_story NIGHT_01 Story Phase Gate）
+
+- Sandbox 新增 `story.phase` gate（`N1_INTRO_CHAT -> N1_GUESTHOUSE_TYPING`）與 `story.quizStep`，開場 30 秒固定聊天室期間不允許 challenge/word reveal/翻譯流程提前進入。
+- NIGHT_01 題庫更新為 1-9 題 + 第 10 題特殊事件（`ห/หัน`）；並把 woman/girl/boy 同義詞群納入 unknown fallback 關鍵字，避免未答時語意分岔。
+- Sandbox 發題與答題判斷改為「`story.phase + scheduler.phase` 雙重 gate」，防止第一題過早出現。
+- Sandbox chat engine 改為 phase-driven scripted 輸出：含指定 intro lines、Q10 special lines、VIP 最終 tag、離線/崩壞/黑畫面與 `guest_house` typing。
+- Debug 欄位新增：`sandbox.story.phase`、`sandbox.story.phaseEnteredAt`、`sandbox.story.quizStep`。
+
+### README Removed/Deprecated Log
+- 2026-03-05：本次無移除或 deprecated 項目。

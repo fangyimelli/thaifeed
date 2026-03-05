@@ -9,6 +9,17 @@ export type SandboxStoryPhase =
   | 'revealingWord'
   | 'awaitingWave';
 
+export type SandboxNarrativePhase =
+  | 'N1_INTRO_CHAT'
+  | 'N1_QUIZ_LOOP'
+  | 'N1_Q10_SPECIAL'
+  | 'N1_VIP_FINAL_TAG'
+  | 'N1_VIP_DISAPPEAR'
+  | 'N1_GHOST_ESCALATION'
+  | 'N1_CHAT_COLLAPSE'
+  | 'N1_BLACKOUT_ENDING'
+  | 'N1_GUESTHOUSE_TYPING';
+
 export type SandboxRevealPhase = 'idle' | 'enter' | 'pulse' | 'exit' | 'done';
 export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
 
@@ -132,6 +143,12 @@ export type SandboxStoryState = {
   };
   mismatch: {
     promptVsReveal: boolean;
+  };
+  story: {
+    phase: SandboxNarrativePhase;
+    phaseEnteredAt: number;
+    introDurationMs: number;
+    quizStep: 'idle' | 'ASK_CONSONANT' | 'PLAYER_CORRECT' | 'REVEAL_WORD_FRAGMENT' | 'CHAT_RIOT' | 'VIP_TRANSLATE' | 'CHAT_REASONING' | 'VIP_TAG_PLAYER' | 'NEXT_QUESTION';
   };
 };
 
@@ -259,6 +276,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     mismatch: {
       promptVsReveal: false
+    },
+    story: {
+      phase: 'N1_INTRO_CHAT',
+      phaseEnteredAt: Date.now(),
+      introDurationMs: 30_000,
+      quizStep: 'idle'
     }
   };
 
@@ -284,6 +307,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     if (node.hintAppend) return node.hintAppend;
     const hintLen = Math.max(1, Math.min(2, node.hintAppendPrefixLen ?? 2));
     return splitGraphemes(appended).graphemes.slice(0, hintLen).join('');
+  };
+
+
+  const setStoryPhase = (phase: SandboxNarrativePhase) => {
+    if (state.story.phase === phase) return;
+    state.story.phase = phase;
+    state.story.phaseEnteredAt = Date.now();
   };
 
   const syncPromptMismatch = () => {
@@ -350,7 +380,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.advance.blockedReason = 'mismatch';
       return;
     }
-    if (mode === 'correct') state.scheduler.phase = 'revealingWord';
+    if (mode === 'correct') {
+      state.scheduler.phase = 'revealingWord';
+      state.story.quizStep = 'REVEAL_WORD_FRAGMENT';
+    }
     clearSchedulerBlockedReason();
     const splitWord = splitGraphemes(node.wordText);
     const wordGraphemes = splitWord.graphemes;
@@ -393,9 +426,21 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   };
   const advancePromptInternal = (reason: string, token: string) => {
     state.advance = { ...state.advance, inFlight: true, lastToken: token, lastAt: Date.now(), lastReason: reason, blockedReason: '' };
-    state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+    const isLastNode = state.nodeIndex >= Math.max(script.nodes.length - 1, 0);
+    if (!isLastNode) {
+      state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(script.nodes.length - 1, 0));
+    }
     syncNodeChar();
-    state.scheduler.phase = 'awaitingTag';
+    if (isLastNode) {
+      setStoryPhase('N1_VIP_FINAL_TAG');
+      state.story.quizStep = 'idle';
+      state.scheduler.phase = 'boot';
+    } else {
+      const nextIsQ10 = state.nodeIndex >= Math.max(script.nodes.length - 1, 0);
+      setStoryPhase(nextIsQ10 ? 'N1_Q10_SPECIAL' : 'N1_QUIZ_LOOP');
+      state.story.quizStep = 'NEXT_QUESTION';
+      state.scheduler.phase = 'awaitingTag';
+    }
     clearSchedulerBlockedReason();
     resetPromptRuntimeState();
     syncPromptMismatch();
@@ -410,6 +455,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     init() {
       state.nodeIndex = 0;
       state.scheduler.phase = 'awaitingTag';
+      setStoryPhase('N1_INTRO_CHAT');
+      state.story.quizStep = 'idle';
       clearSchedulerBlockedReason();
       state.reveal.visible = false;
       state.reveal.phase = 'idle';
@@ -437,10 +484,28 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         return;
       }
       if (state.scheduler.phase === 'awaitingTag') state.scheduler.phase = 'awaitingAnswer';
+      if (state.story.phase === 'N1_QUIZ_LOOP' || state.story.phase === 'N1_Q10_SPECIAL') {
+        state.story.quizStep = 'ASK_CONSONANT';
+      }
       syncFear();
     },
     onPlayerReply() { syncFear(); },
     tick() {
+      if (state.story.phase === 'N1_INTRO_CHAT' && Date.now() - state.story.phaseEnteredAt >= state.story.introDurationMs) {
+        setStoryPhase('N1_QUIZ_LOOP');
+      }
+      const phaseElapsed = Date.now() - state.story.phaseEnteredAt;
+      if (state.story.phase === 'N1_VIP_FINAL_TAG' && phaseElapsed >= 7_000) {
+        setStoryPhase('N1_VIP_DISAPPEAR');
+      } else if (state.story.phase === 'N1_VIP_DISAPPEAR' && phaseElapsed >= 4_000) {
+        setStoryPhase('N1_GHOST_ESCALATION');
+      } else if (state.story.phase === 'N1_GHOST_ESCALATION' && phaseElapsed >= 7_000) {
+        setStoryPhase('N1_CHAT_COLLAPSE');
+      } else if (state.story.phase === 'N1_CHAT_COLLAPSE' && phaseElapsed >= 5_000) {
+        setStoryPhase('N1_BLACKOUT_ENDING');
+      } else if (state.story.phase === 'N1_BLACKOUT_ENDING' && phaseElapsed >= 5_000) {
+        setStoryPhase('N1_GUESTHOUSE_TYPING');
+      }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
         state.reveal.phase = elapsed < 1000 ? 'enter' : elapsed < REVEAL_DURATION_MS ? 'pulse' : 'done';
@@ -470,6 +535,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.advance = { ...state.advance, inFlight: false, lastToken: '', lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
       state.nodeIndex = Math.min(state.nodeIndex + 1, Math.max(0, script.nodes.length - 1));
       state.scheduler.phase = 'awaitingTag';
+      setStoryPhase(state.nodeIndex >= Math.max(script.nodes.length - 1, 0) ? 'N1_Q10_SPECIAL' : 'N1_QUIZ_LOOP');
+      state.story.quizStep = 'NEXT_QUESTION';
       clearSchedulerBlockedReason();
       state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: 0 };
       state.prompt.current = null;
@@ -524,6 +591,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         blockedReason: result.parsed.debug?.blockedReason ?? ''
       };
       state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
+      if (result.judge === 'correct') {
+        state.story.quizStep = 'PLAYER_CORRECT';
+      }
       const classicJudgeResult = result.classicJudgeResult ?? result.judge;
       state.parity = {
         sandboxJudgeResult: result.judge,
@@ -586,6 +656,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.reveal.doneAt = state.reveal.doneAt || Date.now();
       if (state.reveal.mode === 'correct') {
         state.scheduler.phase = 'awaitingWave';
+        state.story.quizStep = 'CHAT_RIOT';
       } else {
         state.scheduler.phase = 'awaitingAnswer';
       }
@@ -621,6 +692,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (state.debugOverride.active) {
         state.debugOverride = { ...state.debugOverride, active: false, consumedAt: Date.now() };
       }
+      state.story.quizStep = 'PLAYER_CORRECT';
       startReveal('correct');
       syncFear();
     },
@@ -654,6 +726,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         return;
       }
       state.wave = { kind, count };
+      if (state.story.phase === 'N1_Q10_SPECIAL') {
+        setStoryPhase('N1_VIP_FINAL_TAG');
+        state.story.quizStep = 'idle';
+        state.scheduler.phase = 'boot';
+        clearSchedulerBlockedReason();
+        return;
+      }
       advancePromptInternal(`markWaveDone:${kind}:${count}`, token);
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
