@@ -1888,3 +1888,14 @@ Console（debug 模式）可觀察：
 - 預熱 30 秒採軟編排：0~20 秒保證 VIP 出場至少一次、5~25 秒保證 VIP 至少一次 `@玩家`。
 - 問玩家（子音/意思）後立即 freeze，聊天室 0 output；玩家回覆後立即 glitch burst（預設 10 則、250~450ms/則）再繼續流程。
 - sandbox VIP 固定 `👑 behindyou`（`src/sandbox/chat/vip_identity.ts`），classic mode 不受影響。
+
+
+## Sandbox Patch Notes（2026-03-06）
+
+- Freeze 外層總閘：sandbox chat dispatch 入口新增 gate，`freeze.frozen=true` 時僅允許 `GLITCH_BURST`。
+- Glitch 專用句來源：`san_idle` 在 engine 內部分流為 general/glitch；一般路由不得抽 glitch 子集。
+- Anti-spam guard：新增 emitKey cooldown、同 speaker 連發防護、tag_player 重入抑制（實際 skip/fallback，不只記錄）。
+- ASK_PLAYER 問句 once-per-step：`ASK_PLAYER_MEANING` 成功發問後立即標記 `tagAskedThisStep=true` 並切到 `WAIT_PLAYER_MEANING`。
+- WORD_RIOT 鎖修補：每題離開 riot 都 reset wave lock，並統一單一路徑推進到 `VIP_TRANSLATE`。
+- Removed/Deprecated（sandbox）：移除 `WORD_RIOT` 多路並行推進（direct setFlowStep + callback 併存）行為，改為 timer SSOT。
+- classic mode 未修改。

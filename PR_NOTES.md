@@ -55,3 +55,32 @@
 3. 0~30 秒確認沒有子音題問句，debug `sandbox.prompt.overlay.consonantShown` 維持空字串。
 4. 30 秒到點後才會進 `ASK_CONSONANT` 並顯示第一題子音。
 5. classic mode 跑一般流程，行為不變。
+
+
+## 2026-03-06 Patch Request：Sandbox 最小修補（P0/P1）
+
+### 變更摘要
+- 新增 freeze 外層總閘（dispatch 前）：WAIT_PLAYER_* 期間除了 glitch burst 之外全面禁發。
+- `san_idle` 在 engine 內部分流為 general/glitch，避免一般時段污染 glitch 語氣。
+- anti-spam guard 改為硬阻擋（非僅記錄）：emitKey cooldown / speaker run / tag_player 重入擋。
+- `ASK_PLAYER_MEANING` 問句改為 once-per-step（成功送出即標記 `tagAskedThisStep=true`）。
+- 修正 `WORD_RIOT` 第二題卡死：wave lock 每題離開必 reset，且僅保留 timer 單一路徑推進到 `VIP_TRANSLATE`。
+- force/debug ask 入口統一走 `canAskConsonantNow()`（intro gate + step 合法性）。
+- classic mode 未修改。
+
+### 驗收步驟（必測）
+1. WAIT_PLAYER_CONSONANT / WAIT_PLAYER_MEANING 期間觀察聊天室：非 glitch 訊息 0 output。
+2. 一般時段連跑：不出現「回個1/lag/送不出去/聊天室卡住」等 glitch 口吻。
+3. 連續重入 ASK_PLAYER_MEANING：tag 問句仍為 once-per-step，不洗版。
+4. 玩家回覆後才看到 glitch burst，且約 10 則後才繼續流程。
+5. 連跑至少 3 題：第 2 題後仍能顯示 REVEAL_WORD，不會卡在 WORD_RIOT。
+6. classic mode smoke run：行為不變。
+
+### 修復證據（debug 欄位）
+- `sandbox.flow.step/stepStartedAt/questionIndex`
+- `sandbox.freeze.frozen/reason`
+- `sandbox.glitchBurst.pending/remaining`
+- `sandbox.audit.flow.tagAskedThisStep`
+- `sandbox.audit.emit.lastEmitKey/recentEmitKeys`
+- `sandbox.audit.transitions`（最近 20 筆）
+- `sandbox.introGate.startedAt/passed/remainingMs`
