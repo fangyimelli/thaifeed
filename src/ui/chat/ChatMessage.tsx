@@ -30,6 +30,10 @@ export default function ChatMessage({ message, onToggleTranslation, activeUserIn
   useEffect(() => {
     onTagHighlightEvaluated?.({ messageId: message.id, reason: highlightReason, applied: isTaggingActiveUser });
   }, [highlightReason, isTaggingActiveUser, message.id, onTagHighlightEvaluated]);
+  const translationRaw = message.translation ?? '';
+  const orangeWrapped = /^\[橘色\](.*)\[\/橘色\]$/u.exec(translationRaw);
+  const translationText = orangeWrapped?.[1] ?? translationRaw;
+  const translationClassName = orangeWrapped ? 'translation translation-orange' : 'translation';
   return (
     <article
       data-message-id={message.id}
@@ -56,7 +60,7 @@ export default function ChatMessage({ message, onToggleTranslation, activeUserIn
         </div>
       )}
       {!isSystemJoin && !isSystemInfo && message.language === 'th' && message.showTranslation && message.translation && (
-        <p className="translation">{message.translation}</p>
+        <p className={translationClassName}>{translationText}</p>
       )}
     </article>
   );

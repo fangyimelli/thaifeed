@@ -73,7 +73,7 @@ const THAI_PHRASES = [
   { thai: 'อยุธยาคืนนี้เงียบผิดปกติ', translation: '今晚大城安靜得不正常' },
   { thai: 'เด็กคนนั้นยังรออยู่', translation: '那個孩子還在等待' },
   { thai: 'ครอบครัวนี้มีความลับ', translation: '這個家庭有秘密' },
-  { thai: 'อย่าหันหลังนะ', translation: '不要轉頭' },
+  { thai: 'อย่ามองกลับไป', translation: '不要回頭看' },
   { thai: 'เสียงฝีเท้ามาจากข้างบน', translation: '腳步聲從樓上傳來' },
   { thai: 'มีเงาอยู่ตรงประตู', translation: '門口有一道影子' },
   { thai: 'เขากำลังมองเรา', translation: '他正在看著我們' },

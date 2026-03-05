@@ -1,3 +1,12 @@
+## 2026-03-05（sandbox only：P1-D/G 角色同義詞追問 + Q10 翻譯特例）
+
+- [sandbox/tag-player] 新增 `src/sandbox/chat/characterDisambiguation.ts`，提供 `normalize()`（全半形/大小寫/空白與常見標點清理）與 `matchCategory()`，支援 woman/girl/boy 同義詞分類。
+- [sandbox/tag-player] `tagPlayerPhase` 玩家輸入改為同義詞判定：命中即記錄 `sandbox.lastCategory` 並 `resolveTagPlayerPhase('hit')`；首次未命中送固定追問 `@玩家 你是在說誰??????`（無 options）；再次未命中改走 P0 revisit queue（enqueue 當前題並先下一題）。
+- [sandbox/ssot] NIGHT_01 第 10 題改為 `consonant=ห / word=หัน / meaning=轉頭`（對應 `NIGHT1_WORDS` 最後一題）。
+- [sandbox/q10-special] 新增 Q10 專屬注入：僅在 `nodeIndex===9 && phase=vipTranslate` 且 `q10Special.armed` 時送出 `VIP: อย่าหัน`（含翻譯按鈕）；點擊翻譯後顯示橘色 `別轉頭`（`[橘色]別轉頭[/橘色]`）。
+- [sandbox/guard] 非 Q10 不注入 `อย่าหัน〔翻譯〕`；泰文池原先 `อย่าหันหลังนะ` 改為 `อย่ามองกลับไป`，避免非 Q10 出現「不要轉頭」語義。
+- [debug] 新增欄位：`sandbox.lastCategory`、`sandbox.pendingDisambiguation.active/attempts/promptId`、`sandbox.q10Special.armed/revealed/currentQuestion/allowInject`。
+
 ## 2026-03-05（sandbox NIGHT_01 P0：intro gate + forced pipeline + revisit queue + timeout copy + options guard）
 
 ### Scope / Isolation

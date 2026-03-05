@@ -124,6 +124,10 @@ npm run build
 - Sandbox options guard：sandbox emit 層會擋下「payload 含 options」或文字含 `選項：` 的訊息，並累計 `sandbox.blockedOptionsCount` debug 計數。
 - Message Source Debug：新增 `chat.lastEmit.source/sourceTag/sourceMode`（sandbox/classic/system）以追蹤每次訊息 emit 來源。
 
+- Character Disambiguation（sandbox only）：新增 `characterDisambiguation.normalize/matchCategory`，支援 woman/girl/boy 同義詞（如 媽媽/母親、姐姐/姊姊、弟弟/哥哥）。tagPlayerPhase 首次未命中會固定追問 `@玩家 你是在說誰??????`（不提供 options）；再次未命中則依 P0 規則 enqueue 當前題並先下一題，後續再回補。
+- Q10 Special（sandbox only）：NIGHT_01 第 10 題改為 `ห + หัน + 轉頭`；答對後於 `vipTranslate` 注入專屬訊息 `อย่าหัน` 與翻譯按鈕，點擊後顯示橘色 `別轉頭`（`[橘色]別轉頭[/橘色]`）。
+- Q10 限制：`อย่าหัน〔翻譯〕` 與橘色 `別轉頭` 僅允許題號 10（`nodeIndex===9`）出現；非 Q10 不會注入。
+
 ### Debug 欄位變更紀錄（本次）
 
 - 新增：
@@ -132,6 +136,9 @@ npm run build
   - `sandbox.pendingQuestions.revisiting`
   - `sandbox.blockedOptionsCount`
   - `sandbox.scheduler.phase=reasoningPhase|tagPlayerPhase`
+  - `sandbox.lastCategory`
+  - `sandbox.pendingDisambiguation.active/attempts/promptId`
+  - `sandbox.q10Special.armed/revealed/currentQuestion/allowInject`
 
 ### Removed / Deprecated Log
 
