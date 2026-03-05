@@ -10,6 +10,8 @@ export type SandboxDirectorStep =
   | 'CROWD_REACT_WORD'
   | 'TAG_PLAYER_2_PRONOUNCE'
   | 'WAIT_REPLY_2'
+  | 'TAG_PLAYER_3_MEANING'
+  | 'WAIT_REPLY_3'
   | 'FLUSH_TECH_BACKLOG'
   | 'ADVANCE_NEXT';
 

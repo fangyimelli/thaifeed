@@ -717,6 +717,7 @@ export default function App() {
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxTechBacklogRef = useRef<string[]>([]);
   const sandboxTechBacklogLastAtRef = useRef(0);
+  const sandboxTechBacklogTotalWaitMsRef = useRef(0);
   const sandboxPossessionRef = useRef<{ inputToken: number; sendToken: number }>({ inputToken: 0, sendToken: 0 });
   const sandboxQnaDebugRef = useRef<{
     lastResolveAt: number;
@@ -1609,7 +1610,17 @@ export default function App() {
         sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
         clearReplyUi('sandbox_wait_reply_2_consumed');
         clearChatFreeze('sandbox_wait_reply_2_consumed');
-        sandboxModeRef.current.setFlowStep('FLUSH_TECH_BACKLOG', 'player_reply_2_consumed');
+        sandboxModeRef.current.setFlowStep('TAG_PLAYER_3_MEANING', 'player_reply_2_consumed');
+        setSandboxRevealTick(Date.now());
+        return true;
+      }
+
+      if (sandboxState.flow.step === 'WAIT_REPLY_3') {
+        sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
+        sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
+        clearReplyUi('sandbox_wait_reply_3_consumed');
+        clearChatFreeze('sandbox_wait_reply_3_consumed');
+        sandboxModeRef.current.setFlowStep('FLUSH_TECH_BACKLOG', 'player_reply_3_consumed');
         setSandboxRevealTick(Date.now());
         return true;
       }
@@ -2720,19 +2731,25 @@ export default function App() {
       if (modeRef.current.id === 'sandbox_story' && canAskConsonantNow(sandboxState)) {
         void askSandboxConsonantNow();
       }
-      if (modeRef.current.id === 'sandbox_story' && (sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2')) {
+      if (modeRef.current.id === 'sandbox_story' && (sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3')) {
         sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: sandboxState.freeze.frozenAt || now });
         setChatAutoPaused(true);
-        if (sandboxTechBacklogLastAtRef.current <= 0) sandboxTechBacklogLastAtRef.current = now;
-        if (now - sandboxTechBacklogLastAtRef.current >= 30_000) {
-          const waitedMs = now - (sandboxState.freeze.frozenAt || now);
-          const roundedMinutes = Math.max(5, Math.round((waitedMs / 60000) / 5) * 5);
-          sandboxTechBacklogRef.current.push('技術故障：訊號不穩，暫時卡住');
-          sandboxTechBacklogRef.current.push(`奇怪卡了大約 ${roundedMinutes} 分鐘`);
-          sandboxTechBacklogLastAtRef.current = now;
+        const isTechBacklogEnabled = sandboxState.flow.currentTagIndex === 3 && sandboxState.flow.step === 'WAIT_REPLY_3';
+        const replyToActive = lockStateRef.current.isLocked && Boolean(lockStateRef.current.replyingToMessageId);
+        if (isTechBacklogEnabled && replyToActive) {
+          if (sandboxTechBacklogLastAtRef.current <= 0) sandboxTechBacklogLastAtRef.current = now;
+          if (now - sandboxTechBacklogLastAtRef.current >= 30_000) {
+            sandboxTechBacklogTotalWaitMsRef.current += 30_000;
+            const waitedMs = Math.max(sandboxTechBacklogTotalWaitMsRef.current, now - (sandboxState.flow.stepStartedAt || now));
+            const roundedMinutes = Math.max(5, Math.round((waitedMs / 60000) / 5) * 5);
+            sandboxTechBacklogRef.current.push('技術故障：訊號不穩，暫時卡住');
+            sandboxTechBacklogRef.current.push(`奇怪卡了大約 ${roundedMinutes} 分鐘`);
+            sandboxTechBacklogLastAtRef.current = now;
+          }
         }
       } else {
         sandboxTechBacklogLastAtRef.current = 0;
+        sandboxTechBacklogTotalWaitMsRef.current = 0;
       }
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
@@ -4385,6 +4402,9 @@ export default function App() {
     });
     modeRef.current.onIncomingTag(line);
     sandboxModeRef.current.setLastTimestamps({ lastAskAt: Date.now() });
+    sandboxTechBacklogRef.current = [];
+    sandboxTechBacklogLastAtRef.current = 0;
+    sandboxTechBacklogTotalWaitMsRef.current = 0;
     sandboxModeRef.current.setFlowStep('WAIT_REPLY_1', 'tag_player_1_enter_wait');
     sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: Date.now() });
     sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt: Date.now(), timeoutMs: 60_000, pausedChat: true });
@@ -4611,7 +4631,61 @@ export default function App() {
         },
         freezeChat: ({ reason }) => {
           const askedAt = Date.now();
+          sandboxTechBacklogRef.current = [];
+          sandboxTechBacklogLastAtRef.current = 0;
+          sandboxTechBacklogTotalWaitMsRef.current = 0;
           sandboxModeRef.current.setFlowStep('WAIT_REPLY_2', 'tag_player_2_once');
+          sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
+          sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
+          setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
+          setPauseSetAt(askedAt);
+          setPauseReason(reason);
+          setScrollMode('FROZEN', reason);
+          setChatAutoPaused(true);
+        }
+      });
+      setSandboxRevealTick(Date.now());
+    }
+
+    if (sandboxState.flow.step === 'TAG_PLAYER_3_MEANING') {
+      const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
+      const speaker = Math.random() < 0.5 ? 'mod_live' : SANDBOX_VIP.handle;
+      const line = `@${taggedUser} 這個單字你覺得代表什麼？在指誰？`;
+      const messageId = crypto.randomUUID();
+      void runTagStartFlow({
+        tagMessage: {
+          id: messageId,
+          username: speaker,
+          type: 'chat',
+          text: line,
+          language: 'zh',
+          translation: line,
+          tagTarget: speaker
+        },
+        pinnedText: line,
+        shouldFreeze: true,
+        appendMessage: (message) => {
+          dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_3' });
+        },
+        forceScrollToBottom: async ({ reason }) => {
+          setScrollMode('FOLLOW', `sandbox_tag3_${reason}`);
+          setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
+          setPendingForceScrollReason(`sandbox_tag3_${reason}`);
+          await nextAnimationFrame();
+        },
+        setPinnedReply: () => {
+          const askedAt = Date.now();
+          markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
+          lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: messageId };
+          const pinnedOk = setPinnedQuestionMessage({ source: 'sandboxPromptCoordinator', messageId, hasTagToActiveUser: true });
+          if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
+        },
+        freezeChat: ({ reason }) => {
+          const askedAt = Date.now();
+          sandboxTechBacklogRef.current = [];
+          sandboxTechBacklogTotalWaitMsRef.current = 0;
+          sandboxTechBacklogLastAtRef.current = askedAt;
+          sandboxModeRef.current.setFlowStep('WAIT_REPLY_3', 'tag_player_3_once');
           sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
           sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
           setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
@@ -4630,6 +4704,7 @@ export default function App() {
       });
       sandboxTechBacklogRef.current = [];
       sandboxTechBacklogLastAtRef.current = 0;
+      sandboxTechBacklogTotalWaitMsRef.current = 0;
       sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'tech_backlog_flushed');
       setSandboxRevealTick(Date.now());
     }

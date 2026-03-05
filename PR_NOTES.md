@@ -156,3 +156,23 @@
 4. 之後觀眾出現 4~8 則「意思/拼音怎唸」追問，再次 `@玩家` 問「所以到底怎麼唸？」並再次停住。
 5. 停住期間 tech backlog 只累積不顯示；玩家回覆後一次 flush（<=8，含「卡了 X 分鐘」）。
 6. 切回 classic mode smoke run：行為不變。
+
+## 2026-03-06 Patch Request：Sandbox tech backlog 只允許 Tag#3 WAIT（sandbox only）
+
+### 變更摘要（sandbox only）
+- sandbox flow 擴增為 3 次強制 tag：新增 `TAG_PLAYER_3_MEANING` / `WAIT_REPLY_3`。
+- `SandboxStoryState.flow` 新增 `currentTagIndex: 1|2|3`，並在 step 切換時同步更新。
+- 新增 backlog gate helper（等價條件）：`isTechBacklogEnabled = currentTagIndex===3 && flow.step===WAIT_REPLY_3`。
+- Tag#1 / Tag#2 WAIT 僅 freeze + reply-to + 0 output，不累積、不 flush、不允許任何技術故障語句。
+- Tag#3 WAIT 才能在背景每 30 秒累積 2 則 backlog（第二則固定「奇怪卡了大約 X 分鐘」）。
+- 玩家回覆 Tag#3 後才進 `FLUSH_TECH_BACKLOG`，一次 flush `<=8` 則後再推進下一題。
+- chat engine 在 `WAIT_REPLY_1/2/3` 一律 0 output（含 glitch burst），避免 WAIT 期 leakage。
+- classic mode 未修改。
+
+### 驗收步驟（必測）
+1. Tag#1 WAIT：長時間不回覆，聊天室完全靜止（0 output），且不出現任何 lag/送不出去/卡住字樣。
+2. Tag#2 WAIT：同上（0 output，無技術故障）。
+3. Tag#3 WAIT：每 30 秒累積 2 則故障到 backlog（不顯示）。
+4. 回覆 Tag#3 後：一次 flush（<=8，含「卡了X分鐘」）再推進。
+5. 技術故障字樣只出現在 Tag#3 回覆後 flush 的那一波；其他時段不得出現。
+6. classic mode 未修改。

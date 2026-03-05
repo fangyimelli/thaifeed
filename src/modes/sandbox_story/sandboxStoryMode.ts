@@ -26,6 +26,8 @@ export type SandboxFlowStep =
   | 'CROWD_REACT_WORD'
   | 'TAG_PLAYER_2_PRONOUNCE'
   | 'WAIT_REPLY_2'
+  | 'TAG_PLAYER_3_MEANING'
+  | 'WAIT_REPLY_3'
   | 'FLUSH_TECH_BACKLOG'
   | 'ADVANCE_NEXT';
 
@@ -84,6 +86,7 @@ export type SandboxStoryState = {
   flow: {
     questionIndex: number;
     step: SandboxFlowStep;
+    currentTagIndex: 1 | 2 | 3;
     stepStartedAt: number;
     askedAt?: number;
     lastAnswerAt?: number;
@@ -268,7 +271,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     introGate: { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 },
     preheat: { enabled: true, joinTarget: 10, lastJoinAt: 0 },
     answerGate: { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false },
-    flow: { questionIndex: 1, step: 'PREJOIN', stepStartedAt: 0, tagAskedThisStep: false, tagAskedAt: 0 },
+    flow: { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: 0, tagAskedThisStep: false, tagAskedAt: 0 },
     freeze: { frozen: false, reason: 'NONE' },
     glitchBurst: { pending: false, remaining: 0, lastEmitAt: 0 },
     player: null,
@@ -391,8 +394,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const schedulerPhaseByStep = (step: SandboxFlowStep): SandboxStoryPhase => {
     if (step === 'PREJOIN') return 'boot';
     if (step === 'PREHEAT') return 'intro';
-    if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE') return 'awaitingTag';
-    if (step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2') return 'awaitingAnswer';
+    if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'TAG_PLAYER_3_MEANING') return 'awaitingTag';
+    if (step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3') return 'awaitingAnswer';
     if (step === 'POSSESSION_AUTOFILL' || step === 'POSSESSION_AUTOSEND') return 'revealingWord';
     if (step === 'CROWD_REACT_WORD') return 'chatRiot';
     if (step === 'FLUSH_TECH_BACKLOG') return 'supernaturalEvent';
@@ -400,7 +403,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   };
   const setFlowStepInternal = (step: SandboxFlowStep, reason = '', now = Date.now()) => {
     const prevStep = state.flow.step;
-    state.flow = { ...state.flow, step, stepStartedAt: now, tagAskedThisStep: false, tagAskedAt: 0 };
+    const currentTagIndex: 1 | 2 | 3 =
+      step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'WAIT_REPLY_2'
+        ? 2
+        : step === 'TAG_PLAYER_3_MEANING' || step === 'WAIT_REPLY_3' || step === 'FLUSH_TECH_BACKLOG'
+          ? 3
+          : 1;
+    state.flow = { ...state.flow, step, currentTagIndex, stepStartedAt: now, tagAskedThisStep: false, tagAskedAt: 0 };
     state.audit.transitions = [...state.audit.transitions, { at: now, from: prevStep, to: step, reason: reason || '-' }].slice(-20);
     state.scheduler.phase = schedulerPhaseByStep(step);
     clearSchedulerBlockedReason();
@@ -547,7 +556,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.introGate = { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
-      state.flow = { questionIndex: 1, step: 'PREJOIN', stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
+      state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
       state.last = {};
@@ -656,7 +665,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.introGate = { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
-      state.flow = { questionIndex: 1, step: 'PREJOIN', stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
+      state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
       state.last = {};

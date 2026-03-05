@@ -923,3 +923,22 @@
 - [sandbox/reply2] 第二段由 `mod_live` 或 VIP 再次 `@玩家` 問「所以到底怎麼唸？」並再次進 reply-to freeze（0 output）。
 - [sandbox/backlog] 新增 tech backlog：reply-to active 每 30 秒累積 2 則，最後包含「奇怪卡了大約 X 分鐘」；解鎖後 `FLUSH_TECH_BACKLOG` 一次 flush（<=8）再 `ADVANCE_NEXT`。
 - [classic] 未修改。
+
+## 2026-03-06（sandbox only：tech backlog 僅 Tag#3 WAIT 啟用）
+
+### Changed
+- [sandbox/flow] 新增第三次 tag 節點：`TAG_PLAYER_3_MEANING` / `WAIT_REPLY_3`，並更新主流程到 `... -> WAIT_REPLY_2 -> TAG_PLAYER_3_MEANING -> WAIT_REPLY_3 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
+- [sandbox/ssot] `SandboxStoryState.flow` 新增 `currentTagIndex: 1|2|3`，step 切換時同步更新，供 backlog gate 判斷。
+- [sandbox/backlog-gate] tech backlog 累積條件收斂為：`currentTagIndex===3 && flow.step===WAIT_REPLY_3 && reply-to active`。
+- [sandbox/wait-silence] `WAIT_REPLY_1/2/3` 全部維持 0 output；chat engine 在三個 WAIT step 一律不發訊息（含 glitch burst）。
+- [sandbox/backlog-accumulate] 只在 `WAIT_REPLY_3` 每 30 秒累積 2 則 backlog，且最後一則固定分鐘文案。
+- [sandbox/backlog-flush] 玩家回覆第三次 tag 後才進 `FLUSH_TECH_BACKLOG`，一次 flush `<=8` 則再推進。
+- [classic] 未修改。
+
+### Acceptance
+- 1) Tag#1 WAIT 長時間不回覆，聊天室 0 output 且無 tech 字樣：PASS。
+- 2) Tag#2 WAIT 長時間不回覆，聊天室 0 output 且無 tech 字樣：PASS。
+- 3) Tag#3 WAIT 每 30 秒背景累積 2 則 tech backlog（不顯示）：PASS。
+- 4) 回覆 Tag#3 後一次 flush（<=8，含「卡了 X 分鐘」）再推進：PASS。
+- 5) 技術故障字樣只出現在 Tag#3 回覆後 flush 波次：PASS。
+- 6) classic mode 未修改：PASS。
