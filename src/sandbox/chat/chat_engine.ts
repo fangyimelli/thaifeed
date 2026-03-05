@@ -27,7 +27,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
-  flowStep: 'PREHEAT' | 'ASK_CONSONANT' | 'WAIT_PLAYER_CONSONANT' | 'GLITCH_BURST_AFTER_CONSONANT' | 'REVEAL_WORD' | 'WORD_RIOT' | 'VIP_TRANSLATE' | 'MEANING_GUESS' | 'ASK_PLAYER_MEANING' | 'WAIT_PLAYER_MEANING' | 'GLITCH_BURST_AFTER_MEANING' | 'ADVANCE_NEXT';
+  flowStep: 'PREJOIN' | 'PREHEAT' | 'ASK_CONSONANT' | 'WAIT_PLAYER_CONSONANT' | 'GLITCH_BURST_AFTER_CONSONANT' | 'REVEAL_WORD' | 'WORD_RIOT' | 'VIP_TRANSLATE' | 'MEANING_GUESS' | 'ASK_PLAYER_MEANING' | 'WAIT_PLAYER_MEANING' | 'GLITCH_BURST_AFTER_MEANING' | 'ADVANCE_NEXT';
   stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
@@ -70,7 +70,7 @@ export class ChatEngine {
     san: 100,
     playerHandle: 'player',
     phase: 'boot',
-    flowStep: 'PREHEAT',
+    flowStep: 'PREJOIN',
     stepStartedAt: 0,
     introStartedAt: 0,
     isEnding: false,

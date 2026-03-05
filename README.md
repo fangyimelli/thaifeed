@@ -1912,3 +1912,11 @@ Console（debug 模式）可觀察：
 - WORD_RIOT 每次固定上限 5 則（可接受區間 4~6，本次預設 5）。
 - 平常 sandbox 頻率維持 classic 節奏；freeze=0 output、glitch burst 才允許快刷。
 - 加入 WORD_RIOT step token 防重入，避免第 2 題後 timer 與 step 雙軌推進造成卡住。
+
+## Sandbox Join Gate（2026-03-06，sandbox only）
+
+- 新增 **PREJOIN / joinGate**：玩家提交名稱前 `joinGate.satisfied=false`，sandbox 聊天輸出總閘會阻擋所有非玩家訊息（0 output）。
+- 玩家提交名稱後，會立即建立 `player.id + player.handle` 並寫入 active user，**不再依賴第一則玩家聊天訊息**。
+- join 後會立即由 VIP 發送 `@玩家` 訊息，並直接走 classic 同一路徑 reply-to bar（sandbox 不自製第二套 pinned）。
+- reply-to active 期間聊天室強制 0 output；玩家送出非空回覆後才解除 gate，恢復 PREHEAT 正常節奏。
+- **classic mode 未修改。**

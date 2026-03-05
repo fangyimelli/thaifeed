@@ -893,3 +893,21 @@
 
 ### Scope Guard
 - 僅 sandbox 路徑修改；classic mode 未修改。
+
+## 2026-03-06（sandbox only：PREJOIN joinGate + join 後立即 @玩家 + classic reply-to 強制回覆）
+
+### Root Cause
+- 舊流程把玩家身份建立綁在 `onPlayerMessage`（玩家第一則訊息）之後；導致「只提交名稱但未發言」時，聊天室找不到可提及的玩家 handle，`@玩家` 不會穩定出現。
+
+### Changed
+- [sandbox/state] `SandboxStoryState` 新增 `joinGate`，flow 新增 `PREJOIN`；init/import 皆以 `joinGate.satisfied=false` + `flow.step=PREJOIN` 起始。
+- [sandbox/join] 新增 join path：提交名稱即 sanitize（trim / 去控制字元 / 長度上限）並立即建立 `player.id + player.handle`。
+- [sandbox/emit-gate] `canSandboxEmitChat()` 改為單一總閘：
+  1) `joinGate.satisfied=false` → 一律 0 output
+  2) reply-to active → 一律 0 output
+  3) 其餘才允許（freeze/glitch 規則照舊）
+- [sandbox/reply-to] join 後立即送出 VIP `@玩家` 問句，並用既有 classic reply-to render path（`runTagStartFlow + ChatPanel replyPinBar`）啟動強制回覆 gate。
+- [sandbox/unfreeze] 玩家送出非空回覆後才 clear reply-to / clear freeze，聊天室才恢復 PREHEAT 節奏。
+
+### Scope Guard
+- 僅 sandbox 路徑修改；classic mode 未修改。
