@@ -644,3 +644,23 @@
 - [sandbox_story/chat] 新增 `SUPERNATURAL_EVENTS` 事件池：`none(40%) / ghost_voice(20%) / tv_on(15%) / screen_glitch(15%) / footsteps(10%)`，並在答對後流程串接 `CHAT_RIOT -> SUPERNATURAL_EVENT -> VIP_TRANSLATE`。
 - [sandbox_story/chat] 新增 `GHOST_HINT_EVENT`（非答題期間可觸發 `ghost_voice/screen_glitch/tv_on`）與對應推理聊天室語料。
 - [sandbox_story/audio/story] `footsteps` 新增距離層級輸出（`footstep_far / footstep_mid / footstep_near`），不影響 NIGHT_01 與 quiz/consonant 主流程。
+
+
+## 2026-03-05（sandbox NIGHT_01：intro phase gate + pipeline lock + classic options isolation）
+
+### Scope / Isolation
+- 僅調整 sandbox_story（`src/app/App.tsx`）流程與 debug；classic mode 無邏輯變更。
+
+### Changed
+- [sandbox/phase-gate] 新增 story phase gate：`N1_INTRO_CHAT(30s) -> N1_QUIZ_LOOP`，intro 期間禁止出題。
+- [sandbox/prompt-gate] `askSandboxConsonantNow()` 僅在 `scheduler.phase=awaitingTag` 且 `storyPhaseGate=N1_QUIZ_LOOP` 才送出 `mod_live` 子音題。
+- [sandbox/pipeline-lock] submit in-flight 的重複輸入不再沉默，會回覆「收到，等一下，正在處理上一題。」並記錄 `sandbox_double_submit`。
+- [sandbox/recover] 同題 prompt 若卡住，3 秒後允許重送同題 prompt（去除永遠只發第一次的黏住狀態）。
+- [sandbox/classic-isolation] sandbox 模式阻擋含「（選項：...）」字樣的 NPC 訊息，防止 classic 模板混入。
+- [sandbox/debug] 新增 debug 欄位：
+  - `sandbox.storyPhaseGate.phase/introStartedAt/introEndsAt/introRemainingMs`
+  - `chat.lastEmit.source/sourceTag/sourceMode`
+
+### Removed / Deprecated
+- [sandbox/deprecated] sandbox 內已停用 classic 選項模板訊息輸出（違規即 blocked）。
+

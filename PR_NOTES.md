@@ -1,14 +1,11 @@
 ## Summary
-- 為 sandbox story 新增 Supernatural Event System，整合 `SUPERNATURAL_EVENTS` 事件池與權重分配。
-- 答對題目後流程改為 `REVEAL_WORD_FRAGMENT -> CHAT_RIOT -> SUPERNATURAL_EVENT -> VIP_TRANSLATE`。
-- 新增 `GHOST_HINT_EVENT`（非答題時可觸發）與三句推理聊天室文案。
-- 新增 `footsteps` 距離層級（far/mid/near）事件輸出。
-- 保持 NIGHT_01 與 quiz flow 可並行運作（僅 sandbox_story 改動）。
+- 修正 sandbox NIGHT_01 進房立即出題問題：新增 30 秒 `N1_INTRO_CHAT` gate，倒數後才進 `N1_QUIZ_LOOP` 出第一題。
+- 修正 sandbox 同題多次輸入僅第一次有反應：加入 input lock 回覆與同題 prompt recover 機制，避免沉默/卡題。
+- 修正 sandbox 混入 classic 「選項模板」：新增 sandbox emit gate，阻擋任何 `（選項：...）` 話術。
+- 新增 message emit source debug：`chat.lastEmit.source/sourceTag/sourceMode`，並在 sandbox debug 顯示 `storyPhaseGate`。
 
 ## Changed files
-- src/sandbox/chat/chat_pools.ts
-- src/sandbox/chat/chat_engine.ts
-- src/modes/sandbox_story/sandboxStoryMode.ts
 - src/app/App.tsx
 - README.md
 - docs/10-change-log.md
+- PR_NOTES.md
