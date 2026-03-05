@@ -1,3 +1,12 @@
+## 2026-03-06（sandbox only：classic reply-to 強制回覆 gate + riot 上限）
+
+- 僅調整 sandbox（`src/app/App.tsx` sandbox 路徑）與文件；classic mode 未修改。
+- [sandbox/reply-to] `WAIT_PLAYER_CONSONANT` / `WAIT_PLAYER_MEANING` 改為共用 classic reply-to UI path（`AWAITING_REPLY + questionMessageId`），不再使用獨立 pinned/notice 分流。
+- [sandbox/freeze] 新增 forced-reply dispatch 總閘：reply-to active 時，非玩家訊息一律 blocked（0 output，包含 join/idle/觀眾聊天/故障字串）。
+- [sandbox/flow] 子音詢問與意思詢問都改成 once-per-step：詢問訊息送出後立刻綁定 reply-to 並 freeze；玩家回覆後才 clear reply/freeze，接續 glitch burst。
+- [sandbox/riot] `WORD_RIOT` 每次固定 5 則（上限控制 4~6 區間之預設值）；加入 step token 檢查，避免 timer 與 step 雙軌推進造成卡題。
+- [sandbox/qa] 意思等待回覆流程改用 `runTagStartFlow(append->scroll->pin->freeze)`，與 classic tagged-question 互動一致。
+
 ## 2026-03-05（sandbox only：Hybrid Chat Director + Freeze/Glitch SSOT）
 
 ### Scope / Isolation

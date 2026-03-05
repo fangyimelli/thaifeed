@@ -1899,3 +1899,16 @@ Console（debug 模式）可觀察：
 - WORD_RIOT 鎖修補：每題離開 riot 都 reset wave lock，並統一單一路徑推進到 `VIP_TRANSLATE`。
 - Removed/Deprecated（sandbox）：移除 `WORD_RIOT` 多路並行推進（direct setFlowStep + callback 併存）行為，改為 timer SSOT。
 - classic mode 未修改。
+
+## Sandbox 強制回覆 Gate（沿用 classic reply-to，2026-03-06）
+
+- 僅 sandbox_story 變更；classic mode 未修改。
+- `WAIT_PLAYER_CONSONANT` 與 `WAIT_PLAYER_MEANING` 都改為沿用 classic 的 reply-to UI path：由同一個 `questionMessageId + AWAITING_REPLY` 驅動輸入框上方回覆條。
+- sandbox 問玩家訊息建立後，立即綁定 reply-to（messageId）並進入 freeze；reply-to active 期間聊天室 0 output（含 join/idle/觀眾聊天/技術訊息全阻擋）。
+- 玩家必須送出一則非空訊息才會解除 gate；送出後才進入後續 glitch/reveal/推題流程。
+
+## Sandbox Riot 上限與節奏規則（2026-03-06）
+
+- WORD_RIOT 每次固定上限 5 則（可接受區間 4~6，本次預設 5）。
+- 平常 sandbox 頻率維持 classic 節奏；freeze=0 output、glitch burst 才允許快刷。
+- 加入 WORD_RIOT step token 防重入，避免第 2 題後 timer 與 step 雙軌推進造成卡住。

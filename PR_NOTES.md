@@ -84,3 +84,35 @@
 - `sandbox.audit.emit.lastEmitKey/recentEmitKeys`
 - `sandbox.audit.transitions`（最近 20 筆）
 - `sandbox.introGate.startedAt/passed/remainingMs`
+
+## 2026-03-06 Patch Request：Sandbox 沿用 classic reply-to + 強制回覆 gate + Riot 上限
+
+### 變更摘要（sandbox only）
+- `WAIT_PLAYER_CONSONANT`：詢問訊息改為 commit `questionMessageId`，沿用 classic reply-to bar 顯示。
+- `WAIT_PLAYER_MEANING`：改為同樣走 `runTagStartFlow`（append→scroll→pin→freeze），用同一個 reply-to render path。
+- 新增 sandbox forced-reply dispatch gate：只要 reply-to active，非玩家訊息全阻擋（0 output）。
+- 玩家回覆後才 clear reply-to / unfreeze，再進 `GLITCH_BURST_AFTER_*`。
+- `WORD_RIOT` 固定最多 5 則，並加入 step token 防止跨 step timer 誤推進。
+- classic mode 未修改。
+
+### 驗收步驟（必測）
+1. 進 sandbox，觸發 `WAIT_PLAYER_CONSONANT`：
+   - 輸入框上方看到 classic 同款回覆條（speaker + 摘要）。
+   - 回覆條存在期間聊天室完全不再出新訊息（0 output）。
+2. 驗證回覆條不可取消：
+   - 不出現 X / Cancel / 取消回覆。
+   - 只能送出一則訊息解除。
+3. 送出回覆後，流程順序：
+   - `glitch burst≈10 -> REVEAL_WORD -> WORD_RIOT(<=5) -> VIP_TRANSLATE -> MEANING_GUESS -> 再建立 reply-to -> 再 freeze`。
+4. 連跑至少 3 題：確認第 2 題後仍會正常顯示單字、不會卡在 WORD_RIOT。
+5. classic smoke：切回 classic 跑一般答題，行為不變。
+
+### debug 欄位（觀測建議）
+- `ui.replyBarVisible`
+- `ui.replyToMessageId`
+- `event.qna.active.status`
+- `sandbox.flow.step / sandbox.flow.stepStartedAt`
+- `sandbox.freeze.frozen/reason`
+- `chat.lastBlockedSendAttempt.blockedReason`（期待可見 `sandbox_forced_reply_gate_active`）
+- `sandbox.lastWave.count`（WORD_RIOT 期望 5）
+
