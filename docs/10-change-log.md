@@ -1,3 +1,19 @@
+## 2026-03-05（sandbox only：Hybrid Chat Director + Freeze/Glitch SSOT）
+
+### Scope / Isolation
+- 僅調整 sandbox（`src/sandbox/*`、`src/app/App.tsx` 的 sandbox 路徑）與文件；classic mode 未改。
+
+### Changed
+- [sandbox/director] 新增 `src/sandbox/chat/chat_director.ts`，作為唯一節奏來源，統一輸出 mode / directed line / random 權重 / preheat join 判斷。
+- [sandbox/chat] `src/sandbox/chat/chat_engine.ts` 改為 director 驅動：優先 directed line，其次依權重抽池；`freeze` 外層 hard gate；`tag_player` 不再隨機抽。
+- [sandbox/preheat] 改為軟編排保證：0~20 秒至少一次 VIP 出場、5~25 秒至少一次 VIP `@玩家`。
+- [sandbox/flow] `App.tsx` 將 `flow.step` 與 `stepStartedAt` 傳入 chat engine；preheat join 由 director `shouldEmitJoin()` 決定。
+- [sandbox/gate] `forceAskConsonantNow/forceAskComprehensionNow` 新增 30 秒 gate（`introGate.passed` 前不允許強制出題）。
+
+### SSOT / Debug
+- SSOT：chat 節奏來源由 engine 分散判斷整併為 director。
+- debug：沿用既有 `sandbox.flow.* / freeze / glitchBurst`，無破壞性 schema 變更。
+
 ## 2026-03-05（sandbox only：intro gate / freeze 0 output / player-reply glitchBurst / banned lexicon）
 
 ### Scope / Isolation

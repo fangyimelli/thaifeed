@@ -2652,6 +2652,8 @@ export default function App() {
         san: state.curse,
         playerHandle: normalizeHandle(sandboxState.player.handle || activeUserInitialHandleRef.current || '000') || '000',
         phase: sandboxState.scheduler.phase,
+        flowStep: sandboxState.flow.step,
+        stepStartedAt: sandboxState.flow.stepStartedAt,
         introStartedAt: sandboxState.introGate.startedAt,
         isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'chatRiot'),
         freeze: sandboxState.freeze,
@@ -2663,7 +2665,7 @@ export default function App() {
         }
         if (sandboxState.flow.step === 'PREHEAT') {
           const preheatGap = now - (sandboxState.preheat.lastJoinAt || 0);
-          if (preheatGap >= randomInt(4000, 7000)) {
+          if (preheatGap >= randomInt(4000, 7000) && sandboxChatEngineRef.current?.shouldEmitJoin()) {
             const joinName = `viewer_${Math.floor(Math.random() * 899 + 100)}`;
             dispatchChatMessage({ id: crypto.randomUUID(), username: 'system', type: 'system', text: `${joinName} 加入聊天室`, language: 'zh' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_join' });
             sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
@@ -2751,6 +2753,8 @@ export default function App() {
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         scheduler: {
           phase: sandboxState.scheduler.phase,
+        flowStep: sandboxState.flow.step,
+        stepStartedAt: sandboxState.flow.stepStartedAt,
           blockedReason: sandboxState.scheduler.blockedReason || '-'
         },
         storyPhaseGate: {
