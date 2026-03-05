@@ -1763,3 +1763,9 @@ Console（debug 模式）可觀察：
 
 ### README Removed/Deprecated Log
 - 2026-03-04：本次為 sandbox 輸入/樣式整合修正，無新增移除項。
+
+## Sandbox Chat Engine
+
+- 新增 sandbox 專用聊天室訊息生成系統，透過 `src/sandbox/chat/chat_engine.ts` 以 1.5~3 秒節奏自動產生訊息。
+- 支援一般觀眾、恐懼升級、中泰混合、tag 玩家、角色猜測、VIP 摘要與結尾崩潰流程。
+- 使用 `src/sandbox/chat/user_generator.ts` 生成不重複的 PTT/Twitch 風格帳號。

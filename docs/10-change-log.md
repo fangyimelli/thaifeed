@@ -613,3 +613,13 @@
 - 注音輸入（如 `ㄅㄆㄇˋ`）不會被清空，debug `input.norm` 保留：PASS
 - sandbox 題目子音恢復藍色：PASS
 - classic mode 不受影響：PASS
+
+## 2026-03-05（sandbox chat engine）
+
+### Added
+- 新增 `src/sandbox/chat/chat_engine.ts`：sandbox 聊天引擎（自動訊息、idle 偵測、thai 混合、VIP summary、結尾崩潰序列）。
+- 新增 `src/sandbox/chat/user_generator.ts`：聊天室帳號生成器，避免重複名稱。
+
+### Changed
+- `src/app/App.tsx` sandbox 模式接入新聊天引擎，改由 engine `start()/stop()/nextMessage()` 驅動訊息 append。
+- sandbox `awaitingWave` 不再走舊的本地 wave 迴圈，統一由 sandbox chat engine 輸出，避免新舊邏輯並存。
