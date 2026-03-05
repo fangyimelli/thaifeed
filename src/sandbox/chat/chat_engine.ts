@@ -1,5 +1,5 @@
 import { SandboxUserGenerator } from './user_generator';
-import { CHAT_POOLS } from './chat_pools';
+import { CHAT_POOLS, assertChatPoolsCounts } from './chat_pools';
 
 export type ChatMessage = {
   user: string;
@@ -36,6 +36,16 @@ const SUPERNATURAL_POOL: Array<{ type: SupernaturalEvent; weight: number }> = [
 ];
 
 const GHOST_HINT_POOL: GhostHintEvent[] = ['ghost_voice', 'screen_glitch', 'tv_on'];
+const GHOST_HINT_REASONING = [
+  '鬼是不是在回應剛剛那個音節',
+  '我覺得線索在提醒我們先拼出完整詞',
+  '這段像在暗示別急著亂猜角色'
+] as const;
+const VIP_TRANSLATE_LINES = [
+  'VIP 翻譯：剛剛泰文是在說「樓上有聲音」，先把樓梯線索記住。',
+  'VIP 翻譯：那句偏向「他還在等」，跟前面等待主題一致。',
+  'VIP 翻譯：這段像提醒「別把人留在那裡」，推進時要注意保護路線。'
+] as const;
 
 export class ChatEngine {
   private readonly options: ChatEngineOptions;
@@ -56,6 +66,9 @@ export class ChatEngine {
 
   constructor(options: ChatEngineOptions) {
     this.options = options;
+    if (import.meta.env.DEV) {
+      assertChatPoolsCounts();
+    }
     for (let i = 0; i < 16; i += 1) this.users.push(this.userGen.next());
     this.users.push('VIP');
   }
@@ -84,7 +97,7 @@ export class ChatEngine {
       this.supernaturalQueue = this.buildSupernaturalQueue();
     }
     if (this.context.phase === 'vipTranslate' && this.lastPhase !== 'vipTranslate' && this.supernaturalQueue.length === 0) {
-      this.supernaturalQueue = [this.formatLine(this.pick('vip_translate'), 'VIP', true)];
+      this.supernaturalQueue = [this.formatLine(this.pickArray(VIP_TRANSLATE_LINES), 'VIP', true)];
     }
     this.lastPhase = this.context.phase;
     if (this.context.isEnding && this.collapseQueue.length === 0) {
@@ -144,18 +157,23 @@ export class ChatEngine {
     }
 
     if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.25) {
-      return this.formatLine(this.pick('tag_player').replace(/@player/g, `@${this.context.playerHandle}`));
+      return this.formatLine(this.applyPlayerHandle(this.pick('tag_player')));
     }
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.3) {
       return this.formatLine(this.pick('guess_character'));
     }
 
-    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.2) {
+    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.35) {
       return this.formatLine(this.pick('theory_pool'));
     }
 
-    if (this.context.isEnding && Math.random() < 0.55) {
+    if (this.context.phase === 'revealingWord' && Math.random() < 0.28) {
+      return this.formatLine(this.pick('theory_pool'));
+    }
+
+    const isHighPressure = this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent';
+    if (isHighPressure && Math.random() < 0.5) {
       return this.formatLine(this.pick('final_fear'));
     }
 
@@ -190,32 +208,36 @@ export class ChatEngine {
     const queue: ChatMessage[] = [];
     queue.push(this.formatLine(`[GHOST_HINT_EVENT] ${hint.toUpperCase()}`, 'system', false));
     for (let i = 0; i < 3; i += 1) {
-      queue.push(this.formatLine(this.pick('ghost_hint_reasoning')));
+      queue.push(this.formatLine(this.pickArray(GHOST_HINT_REASONING)));
     }
     return queue;
   }
 
   emitReasoningWave(count = 2): ChatMessage[] {
     const size = Math.max(1, Math.min(4, count));
-    return Array.from({ length: size }).map(() => this.formatLine(this.pick('ghost_hint_reasoning')));
+    return Array.from({ length: size }).map(() => this.formatLine(this.pickArray(GHOST_HINT_REASONING)));
   }
 
   emitTagPlayerPrompt(): ChatMessage {
-    const line = this.pick('tag_player').replace(/@player/g, `@${this.context.playerHandle}`);
+    const line = this.applyPlayerHandle(this.pick('tag_player'));
     return this.formatLine(line, 'mod_live');
   }
 
   private buildSupernaturalQueue(): ChatMessage[] {
     const eventType = this.pickSupernaturalEvent();
-    if (eventType === 'none') return [this.formatLine(this.pick('vip_translate'), 'VIP', true)];
+    if (eventType === 'none') return [this.formatLine(this.pickArray(VIP_TRANSLATE_LINES), 'VIP', true)];
     const queue: ChatMessage[] = [];
     queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${eventType.toUpperCase()}`, 'system', false));
     if (eventType === 'footsteps') {
       queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${this.pickFootstepDistance().toUpperCase()}`, 'system', false));
     }
     queue.push(this.formatLine(this.pick('fear_pool')));
-    queue.push(this.formatLine(this.pick('vip_translate'), 'VIP', true));
+    queue.push(this.formatLine(this.pickArray(VIP_TRANSLATE_LINES), 'VIP', true));
     return queue;
+  }
+
+  private applyPlayerHandle(template: string): string {
+    return template.replace(/\{\{PLAYER\}\}/g, `@${this.context.playerHandle}`).replace(/\$\{playerHandle\}/g, `@${this.context.playerHandle}`);
   }
 
   private pickSupernaturalEvent(): SupernaturalEvent {
@@ -243,6 +265,10 @@ export class ChatEngine {
   private pick<K extends keyof typeof CHAT_POOLS>(key: K): (typeof CHAT_POOLS)[K][number] {
     const pool = CHAT_POOLS[key];
     return pool[Math.floor(Math.random() * pool.length)] as (typeof CHAT_POOLS)[K][number];
+  }
+
+  private pickArray<T>(pool: readonly T[]): T {
+    return pool[Math.floor(Math.random() * pool.length)] as T;
   }
 
   private pickUser(): string {

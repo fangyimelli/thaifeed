@@ -20,6 +20,8 @@
 | 素材路徑與 base path | `src/config/assetUrls.ts`、`src/config/assetManifest.ts` | `assets/...` 相對路徑與 base URL 解析 |
 | Mode Router（classic/sandbox_story） | `src/app/App.tsx` | 以 `?mode=` 為主、debug-only 可讀 `localStorage['app.currentMode']` 的單一路徑 mode 決策 |
 | 主頁整合入口 | `src/app/App.tsx`、`src/ui/scene/SceneView.tsx` | 系統初始化、畫面組裝、debug overlay |
+| Sandbox chat 語料池 | `src/sandbox/chat/chat_pools.ts` | `CHAT_POOLS` 10 池（2050 entries）與 Thai viewer 結構化欄位唯一來源 |
+| Sandbox chat 路由引擎 | `src/sandbox/chat/chat_engine.ts` | phase/SAN 驅動池路由、emit 節流、Thai/VIP 訊息輸出 |
 
 ## Base path 規範
 

@@ -1,3 +1,27 @@
+## 2026-03-05（sandbox only：CHAT_POOLS SSOT 2050 + phase routing）
+
+### Scope / Isolation
+- 僅調整 sandbox chat（`src/sandbox/chat/*`）與文件；classic mode sources 未修改。
+
+### Changed
+- [sandbox/chat] `src/sandbox/chat/chat_pools.ts` 改為靜態語料檔，`CHAT_POOLS` 僅保留 10 個 pool，數量固定：`casual_pool(500)`、`observation_pool(300)`、`theory_pool(250)`、`thai_viewer_pool(200)`、`fear_pool(200)`、`guess_character(150)`、`tag_player(100)`、`san_idle(150)`、`vip_summary(120)`、`final_fear(80)`，total=2050。
+- [sandbox/chat] `thai_viewer_pool` 統一為結構化 entries：`{ user, text, thai, translation }`；`user` 僅來自 `THAI_USERS`。
+- [sandbox/chat] 新增 `assertChatPoolsCounts()`（dev/測試可呼叫）驗證 10 池與 total，並在 chat engine DEV 初始化時檢查一次。
+- [sandbox/chat] `src/sandbox/chat/chat_engine.ts` 全面改用 `CHAT_POOLS`；移除對舊 pool key（`vip_translate`、`ghost_hint_reasoning`）的依賴，改由引擎內固定小型事件文案常數處理。
+- [sandbox/chat] `tag_player` 改用 `{{PLAYER}}` / `${playerHandle}` 模板，emit 時替換成當前玩家 handle。
+- [sandbox/chat] 新增簡短 phase routing：`theory_pool` 在 `awaitingAnswer/revealingWord` 提高權重；`final_fear` 只在 ending/高壓（低 SAN 或 supernaturalEvent）提高機率。
+
+### SSOT / Debug 記錄
+- SSOT changed：sandbox chat corpus 單一來源收斂到 `CHAT_POOLS`。
+- Debug 欄位無新增；系統狀態變更為「Thai viewer message 保留 `thai/translation` 結構欄位供 UI/debug 使用」。
+
+### Acceptance
+- 1) 10 pools 長度與 total=2050：PASS（`assertChatPoolsCounts()`）
+- 2) sandbox 正常輸出一般觀眾、Thai viewer、VIP、tag player：PASS
+- 3) meaning guess/reveal 時 `theory_pool` 出現率上升（非 0）：PASS
+- 4) 後段/高壓才明顯出現 `final_fear`：PASS
+- 5) classic mode sources 未修改：PASS
+
 ## 2026-03-05（sandbox only：P1-D/G 角色同義詞追問 + Q10 翻譯特例）
 
 - [sandbox/tag-player] 新增 `src/sandbox/chat/characterDisambiguation.ts`，提供 `normalize()`（全半形/大小寫/空白與常見標點清理）與 `matchCategory()`，支援 woman/girl/boy 同義詞分類。
