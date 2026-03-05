@@ -1,3 +1,28 @@
+## 2026-03-05（sandbox only：NIGHT_01 節奏根治 + step SSOT + 第2題卡住修復）
+
+### Scope / Isolation
+- 僅調整 sandbox flow/chat/debug 與文件；classic mode 無任何邏輯變更。
+
+### Changed
+- [sandbox/state] `SandboxStoryState` 新增並整合 `preheat`、`answerGate`、`flow(questionIndex/step/stepStartedAt)`、`last(lastAskAt/lastAnswerAt/lastRevealAt)`，以 `questionIndex + step` 作為主流程 SSOT。
+- [sandbox/flow] 進場固定 `step=0` 預熱 30 秒；預熱中只做閒聊/進人，且 VIP 高頻 tag 玩家。
+- [sandbox/flow] 出題後固定進 `WAIT_ANSWER(step=2)`；15 秒未回覆時硬停聊天（`answerGate.pausedChat=true`）並顯示「等你回覆」。
+- [sandbox/flow] 玩家回覆（包含不知道）後固定走：`ANSWER_GLITCH_FLOOD -> REVEAL_WORD -> WORD_RIOT -> VIP_TRANSLATE -> MEANING_GUESS -> ASK_PLAYER_MEANING -> ADVANCE_NEXT`，每題強制經過 reveal。
+- [sandbox/bugfix] 修正「第 2 題後不跳單字卡住」：以 flow step 單一路徑推進，並用 `last*` 時戳避免同 step 重入重複 ask/reveal。
+- [sandbox/chat] `chat_engine` 路由調整：`awaitingAnswer` 偏 fear/observation/tag，glitch 時段可走 `san_idle`。
+- [debug] 新增 debug 欄位顯示：`flow.*`、`answerGate.*`。
+
+### SSOT / Debug 記錄
+- SSOT changed：sandbox story 推進真相由 phase 轉為 `flow.step`；phase 僅作渲染/路由表象。
+- debug changed：新增 `sandbox.flow.*`、`sandbox.answer.gateWaiting/gateAskedAt/gatePausedChat`。
+
+### Acceptance
+- 1) 進 sandbox 前 30 秒不出題：PASS
+- 2) 30 秒後才出題：PASS
+- 3) 玩家不回覆會停聊 + SAN 上升：PASS
+- 4) 玩家回覆後固定 glitch->reveal->riot->VIP->guess->tag->next：PASS
+- 5) 連跑多題皆可 reveal，不再卡第 2 題：PASS
+
 ## 2026-03-05（sandbox only：CHAT_POOLS SSOT 2050 + phase routing）
 
 ### Scope / Isolation
@@ -728,4 +753,3 @@
 
 ### Removed / Deprecated
 - [sandbox/deprecated] sandbox 內已停用 classic 選項模板訊息輸出（違規即 blocked）。
-

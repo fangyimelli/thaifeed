@@ -164,12 +164,16 @@ export class ChatEngine {
       return this.formatLine(this.pick('guess_character'));
     }
 
-    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.35) {
-      return this.formatLine(this.pick('theory_pool'));
+    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.4) {
+      return this.formatLine(this.pick('fear_pool'));
     }
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.28) {
       return this.formatLine(this.pick('theory_pool'));
+    }
+
+    if (this.context.phase === 'supernaturalEvent' && Math.random() < 0.65) {
+      return this.formatLine(this.pick('san_idle'));
     }
 
     const isHighPressure = this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent';

@@ -1,32 +1,29 @@
 ## Summary
-- 新增/重建 `src/sandbox/chat/chat_pools.ts`，以 **靜態可審查** entries 定義 sandbox chat SSOT：10 個 pools、總數 2050（無 runtime 動態生句）。
-- `CHAT_POOLS` 型別明確區分：9 個 pool 為 `string[]`，`thai_viewer_pool` 為 `{ user, text, thai, translation }[]`。
-- `THAI_USERS` 內聚於 `chat_pools.ts`，`thai_viewer_pool.user` 僅使用該名單，避免重複來源。
-- 新增 `assertChatPoolsCounts()`，可在 dev/測試驗證每池長度與 total=2050；`chat_engine` 僅在 DEV 初始化呼叫一次。
-- `src/sandbox/chat/chat_engine.ts` 完整改為 consume `CHAT_POOLS`，移除平行舊池依賴（不再依賴 `vip_translate` / `ghost_hint_reasoning` pool key）。
-- `tag_player` 模板改為 `{{PLAYER}}` / `${playerHandle}` 佔位符，emit 時統一替換為當前 `@playerHandle`。
-- 新增簡短 phase-driven routing：
-  - `theory_pool`：`awaitingAnswer` 與 `revealingWord` 階段提高機率。
-  - `final_fear`：僅 ending 或高壓（低 SAN / supernatural phase）提高機率。
-- Thai viewer emission 保留結構化欄位（`thai`、`translation`）供 UI/debug 顯示與後續擴充。
+- sandbox NIGHT_01 流程改為 `flow.questionIndex + flow.step` SSOT，新增 `introGate/preheat/answerGate/flow/last` 到 `SandboxStoryState`，避免隱性 phase 卡住。
+- 實作 30 秒預熱：只閒聊、慢速進人、VIP 高頻 tag 玩家。
+- 實作「玩家必回」：出題後進 `WAIT_ANSWER`，15 秒未回覆就硬停聊天室並顯示「等你回覆」，同時 SAN 增壓。
+- 玩家回覆（含不知道）後，固定強制鏈：glitch flood → reveal word → riot → VIP 翻譯 → meaning guess → tag 玩家 → 下一題。
+- 修正第 2 題後不跳單字：加上 `flow step` 單一推進與 `lastAskAt/lastRevealAt` 防重入。
+- sandbox chat routing 調整：`awaitingAnswer` 偏 fear/observation/tag，glitch 時段可走 `san_idle`。
+- debug 面板新增 flow/answerGate 欄位，便於驗證 step chain 與停聊狀態。
 
 ## Impact Scope
-- 影響範圍：sandbox chat corpus 與 sandbox chat routing（`src/sandbox/chat/*`）。
-- 文件：README、change-log、SSOT map 同步更新。
-- **classic-mode sources were not modified**。
+- 影響範圍：`src/modes/sandbox_story/*`、`src/app/App.tsx`、`src/sandbox/chat/chat_engine.ts`、文件（README/docs）。
+- **classic mode sources were not modified**。
 
 ## Changed files
-- src/sandbox/chat/chat_pools.ts
+- src/modes/sandbox_story/sandboxStoryMode.ts
+- src/app/App.tsx
 - src/sandbox/chat/chat_engine.ts
-- docs/02-ssot-map.md
-- docs/10-change-log.md
 - README.md
+- docs/10-change-log.md
+- docs/02-ssot-map.md
+- docs/30-sandbox-story-mode.md
 - PR_NOTES.md
 
 ## Validation / Acceptance
-1. 啟動 sandbox 後，觀察一般觀眾訊息持續輸出（來自 9 個 `string[]` pools）。
-2. Thai viewer 訊息可見，且訊息資料保留 `thai/translation` 結構欄位。
-3. `awaitingAnswer` / `revealingWord` 期間，`theory_pool` 發言為非 0 且明顯提升。
-4. 後段/高壓（ending 或 SAN 低）可見 `final_fear`，前段不大量出現。
-5. 在 dev console 呼叫 `assertChatPoolsCounts()` 通過（10 池 + total=2050）。
-6. `npm run build` 通過（typecheck + build）。
+1. 進 sandbox 前 30 秒不出題，只出現預熱聊天/加入聊天室/VIP tag。  
+2. 30 秒後才出第一題，並進入 WAIT_ANSWER。  
+3. 玩家不回覆 15 秒：聊天室停刷，debug 可見 `answerGate.pausedChat=true`，且 SAN 增壓。  
+4. 玩家回覆後固定進 glitch flood，再 reveal word，後續完整走完 VIP 翻譯與 tag 玩家再進下一題。  
+5. 連續 3 題以上皆可 reveal，無第 2 題卡死。

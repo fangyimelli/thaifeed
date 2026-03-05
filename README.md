@@ -130,6 +130,11 @@ npm run build
 ## Sandbox NIGHT_01 修正（2026-03-05）
 
 - Story Phase Gate：sandbox 進房後強制 `N1_INTRO_CHAT` 30 秒，只允許聊天室閒聊；倒數結束才切 `N1_QUIZ_LOOP`，並允許 `mod_live` 出第一題子音題。
+- NIGHT_01（sandbox only）主流程 SSOT 改為 `flow.questionIndex + flow.step`：
+  - step `0~9` 固定鏈：`PREHEAT -> ASK_CONSONANT -> WAIT_ANSWER -> ANSWER_GLITCH_FLOOD -> REVEAL_WORD -> WORD_RIOT -> VIP_TRANSLATE -> MEANING_GUESS -> ASK_PLAYER_MEANING -> ADVANCE_NEXT`。
+  - `introGate/preheat/answerGate/flow/last` 全部放進 `SandboxStoryState`，phase 僅作渲染路由表象，不再作為推進真相來源。
+  - WAIT_ANSWER timeout（15s）若玩家未回覆：sandbox 會硬停聊天（`answerGate.pausedChat=true`）並顯示「等你回覆」。
+  - 玩家回覆後（包含「不知道」）固定先進 glitch flood，再 reveal word，根治第 2 題後不 reveal 卡住。
 - Prompt Gate：`askSandboxConsonantNow()` 僅在 `phase=awaitingTag` 且 story gate 已進入 `N1_QUIZ_LOOP` 才會送題，避免一進房立即出題。
 - Pipeline/Input Lock：sandbox submit in-flight 時，重複輸入會回覆「收到，等一下，正在處理上一題。」並阻擋重入，不再沉默。
 - Solved 同步：同題 prompt 若已存在但未前進，會在 3 秒後允許重送同題 prompt（recover），避免「題目已 solved 但仍催同題」卡住。

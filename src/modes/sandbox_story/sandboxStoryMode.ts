@@ -66,6 +66,10 @@ export type SandboxStoryState = {
   pendingDisambiguation: { active: boolean; attempts: number; promptId: string };
   q10Special: { armed: boolean; revealed: boolean };
   introGate: { startedAt: number; minDurationMs: number; passed: boolean; remainingMs: number };
+  preheat: { enabled: boolean; joinTarget: number; lastJoinAt: number };
+  answerGate: { waiting: boolean; askedAt: number; timeoutMs: number; pausedChat: boolean };
+  flow: { questionIndex: number; step: number; stepStartedAt: number };
+  last: { lastAskAt?: number; lastAnswerAt?: number; lastRevealAt?: number };
   pendingQuestions: { queue: string[]; revisiting: boolean };
   pipeline: { reasoningCount: number; tagPrompted: boolean };
   scheduler: { phase: SandboxStoryPhase; blockedReason: string };
@@ -196,6 +200,10 @@ export type SandboxStoryMode = GameMode & {
   }) => void;
   commitHintText: (text: string, source?: '' | 'classic_shared') => void;
   setSubmitInFlight: (inFlight: boolean, timestamp?: number) => void;
+  setFlowStep: (step: number, reason?: string, now?: number) => void;
+  setAnswerGate: (payload: Partial<SandboxStoryState['answerGate']>) => void;
+  setLastTimestamps: (payload: Partial<SandboxStoryState['last']>) => void;
+  setPreheatState: (payload: Partial<SandboxStoryState['preheat']>) => void;
 };
 
 const cloneScript = (script: NightScript): NightScript => JSON.parse(JSON.stringify(script)) as NightScript;
@@ -223,6 +231,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     pendingDisambiguation: { active: false, attempts: 0, promptId: '' },
     q10Special: { armed: false, revealed: false },
     introGate: { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 },
+    preheat: { enabled: true, joinTarget: 10, lastJoinAt: 0 },
+    answerGate: { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false },
+    flow: { questionIndex: 1, step: 0, stepStartedAt: 0 },
+    last: {},
     pendingQuestions: { queue: [], revisiting: false },
     pipeline: { reasoningCount: 0, tagPrompted: false },
     scheduler: { phase: 'boot', blockedReason: '' },
@@ -334,6 +346,23 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         state.scheduler.phase = 'awaitingTag';
       }
     }
+  };
+  const schedulerPhaseByStep = (step: number): SandboxStoryPhase => {
+    if (step === 0) return 'intro';
+    if (step === 1) return 'awaitingTag';
+    if (step === 2) return 'awaitingAnswer';
+    if (step === 3) return 'supernaturalEvent';
+    if (step === 4) return 'revealingWord';
+    if (step === 5) return 'chatRiot';
+    if (step === 6) return 'vipTranslate';
+    if (step === 7) return 'reasoningPhase';
+    if (step === 8) return 'tagPlayerPhase';
+    return 'awaitingTag';
+  };
+  const setFlowStepInternal = (step: number, _reason = '', now = Date.now()) => {
+    state.flow = { ...state.flow, step, stepStartedAt: now };
+    state.scheduler.phase = schedulerPhaseByStep(step);
+    clearSchedulerBlockedReason();
   };
   const clearSchedulerBlockedReason = () => {
     state.scheduler.blockedReason = '';
@@ -449,12 +478,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     const clamped = Math.max(0, Math.min(script.nodes.length - 1, nextLinearNodeIndex));
     state.nodeIndex = clamped;
     nextLinearNodeIndex = Math.max(nextLinearNodeIndex, Math.min(clamped + 1, Math.max(script.nodes.length - 1, 0)));
+    state.flow.questionIndex = state.nodeIndex + 1;
   };
   const advancePromptInternal = (reason: string, token: string) => {
     state.advance = { ...state.advance, inFlight: true, lastToken: token, lastAt: Date.now(), lastReason: reason, blockedReason: '' };
     selectNextNodeIndex();
     syncNodeChar();
-    state.scheduler.phase = 'awaitingTag';
+    setFlowStepInternal(1, 'advance_prompt_internal');
     clearSchedulerBlockedReason();
     resetPromptRuntimeState();
     syncPromptMismatch();
@@ -470,12 +500,16 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.nodeIndex = 0;
       nextLinearNodeIndex = 1;
       state.introGate = { startedAt: Date.now(), minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
+      state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
+      state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
+      state.flow = { questionIndex: 1, step: 0, stepStartedAt: Date.now() };
+      state.last = {};
       state.pendingQuestions = { queue: [], revisiting: false };
       state.lastCategory = null;
       state.pendingDisambiguation = { active: false, attempts: 0, promptId: '' };
       state.q10Special = { armed: false, revealed: false };
       state.pipeline = { reasoningCount: 0, tagPrompted: false };
-      state.scheduler.phase = 'intro';
+      setFlowStepInternal(0, 'init');
       clearSchedulerBlockedReason();
       state.reveal.visible = false;
       state.reveal.phase = 'idle';
@@ -502,12 +536,19 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         syncFear();
         return;
       }
-      if (state.scheduler.phase === 'awaitingTag') state.scheduler.phase = 'awaitingAnswer';
+      if (state.flow.step === 1) {
+        state.answerGate = { waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false };
+        setFlowStepInternal(2, 'incoming_tag');
+      }
       syncFear();
     },
     onPlayerReply() { syncFear(); },
     tick() {
       syncIntroGate();
+      if (state.flow.step === 0 && state.introGate.passed) {
+        state.preheat.enabled = false;
+        setFlowStepInternal(1, 'intro_passed');
+      }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
         state.reveal.phase = elapsed < 1000 ? 'enter' : elapsed < REVEAL_DURATION_MS ? 'pulse' : 'done';
@@ -526,8 +567,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
       return node;
     },
-    forceAskConsonantNow() { state.scheduler.phase = 'awaitingTag'; syncFear(); },
-    forceAskComprehensionNow() { state.scheduler.phase = 'awaitingTag'; syncFear(); },
+    forceAskConsonantNow() { setFlowStepInternal(1, 'force_ask_consonant'); syncFear(); },
+    forceAskComprehensionNow() { setFlowStepInternal(1, 'force_ask_comprehension'); syncFear(); },
     forceGhostMotion(motionId) {
       state.ghostMotion = { lastId: motionId ?? 'disabled_no_ghost_entity', state: 'idle' };
       syncFear();
@@ -536,7 +577,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     forceAdvanceNode() {
       state.advance = { ...state.advance, inFlight: false, lastToken: '', lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
       selectNextNodeIndex();
-      state.scheduler.phase = 'awaitingTag';
+      setFlowStepInternal(1, 'force_advance_node');
       clearSchedulerBlockedReason();
       state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: 0 };
       state.prompt.current = null;
@@ -560,12 +601,16 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.nodeIndex = 0;
       nextLinearNodeIndex = 1;
       state.introGate = { startedAt: Date.now(), minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
+      state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
+      state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
+      state.flow = { questionIndex: 1, step: 0, stepStartedAt: Date.now() };
+      state.last = {};
       state.pendingQuestions = { queue: [], revisiting: false };
       state.lastCategory = null;
       state.pendingDisambiguation = { active: false, attempts: 0, promptId: '' };
       state.q10Special = { armed: false, revealed: false };
       state.pipeline = { reasoningCount: 0, tagPrompted: false };
-      state.scheduler.phase = 'intro';
+      setFlowStepInternal(0, 'import_ssot');
       clearSchedulerBlockedReason();
       state.prompt.current = null;
       state.prompt.overlay.consonantShown = '';
@@ -661,9 +706,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (state.reveal.mode === 'correct') {
         state.q10Special.armed = state.nodeIndex === 9;
         state.q10Special.revealed = false;
-        state.scheduler.phase = 'chatRiot';
+        setFlowStepInternal(5, 'mark_reveal_done');
       } else {
-        state.scheduler.phase = 'awaitingAnswer';
+        setFlowStepInternal(2, 'mark_reveal_done_non_correct');
       }
       clearSchedulerBlockedReason();
       state.reveal.visible = false;
@@ -829,6 +874,19 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (!inFlight) {
         state.advance.blockedReason = state.advance.blockedReason === 'double_submit' ? '' : state.advance.blockedReason;
       }
+    },
+    setFlowStep(step, reason = '', now = Date.now()) {
+      setFlowStepInternal(step, reason, now);
+      syncFear();
+    },
+    setAnswerGate(payload) {
+      state.answerGate = { ...state.answerGate, ...payload };
+    },
+    setLastTimestamps(payload) {
+      state.last = { ...state.last, ...payload };
+    },
+    setPreheatState(payload) {
+      state.preheat = { ...state.preheat, ...payload };
     }
   };
 }

@@ -22,6 +22,7 @@
 | 主頁整合入口 | `src/app/App.tsx`、`src/ui/scene/SceneView.tsx` | 系統初始化、畫面組裝、debug overlay |
 | Sandbox chat 語料池 | `src/sandbox/chat/chat_pools.ts` | `CHAT_POOLS` 10 池（2050 entries）與 Thai viewer 結構化欄位唯一來源 |
 | Sandbox chat 路由引擎 | `src/sandbox/chat/chat_engine.ts` | phase/SAN 驅動池路由、emit 節流、Thai/VIP 訊息輸出 |
+| Sandbox story flow gate | `src/modes/sandbox_story/sandboxStoryMode.ts` | `flow.questionIndex+step`、`introGate/preheat/answerGate/last` 單一路徑推進與去重 |
 
 ## Base path 規範
 
