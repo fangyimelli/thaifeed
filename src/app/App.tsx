@@ -281,6 +281,21 @@ function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
 }
 
+function sanitizeSandboxJoinName(raw: string): string {
+  const noControl = raw.replace(/[\u0000-\u001F\u007F]/gu, '');
+  const normalized = normalizeHandle(noControl).trim();
+  if (!normalized) return '';
+  return Array.from(normalized).slice(0, 24).join('');
+}
+
+function createSandboxPlayerId(handle: string): string {
+  let hash = 0;
+  for (let i = 0; i < handle.length; i += 1) {
+    hash = (hash * 31 + handle.charCodeAt(i)) >>> 0;
+  }
+  return `sandbox_player_${hash.toString(16)}_${Date.now().toString(36)}`;
+}
+
 function toHandleKey(raw: string): string {
   return normalizeHandle(raw).toLowerCase();
 }
@@ -969,6 +984,10 @@ export default function App() {
   const canSandboxEmitChat = useCallback((kind: 'GLITCH_BURST' | 'DEFAULT') => {
     if (modeRef.current.id !== 'sandbox_story') return true;
     const sandboxState = sandboxModeRef.current.getState();
+    if (!sandboxState.joinGate.satisfied) return false;
+    const sandboxForcedReplyActive = qnaStateRef.current.active.status === 'AWAITING_REPLY'
+      && Boolean(qnaStateRef.current.active.questionMessageId);
+    if (sandboxForcedReplyActive) return false;
     if (!sandboxState.freeze.frozen) return true;
     return kind === 'GLITCH_BURST' && sandboxState.glitchBurst.pending;
   }, []);
@@ -1279,7 +1298,13 @@ export default function App() {
     const mode = selectedMode === 'sandbox_story' ? sandboxModeRef.current : createClassicMode();
     modeRef.current = mode;
     mode.init();
-    sandboxModeRef.current.setPlayerIdentity({ handle: normalizeHandle(activeUserInitialHandleRef.current || '000') || '000', id: 'activeUser' });
+    if (selectedMode === 'sandbox_story') {
+      sandboxModeRef.current.setPlayerIdentity(null);
+      sandboxModeRef.current.setJoinGate({ satisfied: false, submittedAt: undefined });
+      sandboxModeRef.current.setFlowStep('PREJOIN', 'init_prejoin');
+    } else {
+      sandboxModeRef.current.setPlayerIdentity({ handle: normalizeHandle(activeUserInitialHandleRef.current || '000') || '000', id: 'activeUser' });
+    }
     return () => {
       mode.dispose();
     };
@@ -2686,7 +2711,7 @@ export default function App() {
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
       sandboxChatEngineRef.current?.setContext({
         san: state.curse,
-        playerHandle: normalizeHandle(sandboxState.player.handle || activeUserInitialHandleRef.current || '000') || '000',
+        playerHandle: normalizeHandle(sandboxState.player?.handle || activeUserInitialHandleRef.current || '000') || '000',
         phase: sandboxState.scheduler.phase,
         flowStep: sandboxState.flow.step,
         stepStartedAt: sandboxState.flow.stepStartedAt,
@@ -3965,6 +3990,71 @@ export default function App() {
     return true;
   }, []);
 
+  const onSandboxJoin = useCallback(async (rawName: string) => {
+    const sanitizedName = sanitizeSandboxJoinName(rawName);
+    if (!sanitizedName) return false;
+    const playerId = createSandboxPlayerId(sanitizedName);
+    const registered = registerActiveUser(sanitizedName);
+    if (!registered) return false;
+    const submittedAt = Date.now();
+    sandboxModeRef.current.setPlayerIdentity({ handle: sanitizedName, id: playerId });
+    sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt });
+    sandboxModeRef.current.setFlowStep('PREHEAT', 'sandbox_join_submitted', submittedAt);
+    sandboxModeRef.current.setIntroGate({ startedAt: submittedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
+    sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: submittedAt });
+    sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
+    sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
+    const greetingText = `@${sanitizedName} 第一次看嗎？`;
+    const messageId = crypto.randomUUID();
+    await runTagStartFlow({
+      tagMessage: {
+        id: messageId,
+        username: SANDBOX_VIP.handle,
+        type: 'chat',
+        text: greetingText,
+        language: 'zh',
+        translation: greetingText,
+        isVip: 'VIP_NORMAL',
+        role: SANDBOX_VIP.role,
+        badge: SANDBOX_VIP.badge,
+        tagTarget: SANDBOX_VIP.handle
+      },
+      pinnedText: greetingText,
+      shouldFreeze: true,
+      appendMessage: (message) => {
+        dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_join_gate_prompt' });
+      },
+      forceScrollToBottom: async ({ reason }) => {
+        setScrollMode('FOLLOW', `sandbox_join_${reason}`);
+        setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
+        setPendingForceScrollReason(`sandbox_join_${reason}`);
+        await nextAnimationFrame();
+      },
+      setPinnedReply: () => {
+        const askedAt = Date.now();
+        markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
+        lockStateRef.current = { isLocked: true, target: SANDBOX_VIP.handle, startedAt: askedAt, replyingToMessageId: messageId };
+        const pinnedOk = setPinnedQuestionMessage({
+          source: 'sandboxPromptCoordinator',
+          messageId,
+          hasTagToActiveUser: true
+        });
+        if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
+      },
+      freezeChat: ({ reason }) => {
+        const askedAt = Date.now();
+        sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
+        sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
+        setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
+        setPauseSetAt(askedAt);
+        setPauseReason(reason);
+        setScrollMode('FROZEN', reason);
+        setChatAutoPaused(true);
+      }
+    });
+    return true;
+  }, [nextAnimationFrame, registerActiveUser, setPinnedQuestionMessage, setScrollMode]);
+
   const emitAudioEnabledSystemMessageOnce = useCallback(() => {
     if (audioEnabledSystemMessageSentRef.current) return;
     audioEnabledSystemMessageSentRef.current = true;
@@ -4019,8 +4109,13 @@ export default function App() {
   }, [updateChatDebug]);
 
   const bootstrapAfterUsernameSubmit = useCallback(async (rawHandle: string, activatedBy: Exclude<BootstrapActivatedBy, null> = 'username_submit') => {
-    const registered = registerActiveUser(rawHandle);
-    if (!registered) return false;
+    if (modeIdRef.current === 'sandbox_story') {
+      const joined = await onSandboxJoin(rawHandle);
+      if (!joined) return false;
+    } else {
+      const registered = registerActiveUser(rawHandle);
+      if (!registered) return false;
+    }
     await ensureAudioUnlockedFromUserGesture();
     bootstrapRef.current = {
       isReady: true,
@@ -4048,7 +4143,7 @@ export default function App() {
       }
     } as Partial<NonNullable<Window['__CHAT_DEBUG__']>>);
     return true;
-  }, [emitAudioEnabledSystemMessageOnce, ensureAudioUnlockedFromUserGesture, registerActiveUser, updateChatDebug]);
+  }, [emitAudioEnabledSystemMessageOnce, ensureAudioUnlockedFromUserGesture, onSandboxJoin, registerActiveUser, updateChatDebug]);
 
   const emitNpcTagToActiveUser = useCallback(() => {
     const activeHandle = normalizeHandle(activeUserInitialHandleRef.current || '');

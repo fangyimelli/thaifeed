@@ -1,6 +1,7 @@
 import { SANDBOX_VIP } from './vip_identity';
 
 export type SandboxDirectorStep =
+  | 'PREJOIN'
   | 'PREHEAT'
   | 'ASK_CONSONANT'
   | 'WAIT_PLAYER_CONSONANT'
@@ -48,6 +49,7 @@ export class SandboxChatDirector {
   getChatMode(state: DirectorContext): DirectorMode {
     if (state.glitchBurst.pending) return 'GLITCH_BURST';
     if (state.freeze.frozen) return 'FROZEN';
+    if (state.flowStep === 'PREJOIN') return 'FROZEN';
     if (state.flowStep === 'PREHEAT') return 'PREHEAT';
     if (state.flowStep === 'REVEAL_WORD' || state.flowStep === 'WORD_RIOT' || state.flowStep === 'MEANING_GUESS') return 'REACTIVE';
     return 'RANDOM';

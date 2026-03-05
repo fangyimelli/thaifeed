@@ -116,3 +116,24 @@
 - `chat.lastBlockedSendAttempt.blockedReason`（期待可見 `sandbox_forced_reply_gate_active`）
 - `sandbox.lastWave.count`（WORD_RIOT 期望 5）
 
+
+## 2026-03-06 Patch Request：Join 前 0 output + Join 後未發言可被 @ + classic reply-to 強制 gate（sandbox only）
+
+### 變更摘要（sandbox only）
+- 新增 `PREJOIN` 與 `joinGate`，sandbox 初始化為 `joinGate.satisfied=false`、`player=null`、flow 停在 `PREJOIN`。
+- 新增 `onSandboxJoin(name)`：提交名稱即 sanitize 並立即建立 `player.id/player.handle`，同步寫入 active user（不再依賴玩家第一則訊息）。
+- join 完成後立刻由 VIP 發一則 `@玩家` 訊息，並用 classic 既有 reply-to path（`runTagStartFlow` + `ChatPanel.replyPinBar`）鎖定回覆。
+- 新增 sandbox 單一輸出總閘 `canSandboxEmitChat()`：
+  1) joinGate 未滿足 => 0 output
+  2) reply-to active => 0 output
+  3) 其他照既有 freeze/glitch 規則
+- 玩家回覆後才解除 reply-to/freeze，PREHEAT 才開始正常跑。
+- classic mode 未修改。
+
+### 驗收步驟（可重現）
+1. 進入 sandbox，不提交名稱：聊天室應維持 0 output（完全不動）。
+2. 提交名稱（尚未送任何聊天）：立即可見 VIP/mod `@玩家` 訊息（有 messageId，出現在聊天列表）。
+3. 同步出現 classic reply-to 回覆條（不可取消）；此時聊天室維持 0 output。
+4. 玩家送出一則非空回覆：reply-to 條消失，聊天室才開始 PREHEAT 正常節奏。
+5. 驗證根治：玩家 handle 建立時機在 join，不再依賴第一則玩家聊天訊息。
+6. 驗證 classic mode 未修改（行為不變）。
