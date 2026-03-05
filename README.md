@@ -171,6 +171,19 @@ npm run build
 
 - Deprecated（sandbox）：禁止 sandbox 期間送出任何 options 型訊息（包含 `（選項：...）` 與 payload `options`），違規訊息會被 emit gate 擋下並計數。
 
+## Sandbox Preheat Script（固定序列，sandbox only）
+
+- 新增 `src/sandbox/chat/preheat_script.ts`，以 `PREHEAT_SCRIPT` 固定時間序列（0ms~20000ms）保證開場聊天室演出，不依賴隨機池。
+- 固定序列保證：
+  - VIP 必定出場，且主動 `@{{PLAYER}}` 打招呼（emit 時替換成 `state.player.handle`）。
+  - 至少 2~3 則觀眾跟 VIP 接話。
+  - 至少 1 則「我覺得應該是假的吧」質疑訊息。
+- `introGate.passed=false`（前 30 秒）時：
+  - 禁止出題（`askSandboxConsonantNow()` hard gate）。
+  - 禁止子音 overlay（`commitPromptOverlay('')`）。
+- 固定序列播完後，預熱剩餘時間才回到 `casual/observation` 隨機聊天。
+- **classic mode 未修改。**
+
 ## Actor Pool Separation
 
 - `activeUser`（玩家）只能被 tag，不可被自動發言流程抽中。

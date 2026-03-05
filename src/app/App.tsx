@@ -2641,13 +2641,15 @@ export default function App() {
       const now = Date.now();
       modeRef.current.tick(now);
       const promptBeforeTick = sandboxModeRef.current.getCurrentPrompt();
-      sandboxModeRef.current.commitPromptOverlay(promptBeforeTick?.kind === 'consonant' ? promptBeforeTick.consonant : '');
       const sandboxState = sandboxModeRef.current.getState();
+      const canShowConsonantOverlay = sandboxState.introGate.passed;
+      sandboxModeRef.current.commitPromptOverlay(canShowConsonantOverlay && promptBeforeTick?.kind === 'consonant' ? promptBeforeTick.consonant : '');
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
       sandboxChatEngineRef.current?.setContext({
         san: state.curse,
         playerHandle: normalizeHandle(sandboxState.player.handle || activeUserInitialHandleRef.current || '000') || '000',
         phase: sandboxState.scheduler.phase,
+        introStartedAt: sandboxState.introGate.startedAt,
         isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'chatRiot'),
         freeze: sandboxState.freeze,
         glitchBurst: sandboxState.glitchBurst
@@ -2662,10 +2664,6 @@ export default function App() {
             const joinName = `viewer_${Math.floor(Math.random() * 899 + 100)}`;
             dispatchChatMessage({ id: crypto.randomUUID(), username: 'system', type: 'system', text: `${joinName} 加入聊天室`, language: 'zh' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_join' });
             sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
-          }
-          if (Math.random() < 0.18) {
-            const vipLine = 'VIP：先暖場一下，等等再進主題';
-            dispatchChatMessage({ id: crypto.randomUUID(), username: 'VIP', type: 'chat', text: vipLine, language: 'zh', translation: vipLine, isVip: 'VIP_NORMAL' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_vip_tag' });
           }
         }
         const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);

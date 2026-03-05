@@ -805,3 +805,27 @@
 - 4) 玩家回覆後 glitch burst 10 則，再 reveal 與後續流程：PASS
 - 5) 連跑至少 3 題，不再第 2 題卡住：PASS
 - 6) classic mode 未修改：PASS
+
+## 2026-03-05（sandbox only：Preheat Script 固定序列 + 30 秒出題硬門檻）
+
+### Scope / Isolation
+- 僅調整 sandbox 聊天與 sandbox 出題 gate；**classic mode 未修改**。
+
+### Changed
+- [sandbox/preheat-script] 新增 `src/sandbox/chat/preheat_script.ts`，導入 `PREHEAT_SCRIPT` 固定時間序列（0~20s，12 條）。
+- [sandbox/chat-engine] `src/sandbox/chat/chat_engine.ts` 在 `phase=intro` 期間改為逐條 dispatch 固定序列（`preheatScriptCursor` 單次發送），序列播完才回到 `casual_pool / observation_pool` 隨機聊天。
+- [sandbox/player-handle] sandbox chat context 新增 `introStartedAt`，並持續以 `state.player.handle` 替換 `{{PLAYER}}`，確保 VIP 可主動 `@玩家`。
+- [sandbox/overlay-gate] `src/app/App.tsx` 新增 `canShowConsonantOverlay=introGate.passed`，前 30 秒強制不顯示子音 overlay。
+- [sandbox/preheat-cleanup] 移除 preheat 階段隨機 VIP 暖場句，改由固定腳本保證演出順序與內容。
+
+### Debug 欄位變更紀錄
+- 既有欄位沿用並可驗證本次行為：
+  - `sandbox.introGate.startedAt/minDurationMs/passed/remainingMs`
+  - `sandbox.player.handle`
+  - `sandbox.prompt.overlay.consonantShown`
+
+### Acceptance
+- 1) 進 sandbox 0~20 秒：可見 VIP 主動 `@玩家`、熟客互動、質疑句：PASS
+- 2) 0~30 秒不出題且不顯示子音 overlay：PASS
+- 3) 30 秒到點才出第一題子音：PASS
+- 4) classic mode 未修改：PASS

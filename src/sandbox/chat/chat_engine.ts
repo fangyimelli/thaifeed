@@ -1,5 +1,6 @@
 import { SandboxUserGenerator } from './user_generator';
 import { CHAT_POOLS, assertChatPoolsCounts } from './chat_pools';
+import { PREHEAT_SCRIPT } from './preheat_script';
 
 const SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/] as const;
 const SANDBOX_POOL_REROLL_MAX = 5;
@@ -22,6 +23,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
+  introStartedAt: number;
   isEnding: boolean;
   freeze: { frozen: boolean; reason: 'NONE' | 'AWAIT_PLAYER_INPUT' };
   glitchBurst: { pending: boolean; remaining: number };
@@ -62,6 +64,7 @@ export class ChatEngine {
     san: 100,
     playerHandle: 'player',
     phase: 'boot',
+    introStartedAt: 0,
     isEnding: false,
     freeze: { frozen: false, reason: 'NONE' },
     glitchBurst: { pending: false, remaining: 0 }
@@ -75,6 +78,7 @@ export class ChatEngine {
   private waveTotal = 0;
   private collapseQueue: ChatMessage[] = [];
   private supernaturalQueue: ChatMessage[] = [];
+  private preheatScriptCursor = 0;
 
   constructor(options: ChatEngineOptions) {
     this.options = options;
@@ -111,6 +115,9 @@ export class ChatEngine {
     if (this.context.phase === 'vipTranslate' && this.lastPhase !== 'vipTranslate' && this.supernaturalQueue.length === 0) {
       this.supernaturalQueue = [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true)];
     }
+    if (this.context.phase === 'intro' && this.lastPhase !== 'intro') {
+      this.preheatScriptCursor = 0;
+    }
     this.lastPhase = this.context.phase;
     if (this.context.isEnding && this.collapseQueue.length === 0) {
       this.prepareCollapse();
@@ -133,6 +140,16 @@ export class ChatEngine {
 
     if (this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0) {
       return this.formatLine(this.pickStringPool('san_idle'));
+    }
+
+    if (this.context.phase === 'intro') {
+      const scripted = this.nextPreheatScriptMessage();
+      if (scripted) return scripted;
+      if (this.preheatScriptCursor >= PREHEAT_SCRIPT.length) {
+        return Math.random() < 0.5
+          ? this.formatLine(this.pickStringPool('casual_pool'))
+          : this.formatLine(this.pickStringPool('observation_pool'));
+      }
     }
 
     if (this.supernaturalQueue.length > 0) {
@@ -264,6 +281,22 @@ export class ChatEngine {
 
   private applyPlayerHandle(template: string): string {
     return template.replace(/\{\{PLAYER\}\}/g, `@${this.context.playerHandle}`).replace(/\$\{playerHandle\}/g, `@${this.context.playerHandle}`);
+  }
+
+
+  private nextPreheatScriptMessage(now = Date.now()): ChatMessage | null {
+    if (this.preheatScriptCursor >= PREHEAT_SCRIPT.length) return null;
+    const event = PREHEAT_SCRIPT[this.preheatScriptCursor];
+    if (!event) return null;
+    const introStartedAt = this.context.introStartedAt || now;
+    const elapsed = Math.max(0, now - introStartedAt);
+    if (elapsed < event.atMs) return null;
+    this.preheatScriptCursor += 1;
+    const text = this.applyPlayerHandle(event.text);
+    if (event.speaker === 'system') return this.formatLine(text, 'system', false);
+    if (event.speaker === 'vip') return this.formatLine(text, 'VIP', true);
+    if (event.speaker === 'mod') return this.formatLine(text, 'mod_live', false);
+    return this.formatLine(text, this.pickUser(), false);
   }
 
   private pickSupernaturalEvent(): SupernaturalEvent {
