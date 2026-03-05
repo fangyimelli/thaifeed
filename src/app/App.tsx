@@ -301,10 +301,12 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
-function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'awaitingWave' {
+function mapSandboxSchedulerPhase(phase: string): 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' {
   if (phase === 'awaitingAnswer') return 'awaitingAnswer';
   if (phase === 'revealingWord') return 'revealingWord';
-  if (phase === 'awaitingWave') return 'awaitingWave';
+  if (phase === 'chatRiot') return 'chatRiot';
+  if (phase === 'supernaturalEvent') return 'supernaturalEvent';
+  if (phase === 'vipTranslate') return 'vipTranslate';
   return 'awaitingTag';
 }
 
@@ -675,6 +677,8 @@ export default function App() {
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
   const sandboxConsonantTagOwnerRef = useRef<string>('mod_live');
   const sandboxWaveRunningRef = useRef(false);
+  const sandboxSupernaturalTimerRef = useRef<number | null>(null);
+  const sandboxVipTranslateTimerRef = useRef<number | null>(null);
   const sandboxRevealDoneTimerRef = useRef<number | null>(null);
   const sandboxAdvanceRetryTimerRef = useRef<number | null>(null);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
@@ -2549,12 +2553,15 @@ export default function App() {
         san: state.curse,
         playerHandle: normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player',
         phase: sandboxState.scheduler.phase,
-        isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'awaitingWave')
+        isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'chatRiot')
       });
       if (modeRef.current.id === 'sandbox_story') {
         const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);
         if (footstepRoll.shouldTrigger) {
           playSfx('footsteps', { reason: 'sandbox:fear_roll', source: 'event', allowBeforeStarterTag: true });
+        }
+        if (sandboxState.scheduler.phase !== 'awaitingAnswer' && Math.random() < 0.05) {
+          sandboxChatEngineRef.current?.triggerGhostHintEvent();
         }
       }
       if (modeRef.current.id === 'sandbox_story' && sandboxState.scheduler.phase === 'awaitingTag') {
@@ -3337,6 +3344,14 @@ export default function App() {
   useEffect(() => () => {
     clearSandboxAdvanceRetry();
     clearSandboxRevealDoneTimer();
+    if (sandboxSupernaturalTimerRef.current != null) {
+      window.clearTimeout(sandboxSupernaturalTimerRef.current);
+      sandboxSupernaturalTimerRef.current = null;
+    }
+    if (sandboxVipTranslateTimerRef.current != null) {
+      window.clearTimeout(sandboxVipTranslateTimerRef.current);
+      sandboxVipTranslateTimerRef.current = null;
+    }
   }, [clearSandboxAdvanceRetry, clearSandboxRevealDoneTimer]);
 
   const submitChat = useCallback(async (rawText: string, source: SendSource): Promise<SendResult> => {
@@ -4216,18 +4231,39 @@ export default function App() {
       sandboxRevealDoneTimerRef.current = window.setTimeout(() => {
         sandboxModeRef.current.forceRevealDone();
         sandboxModeRef.current.markRevealDone();
-        advanceSandboxPrompt('correct_done');
         setSandboxRevealTick(Date.now());
       }, remainMs);
     }
     if (reveal.visible && reveal.phase === 'done') {
       sandboxModeRef.current.markRevealDone();
-      advanceSandboxPrompt('correct_done');
       setSandboxRevealTick(Date.now());
       return;
     }
-    if (sandboxState.scheduler.phase === 'awaitingWave' && !sandboxWaveRunningRef.current) {
+    if (sandboxState.scheduler.phase === 'chatRiot' && !sandboxWaveRunningRef.current) {
       sandboxWaveRunningRef.current = true;
+    }
+    if (sandboxState.scheduler.phase === 'supernaturalEvent' && sandboxSupernaturalTimerRef.current == null) {
+      sandboxSupernaturalTimerRef.current = window.setTimeout(() => {
+        sandboxSupernaturalTimerRef.current = null;
+        sandboxModeRef.current.markSupernaturalDone();
+        setSandboxRevealTick(Date.now());
+      }, 1200);
+    }
+    if (sandboxState.scheduler.phase !== 'supernaturalEvent' && sandboxSupernaturalTimerRef.current != null) {
+      window.clearTimeout(sandboxSupernaturalTimerRef.current);
+      sandboxSupernaturalTimerRef.current = null;
+    }
+    if (sandboxState.scheduler.phase === 'vipTranslate' && sandboxVipTranslateTimerRef.current == null) {
+      sandboxVipTranslateTimerRef.current = window.setTimeout(() => {
+        sandboxVipTranslateTimerRef.current = null;
+        sandboxModeRef.current.markVipTranslateDone();
+        sandboxConsonantPromptNodeIdRef.current = null;
+        setSandboxRevealTick(Date.now());
+      }, 1000);
+    }
+    if (sandboxState.scheduler.phase !== 'vipTranslate' && sandboxVipTranslateTimerRef.current != null) {
+      window.clearTimeout(sandboxVipTranslateTimerRef.current);
+      sandboxVipTranslateTimerRef.current = null;
     }
     return () => {
       clearSandboxRevealDoneTimer();

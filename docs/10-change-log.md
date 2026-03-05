@@ -639,3 +639,8 @@
 ### Changed
 - `src/app/App.tsx` sandbox 模式接入新聊天引擎，改由 engine `start()/stop()/nextMessage()` 驅動訊息 append。
 - sandbox `awaitingWave` 不再走舊的本地 wave 迴圈，統一由 sandbox chat engine 輸出，避免新舊邏輯並存。
+
+## 2026-03-05（sandbox supernatural event system）
+- [sandbox_story/chat] 新增 `SUPERNATURAL_EVENTS` 事件池：`none(40%) / ghost_voice(20%) / tv_on(15%) / screen_glitch(15%) / footsteps(10%)`，並在答對後流程串接 `CHAT_RIOT -> SUPERNATURAL_EVENT -> VIP_TRANSLATE`。
+- [sandbox_story/chat] 新增 `GHOST_HINT_EVENT`（非答題期間可觸發 `ghost_voice/screen_glitch/tv_on`）與對應推理聊天室語料。
+- [sandbox_story/audio/story] `footsteps` 新增距離層級輸出（`footstep_far / footstep_mid / footstep_near`），不影響 NIGHT_01 與 quiz/consonant 主流程。

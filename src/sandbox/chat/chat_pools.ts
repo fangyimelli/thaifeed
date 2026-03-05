@@ -62,6 +62,12 @@ const VIP_END = ['先記住這條', '下一波應該會驗證', '這邊別漏看
 const FINAL_FEAR_START = ['為什麼要說別轉頭', '最後那句太毒', '像是在警告我們', '這結尾超不祥', '我現在不敢看背後'];
 const FINAL_FEAR_END = ['真的有人在後面', '像是下一秒就貼臉', '這不是玩笑', '整個房間都在聽', '收得太可怕了'];
 
+const VIP_TRANSLATE_OPEN = ['VIP 翻譯補充', 'VIP 快速翻譯', 'VIP 線索翻譯', 'VIP 即時翻譯'];
+const VIP_TRANSLATE_CORE = ['剛剛那段像是在提醒我們「往前拼」', '鬼聲像是回應上一個字', '畫面干擾和語音都在指向同一條線索', '它像在等我們把詞拼完整'];
+const VIP_TRANSLATE_END = ['先記住再往下解', '不要漏掉這條', '這很可能是關鍵提示', '先照這條走'];
+
+const GHOST_HINT_REASONING = ['鬼是不是在提示', '是不是在回應剛剛的字', '鬼是不是在等我們拼出什麼'] as const;
+
 const THAI_PHRASES = [
   { thai: 'บ้านนี้น่ากลัวมาก', translation: '這間房子很可怕' },
   { thai: 'อยุธยาคืนนี้เงียบผิดปกติ', translation: '今晚大城安靜得不正常' },
@@ -144,6 +150,14 @@ const final_fear = ensureUnique(
   (line) => line
 );
 
+const vip_translate = ensureUnique(
+  120,
+  (i) => `${VIP_TRANSLATE_OPEN[i % VIP_TRANSLATE_OPEN.length]}：${VIP_TRANSLATE_CORE[(i * 2) % VIP_TRANSLATE_CORE.length]}，${VIP_TRANSLATE_END[(i * 3) % VIP_TRANSLATE_END.length]} #${i + 1}`,
+  (line) => line
+);
+
+const ghost_hint_reasoning = [...GHOST_HINT_REASONING];
+
 export const CHAT_POOLS = {
   casual_pool,
   observation_pool,
@@ -154,5 +168,7 @@ export const CHAT_POOLS = {
   tag_player,
   san_idle,
   vip_summary,
-  final_fear
+  final_fear,
+  vip_translate,
+  ghost_hint_reasoning
 };
