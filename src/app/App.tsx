@@ -26,7 +26,7 @@ import { audioEngine } from '../audio/AudioEngine';
 import { SFX_REGISTRY } from '../audio/SfxRegistry';
 import { onSceneEvent } from '../core/systems/sceneEvents';
 import { requestSceneAction } from '../core/systems/sceneEvents';
-import { ChatEngine } from '../chat/ChatEngine';
+import { ChatEngine as ClassicChatEngine } from '../chat/ChatEngine';
 import { getChatLintReason, truncateLintText } from '../chat/ChatLint';
 import { SAFE_FALLBACK_POOL } from '../chat/ChatPools';
 import { collectActiveUsers } from '../core/systems/mentionV2';
@@ -58,6 +58,7 @@ import {
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, normalizeSandboxConsonantInput, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
+import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import { playPronounce } from '../ui/audio/PronounceAudio';
@@ -593,7 +594,8 @@ export default function App() {
   const eventWeightActiveUntilRef = useRef(0);
   const eventWeightRecoverUntilRef = useRef(0);
   const lastChatMessageAtRef = useRef(Date.now());
-  const chatEngineRef = useRef(new ChatEngine());
+  const chatEngineRef = useRef(new ClassicChatEngine());
+  const sandboxChatEngineRef = useRef<SandboxChatEngine | null>(null);
   const ghostLoreRef = useRef(createGhostLore());
   const lockStateRef = useRef<{ isLocked: boolean; target: string | null; startedAt: number; replyingToMessageId: string | null }>({
     isLocked: false,
@@ -1172,7 +1174,7 @@ export default function App() {
     };
   }, [state.messages]);
 
-  const emitChatEvent = (event: Parameters<ChatEngine['emit']>[0]) => {
+  const emitChatEvent = (event: Parameters<ClassicChatEngine['emit']>[0]) => {
     if (chatFreeze.isFrozen) {
       npcSpawnBlockedByFreezeRef.current += 1;
       return;
@@ -1199,6 +1201,43 @@ export default function App() {
       mode.dispose();
     };
   }, []);
+
+
+  const convertSandboxChatMessage = useCallback((message: { user: string; text: string; thai?: string; translation?: string; vip?: boolean }): ChatMessage => {
+    const [maybeUser, ...rest] = message.text.split(': ');
+    const parsedHasPrefix = maybeUser === message.user && rest.length > 0;
+    const text = parsedHasPrefix ? rest.join(': ') : message.text;
+    return {
+      id: crypto.randomUUID(),
+      username: message.user,
+      text,
+      language: message.thai ? 'th' : 'zh',
+      translation: message.translation,
+      type: 'chat',
+      isVip: message.vip ? 'VIP_NORMAL' : undefined
+    };
+  }, []);
+
+  useEffect(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    if (sandboxChatEngineRef.current) return;
+    sandboxChatEngineRef.current = new SandboxChatEngine({
+      onMessage: (message) => {
+        dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_chat_engine' });
+      },
+      onWaveResolved: (count) => {
+        sandboxModeRef.current.markWaveDone('related', count);
+        sandboxWaveRunningRef.current = false;
+        sandboxConsonantPromptNodeIdRef.current = null;
+        setSandboxRevealTick(Date.now());
+      }
+    });
+    sandboxChatEngineRef.current.start();
+    return () => {
+      sandboxChatEngineRef.current?.stop();
+      sandboxChatEngineRef.current = null;
+    };
+  }, [convertSandboxChatMessage]);
 
   const sortedMessages = useMemo(() => {
     const withIndex = state.messages.map((message, idx) => ({ message, idx }));
@@ -2506,6 +2545,12 @@ export default function App() {
       sandboxModeRef.current.commitPromptOverlay(promptBeforeTick?.kind === 'consonant' ? promptBeforeTick.consonant : '');
       const sandboxState = sandboxModeRef.current.getState();
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
+      sandboxChatEngineRef.current?.setContext({
+        san: state.curse,
+        playerHandle: normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player',
+        phase: sandboxState.scheduler.phase,
+        isEnding: Boolean(sandboxNode && sandboxState.nodeIndex >= sandboxModeRef.current.getSSOT().nodes.length - 1 && sandboxState.scheduler.phase === 'awaitingWave')
+      });
       if (modeRef.current.id === 'sandbox_story') {
         const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);
         if (footstepRoll.shouldTrigger) {
@@ -3407,6 +3452,7 @@ export default function App() {
         source: 'player_input',
         sourceTag: source
       });
+      sandboxChatEngineRef.current?.markPlayerReply(Date.now());
       const sandboxQnaConsumed = modeRef.current.id === 'sandbox_story' ? consumePlayerReply(outgoingText) : false;
       if (modeRef.current.id === 'sandbox_story') {
         modeRef.current.onPlayerReply(outgoingText);
@@ -4181,28 +4227,7 @@ export default function App() {
       return;
     }
     if (sandboxState.scheduler.phase === 'awaitingWave' && !sandboxWaveRunningRef.current) {
-      const waveNode = sandboxModeRef.current.getCurrentNode();
-      if (!waveNode) return;
       sandboxWaveRunningRef.current = true;
-      const waveCount = randomInt(3, 6);
-      const lines = waveNode.talkSeeds.related;
-      for (let i = 0; i < waveCount; i += 1) {
-        window.setTimeout(() => {
-          dispatchChatMessage({
-            id: crypto.randomUUID(),
-            username: pickOne(usernames),
-            text: pickOne(lines),
-            language: 'zh',
-            translation: pickOne(lines)
-          }, { source: 'sandbox_consonant', sourceTag: 'sandbox_related_wave' });
-          if (i === waveCount - 1) {
-            sandboxModeRef.current.markWaveDone('related', waveCount);
-            sandboxWaveRunningRef.current = false;
-            sandboxConsonantPromptNodeIdRef.current = null;
-            setSandboxRevealTick(Date.now());
-          }
-        }, i * randomInt(220, 360));
-      }
     }
     return () => {
       clearSandboxRevealDoneTimer();
