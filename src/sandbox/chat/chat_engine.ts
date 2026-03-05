@@ -9,7 +9,16 @@ export type ChatMessage = {
   vip?: boolean;
 };
 
-type StoryPhase = 'boot' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'awaitingWave';
+type StoryPhase =
+  | 'N1_INTRO_CHAT'
+  | 'N1_QUIZ_LOOP'
+  | 'N1_Q10_SPECIAL'
+  | 'N1_VIP_FINAL_TAG'
+  | 'N1_VIP_DISAPPEAR'
+  | 'N1_GHOST_ESCALATION'
+  | 'N1_CHAT_COLLAPSE'
+  | 'N1_BLACKOUT_ENDING'
+  | 'N1_GUESTHOUSE_TYPING';
 
 type ChatEngineContext = {
   san: number;
@@ -23,20 +32,37 @@ type ChatEngineOptions = {
   onWaveResolved?: (count: number) => void;
 };
 
+const INTRO_LINES: Array<{ user: string; text: string; vip?: boolean }> = [
+  { user: 'VIP', text: '晚安', vip: true },
+  { user: 'Kai', text: '又開了' },
+  { user: 'Nana', text: '今天有鬼嗎' },
+  { user: 'VIP', text: '不知道 看運氣', vip: true },
+  { user: 'Leo', text: '上次那次超誇張' },
+  { user: 'Kai', text: '對 上次門自己關' },
+  { user: 'VIP', text: '@玩家 第一次看嗎', vip: true },
+  { user: '觀眾', text: '新觀眾？' },
+  { user: '觀眾', text: '歡迎' },
+  { user: '觀眾', text: '先別被嚇到' },
+  { user: '觀眾', text: '這直播有時候真的很怪' },
+  { user: '觀眾', text: '真的假的啦' },
+  { user: '觀眾', text: '我覺得是假的' }
+];
+
 export class ChatEngine {
   private readonly options: ChatEngineOptions;
   private readonly userGen = new SandboxUserGenerator();
   private readonly users: string[] = [];
   private timer: number | null = null;
   private running = false;
-  private context: ChatEngineContext = { san: 100, playerHandle: 'player', phase: 'boot', isEnding: false };
+  private context: ChatEngineContext = { san: 100, playerHandle: 'player', phase: 'N1_INTRO_CHAT', isEnding: false };
   private messageCount = 0;
   private sinceThai = 0;
   private sinceVip = 0;
   private lastPlayerReplyAt = Date.now();
-  private lastPhase: StoryPhase = 'boot';
+  private lastPhase: StoryPhase = 'N1_INTRO_CHAT';
   private waveRemaining = 0;
-  private collapseQueue: ChatMessage[] = [];
+  private scriptedQueue: ChatMessage[] = [];
+  private introSent = false;
 
   constructor(options: ChatEngineOptions) {
     this.options = options;
@@ -60,13 +86,17 @@ export class ChatEngine {
 
   setContext(context: Partial<ChatEngineContext>): void {
     this.context = { ...this.context, ...context };
-    if (this.context.phase === 'awaitingWave' && this.lastPhase !== 'awaitingWave') {
+    if (this.context.phase === 'N1_INTRO_CHAT' && !this.introSent) {
+      this.scriptedQueue = INTRO_LINES.map((line) => this.formatLine(line.text, line.user, Boolean(line.vip)));
+      this.introSent = true;
+    }
+    if ((this.context.phase === 'N1_QUIZ_LOOP' || this.context.phase === 'N1_Q10_SPECIAL') && this.lastPhase !== this.context.phase) {
       this.waveRemaining = 3 + Math.floor(Math.random() * 4);
     }
-    this.lastPhase = this.context.phase;
-    if (this.context.isEnding && this.collapseQueue.length === 0) {
-      this.prepareCollapse();
+    if (this.context.phase !== this.lastPhase) {
+      this.enqueuePhaseScript(this.context.phase);
     }
+    this.lastPhase = this.context.phase;
   }
 
   markPlayerReply(at = Date.now()): void {
@@ -74,21 +104,19 @@ export class ChatEngine {
   }
 
   nextMessage(): ChatMessage | null {
-    if (this.collapseQueue.length > 0) {
-      return this.collapseQueue.shift() ?? null;
-    }
+    if (this.scriptedQueue.length > 0) return this.scriptedQueue.shift() ?? null;
+    if (this.context.phase === 'N1_INTRO_CHAT') return null;
 
-    if (Date.now() - this.lastPlayerReplyAt >= 10_000) {
-      this.lastPlayerReplyAt = Date.now();
-      return this.formatLine(this.pick('san_idle'));
-    }
-
-    if (this.waveRemaining > 0) {
-      this.waveRemaining -= 1;
-      if (this.waveRemaining === 0) {
-        this.options.onWaveResolved?.(3);
+    if (this.context.phase === 'N1_QUIZ_LOOP' || this.context.phase === 'N1_Q10_SPECIAL') {
+      if (Date.now() - this.lastPlayerReplyAt >= 10_000) {
+        this.lastPlayerReplyAt = Date.now();
+        return this.formatLine(this.pick('san_idle'));
       }
-      return this.formatLine(this.pick('observation_pool'));
+      if (this.waveRemaining > 0) {
+        this.waveRemaining -= 1;
+        if (this.waveRemaining === 0) this.options.onWaveResolved?.(3);
+        return this.formatLine(this.pick('observation_pool'));
+      }
     }
 
     this.sinceThai += 1;
@@ -99,32 +127,10 @@ export class ChatEngine {
       this.sinceVip = 0;
       return this.formatLine(this.pick('vip_summary'), 'VIP', true);
     }
-
     if (this.sinceThai >= this.randomRange(5, 8)) {
       this.sinceThai = 0;
       const line = this.pick('thai_viewer_pool');
-      return {
-        user: line.user,
-        text: `${line.user}: ${line.text}`,
-        thai: line.thai,
-        translation: line.translation
-      };
-    }
-
-    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.25) {
-      return this.formatLine(this.pick('tag_player').replace(/@player/g, `@${this.context.playerHandle}`));
-    }
-
-    if (this.context.phase === 'revealingWord' && Math.random() < 0.3) {
-      return this.formatLine(this.pick('guess_character'));
-    }
-
-    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.2) {
-      return this.formatLine(this.pick('theory_pool'));
-    }
-
-    if (this.context.isEnding && Math.random() < 0.55) {
-      return this.formatLine(this.pick('final_fear'));
+      return { user: line.user, text: `${line.user}: ${line.text}`, thai: line.thai, translation: line.translation };
     }
 
     const fearRate = this.context.san <= 35 ? 0.62 : this.context.san <= 60 ? 0.4 : 0.22;
@@ -133,24 +139,28 @@ export class ChatEngine {
     return this.formatLine(this.pick('casual_pool'));
   }
 
+  private enqueuePhaseScript(phase: StoryPhase) {
+    if (phase === 'N1_Q10_SPECIAL') {
+      this.scriptedQueue.push(this.formatLine('什麼意思'), this.formatLine('有人懂嗎'), this.formatLine('อย่าหัน', 'system'));
+      return;
+    }
+    if (phase === 'N1_VIP_FINAL_TAG') {
+      this.scriptedQueue.push(this.formatLine('等等 如果他真的在房子裡等 那他現在是在等誰', 'VIP', true), this.formatLine(`@${this.context.playerHandle} 你現在在哪裡看這個?`, 'VIP', true));
+      return;
+    }
+    if (phase === 'N1_VIP_DISAPPEAR') this.scriptedQueue.push(this.formatLine('VIP 已離開聊天室', 'system'));
+    if (phase === 'N1_GHOST_ESCALATION') this.scriptedQueue.push(this.formatLine('剛剛有聲音嗎'), this.formatLine('門是不是動了'), this.formatLine('誰在走路'), this.formatLine('風聲?'));
+    if (phase === 'N1_CHAT_COLLAPSE') this.scriptedQueue.push(this.formatLine('Kai 已離開聊天室', 'system'), this.formatLine('Nana 已離開聊天室', 'system'), this.formatLine('Leo 已離開聊天室', 'system'));
+    if (phase === 'N1_BLACKOUT_ENDING') this.scriptedQueue.push(this.formatLine('อย่าหัน', 'system'));
+    if (phase === 'N1_GUESTHOUSE_TYPING') this.scriptedQueue.push(this.formatLine('guest_house 正在加入聊天室', 'system'), this.formatLine('guest_house 正在輸入…', 'system'));
+  }
+
   private scheduleNext(): void {
     if (!this.running) return;
     const message = this.nextMessage();
     if (message) this.options.onMessage(message);
     const delay = this.randomRange(1500, 3000);
     this.timer = window.setTimeout(() => this.scheduleNext(), delay);
-  }
-
-  private prepareCollapse(): void {
-    const queue: ChatMessage[] = [
-      this.formatLine('@VIP 你還在嗎'),
-      this.formatLine('@VIP 說話啊'),
-      this.formatLine('@VIP 已離開聊天室', 'system', false),
-      this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false),
-      this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false),
-      this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false)
-    ];
-    this.collapseQueue = queue;
   }
 
   private formatLine(text: string, forcedUser?: string, vip = false): ChatMessage {

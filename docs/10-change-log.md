@@ -639,3 +639,12 @@
 ### Changed
 - `src/app/App.tsx` sandbox 模式接入新聊天引擎，改由 engine `start()/stop()/nextMessage()` 驅動訊息 append。
 - sandbox `awaitingWave` 不再走舊的本地 wave 迴圈，統一由 sandbox chat engine 輸出，避免新舊邏輯並存。
+
+## 2026-03-05（sandbox_story NIGHT_01 Story Phase Gate）
+
+- [sandbox/story-phase] `src/modes/sandbox_story/sandboxStoryMode.ts` 新增 `story.phase`（`N1_INTRO_CHAT` 到 `N1_GUESTHOUSE_TYPING`）與 `story.quizStep`，並在 `tick()` 內加上 30 秒 intro gate，確保第一題不會提早出現。
+- [sandbox/flow-gate] `src/app/App.tsx` 的 sandbox 發題與答題入口改為同時檢查 `story.phase + scheduler.phase`，僅在 `N1_QUIZ_LOOP/N1_Q10_SPECIAL + awaitingTag/awaitingAnswer` 可進入 challenge 流程。
+- [sandbox/ending] `sandboxStoryMode` 新增 NIGHT_01 後段 phase 時序（`N1_VIP_FINAL_TAG -> ... -> N1_GUESTHOUSE_TYPING`），並讓 chat engine 讀 `story.phase` 進行 scripted 輸出。
+- [sandbox/chat-script] `src/sandbox/chat/chat_engine.ts` 導入固定開場聊天室腳本（VIP/Kai/Nana/Leo/觀眾），在 `N1_INTRO_CHAT` 期間禁止 challenge 相關節奏輸出，並加入 Q10/結尾 scripted line。
+- [sandbox/ssot] `src/data/night1_words.ts` 更新 NIGHT_01 題庫為 1-9 + Q10 特殊題（`ห/หัน`），並加入 woman/girl/boy 同義詞到 unknown keywords。
+- [debug] 新增 `window.__CHAT_DEBUG__.sandbox.story.phase/phaseEnteredAt/quizStep` 觀測欄位（SSOT 與 debug 欄位異動已同步）。
