@@ -12,6 +12,8 @@ export type ChatMessage = {
   subtype?: 'join';
   translation?: string;
   isVip?: 'VIP_NORMAL' | 'VIP_STILL_HERE';
+  role?: 'viewer' | 'vip' | 'mod';
+  badge?: 'crown';
   isSelf?: boolean;
   showTranslation?: boolean;
   donateAmount?: number;

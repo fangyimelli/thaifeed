@@ -174,9 +174,10 @@ npm run build
 ## Sandbox Preheat Script（固定序列，sandbox only）
 
 - 新增 `src/sandbox/chat/preheat_script.ts`，以 `PREHEAT_SCRIPT` 固定時間序列（0ms~20000ms）保證開場聊天室演出，不依賴隨機池。
+- Sandbox VIP identity 固定為 `src/sandbox/chat/vip_identity.ts`：`👑 behindyou`（`id=sandbox_vip_behindyou`、`role=vip`、`badge=crown`）。
 - 固定序列保證：
-  - VIP 必定出場，且主動 `@{{PLAYER}}` 打招呼（emit 時替換成 `state.player.handle`）。
-  - 至少 2~3 則觀眾跟 VIP 接話。
+  - `👑 behindyou` 必定出場，且主動 `@{{PLAYER}}` 打招呼（emit 時替換成 `state.player.handle`）。
+  - 至少 2~3 則觀眾跟 `@behindyou` 接話。
   - 至少 1 則「我覺得應該是假的吧」質疑訊息。
 - `introGate.passed=false`（前 30 秒）時：
   - 禁止出題（`askSandboxConsonantNow()` hard gate）。

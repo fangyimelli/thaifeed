@@ -813,6 +813,7 @@
 
 ### Changed
 - [sandbox/preheat-script] 新增 `src/sandbox/chat/preheat_script.ts`，導入 `PREHEAT_SCRIPT` 固定時間序列（0~20s，12 條）。
+- [sandbox/vip-identity] 新增 `src/sandbox/chat/vip_identity.ts`，Sandbox VIP SSOT 固定為 `👑 behindyou`（`id=sandbox_vip_behindyou`、`role=vip`、`badge=crown`），移除隨機/字串型 VIP 帳號來源。
 - [sandbox/chat-engine] `src/sandbox/chat/chat_engine.ts` 在 `phase=intro` 期間改為逐條 dispatch 固定序列（`preheatScriptCursor` 單次發送），序列播完才回到 `casual_pool / observation_pool` 隨機聊天。
 - [sandbox/player-handle] sandbox chat context 新增 `introStartedAt`，並持續以 `state.player.handle` 替換 `{{PLAYER}}`，確保 VIP 可主動 `@玩家`。
 - [sandbox/overlay-gate] `src/app/App.tsx` 新增 `canShowConsonantOverlay=introGate.passed`，前 30 秒強制不顯示子音 overlay。

@@ -1,6 +1,7 @@
 import { SandboxUserGenerator } from './user_generator';
 import { CHAT_POOLS, assertChatPoolsCounts } from './chat_pools';
 import { PREHEAT_SCRIPT } from './preheat_script';
+import { SANDBOX_VIP } from './vip_identity';
 
 const SANDBOX_BANNED_PATTERNS = [/回頭/, /轉頭/] as const;
 const SANDBOX_POOL_REROLL_MAX = 5;
@@ -11,6 +12,8 @@ export type ChatMessage = {
   thai?: string;
   translation?: string;
   vip?: boolean;
+  role?: 'viewer' | 'vip' | 'mod';
+  badge?: 'crown';
 };
 
 type StoryPhase = 'boot' | 'intro' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' | 'reasoningPhase' | 'tagPlayerPhase';
@@ -86,7 +89,6 @@ export class ChatEngine {
       assertChatPoolsCounts();
     }
     for (let i = 0; i < 16; i += 1) this.users.push(this.userGen.next());
-    this.users.push('VIP');
   }
 
   start(): void {
@@ -113,7 +115,7 @@ export class ChatEngine {
       this.supernaturalQueue = this.buildSupernaturalQueue();
     }
     if (this.context.phase === 'vipTranslate' && this.lastPhase !== 'vipTranslate' && this.supernaturalQueue.length === 0) {
-      this.supernaturalQueue = [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true)];
+      this.supernaturalQueue = [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), SANDBOX_VIP.handle, true)];
     }
     if (this.context.phase === 'intro' && this.lastPhase !== 'intro') {
       this.preheatScriptCursor = 0;
@@ -179,7 +181,7 @@ export class ChatEngine {
 
     if (this.sinceVip >= this.randomRange(15, 25)) {
       this.sinceVip = 0;
-      return this.formatLine(this.pickStringPool('vip_summary'), 'VIP', true);
+      return this.formatLine(this.pickStringPool('vip_summary'), SANDBOX_VIP.handle, true);
     }
 
     if (this.sinceThai >= this.randomRange(5, 8)) {
@@ -236,9 +238,9 @@ export class ChatEngine {
 
   private prepareCollapse(): void {
     const queue: ChatMessage[] = [
-      this.formatLine('@VIP 你還在嗎'),
-      this.formatLine('@VIP 說話啊'),
-      this.formatLine('@VIP 已離開聊天室', 'system', false),
+      this.formatLine(`@${SANDBOX_VIP.handle} 你還在嗎`),
+      this.formatLine(`@${SANDBOX_VIP.handle} 說話啊`),
+      this.formatLine(`@${SANDBOX_VIP.handle} 已離開聊天室`, 'system', false),
       this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false),
       this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false),
       this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false)
@@ -268,14 +270,14 @@ export class ChatEngine {
 
   private buildSupernaturalQueue(): ChatMessage[] {
     const eventType = this.pickSupernaturalEvent();
-    if (eventType === 'none') return [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true)];
+    if (eventType === 'none') return [this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), SANDBOX_VIP.handle, true)];
     const queue: ChatMessage[] = [];
     queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${eventType.toUpperCase()}`, 'system', false));
     if (eventType === 'footsteps') {
       queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${this.pickFootstepDistance().toUpperCase()}`, 'system', false));
     }
     queue.push(this.formatLine(this.pickStringPool('fear_pool')));
-    queue.push(this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), 'VIP', true));
+    queue.push(this.formatLine(this.pickSafeArray(VIP_TRANSLATE_LINES), SANDBOX_VIP.handle, true));
     return queue;
   }
 
@@ -294,7 +296,7 @@ export class ChatEngine {
     this.preheatScriptCursor += 1;
     const text = this.applyPlayerHandle(event.text);
     if (event.speaker === 'system') return this.formatLine(text, 'system', false);
-    if (event.speaker === 'vip') return this.formatLine(text, 'VIP', true);
+    if (event.speaker === 'vip' || event.speaker === SANDBOX_VIP) return this.formatLine(text, SANDBOX_VIP.handle, true);
     if (event.speaker === 'mod') return this.formatLine(text, 'mod_live', false);
     return this.formatLine(text, this.pickUser(), false);
   }
@@ -318,7 +320,25 @@ export class ChatEngine {
 
   private formatLine(text: string, forcedUser?: string, vip = false): ChatMessage {
     const user = forcedUser ?? this.pickUser();
-    return { user, text: `${user}: ${text}`, translation: text, vip };
+    const normalizedText = this.normalizeVipText(text);
+    if (vip) {
+      return {
+        user: SANDBOX_VIP.handle,
+        text: `${SANDBOX_VIP.handle}: ${normalizedText}`,
+        translation: normalizedText,
+        vip: true,
+        role: SANDBOX_VIP.role,
+        badge: SANDBOX_VIP.badge
+      };
+    }
+    const role = user === 'mod_live' ? 'mod' : user === 'system' ? undefined : 'viewer';
+    return { user, text: `${user}: ${normalizedText}`, translation: normalizedText, vip, role };
+  }
+
+  private normalizeVipText(text: string): string {
+    return text
+      .replace(/@VIP\b/g, `@${SANDBOX_VIP.handle}`)
+      .replace(/\bVIP\b/g, SANDBOX_VIP.handle);
   }
 
   private pick<K extends keyof typeof CHAT_POOLS>(key: K): (typeof CHAT_POOLS)[K][number] {
