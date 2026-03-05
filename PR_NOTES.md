@@ -1,22 +1,21 @@
 ## Summary
-- sandbox 問答節奏改為嚴格 step 驅動：`PREHEAT -> ASK_CONSONANT -> WAIT_PLAYER_* -> GLITCH_BURST -> REVEAL_WORD -> ... -> ADVANCE_NEXT`。
-- introGate 30 秒硬門檻確實生效；預熱期只閒聊，不出題、不顯示子音、不 tag 玩家進題。
-- WAIT_PLAYER_CONSONANT / WAIT_PLAYER_MEANING 送出問句後立即 freeze，聊天室 0 output。
-- 玩家回覆後才觸發 glitchBurst（10 則、250~450ms），刷完才繼續 reveal/後續鏈。
-- 新增 sandbox 語料禁字過濾（`回頭`、`轉頭`），命中重抽最多 5 次，失敗 fallback。
-- **classic mode 完全未修改**。
+- 新增 sandbox 固定暖場腳本 `PREHEAT_SCRIPT`（12 條、0~20 秒），不再依賴隨機池決定開場戲。
+- sandbox chat engine 在 `PREHEAT` 階段改為按時間逐條派發固定序列（每條只發一次），腳本播完後才回到 `casual/observation` 隨機聊天。
+- 固定序列保證包含：VIP 主動 `@玩家`、VIP 熟客台詞、觀眾與 VIP 接話、以及「我覺得應該是假的吧」質疑句。
+- 前 30 秒維持硬 gate：禁止出題、禁止子音 overlay；30 秒到點後才允許第一題子音。
+- sandbox 初始化與 context 持續使用 `state.player.handle`（fallback `000`）做 `{{PLAYER}}` 替換，玩家不需先發言即可被 VIP @。
+- **classic mode 未修改**。
 
 ## Debug 欄位變更紀錄
-- `sandbox.flow.step`（含 transition log：`prev -> next`）。
-- `sandbox.introGate.passed/remainingMs`。
-- `sandbox.freeze.frozen/reason/frozenAt`。
-- `sandbox.glitchBurst.pending/remaining/lastEmitAt`。
-- `sandbox.flow.questionIndex`。
+- 本次沿用既有 debug 欄位進行驗收：
+  - `sandbox.introGate.startedAt/minDurationMs/passed/remainingMs`
+  - `sandbox.player.handle`
+  - `sandbox.prompt.overlay.consonantShown`
+- 補充：preheat 固定序列為 chat engine 內部 cursor 控制（`preheatScriptCursor`），不新增外部 debug schema，避免破壞既有面板相容性。
 
 ## 驗收步驟
-1. 進 sandbox，前 30 秒觀察：只預熱閒聊，不出題。
-2. 30 秒到點：才出第一題子音。
-3. 問玩家後：聊天室完全停止輸出，直到玩家回覆。
-4. 玩家回覆：立即 glitch 10 則，再進 revealWord/riot/vipTranslate/guess/next。
-5. 連跑 3 題：第 2 題後不再卡住，且每題都經過 revealWord。
-6. 檢查語料：不出現「回頭/轉頭」。
+1. 進 sandbox 後觀察 0~20 秒：一定出現 VIP 主動 `@玩家` 打招呼。
+2. 同一段預熱內可見 2~3 則觀眾和 VIP 互動，且至少 1 則質疑「我覺得應該是假的吧」。
+3. 0~30 秒確認沒有子音題問句，debug `sandbox.prompt.overlay.consonantShown` 維持空字串。
+4. 30 秒到點後才會進 `ASK_CONSONANT` 並顯示第一題子音。
+5. classic mode 跑一般流程，行為不變。
