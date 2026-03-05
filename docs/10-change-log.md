@@ -1,3 +1,35 @@
+## 2026-03-05（sandbox NIGHT_01 P0：intro gate + forced pipeline + revisit queue + timeout copy + options guard）
+
+### Scope / Isolation
+- 僅調整 sandbox_story 與 sandbox chat engine；classic mode 無邏輯變更。
+
+### Changed
+- [sandbox/state] `SandboxStoryState` 新增 `introGate`（`startedAt/minDurationMs/passed/remainingMs`）、`pendingQuestions`（FIFO queue + revisiting）、`pipeline`（reasoning/tag 追蹤）；`init()` phase 改為 `intro`。
+- [sandbox/intro] `tick()` 內更新 intro gate；僅 gate 通過才會進入 `awaitingTag` 並觸發出題。
+- [sandbox/pipeline] 新增 `reasoningPhase`、`tagPlayerPhase`，`vipTranslate` 後固定經過 `reasoning -> tag -> next`，不再隨機缺步。
+- [sandbox/revisit] tag 回覆未命中 `woman/girl/boy` 時 enqueue 當前題；`next` 前優先回補 pending 題，命中後才 dequeue。
+- [sandbox/timeout] `tagPlayerPhase` 新增 8~12 秒 timeout 固定文案（卡住四連）；玩家回覆後固定 recovery 文案（終於三連）。
+- [sandbox/options-guard] sandbox emit 層阻擋 `options payload` 與 `選項：` 句型，並累積 debug `blockedOptionsCount`。
+- [sandbox/chat-engine] `onWaveResolved` 改回傳實際 wave 長度；新增 `emitReasoningWave()` / `emitTagPlayerPrompt()`。
+
+### SSOT / Debug 欄位變更
+- SSOT changed：sandbox flow 新增 `intro/reasoning/tagPlayer` 狀態節點，移除「推理/tag 玩家隨機噴」分叉。
+- Debug 新增/調整：
+  - `sandbox.introGate.*`
+  - `sandbox.pendingQuestions.length/revisiting`
+  - `sandbox.blockedOptionsCount`
+  - `sandbox.scheduler.phase` 可見 `reasoningPhase/tagPlayerPhase`
+
+### Removed / Deprecated
+- Deprecated（sandbox）：所有 options 型輸出（payload `options` 或 `選項：...`）在 sandbox 一律 blocked。
+
+### Acceptance
+- 1) intro 30 秒內不出題：PASS
+- 2) 每輪固定經過 reasoning + tag：PASS
+- 3) 未命中分類會先跳題後回補直到命中：PASS
+- 4) tag timeout/recovery 固定文案：PASS
+- 5) sandbox 不再出現「選項：...」：PASS
+
 ## 2026-03-05（sandbox only：chat pools corpus expansion）
 
 ### Changed

@@ -9,7 +9,7 @@ export type ChatMessage = {
   vip?: boolean;
 };
 
-type StoryPhase = 'boot' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate';
+type StoryPhase = 'boot' | 'intro' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' | 'reasoningPhase' | 'tagPlayerPhase';
 
 type SupernaturalEvent = 'none' | 'ghost_voice' | 'tv_on' | 'screen_glitch' | 'footsteps';
 type GhostHintEvent = 'ghost_voice' | 'screen_glitch' | 'tv_on';
@@ -50,6 +50,7 @@ export class ChatEngine {
   private lastPlayerReplyAt = Date.now();
   private lastPhase: StoryPhase = 'boot';
   private waveRemaining = 0;
+  private waveTotal = 0;
   private collapseQueue: ChatMessage[] = [];
   private supernaturalQueue: ChatMessage[] = [];
 
@@ -77,6 +78,7 @@ export class ChatEngine {
     this.context = { ...this.context, ...context };
     if (this.context.phase === 'chatRiot' && this.lastPhase !== 'chatRiot') {
       this.waveRemaining = 3 + Math.floor(Math.random() * 4);
+      this.waveTotal = this.waveRemaining;
     }
     if (this.context.phase === 'supernaturalEvent' && this.lastPhase !== 'supernaturalEvent') {
       this.supernaturalQueue = this.buildSupernaturalQueue();
@@ -116,7 +118,7 @@ export class ChatEngine {
     if (this.waveRemaining > 0) {
       this.waveRemaining -= 1;
       if (this.waveRemaining === 0) {
-        this.options.onWaveResolved?.(3);
+        this.options.onWaveResolved?.(this.waveTotal);
       }
       return this.formatLine(this.pick('observation_pool'));
     }
@@ -191,6 +193,16 @@ export class ChatEngine {
       queue.push(this.formatLine(this.pick('ghost_hint_reasoning')));
     }
     return queue;
+  }
+
+  emitReasoningWave(count = 2): ChatMessage[] {
+    const size = Math.max(1, Math.min(4, count));
+    return Array.from({ length: size }).map(() => this.formatLine(this.pick('ghost_hint_reasoning')));
+  }
+
+  emitTagPlayerPrompt(): ChatMessage {
+    const line = this.pick('tag_player').replace(/@player/g, `@${this.context.playerHandle}`);
+    return this.formatLine(line, 'mod_live');
   }
 
   private buildSupernaturalQueue(): ChatMessage[] {
