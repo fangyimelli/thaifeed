@@ -55,6 +55,14 @@ npm run build
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
 - [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
+## Sandbox 與 Classic 子音判定同源（2026-03-05）
+
+- sandbox 子音流程（parse / judge / hint / state transition）改為透過 `parseAndJudgeUsingClassic()` 走 classic 同一套核心；sandbox 只做 thin adapter 顯示，不再自行覆寫結果。
+- 修正重大誤判：`consonant=ร` 時輸入 `บ` 現在固定 `wrong`，不再因 keyword shortcut 被判定 `correct`。
+- 新增 parity 驗證：每次 sandbox 判定同步輸出 `sandbox.judge.result`、`classic.judge.result`、`sandboxClassicParity`；若 mismatch，直接以 classic 結果覆寫並標記 `blockedReason=parity_mismatch`。
+- Debug Tester 保留 `ForceCorrect`，但改為「按鈕觸發一次性 override」：`sandbox.judge.debugOverride.active/source/consumedAt` 可驗證，且不污染一般玩家輸入。
+- unknown 提示與 pinned prompt 均沿用 classic 產生器，sandbox 不再自行改寫文案。
+
 ## Sandbox 換題鎖定規則（2026-03-04）
 
 - 只允許兩種情況換題：
@@ -78,6 +86,7 @@ npm run build
 ### Removed / Deprecated Log
 
 - 已移除「debug PASS 只改 state、不走引擎流程」舊行為。
+- 已移除一般輸入流程中可能導致 `debug_apply_correct / keyword shortcut => correct` 的捷徑判定；僅保留 debug 按鈕一次性 override。
 - 已移除 ChatPanel 的 `fallback_click` 提交分流與 Enter 直送第二路徑，改為單一路徑 form submit handler。
 - 原因：會造成 reveal/prompt 推進分叉，導致 PASS 後卡題，且在部份裝置觸發重複提交。
 

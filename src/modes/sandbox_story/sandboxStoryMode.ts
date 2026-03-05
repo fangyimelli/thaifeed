@@ -107,6 +107,16 @@ export type SandboxStoryState = {
   advance: { inFlight: boolean; lastToken: string; lastAt: number; lastReason: string; blockedReason: string };
   audio: { lastKey: string; state: 'playing' | 'idle' | 'error'; reason: string };
   hint: { active: boolean; lastText: string; count: number; lastShownAt: number; source: '' | 'classic_shared' };
+  parity: {
+    sandboxJudgeResult: 'correct' | 'wrong' | 'unknown' | 'pass' | 'timeout' | 'none';
+    classicJudgeResult: 'correct' | 'wrong' | 'unknown' | 'pass' | 'timeout' | 'none';
+    sandboxClassicParity: boolean;
+  };
+  debugOverride: {
+    active: boolean;
+    source: '' | 'button';
+    consumedAt: number;
+  };
   prompt: {
     current: SandboxPrompt | null;
     overlay: { consonantShown: string };
@@ -141,6 +151,7 @@ export type SandboxStoryMode = GameMode & {
     input: string;
     parsed: { ok: boolean; matchedChar?: string; debug?: { kind?: string; matchedAlias?: string; inputNorm?: string; inputRaw?: string; matched?: string; blockedReason?: string; normalize?: { allowedSetsHit?: { latin?: boolean; bopomofo?: boolean; thai?: boolean; cjk?: boolean } } } };
     judge: 'correct' | 'wrong' | 'unknown' | 'pass' | 'timeout';
+    classicJudgeResult?: 'correct' | 'wrong' | 'unknown' | 'pass' | 'timeout';
   }) => void;
   getFearDebugState: () => SandboxFearDebugState;
   canTriggerGhostMotion: (ctx: { qnaType: 'consonant' | 'comprehension'; answerResult: 'correct' | 'wrong' | 'unknown' }) => SandboxGhostGateResult;
@@ -150,6 +161,7 @@ export type SandboxStoryMode = GameMode & {
   markRevealDone: () => void;
   forceRevealDone: () => void;
   applyCorrect: (payload?: { input?: string; matchedChar?: string }) => void;
+  activateDebugOverride: (source?: 'button') => void;
   advancePrompt: (reason: string) => void;
   markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
@@ -234,6 +246,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     advance: { inFlight: false, lastToken: '', lastAt: 0, lastReason: '', blockedReason: '' },
     audio: { lastKey: '', state: 'idle', reason: '' },
     hint: { active: false, lastText: '', count: 0, lastShownAt: 0, source: '' },
+    parity: { sandboxJudgeResult: 'none', classicJudgeResult: 'none', sandboxClassicParity: true },
+    debugOverride: { active: false, source: '', consumedAt: 0 },
     prompt: {
       current: null,
       overlay: { consonantShown: '' },
@@ -510,6 +524,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         blockedReason: result.parsed.debug?.blockedReason ?? ''
       };
       state.consonant.judge = { ...state.consonant.judge, lastInput: result.input, lastResult: result.judge };
+      const classicJudgeResult = result.classicJudgeResult ?? result.judge;
+      state.parity = {
+        sandboxJudgeResult: result.judge,
+        classicJudgeResult,
+        sandboxClassicParity: result.judge === classicJudgeResult
+      };
       if (state.consonant.parse.blockedReason === 'input_sanitized_to_empty') {
         state.advance.blockedReason = 'input_sanitized_to_empty';
       } else if ((result.parsed.debug?.kind ?? '') === 'none' || (!result.parsed.ok && result.judge !== 'pass')) {
@@ -585,7 +605,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.consonant.parse = {
         ok: true,
         matchedChar: payload?.matchedChar ?? node?.char ?? '',
-        kind: 'debug_apply_correct',
+        kind: state.debugOverride.active ? 'debug_apply_correct' : 'manual_apply_correct',
         matchedAlias: '',
         inputNorm: payload?.input ?? '',
         inputRaw: payload?.input ?? '',
@@ -598,8 +618,14 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         lastInput: payload?.input ?? state.consonant.judge.lastInput,
         lastResult: 'correct'
       };
+      if (state.debugOverride.active) {
+        state.debugOverride = { ...state.debugOverride, active: false, consumedAt: Date.now() };
+      }
       startReveal('correct');
       syncFear();
+    },
+    activateDebugOverride(source = 'button') {
+      state.debugOverride = { active: true, source, consumedAt: 0 };
     },
     advancePrompt(reason) {
       if (reason !== 'correct_done' && reason !== 'debug_pass') {

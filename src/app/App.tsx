@@ -57,8 +57,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt, judgeClassicConsonantAnswer, normalizeSandboxConsonantInput, tryParseClassicConsonantAnswer } from '../modes/sandbox_story/classicConsonantAdapter';
-import { buildConsonantHint } from '../shared/hints/consonantHint';
+import { getClassicConsonantPrompt, normalizeSandboxConsonantInput, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import { playPronounce } from '../ui/audio/PronounceAudio';
@@ -2642,6 +2641,16 @@ export default function App() {
           pass: {
             clickedAt: sandboxDebugPassRef.current.clickedAt,
             action: sandboxDebugPassRef.current.action
+          },
+          override: {
+            active: sandboxState.debugOverride.active,
+            source: sandboxState.debugOverride.source || '-',
+            consumedAt: sandboxState.debugOverride.consumedAt || 0
+          },
+          parity: {
+            sandboxJudgeResult: sandboxState.parity.sandboxJudgeResult,
+            classicJudgeResult: sandboxState.parity.classicJudgeResult,
+            sandboxClassicParity: sandboxState.parity.sandboxClassicParity
           }
         },
         promptNext: {
@@ -3267,8 +3276,9 @@ export default function App() {
     setSandboxRevealTick(Date.now());
   }, [clearChatFreeze]);
 
-  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string } }) => {
-    const hintLine = buildConsonantHint({ expected: params.currentPrompt.consonant, aliases: [params.currentPrompt.consonant] });
+  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string }; hintText?: string }) => {
+    const hintLine = params.hintText?.trim() || '';
+    if (!hintLine) return;
     sandboxModeRef.current.commitHintText(hintLine, 'classic_shared');
     dispatchChatMessage({
       id: crypto.randomUUID(),
@@ -3409,39 +3419,61 @@ export default function App() {
           : null;
         if (sandboxState.scheduler.phase === 'awaitingAnswer' && node && currentPrompt?.kind === 'consonant') {
           const normalizedInput = normalizeSandboxConsonantInput(raw);
-          const parsed = tryParseClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
-          const parseKind = parsed.debug?.kind ?? '';
-          let judge = judgeClassicConsonantAnswer(raw, { nodeChar: currentPrompt.consonant, node });
+          const classic = parseAndJudgeUsingClassic(raw, { nodeChar: currentPrompt.consonant, node });
+          const parsed = {
+            ...classic.parsed,
+            debug: {
+              ...(classic.parsed.debug ?? {}),
+              inputRaw: normalizedInput.raw,
+              inputNorm: normalizedInput.norm,
+              normalize: normalizedInput
+            }
+          };
+          let judge = classic.result;
+          const classicJudgeResult = classic.result;
+          let parityBlockedReason = '';
+
           if (!normalizedInput.norm) {
             parsed.debug = {
               ...(parsed.debug ?? {}),
-              inputRaw: normalizedInput.raw,
-              inputNorm: normalizedInput.norm,
-              blockedReason: 'input_sanitized_to_empty',
-              normalize: normalizedInput
+              blockedReason: 'input_sanitized_to_empty'
             };
-            sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge: 'wrong' });
-            showHintForCurrentPrompt({
-              judge: 'wrong',
-              currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey }
-            });
+            judge = 'wrong';
+          }
+
+          const parseKind = parsed.debug?.kind ?? '';
+          if ((parseKind === 'none') || (!parsed.ok && parseKind !== 'pass' && judge !== 'unknown')) {
+            judge = judge === 'unknown' ? 'unknown' : 'wrong';
+            sandboxModeRef.current.commitAdvanceBlockedReason('parse_none');
+          }
+
+          const sandboxClassicParity = judge === classicJudgeResult;
+          if (!sandboxClassicParity) {
+            parityBlockedReason = 'parity_mismatch';
+            judge = classicJudgeResult;
+            sandboxModeRef.current.commitAdvanceBlockedReason('parity_mismatch');
+          }
+
+          sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge, classicJudgeResult });
+          updateChatDebug({
+            sandbox: {
+              judge: {
+                result: judge,
+                classicResult: classicJudgeResult,
+                sandboxClassicParity,
+                blockedReason: parityBlockedReason || '-'
+              }
+            }
+          } as any);
+
+          if (!normalizedInput.norm) {
             sendCooldownUntil.current = Date.now() + 350;
             tagSlowActiveRef.current = false;
             setInput('');
             setSandboxRevealTick(Date.now());
             return markSent('sandbox_consonant_blocked_empty');
           }
-          if ((parseKind === 'none') || (!parsed.ok && parseKind !== 'pass')) {
-            judge = judge === 'unknown' ? 'unknown' : 'wrong';
-            sandboxModeRef.current.commitAdvanceBlockedReason('parse_none');
-          }
-          parsed.debug = {
-            ...(parsed.debug ?? {}),
-            inputRaw: normalizedInput.raw,
-            inputNorm: normalizedInput.norm,
-            normalize: normalizedInput
-          };
-          sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed, judge });
+
           if (judge === 'pass') {
             advanceSandboxPrompt('debug_pass');
             clearReplyUi('sandbox_consonant_pass');
@@ -3457,7 +3489,8 @@ export default function App() {
           }
           showHintForCurrentPrompt({
             judge: judge === 'unknown' ? 'unknown' : 'wrong',
-            currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey }
+            currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey },
+            hintText: classic.hintText ?? ''
           });
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
@@ -4044,6 +4077,15 @@ export default function App() {
     setInput('');
     setSandboxRevealTick(Date.now());
   }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze]);
+
+
+  const handleSandboxDebugForceCorrect = useCallback(() => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
+    if (currentPrompt?.kind !== 'consonant') return;
+    sandboxModeRef.current.activateDebugOverride('button');
+    applySandboxCorrect({ input: '[debug-force-correct]', matchedChar: currentPrompt.consonant, source: 'debug_button' });
+  }, [applySandboxCorrect]);
 
   const forceResolveQna = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -4632,6 +4674,7 @@ export default function App() {
                       Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
                     </button>
                     <button type="button" onClick={handleSandboxDebugPass}>PASS (advancePrompt)</button>
+                    <button type="button" onClick={handleSandboxDebugForceCorrect}>ForceCorrect (debug override)</button>
                     <button type="button" onClick={forceResolveQna}>ForceResolveQna</button>
                     <button type="button" onClick={handleClearReplyUi}>ClearReplyUi</button>
                     <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>
@@ -4765,6 +4808,13 @@ export default function App() {
                     <div>sandbox.reveal.doneAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.doneAt ?? 0}</div>
                     <div>debug.pass.clickedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.clickedAt ?? 0}</div>
                     <div>debug.pass.action: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.action ?? 'none'}</div>
+                    <div>sandbox.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.result ?? '-'}</div>
+                    <div>classic.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.classicResult ?? '-'}</div>
+                    <div>sandboxClassicParity: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.sandboxClassicParity ?? true)}</div>
+                    <div>sandbox.judge.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.blockedReason ?? '-'}</div>
+                    <div>sandbox.judge.debugOverride.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.active ?? false)}</div>
+                    <div>sandbox.judge.debugOverride.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.source ?? '-'}</div>
+                    <div>sandbox.judge.debugOverride.consumedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.consumedAt ?? 0}</div>
                     <div>sandbox.prompt.overlay.consonantShown: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.overlay?.consonantShown ?? '-'}</div>
                     <div>sandbox.prompt.pinned.promptIdRendered: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.promptIdRendered ?? '-'}</div>
                     <div>sandbox.prompt.mismatch: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.mismatch ?? false)}</div>

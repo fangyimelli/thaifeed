@@ -1,3 +1,31 @@
+## 2026-03-05（sandbox only：classic consonant parity + debug override isolation）
+
+### 變更摘要
+- [adapter] 新增 `parseAndJudgeUsingClassic()` 並把 sandbox 子音 parse/judge/hint/flow 全數改走 classic 核心回傳。
+- [bugfix] 修正 `consonant=ร` + `input=บ` 被誤判 correct 的重大問題，正常輸入不再落入 `debug_apply_correct / keyword` 快捷路徑。
+- [debug] 新增 parity 與 override 監控：`sandbox.judge.result`、`classic.judge.result`、`sandboxClassicParity`、`sandbox.judge.debugOverride.*`。
+- [debug tester] 新增 `ForceCorrect (debug override)` 按鈕；override 僅一次有效，consume 後清除。
+- [docs] README / change-log 同步更新；`.github/pull_request_template.md` 與 `PR_NOTES.md` 持續存在。
+
+### SSOT / Debug 欄位
+- SSOT：sandbox 判定邏輯改為 classic 單一路徑（adapter thin wrapper）。
+- Debug 新增：
+  - `sandbox.judge.result`
+  - `classic.judge.result`
+  - `sandboxClassicParity`
+  - `sandbox.judge.blockedReason`
+  - `sandbox.judge.debugOverride.active/source/consumedAt`
+
+### 驗收
+| Item | Result |
+|---|---|
+| 1) 題目=ร，輸入=บ → wrong | PASS |
+| 2) unknown（不知道）顯示 classic 提示且不跳題 | PASS |
+| 3) correct 流程節奏與 classic 一致 | PASS |
+| 4) 未按 debug 按鈕不會出現 debug_apply_correct | PASS |
+| 5) sandboxClassicParity 維持 true | PASS |
+| 6) Classic Isolation（classic 行為不變） | PASS |
+
 ## 2026-03-04（sandbox only：currentPrompt SSOT + pass keyword fix）
 
 ### Changed
