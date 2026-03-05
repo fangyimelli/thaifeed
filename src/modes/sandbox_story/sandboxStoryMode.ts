@@ -62,6 +62,9 @@ export type SandboxPrompt =
 
 export type SandboxStoryState = {
   nodeIndex: number;
+  lastCategory: 'woman' | 'girl' | 'boy' | null;
+  pendingDisambiguation: { active: boolean; attempts: number; promptId: string };
+  q10Special: { armed: boolean; revealed: boolean };
   introGate: { startedAt: number; minDurationMs: number; passed: boolean; remainingMs: number };
   pendingQuestions: { queue: string[]; revisiting: boolean };
   pipeline: { reasoningCount: number; tagPrompted: boolean };
@@ -176,6 +179,9 @@ export type SandboxStoryMode = GameMode & {
   markVipTranslateDone: () => void;
   markReasoningDone: (count: number) => void;
   resolveTagPlayerPhase: (result: 'hit' | 'miss') => void;
+  commitLastCategory: (category: 'woman' | 'girl' | 'boy' | null) => void;
+  setPendingDisambiguation: (payload: { active: boolean; attempts: number; promptId?: string }) => void;
+  setQ10SpecialState: (payload: { armed?: boolean; revealed?: boolean }) => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
   notifyBlockedByPhase: () => void;
   commitAdvanceBlockedReason: (reason: string) => void;
@@ -213,6 +219,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const REVEAL_DURATION_MS = 4000;
   const state: SandboxStoryState = {
     nodeIndex: 0,
+    lastCategory: null,
+    pendingDisambiguation: { active: false, attempts: 0, promptId: '' },
+    q10Special: { armed: false, revealed: false },
     introGate: { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 },
     pendingQuestions: { queue: [], revisiting: false },
     pipeline: { reasoningCount: 0, tagPrompted: false },
@@ -462,6 +471,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       nextLinearNodeIndex = 1;
       state.introGate = { startedAt: Date.now(), minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
       state.pendingQuestions = { queue: [], revisiting: false };
+      state.lastCategory = null;
+      state.pendingDisambiguation = { active: false, attempts: 0, promptId: '' };
+      state.q10Special = { armed: false, revealed: false };
       state.pipeline = { reasoningCount: 0, tagPrompted: false };
       state.scheduler.phase = 'intro';
       clearSchedulerBlockedReason();
@@ -549,6 +561,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       nextLinearNodeIndex = 1;
       state.introGate = { startedAt: Date.now(), minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
       state.pendingQuestions = { queue: [], revisiting: false };
+      state.lastCategory = null;
+      state.pendingDisambiguation = { active: false, attempts: 0, promptId: '' };
+      state.q10Special = { armed: false, revealed: false };
       state.pipeline = { reasoningCount: 0, tagPrompted: false };
       state.scheduler.phase = 'intro';
       clearSchedulerBlockedReason();
@@ -644,6 +659,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     markRevealDone() {
       state.reveal.doneAt = state.reveal.doneAt || Date.now();
       if (state.reveal.mode === 'correct') {
+        state.q10Special.armed = state.nodeIndex === 9;
+        state.q10Special.revealed = false;
         state.scheduler.phase = 'chatRiot';
       } else {
         state.scheduler.phase = 'awaitingAnswer';
@@ -724,6 +741,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     markReasoningDone(count) {
       state.pipeline.reasoningCount = count;
+      state.pendingDisambiguation = { active: false, attempts: 0, promptId: '' };
       state.scheduler.phase = 'tagPlayerPhase';
       clearSchedulerBlockedReason();
       syncFear();
@@ -731,6 +749,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     resolveTagPlayerPhase(result) {
       if (result !== 'hit') {
         enqueueCurrentNodeForRevisit();
+        state.pendingDisambiguation = {
+          active: false,
+          attempts: 0,
+          promptId: ''
+        };
       } else if (state.pendingQuestions.queue.length > 0 && state.pendingQuestions.revisiting) {
         const currentNode = getCurrentNode();
         if (currentNode && state.pendingQuestions.queue[0] === currentNode.id) {
@@ -744,6 +767,22 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       }
       state.pipeline.tagPrompted = true;
       advancePromptInternal(`tagPlayer:${result}`, token);
+    },
+    commitLastCategory(category) {
+      state.lastCategory = category;
+    },
+    setPendingDisambiguation(payload) {
+      state.pendingDisambiguation = {
+        active: payload.active,
+        attempts: Math.max(0, payload.attempts),
+        promptId: payload.promptId ?? state.pendingDisambiguation.promptId
+      };
+    },
+    setQ10SpecialState(payload) {
+      state.q10Special = {
+        armed: payload.armed ?? state.q10Special.armed,
+        revealed: payload.revealed ?? state.q10Special.revealed
+      };
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
     notifyBlockedByPhase() {

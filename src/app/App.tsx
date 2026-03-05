@@ -59,6 +59,7 @@ import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, normalizeSandboxConsonantInput, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
+import { characterDisambiguation } from '../sandbox/chat/characterDisambiguation';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import { playPronounce } from '../ui/audio/PronounceAudio';
@@ -1528,9 +1529,37 @@ export default function App() {
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
       if (sandboxState.scheduler.phase === 'tagPlayerPhase') {
-        const stripped = raw.replace(/^[\s\u3000]*@[^\s\u3000]+[\s\u3000]*/u, '').trim().toLowerCase();
-        const isHit = /(woman|girl|boy)/u.test(stripped);
-        sandboxModeRef.current.resolveTagPlayerPhase(isHit ? 'hit' : 'miss');
+        const stripped = raw.replace(/^[\s\u3000]*@[^\s\u3000]+[\s\u3000]*/u, '').trim();
+        const matchedCategory = characterDisambiguation.matchCategory(stripped);
+        const pending = sandboxState.pendingDisambiguation;
+        const currentPromptId = sandboxState.prompt.current?.promptId ?? `tag-${sandboxState.nodeIndex}`;
+        if (matchedCategory) {
+          sandboxModeRef.current.commitLastCategory(matchedCategory);
+          sandboxModeRef.current.setPendingDisambiguation({ active: false, attempts: 0, promptId: currentPromptId });
+          sandboxModeRef.current.resolveTagPlayerPhase('hit');
+          setSandboxRevealTick(Date.now());
+          return true;
+        }
+        if (!pending.active) {
+          sandboxModeRef.current.setPendingDisambiguation({ active: true, attempts: 1, promptId: currentPromptId });
+          dispatchChatMessage({
+            id: crypto.randomUUID(),
+            username: 'mod_live',
+            type: 'chat',
+            text: `@${activeUserInitialHandleRef.current || '玩家'} 你是在說誰??????`,
+            language: 'zh',
+            translation: `@${activeUserInitialHandleRef.current || '玩家'} 你是在說誰??????`
+          }, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_disambiguation' });
+          setSandboxRevealTick(Date.now());
+          return true;
+        }
+        if (pending.attempts >= 1) {
+          sandboxModeRef.current.setPendingDisambiguation({ active: false, attempts: 2, promptId: currentPromptId });
+          sandboxModeRef.current.resolveTagPlayerPhase('miss');
+          setSandboxRevealTick(Date.now());
+          return true;
+        }
+        sandboxModeRef.current.setPendingDisambiguation({ active: true, attempts: pending.attempts + 1, promptId: currentPromptId });
         setSandboxRevealTick(Date.now());
         return true;
       }
@@ -2697,6 +2726,18 @@ export default function App() {
         pendingQuestions: {
           length: sandboxState.pendingQuestions.queue.length,
           revisiting: sandboxState.pendingQuestions.revisiting
+        },
+        lastCategory: sandboxState.lastCategory ?? '-',
+        pendingDisambiguation: {
+          active: sandboxState.pendingDisambiguation.active,
+          attempts: sandboxState.pendingDisambiguation.attempts,
+          promptId: sandboxState.pendingDisambiguation.promptId || '-'
+        },
+        q10Special: {
+          armed: sandboxState.q10Special.armed,
+          revealed: sandboxState.q10Special.revealed,
+          currentQuestion: sandboxState.nodeIndex + 1,
+          allowInject: sandboxState.nodeIndex === 9 && sandboxState.scheduler.phase === 'vipTranslate'
         },
         blockedOptionsCount: sandboxBlockedOptionsCountRef.current,
         judge: {
@@ -4372,6 +4413,20 @@ export default function App() {
       sandboxSupernaturalTimerRef.current = null;
     }
     if (sandboxState.scheduler.phase === 'vipTranslate' && sandboxVipTranslateTimerRef.current == null) {
+      const q10SpecialAllowed = sandboxState.nodeIndex === 9;
+      if (q10SpecialAllowed && sandboxState.q10Special.armed && !sandboxState.q10Special.revealed) {
+        const specialId = crypto.randomUUID();
+        dispatchChatMessage({
+          id: specialId,
+          username: 'VIP',
+          type: 'chat',
+          text: 'อย่าหัน',
+          language: 'th',
+          translation: '[橘色]別轉頭[/橘色]',
+          isVip: 'VIP_NORMAL'
+        }, { source: 'sandbox_consonant', sourceTag: 'sandbox_q10_special' });
+        sandboxModeRef.current.setQ10SpecialState({ revealed: true });
+      }
       sandboxVipTranslateTimerRef.current = window.setTimeout(() => {
         sandboxVipTranslateTimerRef.current = null;
         sandboxModeRef.current.markVipTranslateDone();
@@ -4392,7 +4447,7 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.scheduler.phase === 'tagPlayerPhase' && sandboxTagPhaseTimeoutRef.current == null) {
-      const prompt = sandboxChatEngineRef.current?.emitTagPlayerPrompt() ?? { user: 'mod_live', text: 'mod_live: 你先說你覺得是 woman/girl/boy 哪個？' };
+      const prompt = sandboxChatEngineRef.current?.emitTagPlayerPrompt() ?? { user: 'mod_live', text: 'mod_live: @player 你是在說誰??????' };
       dispatchChatMessage(convertSandboxChatMessage(prompt), { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_phase' });
       const timeoutLines = ['奇怪', '我訊息送不出去', '聊天室卡住?', '網路怪怪的'];
       sandboxTagPhaseTimeoutRef.current = window.setTimeout(() => {
@@ -5004,6 +5059,13 @@ export default function App() {
                     <div>introGate.remainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.introGate?.remainingMs ?? '-'}</div>
                     <div>pendingQuestions.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.length ?? 0}</div>
                     <div>pendingQuestions.revisiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.revisiting ?? false)}</div>
+                    <div>sandbox.lastCategory: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastCategory ?? '-'}</div>
+                    <div>pendingDisambiguation.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingDisambiguation?.active ?? false)}</div>
+                    <div>pendingDisambiguation.attempts: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingDisambiguation?.attempts ?? 0}</div>
+                    <div>q10Special.armed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.armed ?? false)}</div>
+                    <div>q10Special.revealed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.revealed ?? false)}</div>
+                    <div>q10Special.currentQuestion: {(window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.currentQuestion ?? '-'}</div>
+                    <div>q10Special.allowInject: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.allowInject ?? false)}</div>
                     <div>blockedOptionsCount: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedOptionsCount ?? 0}</div>
                     <div>sandbox.currentPrompt.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.id ?? '-'}</div>
                     <div>sandbox.currentPrompt.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.consonant ?? '-'}</div>

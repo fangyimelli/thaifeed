@@ -171,6 +171,7 @@ body {
 .msg { color: #f1f3f4; word-break: break-word; flex: 1; }
 .translation-actions { margin: 2px 0 0 22px; }
 .translation { margin: 3px 0 0 22px; color: #9ecbff; font-size: 13px; }
+.translation.translation-orange { color: #ff9a3c; font-weight: 600; }
 .crown { width: 14px; height: 14px; }
 .vip.VIP_NORMAL .name { color: #f7d87b; }
 .vip.VIP_STILL_HERE .name { color: #c9b8ff; }
