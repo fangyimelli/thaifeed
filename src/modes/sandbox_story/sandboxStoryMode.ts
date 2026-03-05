@@ -7,7 +7,9 @@ export type SandboxStoryPhase =
   | 'awaitingTag'
   | 'awaitingAnswer'
   | 'revealingWord'
-  | 'awaitingWave';
+  | 'chatRiot'
+  | 'supernaturalEvent'
+  | 'vipTranslate';
 
 export type SandboxRevealPhase = 'idle' | 'enter' | 'pulse' | 'exit' | 'done';
 export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
@@ -164,6 +166,8 @@ export type SandboxStoryMode = GameMode & {
   activateDebugOverride: (source?: 'button') => void;
   advancePrompt: (reason: string) => void;
   markWaveDone: (kind: 'related' | 'surprise' | 'guess', count: number) => void;
+  markSupernaturalDone: () => void;
+  markVipTranslateDone: () => void;
   setPronounceState: (state: 'playing' | 'idle' | 'error', payload?: { key?: string; reason?: string }) => void;
   notifyBlockedByPhase: () => void;
   commitAdvanceBlockedReason: (reason: string) => void;
@@ -482,7 +486,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     forceWave(kind) {
       state.wave.kind = kind;
-      state.scheduler.phase = 'awaitingTag';
+      state.scheduler.phase = 'chatRiot';
       clearSchedulerBlockedReason();
       syncFear();
     },
@@ -585,7 +589,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     markRevealDone() {
       state.reveal.doneAt = state.reveal.doneAt || Date.now();
       if (state.reveal.mode === 'correct') {
-        state.scheduler.phase = 'awaitingWave';
+        state.scheduler.phase = 'chatRiot';
       } else {
         state.scheduler.phase = 'awaitingAnswer';
       }
@@ -648,13 +652,23 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       advancePromptInternal(reason, token);
     },
     markWaveDone(kind, count) {
-      const token = `wave:${kind}:${count}:${state.prompt.current?.promptId ?? 'none'}:${state.nodeIndex}`;
+      state.wave = { kind, count };
+      state.scheduler.phase = 'supernaturalEvent';
+      clearSchedulerBlockedReason();
+      syncFear();
+    },
+    markSupernaturalDone() {
+      state.scheduler.phase = 'vipTranslate';
+      clearSchedulerBlockedReason();
+      syncFear();
+    },
+    markVipTranslateDone() {
+      const token = `vipTranslate:${state.prompt.current?.promptId ?? 'none'}:${state.nodeIndex}`;
       if (state.advance.inFlight || state.advance.lastToken === token) {
         state.advance = { ...state.advance, blockedReason: 'double_advance', lastReason: 'blocked', lastAt: Date.now() };
         return;
       }
-      state.wave = { kind, count };
-      advancePromptInternal(`markWaveDone:${kind}:${count}`, token);
+      advancePromptInternal('vipTranslateDone', token);
     },
     setPronounceState(nextState, payload) { state.audio = { state: nextState, lastKey: payload?.key ?? state.audio.lastKey, reason: payload?.reason ?? '' }; },
     notifyBlockedByPhase() {

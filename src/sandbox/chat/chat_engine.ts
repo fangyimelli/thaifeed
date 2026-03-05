@@ -9,7 +9,11 @@ export type ChatMessage = {
   vip?: boolean;
 };
 
-type StoryPhase = 'boot' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'awaitingWave';
+type StoryPhase = 'boot' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate';
+
+type SupernaturalEvent = 'none' | 'ghost_voice' | 'tv_on' | 'screen_glitch' | 'footsteps';
+type GhostHintEvent = 'ghost_voice' | 'screen_glitch' | 'tv_on';
+type FootstepDistance = 'footstep_far' | 'footstep_mid' | 'footstep_near';
 
 type ChatEngineContext = {
   san: number;
@@ -22,6 +26,16 @@ type ChatEngineOptions = {
   onMessage: (message: ChatMessage) => void;
   onWaveResolved?: (count: number) => void;
 };
+
+const SUPERNATURAL_POOL: Array<{ type: SupernaturalEvent; weight: number }> = [
+  { type: 'none', weight: 40 },
+  { type: 'ghost_voice', weight: 20 },
+  { type: 'tv_on', weight: 15 },
+  { type: 'screen_glitch', weight: 15 },
+  { type: 'footsteps', weight: 10 }
+];
+
+const GHOST_HINT_POOL: GhostHintEvent[] = ['ghost_voice', 'screen_glitch', 'tv_on'];
 
 export class ChatEngine {
   private readonly options: ChatEngineOptions;
@@ -37,6 +51,7 @@ export class ChatEngine {
   private lastPhase: StoryPhase = 'boot';
   private waveRemaining = 0;
   private collapseQueue: ChatMessage[] = [];
+  private supernaturalQueue: ChatMessage[] = [];
 
   constructor(options: ChatEngineOptions) {
     this.options = options;
@@ -60,8 +75,14 @@ export class ChatEngine {
 
   setContext(context: Partial<ChatEngineContext>): void {
     this.context = { ...this.context, ...context };
-    if (this.context.phase === 'awaitingWave' && this.lastPhase !== 'awaitingWave') {
+    if (this.context.phase === 'chatRiot' && this.lastPhase !== 'chatRiot') {
       this.waveRemaining = 3 + Math.floor(Math.random() * 4);
+    }
+    if (this.context.phase === 'supernaturalEvent' && this.lastPhase !== 'supernaturalEvent') {
+      this.supernaturalQueue = this.buildSupernaturalQueue();
+    }
+    if (this.context.phase === 'vipTranslate' && this.lastPhase !== 'vipTranslate' && this.supernaturalQueue.length === 0) {
+      this.supernaturalQueue = [this.formatLine(this.pick('vip_translate'), 'VIP', true)];
     }
     this.lastPhase = this.context.phase;
     if (this.context.isEnding && this.collapseQueue.length === 0) {
@@ -73,7 +94,16 @@ export class ChatEngine {
     this.lastPlayerReplyAt = at;
   }
 
+  triggerGhostHintEvent(): void {
+    if (this.context.phase === 'awaitingAnswer') return;
+    this.supernaturalQueue = [...this.supernaturalQueue, ...this.buildGhostHintQueue()];
+  }
+
   nextMessage(): ChatMessage | null {
+    if (this.supernaturalQueue.length > 0) {
+      return this.supernaturalQueue.shift() ?? null;
+    }
+
     if (this.collapseQueue.length > 0) {
       return this.collapseQueue.shift() ?? null;
     }
@@ -151,6 +181,46 @@ export class ChatEngine {
       this.formatLine(`${this.pickUser()} 已離開聊天室`, 'system', false)
     ];
     this.collapseQueue = queue;
+  }
+
+  private buildGhostHintQueue(): ChatMessage[] {
+    const hint = GHOST_HINT_POOL[Math.floor(Math.random() * GHOST_HINT_POOL.length)] ?? 'ghost_voice';
+    const queue: ChatMessage[] = [];
+    queue.push(this.formatLine(`[GHOST_HINT_EVENT] ${hint.toUpperCase()}`, 'system', false));
+    for (let i = 0; i < 3; i += 1) {
+      queue.push(this.formatLine(this.pick('ghost_hint_reasoning')));
+    }
+    return queue;
+  }
+
+  private buildSupernaturalQueue(): ChatMessage[] {
+    const eventType = this.pickSupernaturalEvent();
+    if (eventType === 'none') return [this.formatLine(this.pick('vip_translate'), 'VIP', true)];
+    const queue: ChatMessage[] = [];
+    queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${eventType.toUpperCase()}`, 'system', false));
+    if (eventType === 'footsteps') {
+      queue.push(this.formatLine(`[SUPERNATURAL_EVENT] ${this.pickFootstepDistance().toUpperCase()}`, 'system', false));
+    }
+    queue.push(this.formatLine(this.pick('fear_pool')));
+    queue.push(this.formatLine(this.pick('vip_translate'), 'VIP', true));
+    return queue;
+  }
+
+  private pickSupernaturalEvent(): SupernaturalEvent {
+    const totalWeight = SUPERNATURAL_POOL.reduce((acc, item) => acc + item.weight, 0);
+    let roll = Math.random() * totalWeight;
+    for (const item of SUPERNATURAL_POOL) {
+      roll -= item.weight;
+      if (roll <= 0) return item.type;
+    }
+    return 'none';
+  }
+
+  private pickFootstepDistance(): FootstepDistance {
+    const roll = Math.random();
+    if (roll < 0.34) return 'footstep_far';
+    if (roll < 0.67) return 'footstep_mid';
+    return 'footstep_near';
   }
 
   private formatLine(text: string, forcedUser?: string, vip = false): ChatMessage {

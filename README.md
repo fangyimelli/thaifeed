@@ -1775,3 +1775,13 @@ Console（debug 模式）可觀察：
 - 新增 sandbox 專用聊天室訊息生成系統，透過 `src/sandbox/chat/chat_engine.ts` 以 1.5~3 秒節奏自動產生訊息。
 - 支援一般觀眾、恐懼升級、中泰混合、tag 玩家、角色猜測、VIP 摘要與結尾崩潰流程。
 - 使用 `src/sandbox/chat/user_generator.ts` 生成不重複的 PTT/Twitch 風格帳號。
+
+## 2026-03-05 sandbox supernatural event system
+- sandbox story 新增 `SUPERNATURAL_EVENTS` 事件池（`none/ghost_voice/tv_on/screen_glitch/footsteps`）與固定權重：40% / 20% / 15% / 15% / 10%。
+- 答對題目後流程調整為：`PLAYER_CORRECT -> REVEAL_WORD_FRAGMENT -> CHAT_RIOT -> SUPERNATURAL_EVENT -> VIP_TRANSLATE`。
+- 新增 `GHOST_HINT_EVENT`（非答題階段可觸發），包含 `ghost_voice/screen_glitch/tv_on`，聊天室會產生推理句：
+  - 鬼是不是在提示
+  - 是不是在回應剛剛的字
+  - 鬼是不是在等我們拼出什麼
+- `footsteps` 新增距離分層輸出：`footstep_far / footstep_mid / footstep_near`。
+- NIGHT_01 phase 與 supernatural events 已在 sandbox flow 整合，並維持 quiz/consonant 主流程不被破壞（只在 `chatRiot/supernaturalEvent/vipTranslate` 鏈條中插入）。
