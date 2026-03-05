@@ -60,6 +60,7 @@ import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt 
 import { getClassicConsonantPrompt, normalizeSandboxConsonantInput, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { characterDisambiguation } from '../sandbox/chat/characterDisambiguation';
+import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import { playPronounce } from '../ui/audio/PronounceAudio';
@@ -1252,7 +1253,7 @@ export default function App() {
   }, []);
 
 
-  const convertSandboxChatMessage = useCallback((message: { user: string; text: string; thai?: string; translation?: string; vip?: boolean }): ChatMessage => {
+  const convertSandboxChatMessage = useCallback((message: { user: string; text: string; thai?: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown' }): ChatMessage => {
     const [maybeUser, ...rest] = message.text.split(': ');
     const parsedHasPrefix = maybeUser === message.user && rest.length > 0;
     const text = parsedHasPrefix ? rest.join(': ') : message.text;
@@ -1263,7 +1264,9 @@ export default function App() {
       language: message.thai ? 'th' : 'zh',
       translation: message.translation,
       type: 'chat',
-      isVip: message.vip ? 'VIP_NORMAL' : undefined
+      isVip: message.vip ? 'VIP_NORMAL' : undefined,
+      role: message.role,
+      badge: message.badge
     };
   }, []);
 
@@ -4482,8 +4485,8 @@ export default function App() {
     }
     if (sandboxState.flow.step === 'VIP_TRANSLATE') {
       const meaning = sandboxState.reveal.text || '（查不到）';
-      const vipText = `VIP 翻譯：我剛剛查中文是：${meaning}`;
-      dispatchChatMessage({ id: crypto.randomUUID(), username: 'VIP', type: 'chat', text: vipText, language: 'zh', translation: vipText, isVip: 'VIP_NORMAL' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_translate' });
+      const vipText = `${SANDBOX_VIP.handle} 翻譯：我剛剛查中文是：${meaning}`;
+      dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: vipText, language: 'zh', translation: vipText, isVip: 'VIP_NORMAL', role: SANDBOX_VIP.role, badge: SANDBOX_VIP.badge }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_translate' });
       sandboxModeRef.current.setFlowStep('MEANING_GUESS', 'vip_translate_done');
       setSandboxRevealTick(Date.now());
     }
