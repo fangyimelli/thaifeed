@@ -753,3 +753,34 @@
 
 ### Removed / Deprecated
 - [sandbox/deprecated] sandbox 內已停用 classic 選項模板訊息輸出（違規即 blocked）。
+
+
+## 2026-03-05（sandbox only：PREHEAT/FREEZE/GLITCH_BURST/STEP SSOT）
+
+### Changed
+- [sandbox/flow] 將 sandbox chat 問答循環收斂為具名 step SSOT（`SandboxFlowStep`），統一以 `setFlowStep()` 推進，並在 transition 重設 `tagAskedThisStep` 與記錄 debug transition。
+- [sandbox/player] sandbox init 即建立 `player.handle`（fallback `000`），不再等待玩家先發言才可被 `@`。
+- [sandbox/freeze] 等玩家回覆階段（子音與意思）一律 `freeze.frozen=true` + `reason=AWAIT_PLAYER_INPUT`，聊天室 0 output。
+- [sandbox/glitch] 玩家回覆後新增 glitch burst（10 則、250~450ms）再進 reveal / 後續流程。
+- [sandbox/fix] 修正第 2 題後卡住：每題固定走完整鏈，`REVEAL_WORD` 必達。
+- [sandbox/pacing] sandbox chat engine 常態節奏調整為 800~1600ms（freeze 例外 0 output、glitch 例外快刷），classic 未改。
+
+### SSOT
+- [x] SSOT changed
+  - `SandboxStoryState.flow.step` 改為 `SandboxFlowStep`，新增 `askedAt/lastAnswerAt/lastRevealAt/tagAskedThisStep`。
+  - 新增 `freeze`、`glitchBurst`、`player` 狀態節點，作為 sandbox chat state machine 的唯一真相。
+
+### Debug 欄位變更紀錄
+- 新增：
+  - `sandbox.flow.step`（具名 step）
+  - `sandbox.freeze.frozen/reason/frozenAt`
+  - `sandbox.glitchBurst.pending/remaining/lastEmitAt`
+  - `sandbox.player.handle/id`
+
+### Acceptance
+- 1) sandbox 一進場即可在預熱期 `@玩家`：PASS
+- 2) 30 秒 PREHEAT 不出題：PASS
+- 3) 問句一次制 + 等待期間 freeze：PASS
+- 4) 玩家回覆後 glitch burst 10 則，再 reveal 與後續流程：PASS
+- 5) 連跑至少 3 題，不再第 2 題卡住：PASS
+- 6) classic mode 未修改：PASS

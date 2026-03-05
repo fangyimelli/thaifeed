@@ -1,29 +1,47 @@
 ## Summary
-- sandbox NIGHT_01 流程改為 `flow.questionIndex + flow.step` SSOT，新增 `introGate/preheat/answerGate/flow/last` 到 `SandboxStoryState`，避免隱性 phase 卡住。
-- 實作 30 秒預熱：只閒聊、慢速進人、VIP 高頻 tag 玩家。
-- 實作「玩家必回」：出題後進 `WAIT_ANSWER`，15 秒未回覆就硬停聊天室並顯示「等你回覆」，同時 SAN 增壓。
-- 玩家回覆（含不知道）後，固定強制鏈：glitch flood → reveal word → riot → VIP 翻譯 → meaning guess → tag 玩家 → 下一題。
-- 修正第 2 題後不跳單字：加上 `flow step` 單一推進與 `lastAskAt/lastRevealAt` 防重入。
-- sandbox chat routing 調整：`awaitingAnswer` 偏 fear/observation/tag，glitch 時段可走 `san_idle`。
-- debug 面板新增 flow/answerGate 欄位，便於驗證 step chain 與停聊狀態。
+- 以 sandbox 專屬 step-driven state machine 重整聊天室流程，導入 PREHEAT / WAIT freeze / glitch burst / reveal chain 單一路徑。
+- 玩家身份在 sandbox init 立即建立（`player.handle`），VIP 可在預熱期直接 `@玩家`。
+- 修正第 2 題後卡住：每題固定經過 `子音 -> glitch -> 單字 -> 暴動 -> VIP 翻譯 -> 猜測 -> 問玩家 -> 下一題`。
+- **classic mode 完全未修改**。
 
-## Impact Scope
-- 影響範圍：`src/modes/sandbox_story/*`、`src/app/App.tsx`、`src/sandbox/chat/chat_engine.ts`、文件（README/docs）。
-- **classic mode sources were not modified**。
+## SSOT（Single Source of Truth）
+- `SandboxStoryState.flow.step` 使用 `SandboxFlowStep` 具名枚舉：
+  - `PREHEAT`
+  - `ASK_CONSONANT`
+  - `WAIT_PLAYER_CONSONANT`
+  - `GLITCH_BURST_AFTER_CONSONANT`
+  - `REVEAL_WORD`
+  - `WORD_RIOT`
+  - `VIP_TRANSLATE`
+  - `MEANING_GUESS`
+  - `ASK_PLAYER_MEANING`
+  - `WAIT_PLAYER_MEANING`
+  - `GLITCH_BURST_AFTER_MEANING`
+  - `ADVANCE_NEXT`
+- 新增 state 節點：
+  - `freeze: { frozen, reason, frozenAt }`
+  - `glitchBurst: { pending, remaining, lastEmitAt }`
+  - `player: { handle, id? }`
 
-## Changed files
-- src/modes/sandbox_story/sandboxStoryMode.ts
-- src/app/App.tsx
-- src/sandbox/chat/chat_engine.ts
-- README.md
-- docs/10-change-log.md
-- docs/02-ssot-map.md
-- docs/30-sandbox-story-mode.md
-- PR_NOTES.md
+## Debug 欄位變更紀錄
+- 新增 `sandbox.flow.step`（具名 step）。
+- 新增 `sandbox.freeze.frozen/reason/frozenAt`。
+- 新增 `sandbox.glitchBurst.pending/remaining/lastEmitAt`。
+- 新增 `sandbox.player.handle/id`。
+- `setFlowStep()` transition 會寫 sandbox debug transition 訊息（DEV console）。
 
-## Validation / Acceptance
-1. 進 sandbox 前 30 秒不出題，只出現預熱聊天/加入聊天室/VIP tag。  
-2. 30 秒後才出第一題，並進入 WAIT_ANSWER。  
-3. 玩家不回覆 15 秒：聊天室停刷，debug 可見 `answerGate.pausedChat=true`，且 SAN 增壓。  
-4. 玩家回覆後固定進 glitch flood，再 reveal word，後續完整走完 VIP 翻譯與 tag 玩家再進下一題。  
-5. 連續 3 題以上皆可 reveal，無第 2 題卡死。
+## 驗收步驟與預期輸出
+1. 進入 sandbox（不輸入任何字）。
+   - 預期：VIP 能在 PREHEAT 直接 `@<player.handle>` 打招呼。
+2. 觀察前 30 秒。
+   - 預期：僅預熱聊天/慢速 join，不出題。
+3. 30 秒後進第一題。
+   - 預期：只出一次子音題目，接著進 `WAIT_PLAYER_CONSONANT` 並 freeze（聊天室 0 output）。
+4. 玩家回覆子音（含不知道）。
+   - 預期：立刻 glitch burst 10 則（250~450ms），刷完進 REVEAL_WORD 再跑後續鏈。
+5. 進入 ASK_PLAYER_MEANING 後回覆。
+   - 預期：再次 freeze -> 回覆 -> glitch burst 10 則 -> ADVANCE_NEXT。
+6. 至少跑 3 題。
+   - 預期：每題都會顯示單字，不會第 2 題卡住。
+7. 驗證 classic。
+   - 預期：classic mode 行為不變（本次未改 classic sources）。
