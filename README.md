@@ -57,9 +57,24 @@ npm run build
 
 ## Sandbox Chat Pools
 
-- `src/sandbox/chat/chat_pools.ts` 提供 sandbox 恐怖聊天室完整語料庫（約 2050 條），依情境拆分為 casual / observation / theory / thai viewer / fear / guess / tag / idle / vip / final fear 十個池。
-- `thai_viewer_pool` 每筆包含 `user`、`text`、`thai`、`translation`，可直接用於中泰混合聊天室顯示。
-- 用途：提供 sandbox 劇情模式在不同 SAN / phase 下的聊天室節奏，避免重複句與過度機械化語氣。
+- SSOT：`src/sandbox/chat/chat_pools.ts` 是 sandbox 聊天語料唯一來源（`CHAT_POOLS`），總數固定 **2050 entries**。
+- pool 與用途（精準數量）：
+  - `casual_pool`（500）：一般路人台味閒聊。
+  - `observation_pool`（300）：畫面觀察與異常提示。
+  - `theory_pool`（250）：推理/猜測/解釋，於 `awaitingAnswer`、`revealingWord` 提高路由機率。
+  - `thai_viewer_pool`（200）：泰國觀眾訊息，結構為 `{ user, text, thai, translation }`。
+  - `fear_pool`（200）：中段恐懼升溫。
+  - `guess_character`（150）：角色猜測。
+  - `tag_player`（100）：`{{PLAYER}}`/`${playerHandle}` 模板，emit 時替換為目前玩家 handle。
+  - `san_idle`（150）：玩家久未回覆時的催促。
+  - `vip_summary`（120）：VIP 重點整理。
+  - `final_fear`（80）：後段/高壓收束恐怖語氣。
+- `thai_viewer_pool.user` 僅允許 `THAI_USERS` 名單，避免多份 Thai user 來源。
+- `src/sandbox/chat/chat_engine.ts` 只 consume `CHAT_POOLS`，不再維護平行 mini-pools；Thai viewer message 保留 `thai/translation` 可供 UI/Debug 顯示。
+- phase-driven routing（sandbox）：
+  - `theory_pool`：`awaitingAnswer`、`revealingWord` 提高出現率。
+  - `final_fear`：僅在 ending / 高壓（低 SAN 或 supernatural phase）提高出現率。
+- 開發檢查：`assertChatPoolsCounts()` 可驗證 10 池長度與 total=2050；chat engine 僅在 DEV 初始化時呼叫一次。
 
 ## Sandbox 與 Classic 子音判定同源（2026-03-05）
 
@@ -1801,6 +1816,7 @@ Console（debug 模式）可觀察：
   - `ui.promptGlyph.className/colorResolved/opacityResolved/source/isBlueExpected`
 
 ### README Removed/Deprecated Log
+- 2026-03-05（sandbox only）：移除 `chat_engine.ts` 內嵌 mini-pools 舊語料來源，統一改由 `CHAT_POOLS` 單一 SSOT 提供。
 - 2026-03-04：本次為 sandbox 輸入/樣式整合修正，無新增移除項。
 
 ## Sandbox Chat Engine
