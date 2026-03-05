@@ -1,4 +1,5 @@
 import { SandboxUserGenerator } from './user_generator';
+import { CHAT_POOLS } from './chat_pools';
 
 export type ChatMessage = {
   user: string;
@@ -20,21 +21,6 @@ type ChatEngineContext = {
 type ChatEngineOptions = {
   onMessage: (message: ChatMessage) => void;
   onWaveResolved?: (count: number) => void;
-};
-
-const pools = {
-  casual_pool: ['先穩住節奏', '感覺這輪可以過', '聊天室有在看你', '這房間今天特別安靜'],
-  observation_pool: ['窗簾剛剛是不是動了', '右上角陰影變深了', '那盞燈忽明忽暗', '畫面有一瞬間糊掉'],
-  fear_pool: ['越看越不對勁', '這不是延遲吧', '我背後發涼', '不要停在那個角落太久'],
-  thai_viewer_pool: [
-    { thai: 'ช้าทำไม รีบตอบสิ', text: '怎麼變慢了，快回答' },
-    { thai: 'เหมือนมีคนยืนหลังกล้อง', text: '像有人站在鏡頭後面' },
-    { thai: 'แชตกำลังลุ้นอยู่', text: '聊天室都在緊張等你' }
-  ],
-  san_idle: ['聊天室是不是卡住', '@player 還在嗎', '有人還在線嗎'],
-  guess_character: ['會不會是媽媽', '像姐姐在等弟弟', '感覺是家人關係'],
-  tag_player: ['@player 你覺得是誰', '@player 你來判斷一下', '@player 現在該怎麼做'],
-  vip_summary: ['目前線索看起來都指向家人', '那個字可能是關鍵', '先把重複出現的細節記下來']
 };
 
 export class ChatEngine {
@@ -118,10 +104,10 @@ export class ChatEngine {
       this.sinceThai = 0;
       const line = this.pick('thai_viewer_pool');
       return {
-        user: this.pickUser(),
-        text: `${this.pickUser()}: ${line.text}`,
+        user: line.user,
+        text: `${line.user}: ${line.text}`,
         thai: line.thai,
-        translation: line.text
+        translation: line.translation
       };
     }
 
@@ -131,6 +117,14 @@ export class ChatEngine {
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.3) {
       return this.formatLine(this.pick('guess_character'));
+    }
+
+    if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.2) {
+      return this.formatLine(this.pick('theory_pool'));
+    }
+
+    if (this.context.isEnding && Math.random() < 0.55) {
+      return this.formatLine(this.pick('final_fear'));
     }
 
     const fearRate = this.context.san <= 35 ? 0.62 : this.context.san <= 60 ? 0.4 : 0.22;
@@ -164,9 +158,9 @@ export class ChatEngine {
     return { user, text: `${user}: ${text}`, translation: text, vip };
   }
 
-  private pick<K extends keyof typeof pools>(key: K): (typeof pools)[K][number] {
-    const pool = pools[key];
-    return pool[Math.floor(Math.random() * pool.length)] as (typeof pools)[K][number];
+  private pick<K extends keyof typeof CHAT_POOLS>(key: K): (typeof CHAT_POOLS)[K][number] {
+    const pool = CHAT_POOLS[key];
+    return pool[Math.floor(Math.random() * pool.length)] as (typeof CHAT_POOLS)[K][number];
   }
 
   private pickUser(): string {

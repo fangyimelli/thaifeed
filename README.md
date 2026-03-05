@@ -55,6 +55,12 @@ npm run build
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
 - [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
+## Sandbox Chat Pools
+
+- `src/sandbox/chat/chat_pools.ts` 提供 sandbox 恐怖聊天室完整語料庫（約 2050 條），依情境拆分為 casual / observation / theory / thai viewer / fear / guess / tag / idle / vip / final fear 十個池。
+- `thai_viewer_pool` 每筆包含 `user`、`text`、`thai`、`translation`，可直接用於中泰混合聊天室顯示。
+- 用途：提供 sandbox 劇情模式在不同 SAN / phase 下的聊天室節奏，避免重複句與過度機械化語氣。
+
 ## Sandbox 與 Classic 子音判定同源（2026-03-05）
 
 - sandbox 子音流程（parse / judge / hint / state transition）改為透過 `parseAndJudgeUsingClassic()` 走 classic 同一套核心；sandbox 只做 thin adapter 顯示，不再自行覆寫結果。

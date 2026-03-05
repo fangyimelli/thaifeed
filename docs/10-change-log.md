@@ -1,3 +1,19 @@
+## 2026-03-05（sandbox only：chat pools corpus expansion）
+
+### Changed
+- [sandbox/chat] 新增 `src/sandbox/chat/chat_pools.ts`，建立 10 類聊天室語料池：`casual_pool(500)`、`observation_pool(300)`、`theory_pool(250)`、`thai_viewer_pool(200)`、`fear_pool(200)`、`guess_character(150)`、`tag_player(100)`、`san_idle(150)`、`vip_summary(120)`、`final_fear(80)`。
+- [sandbox/chat] `src/sandbox/chat/chat_engine.ts` 改為使用 `CHAT_POOLS` 作為單一語料來源，移除本地小型硬編碼池，避免新舊語料邏輯並存。
+- [sandbox/chat] 泰文觀眾訊息改用 `thai_viewer_pool` 物件格式（`user/text/thai/translation`），直接輸出中泰翻譯欄位。
+
+### SSOT
+- [x] SSOT changed
+  - sandbox 聊天語料改由 `CHAT_POOLS` 集中管理，`chat_engine` 不再維護第二套內嵌池。
+
+### Acceptance
+- 1) 語料池數量符合目標（總量 2050）：PASS
+- 2) `thai_viewer_pool` user 來源符合指定名單：PASS
+- 3) classic mode 無檔案變更：PASS
+
 ## 2026-03-05（sandbox only：classic consonant parity + debug override isolation）
 
 ### Changed
