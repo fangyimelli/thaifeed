@@ -19,16 +19,14 @@ export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
 export type SandboxFlowStep =
   | 'PREJOIN'
   | 'PREHEAT'
-  | 'ASK_CONSONANT'
-  | 'WAIT_PLAYER_CONSONANT'
-  | 'GLITCH_BURST_AFTER_CONSONANT'
-  | 'REVEAL_WORD'
-  | 'WORD_RIOT'
-  | 'VIP_TRANSLATE'
-  | 'MEANING_GUESS'
-  | 'ASK_PLAYER_MEANING'
-  | 'WAIT_PLAYER_MEANING'
-  | 'GLITCH_BURST_AFTER_MEANING'
+  | 'TAG_PLAYER_1'
+  | 'WAIT_REPLY_1'
+  | 'POSSESSION_AUTOFILL'
+  | 'POSSESSION_AUTOSEND'
+  | 'CROWD_REACT_WORD'
+  | 'TAG_PLAYER_2_PRONOUNCE'
+  | 'WAIT_REPLY_2'
+  | 'FLUSH_TECH_BACKLOG'
   | 'ADVANCE_NEXT';
 
 export type SandboxFearDebugState = {
@@ -393,15 +391,11 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const schedulerPhaseByStep = (step: SandboxFlowStep): SandboxStoryPhase => {
     if (step === 'PREJOIN') return 'boot';
     if (step === 'PREHEAT') return 'intro';
-    if (step === 'ASK_CONSONANT') return 'awaitingTag';
-    if (step === 'WAIT_PLAYER_CONSONANT') return 'awaitingAnswer';
-    if (step === 'GLITCH_BURST_AFTER_CONSONANT') return 'supernaturalEvent';
-    if (step === 'REVEAL_WORD') return 'revealingWord';
-    if (step === 'WORD_RIOT') return 'chatRiot';
-    if (step === 'VIP_TRANSLATE') return 'vipTranslate';
-    if (step === 'MEANING_GUESS') return 'reasoningPhase';
-    if (step === 'ASK_PLAYER_MEANING' || step === 'WAIT_PLAYER_MEANING') return 'tagPlayerPhase';
-    if (step === 'GLITCH_BURST_AFTER_MEANING') return 'supernaturalEvent';
+    if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE') return 'awaitingTag';
+    if (step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2') return 'awaitingAnswer';
+    if (step === 'POSSESSION_AUTOFILL' || step === 'POSSESSION_AUTOSEND') return 'revealingWord';
+    if (step === 'CROWD_REACT_WORD') return 'chatRiot';
+    if (step === 'FLUSH_TECH_BACKLOG') return 'supernaturalEvent';
     return 'awaitingTag';
   };
   const setFlowStepInternal = (step: SandboxFlowStep, reason = '', now = Date.now()) => {
@@ -534,7 +528,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.advance = { ...state.advance, inFlight: true, lastToken: token, lastAt: Date.now(), lastReason: reason, blockedReason: '' };
     selectNextNodeIndex();
     syncNodeChar();
-    setFlowStepInternal('ASK_CONSONANT', 'advance_prompt_internal');
+    setFlowStepInternal('TAG_PLAYER_1', 'advance_prompt_internal');
     clearSchedulerBlockedReason();
     resetPromptRuntimeState();
     syncPromptMismatch();
@@ -590,9 +584,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         syncFear();
         return;
       }
-      if (state.flow.step === 'ASK_CONSONANT') {
+      if (state.flow.step === 'TAG_PLAYER_1') {
         state.answerGate = { waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false };
-        setFlowStepInternal('WAIT_PLAYER_CONSONANT', 'incoming_tag');
+        setFlowStepInternal('WAIT_REPLY_1', 'incoming_tag');
       }
       syncFear();
     },
@@ -605,7 +599,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncIntroGate();
       if (state.flow.step === 'PREHEAT' && state.introGate.passed) {
         state.preheat.enabled = false;
-        setFlowStepInternal('ASK_CONSONANT', 'intro_passed');
+        setFlowStepInternal('TAG_PLAYER_1', 'intro_passed');
       }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
@@ -625,8 +619,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
       return node;
     },
-    forceAskConsonantNow() { if (!state.introGate.passed) return; setFlowStepInternal('ASK_CONSONANT', 'force_ask_consonant'); syncFear(); },
-    forceAskComprehensionNow() { if (!state.introGate.passed) return; setFlowStepInternal('ASK_CONSONANT', 'force_ask_comprehension'); syncFear(); },
+    forceAskConsonantNow() { if (!state.introGate.passed) return; setFlowStepInternal('TAG_PLAYER_1', 'force_ask_consonant'); syncFear(); },
+    forceAskComprehensionNow() { if (!state.introGate.passed) return; setFlowStepInternal('TAG_PLAYER_1', 'force_ask_comprehension'); syncFear(); },
     forceGhostMotion(motionId) {
       state.ghostMotion = { lastId: motionId ?? 'disabled_no_ghost_entity', state: 'idle' };
       syncFear();
@@ -635,7 +629,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     forceAdvanceNode() {
       state.advance = { ...state.advance, inFlight: false, lastToken: '', lastAt: Date.now(), lastReason: 'forceAdvanceNode', blockedReason: '' };
       selectNextNodeIndex();
-      setFlowStepInternal('ASK_CONSONANT', 'force_advance_node');
+      setFlowStepInternal('TAG_PLAYER_1', 'force_advance_node');
       clearSchedulerBlockedReason();
       state.reveal = { ...state.reveal, visible: false, phase: 'idle', appended: '', startedAt: 0, doneAt: 0 };
       state.prompt.current = null;
@@ -768,9 +762,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       if (state.reveal.mode === 'correct') {
         state.q10Special.armed = state.nodeIndex === 9;
         state.q10Special.revealed = false;
-        setFlowStepInternal('WORD_RIOT', 'mark_reveal_done');
+        setFlowStepInternal('CROWD_REACT_WORD', 'mark_reveal_done');
       } else {
-        setFlowStepInternal('WAIT_PLAYER_CONSONANT', 'mark_reveal_done_non_correct');
+        setFlowStepInternal('WAIT_REPLY_1', 'mark_reveal_done_non_correct');
       }
       clearSchedulerBlockedReason();
       state.reveal.visible = false;

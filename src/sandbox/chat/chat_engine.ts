@@ -27,7 +27,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
-  flowStep: 'PREJOIN' | 'PREHEAT' | 'ASK_CONSONANT' | 'WAIT_PLAYER_CONSONANT' | 'GLITCH_BURST_AFTER_CONSONANT' | 'REVEAL_WORD' | 'WORD_RIOT' | 'VIP_TRANSLATE' | 'MEANING_GUESS' | 'ASK_PLAYER_MEANING' | 'WAIT_PLAYER_MEANING' | 'GLITCH_BURST_AFTER_MEANING' | 'ADVANCE_NEXT';
+  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
   stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
@@ -54,6 +54,16 @@ const GHOST_HINT_REASONING = [
   '我覺得線索在提醒我們先拼出完整詞',
   '這段像在暗示別急著亂猜角色'
 ] as const;
+
+const CROWD_REACT_WORD_LINES = [
+  '這是什麼意思？',
+  '是在說螢幕上的拼音嗎？',
+  '這個拼音到底怎唸？',
+  '有人可以翻一下嗎？',
+  '看起來像泰文單字耶',
+  '我也想知道怎麼念'
+] as const;
+
 const VIP_TRANSLATE_LINES = [
   'VIP 翻譯：剛剛泰文是在說「樓上有聲音」，先把樓梯線索記住。',
   'VIP 翻譯：那句偏向「他還在等」，跟前面等待主題一致。',
@@ -301,6 +311,11 @@ export class ChatEngine {
     return queue;
   }
 
+  emitCrowdReactWord(count = 6): ChatMessage[] {
+    const size = Math.max(4, Math.min(8, count));
+    return Array.from({ length: size }).map(() => this.captureMessage(this.formatLine(this.pickSafeArray(CROWD_REACT_WORD_LINES)), 'crowd_react_word')).filter((message): message is ChatMessage => Boolean(message));
+  }
+
   emitReasoningWave(count = 2): ChatMessage[] {
     const size = Math.max(1, Math.min(4, count));
     return Array.from({ length: size }).map(() => this.captureMessage(this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)), 'reasoning_wave')).filter((message): message is ChatMessage => Boolean(message));
@@ -374,7 +389,7 @@ export class ChatEngine {
   private captureMessage(message: ChatMessage | null, emitKey: string): ChatMessage | null {
     if (!message) return null;
     const now = Date.now();
-    if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_PLAYER_CONSONANT' || this.context.flowStep === 'WAIT_PLAYER_MEANING')) {
+    if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2')) {
       this.freezeLeakCount += 1;
     }
     const speaker = message.user;
@@ -397,7 +412,7 @@ export class ChatEngine {
       }
       return null;
     }
-    if (emitKey === 'tag_player_phase' && (this.context.flowStep === 'ASK_PLAYER_MEANING' || this.context.flowStep === 'WAIT_PLAYER_MEANING') && this.context.stepStartedAt > 0 && now - this.context.stepStartedAt > 3000) {
+    if (emitKey === 'tag_player_phase' && (this.context.flowStep === 'TAG_PLAYER_2_PRONOUNCE' || this.context.flowStep === 'WAIT_REPLY_2') && this.context.stepStartedAt > 0 && now - this.context.stepStartedAt > 3000) {
       this.duplicateSpamCount += 1;
       return null;
     }
