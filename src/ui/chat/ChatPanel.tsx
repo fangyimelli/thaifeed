@@ -52,6 +52,13 @@ type Props = {
   onForceScrollDebug?: (payload: ForceScrollDebugPayload) => void;
   onReplyPinMountedChange?: (mounted: boolean) => void;
   forceScrollSignalReason?: string | null;
+  sandboxControl?: {
+    enabled: boolean;
+    valueToken: number;
+    value: string;
+    sendToken: number;
+    onAutoSend: () => void;
+  };
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -90,7 +97,8 @@ export default function ChatPanel({
   replyPreviewSuppressedReason = null,
   onForceScrollDebug,
   onReplyPinMountedChange,
-  forceScrollSignalReason = null
+  forceScrollSignalReason = null,
+  sandboxControl
 }: Props) {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -373,6 +381,16 @@ export default function ChatPanel({
   }, []);
 
 
+
+  useEffect(() => {
+    if (!sandboxControl?.enabled || sandboxControl.valueToken <= 0) return;
+    onChange(sandboxControl.value);
+  }, [onChange, sandboxControl?.enabled, sandboxControl?.valueToken]);
+
+  useEffect(() => {
+    if (!sandboxControl?.enabled || sandboxControl.sendToken <= 0) return;
+    sandboxControl.onAutoSend();
+  }, [sandboxControl?.enabled, sandboxControl?.sendToken]);
   useEffect(() => {
     onReplyPinMountedChange?.(shouldRenderReplyPreview);
   }, [onReplyPinMountedChange, shouldRenderReplyPreview]);

@@ -1920,3 +1920,13 @@ Console（debug 模式）可觀察：
 - join 後會立即由 VIP 發送 `@玩家` 訊息，並直接走 classic 同一路徑 reply-to bar（sandbox 不自製第二套 pinned）。
 - reply-to active 期間聊天室強制 0 output；玩家送出非空回覆後才解除 gate，恢復 PREHEAT 正常節奏。
 - **classic mode 未修改。**
+
+## 2026-03-06（sandbox only：Silent Prompt + 附身自動送字 + 第二次強制回覆 + tech backlog flush）
+
+- sandbox flow 改為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
+- 30 秒 PREHEAT 到點後採 **Silent Prompt**：overlay 照常顯示子音，但聊天室不再發題目公告；改由 `mod_live` 或 `👑 behindyou` 直接 `@玩家` 並立刻進 reply-to freeze（0 output）。
+- 玩家回覆第一段後啟動「附身打字」：sandbox wrapper 會控制輸入框 value 為本題單字，並於 300~700ms 內走同一送出管線自動送出。
+- 自動送字後固定進入 `CROWD_REACT_WORD`（預設 6，區間 4~8），內容含「什麼意思／是不是拼音／這拼音怎麼唸」。
+- 接著第二次由 `mod_live` 或 `👑 behindyou` 再 `@玩家` 問「所以到底怎麼唸？」並啟用 reply-to（不可取消）；reply-to active 期間聊天室 0 output。
+- 技術故障改為 backlog：在 `WAIT_REPLY_1/WAIT_REPLY_2` 期間每 30 秒累積 2 則（含「奇怪卡了大約 X 分鐘」），玩家回覆後於 `FLUSH_TECH_BACKLOG` 一次吐出（最多 8 則）再推進下一題。
+- classic mode 未修改。

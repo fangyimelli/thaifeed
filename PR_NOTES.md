@@ -137,3 +137,22 @@
 4. 玩家送出一則非空回覆：reply-to 條消失，聊天室才開始 PREHEAT 正常節奏。
 5. 驗證根治：玩家 handle 建立時機在 join，不再依賴第一則玩家聊天訊息。
 6. 驗證 classic mode 未修改（行為不變）。
+
+## 2026-03-06 Patch Request：Silent Prompt + 附身自動送字 + 二次強制回覆 + tech backlog flush（sandbox only）
+
+### 變更摘要
+- sandbox flow SSOT 改為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
+- 30 秒後採 Silent Prompt：overlay 顯示子音，但聊天室不再發題目公告，直接由 `mod_live/👑 behindyou` `@玩家` 並啟用 classic reply-to（freeze 0 output）。
+- 第一段玩家回覆後會觸發 sandbox input wrapper：輸入框自動填本題單字，300~700ms 後走同一送出管線自動送出。
+- 自動送字後固定刷 4~8 則觀眾追問（預設 6）：包含「什麼意思？」、「是在說螢幕上的拼音嗎？」、「這個拼音到底怎唸？」。
+- 接著再由 `mod_live/👑 behindyou` 第二次 `@玩家` 問「所以到底怎麼唸？」並再次啟用 reply-to（不可取消），期間聊天室 0 output。
+- tech 故障改為 backlog：reply-to active 每 30 秒累積 2 則（最後含「奇怪卡了大約 X 分鐘」），玩家回覆後一次 flush（<=8）才推進下一段。
+- classic mode 未修改。
+
+### 手機驗收步驟（必列）
+1. 送出名稱前，聊天室 0 output；送出名稱後預熱 30 秒，不出題。
+2. 30 秒後，overlay 出子音；聊天室不公告題目，直接 `@玩家` + reply-to（不可取消）且聊天室停住。
+3. 玩家回覆後，輸入框會自動填單字並在 300~700ms 內自動送出（可肉眼看到）。
+4. 之後觀眾出現 4~8 則「意思/拼音怎唸」追問，再次 `@玩家` 問「所以到底怎麼唸？」並再次停住。
+5. 停住期間 tech backlog 只累積不顯示；玩家回覆後一次 flush（<=8，含「卡了 X 分鐘」）。
+6. 切回 classic mode smoke run：行為不變。

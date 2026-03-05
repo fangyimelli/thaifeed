@@ -3,16 +3,14 @@ import { SANDBOX_VIP } from './vip_identity';
 export type SandboxDirectorStep =
   | 'PREJOIN'
   | 'PREHEAT'
-  | 'ASK_CONSONANT'
-  | 'WAIT_PLAYER_CONSONANT'
-  | 'GLITCH_BURST_AFTER_CONSONANT'
-  | 'REVEAL_WORD'
-  | 'WORD_RIOT'
-  | 'VIP_TRANSLATE'
-  | 'MEANING_GUESS'
-  | 'ASK_PLAYER_MEANING'
-  | 'WAIT_PLAYER_MEANING'
-  | 'GLITCH_BURST_AFTER_MEANING'
+  | 'TAG_PLAYER_1'
+  | 'WAIT_REPLY_1'
+  | 'POSSESSION_AUTOFILL'
+  | 'POSSESSION_AUTOSEND'
+  | 'CROWD_REACT_WORD'
+  | 'TAG_PLAYER_2_PRONOUNCE'
+  | 'WAIT_REPLY_2'
+  | 'FLUSH_TECH_BACKLOG'
   | 'ADVANCE_NEXT';
 
 export type DirectorMode = 'PREHEAT' | 'RANDOM' | 'REACTIVE' | 'FROZEN' | 'GLITCH_BURST';
@@ -43,7 +41,6 @@ type PoolWeights = {
 export class SandboxChatDirector {
   private preheatVipEntranceDone = false;
   private preheatVipTagDone = false;
-  private directedAskedStepKey = '';
   private lastJoinAt = 0;
 
   getChatMode(state: DirectorContext): DirectorMode {
@@ -51,7 +48,7 @@ export class SandboxChatDirector {
     if (state.freeze.frozen) return 'FROZEN';
     if (state.flowStep === 'PREJOIN') return 'FROZEN';
     if (state.flowStep === 'PREHEAT') return 'PREHEAT';
-    if (state.flowStep === 'REVEAL_WORD' || state.flowStep === 'WORD_RIOT' || state.flowStep === 'MEANING_GUESS') return 'REACTIVE';
+    if (state.flowStep === 'POSSESSION_AUTOFILL' || state.flowStep === 'POSSESSION_AUTOSEND' || state.flowStep === 'CROWD_REACT_WORD') return 'REACTIVE';
     return 'RANDOM';
   }
 
@@ -67,21 +64,6 @@ export class SandboxChatDirector {
         return { speaker: SANDBOX_VIP.handle, text: `@${state.playerHandle || '000'} 嗨嗨，第一次看這台嗎？`, vip: true };
       }
     }
-
-    if (state.flowStep === 'WAIT_PLAYER_CONSONANT' || state.flowStep === 'WAIT_PLAYER_MEANING') {
-      const stepKey = `${state.flowStep}:${state.stepStartedAt ?? 0}`;
-      if (this.directedAskedStepKey !== stepKey) {
-        this.directedAskedStepKey = stepKey;
-        return {
-          speaker: SANDBOX_VIP.handle,
-          text: state.flowStep === 'WAIT_PLAYER_CONSONANT'
-            ? `@${state.playerHandle || '000'} 這題子音你覺得是哪個？`
-            : `@${state.playerHandle || '000'} 那這個詞你會翻成什麼？`,
-          vip: true
-        };
-      }
-    }
-
     return null;
   }
 

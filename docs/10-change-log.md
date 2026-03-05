@@ -911,3 +911,15 @@
 
 ### Scope Guard
 - 僅 sandbox 路徑修改；classic mode 未修改。
+
+## 2026-03-06（sandbox only：Silent Prompt + possession autosend + reply-to 再鎖一次 + tech backlog）
+
+### Changed
+- [sandbox/flow] `SandboxFlowStep` 改為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
+- [sandbox/prompt] 第一段出題改為 Silent Prompt：overlay 顯示子音、聊天室不發題目公告，直接 `@玩家` + classic reply-to freeze。
+- [sandbox/input-wrapper] 新增 sandbox input wrapper 控制（ChatPanel `sandboxControl`）：可 programmatically 寫入 input value，並觸發同一 `submitChat()` 送出管線。
+- [sandbox/possession] 玩家回覆第一段後，300~700ms 自動送出本題單字（視覺上等同玩家輸入送出）。
+- [sandbox/crowd] 新增 `emitCrowdReactWord(4~8)`，固定帶入「什麼意思／拼音怎麼唸」類觀眾追問。
+- [sandbox/reply2] 第二段由 `mod_live` 或 VIP 再次 `@玩家` 問「所以到底怎麼唸？」並再次進 reply-to freeze（0 output）。
+- [sandbox/backlog] 新增 tech backlog：reply-to active 每 30 秒累積 2 則，最後包含「奇怪卡了大約 X 分鐘」；解鎖後 `FLUSH_TECH_BACKLOG` 一次 flush（<=8）再 `ADVANCE_NEXT`。
+- [classic] 未修改。
