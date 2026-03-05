@@ -55,6 +55,12 @@ npm run build
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
 - [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
+## Recent Sandbox Audit Debug Additions
+
+- 新增 sandbox audit debug schema（僅 sandbox）：`introGate`、`flow`、`freeze`、`glitchBurst`、`tagAsked`、`emit key/speaker`、`recentEmitKeys(20)`、`transitions(20)`、`thaiViewer usage`。
+- `src/sandbox/chat/chat_engine.ts` 新增防洗版檢測計數（只記錄不阻擋）：`duplicateSpamCount` / `speakerSpamCount` / `freezeLeakCount`。
+- classic mode 無變更。
+
 ## Sandbox Chat Pools
 
 - SSOT：`src/sandbox/chat/chat_pools.ts` 是 sandbox 聊天語料唯一來源（`CHAT_POOLS`），總數固定 **2050 entries**。
