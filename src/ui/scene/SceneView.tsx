@@ -260,7 +260,7 @@ declare global {
         npcSpawnBlockedByFreeze?: number;
         ghostBlockedByFreeze?: number;
         sendSourceWarning?: { at?: number; actor?: string; textPreview?: string };
-      lastBlockedSendAttempt?: {
+        lastBlockedSendAttempt?: {
           actorId?: string;
           actorHandle?: string;
           source?: string;
@@ -268,6 +268,14 @@ declare global {
           textPreview?: string;
           at?: number;
           blockedReason?: string;
+        };
+        lastEmit?: {
+          at?: number;
+          source?: string;
+          sourceTag?: string;
+          sourceMode?: 'sandbox' | 'classic' | 'system';
+          actor?: string;
+          textPreview?: string;
         };
       };
       audio?: {

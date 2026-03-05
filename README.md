@@ -111,6 +111,20 @@ npm run build
   - `sandbox.prompt.current.id/consonant/wordKey`
   - `sandbox.hint.lastTextPreview / sandbox.hint.source`
 
+
+## Sandbox NIGHT_01 修正（2026-03-05）
+
+- Story Phase Gate：sandbox 進房後強制 `N1_INTRO_CHAT` 30 秒，只允許聊天室閒聊；倒數結束才切 `N1_QUIZ_LOOP`，並允許 `mod_live` 出第一題子音題。
+- Prompt Gate：`askSandboxConsonantNow()` 僅在 `phase=awaitingTag` 且 story gate 已進入 `N1_QUIZ_LOOP` 才會送題，避免一進房立即出題。
+- Pipeline/Input Lock：sandbox submit in-flight 時，重複輸入會回覆「收到，等一下，正在處理上一題。」並阻擋重入，不再沉默。
+- Solved 同步：同題 prompt 若已存在但未前進，會在 3 秒後允許重送同題 prompt（recover），避免「題目已 solved 但仍催同題」卡住。
+- Classic 隔離：sandbox 模式下阻擋含「（選項：...）」模板的非玩家訊息，避免 classic QNA 話術混入。
+- Message Source Debug：新增 `chat.lastEmit.source/sourceTag/sourceMode`（sandbox/classic/system）以追蹤每次訊息 emit 來源。
+
+### Removed / Deprecated Log
+
+- Deprecated（sandbox）：禁止 sandbox 期間送出 classic 風格選項模板（`（選項：...）`），違規訊息會被 emit gate 擋下。
+
 ## Actor Pool Separation
 
 - `activeUser`（玩家）只能被 tag，不可被自動發言流程抽中。
