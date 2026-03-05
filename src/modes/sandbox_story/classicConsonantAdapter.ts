@@ -7,6 +7,8 @@ export type ClassicConsonantContext = {
   activeUser?: string;
 };
 
+export type ClassicConsonantJudgeResult = 'correct' | 'wrong' | 'unknown' | 'pass';
+
 const BOPOMOFO_RE = /[\u3100-\u312F\u02C7\u02CA\u02CB\u02D9]/u;
 const THAI_RE = /[\u0E00-\u0E7F]/u;
 const CJK_RE = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/u;
@@ -117,6 +119,29 @@ export function judgeClassicConsonantAnswer(input: string, ctx: ClassicConsonant
   const parsed = tryParseClassicConsonantAnswer(input, ctx);
   if (parsed.ok) return 'correct';
   return compact ? 'wrong' : 'wrong';
+}
+
+export function parseAndJudgeUsingClassic(input: string, ctx: ClassicConsonantContext): {
+  parsed: ReturnType<typeof tryParseClassicConsonantAnswer>;
+  result: ClassicConsonantJudgeResult;
+  hintText?: string;
+  debugMeta: {
+    source: 'classic_consonant_core';
+    parityChecked: true;
+  };
+} {
+  const parsed = tryParseClassicConsonantAnswer(input, ctx);
+  const result = judgeClassicConsonantAnswer(input, ctx);
+  const hintText = result === 'unknown' ? getHintForConsonantPrompt(ctx) : undefined;
+  return {
+    parsed,
+    result,
+    hintText,
+    debugMeta: {
+      source: 'classic_consonant_core',
+      parityChecked: true
+    }
+  };
 }
 
 export function getHintForConsonantPrompt(ctx: ClassicConsonantContext): string {

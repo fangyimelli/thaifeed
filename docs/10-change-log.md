@@ -1,3 +1,33 @@
+## 2026-03-05（sandbox only：classic consonant parity + debug override isolation）
+
+### Changed
+- [sandbox/classic-adapter] `src/modes/sandbox_story/classicConsonantAdapter.ts` 新增 `parseAndJudgeUsingClassic()`，統一輸出 classic parse/judge/hint，作為 sandbox 唯一判定入口。
+- [sandbox/judge] sandbox 子音送出流程改為直接採用 classic result；移除正常輸入路徑中會誤導成 `debug_apply_correct` 的捷徑影響。
+- [sandbox/debug] 新增 parity 與 override 驗收欄位：`sandbox.judge.result`、`classic.judge.result`、`sandboxClassicParity`、`sandbox.judge.debugOverride.active/source/consumedAt`。
+- [sandbox/debug-tester] 保留 ForceCorrect，但改為「按鈕觸發一次性 override」，consume 後自動清除，避免污染一般玩家輸入。
+- [sandbox/hint/pinned] unknown hint 與 prompt text 由 classic adapter 輸出，sandbox 僅顯示不改寫。
+
+### SSOT
+- [x] SSOT unchanged（仍以 classic consonant core 為唯一真相來源；sandbox 僅 adapter）
+
+### Debug 欄位變更紀錄
+- 新增：
+  - `sandbox.judge.result`
+  - `classic.judge.result`
+  - `sandboxClassicParity`
+  - `sandbox.judge.blockedReason`（parity mismatch 時為 `parity_mismatch`）
+  - `sandbox.judge.debugOverride.active`
+  - `sandbox.judge.debugOverride.source`
+  - `sandbox.judge.debugOverride.consumedAt`
+
+### Acceptance
+- 1) 題目=ร，輸入=บ => wrong：PASS
+- 2) unknown（不知道）=> classic 同款提示且留在同題：PASS
+- 3) correct => 與 classic 同步流程（reveal/節奏）：PASS
+- 4) 未按 debug 按鈕不會出現 `debug_apply_correct`：PASS
+- 5) `sandboxClassicParity` 維持 true：PASS
+- 6) classic mode 行為不變：PASS
+
 ## 2026-03-04（sandbox only：currentPrompt SSOT + parser PASS + unknown 不跳題）
 
 ### Changed
