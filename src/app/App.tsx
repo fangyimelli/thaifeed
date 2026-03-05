@@ -2645,6 +2645,7 @@ export default function App() {
       modeRef.current.tick(now);
       const promptBeforeTick = sandboxModeRef.current.getCurrentPrompt();
       const sandboxState = sandboxModeRef.current.getState();
+      const sandboxEngineAudit = sandboxChatEngineRef.current?.getAuditDebugState();
       const canShowConsonantOverlay = sandboxState.introGate.passed;
       sandboxModeRef.current.commitPromptOverlay(canShowConsonantOverlay && promptBeforeTick?.kind === 'consonant' ? promptBeforeTick.consonant : '');
       const sandboxNode = sandboxModeRef.current.getCurrentNode();
@@ -2764,6 +2765,42 @@ export default function App() {
           introRemainingMs: Math.max(0, sandboxStoryPhaseGateRef.current.introEndsAt - now)
         },
         introGate: sandboxState.introGate,
+        audit: {
+          introGate: {
+            startedAt: sandboxState.introGate.startedAt,
+            minDurationMs: sandboxState.introGate.minDurationMs,
+            passed: sandboxState.introGate.passed
+          },
+          flow: {
+            step: sandboxState.flow.step,
+            stepEnteredAt: sandboxState.flow.stepStartedAt,
+            questionIndex: sandboxState.flow.questionIndex,
+            tagAskedThisStep: Boolean(sandboxState.flow.tagAskedThisStep),
+            askedAt: sandboxState.flow.tagAskedAt ?? sandboxState.flow.askedAt ?? 0
+          },
+          freeze: {
+            frozen: sandboxState.freeze.frozen,
+            reason: sandboxState.freeze.reason,
+            frozenAt: sandboxState.freeze.frozenAt ?? 0
+          },
+          glitchBurst: {
+            pending: sandboxState.glitchBurst.pending,
+            remaining: sandboxState.glitchBurst.remaining
+          },
+          emit: {
+            lastEmitKey: sandboxEngineAudit?.lastEmitKey ?? '-',
+            lastSpeaker: sandboxEngineAudit?.lastSpeaker ?? '-',
+            recentEmitKeys: sandboxEngineAudit?.recentEmitKeys ?? [],
+            duplicateSpamCount: sandboxEngineAudit?.duplicateSpamCount ?? 0,
+            speakerSpamCount: sandboxEngineAudit?.speakerSpamCount ?? 0,
+            freezeLeakCount: sandboxEngineAudit?.freezeLeakCount ?? 0
+          },
+          transitions: sandboxState.audit.transitions,
+          thaiViewer: {
+            lastUsedField: sandboxEngineAudit?.thaiViewer.lastUsedField ?? 'text',
+            count: sandboxEngineAudit?.thaiViewer.count ?? 0
+          }
+        },
         pendingQuestions: {
           length: sandboxState.pendingQuestions.queue.length,
           revisiting: sandboxState.pendingQuestions.revisiting
@@ -5115,9 +5152,19 @@ export default function App() {
                     <div>storyPhaseGate.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.storyPhaseGate?.phase ?? '-'}</div>
                     <div>storyPhaseGate.introRemainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.storyPhaseGate?.introRemainingMs ?? '-'}</div>
                     <div>introGate.remainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.introGate?.remainingMs ?? '-'}</div>
+                    <div>audit.introGate.startedAt/minDurationMs/passed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.startedAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.minDurationMs ?? 0} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.passed ?? false)}</div>
                     <div>flow.questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionIndex ?? '-'}</div>
                     <div>flow.step: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.step ?? '-'}</div>
                     <div>flow.stepStartedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.stepStartedAt ?? '-'}</div>
+                    <div>audit.flow.step/stepEnteredAt/questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.step ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.stepEnteredAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.questionIndex ?? 0}</div>
+                    <div>audit.freeze.frozen/reason/frozenAt: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.freeze?.frozen ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.freeze?.reason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.freeze?.frozenAt ?? 0}</div>
+                    <div>audit.glitchBurst.pending/remaining: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.glitchBurst?.pending ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.glitchBurst?.remaining ?? 0}</div>
+                    <div>audit.tagAskedThisStep/askedAt: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.tagAskedThisStep ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.askedAt ?? 0}</div>
+                    <div>audit.lastEmitKey/lastSpeaker: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.lastEmitKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.lastSpeaker ?? '-'}</div>
+                    <div>audit.recentEmitKeys(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.recentEmitKeys ?? [])}</div>
+                    <div>audit.transitions(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.transitions ?? [])}</div>
+                    <div>audit.spam.duplicate/speaker/freezeLeak: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.duplicateSpamCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.speakerSpamCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.freezeLeakCount ?? 0}</div>
+                    <div>audit.thaiViewer.lastUsedField/count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.thaiViewer?.lastUsedField ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.thaiViewer?.count ?? 0}</div>
                     <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
                     <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
                     <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>

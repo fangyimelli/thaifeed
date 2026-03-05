@@ -28,6 +28,27 @@
   - `sandbox.prompt.overlay.consonantShown`
 - 補充：preheat 固定序列為 chat engine 內部 cursor 控制（`preheatScriptCursor`），不新增外部 debug schema，避免破壞既有面板相容性。
 
+## 2026-03-06（sandbox only：audit debug fields + emit spam detection）
+
+### Changed
+- [sandbox/debug] 新增 audit debug 欄位並輸出到 debug 面板：
+  - `introGate.startedAt/minDurationMs/passed`
+  - `flow.step + stepEnteredAt + questionIndex`
+  - `freeze.frozen/reason/frozenAt`
+  - `glitchBurst.pending/remaining`
+  - `tagAskedThisStep + askedAt`
+  - `lastEmitKey + lastSpeaker`
+  - `recentEmitKeys`（ring buffer 20）
+  - `transitions`（ring buffer 20）
+  - `thaiViewer.lastUsedField/count`
+- [sandbox/chat] `chat_engine` 新增 audit 記錄，不阻擋 emit：
+  - 同 key 連續 >2：`duplicateSpamCount++`
+  - 同 speaker 連續 >3：`speakerSpamCount++`
+  - `WAIT_PLAYER_*` 且 freeze 期間仍有 emit：`freezeLeakCount++`
+
+### Scope Guard
+- 只改 sandbox，classic 無變更。
+
 ## 驗收步驟
 1. 進 sandbox 後觀察 0~20 秒：一定出現 VIP 主動 `@玩家` 打招呼。
 2. 同一段預熱內可見 2~3 則觀眾和 VIP 互動，且至少 1 則質疑「我覺得應該是假的吧」。

@@ -86,6 +86,16 @@ export class ChatEngine {
   private collapseQueue: ChatMessage[] = [];
   private supernaturalQueue: ChatMessage[] = [];
   private readonly director = new SandboxChatDirector();
+  private lastEmitKey = '';
+  private lastSpeaker = '';
+  private sameEmitKeyStreak = 0;
+  private sameSpeakerStreak = 0;
+  private recentEmitKeys: string[] = [];
+  private duplicateSpamCount = 0;
+  private speakerSpamCount = 0;
+  private freezeLeakCount = 0;
+  private thaiViewerLastUsedField: 'thai' | 'text' = 'text';
+  private thaiViewerUseCount = 0;
 
   constructor(options: ChatEngineOptions) {
     this.options = options;
@@ -142,7 +152,7 @@ export class ChatEngine {
     }
 
     if (this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0) {
-      return this.formatLine(this.pickStringPool('san_idle'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('san_idle')), 'san_idle');
     }
 
     const directed = this.director.getNextDirectedLine({
@@ -154,20 +164,20 @@ export class ChatEngine {
       glitchBurst: this.context.glitchBurst
     });
     if (directed) {
-      return this.formatLine(this.applyPlayerHandle(directed.text), directed.speaker, Boolean(directed.vip));
+      return this.captureMessage(this.formatLine(this.applyPlayerHandle(directed.text), directed.speaker, Boolean(directed.vip)), 'directed');
     }
 
     if (this.supernaturalQueue.length > 0) {
-      return this.supernaturalQueue.shift() ?? null;
+      return this.captureMessage(this.supernaturalQueue.shift() ?? null, 'supernatural_queue');
     }
 
     if (this.collapseQueue.length > 0) {
-      return this.collapseQueue.shift() ?? null;
+      return this.captureMessage(this.collapseQueue.shift() ?? null, 'collapse_queue');
     }
 
     if (Date.now() - this.lastPlayerReplyAt >= 10_000) {
       this.lastPlayerReplyAt = Date.now();
-      return this.formatLine(this.pickStringPool('san_idle'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('san_idle')), 'san_idle');
     }
 
     if (this.waveRemaining > 0) {
@@ -175,7 +185,7 @@ export class ChatEngine {
       if (this.waveRemaining === 0) {
         this.options.onWaveResolved?.(this.waveTotal);
       }
-      return this.formatLine(this.pickStringPool('observation_pool'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('observation_pool')), 'observation_pool');
     }
 
     this.sinceThai += 1;
@@ -184,39 +194,41 @@ export class ChatEngine {
 
     if (this.sinceVip >= this.randomRange(15, 25)) {
       this.sinceVip = 0;
-      return this.formatLine(this.pickStringPool('vip_summary'), SANDBOX_VIP.handle, true);
+      return this.captureMessage(this.formatLine(this.pickStringPool('vip_summary'), SANDBOX_VIP.handle, true), 'vip_summary');
     }
 
     if (this.sinceThai >= this.randomRange(5, 8)) {
       this.sinceThai = 0;
       const line = this.pickThaiViewerLine();
-      return {
+      this.thaiViewerLastUsedField = line.thai ? 'thai' : 'text';
+      this.thaiViewerUseCount += 1;
+      return this.captureMessage({
         user: line.user,
         text: `${line.user}: ${line.text}`,
         thai: line.thai,
         translation: line.translation
-      };
+      }, 'thai_viewer_pool');
     }
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.3) {
-      return this.formatLine(this.pickStringPool('guess_character'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('guess_character')), 'guess_character');
     }
 
     if (this.context.phase === 'awaitingAnswer' && Math.random() < 0.4) {
-      return this.formatLine(this.pickStringPool('fear_pool'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('fear_pool')), 'fear_pool');
     }
 
     if (this.context.phase === 'revealingWord' && Math.random() < 0.28) {
-      return this.formatLine(this.pickStringPool('theory_pool'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('theory_pool')), 'theory_pool');
     }
 
     if (this.context.phase === 'supernaturalEvent' && Math.random() < 0.65) {
-      return this.formatLine(this.pickStringPool('san_idle'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('san_idle')), 'san_idle');
     }
 
     const isHighPressure = this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent';
     if (isHighPressure && Math.random() < 0.5) {
-      return this.formatLine(this.pickStringPool('final_fear'));
+      return this.captureMessage(this.formatLine(this.pickStringPool('final_fear')), 'final_fear');
     }
 
     const weights = this.director.getRandomPoolWeights({
@@ -242,11 +254,11 @@ export class ChatEngine {
     for (const item of weightedPool) {
       roll -= item.weight;
       if (roll <= 0) {
-        if (item.key === 'vip_summary') return this.formatLine(this.pickStringPool(item.key), SANDBOX_VIP.handle, true);
-        return this.formatLine(this.pickStringPool(item.key));
+        if (item.key === 'vip_summary') return this.captureMessage(this.formatLine(this.pickStringPool(item.key), SANDBOX_VIP.handle, true), item.key);
+        return this.captureMessage(this.formatLine(this.pickStringPool(item.key)), item.key);
       }
     }
-    return this.formatLine(this.pickStringPool('casual_pool'));
+    return this.captureMessage(this.formatLine(this.pickStringPool('casual_pool')), 'casual_pool');
   }
 
   private scheduleNext(): void {
@@ -283,7 +295,7 @@ export class ChatEngine {
 
   emitReasoningWave(count = 2): ChatMessage[] {
     const size = Math.max(1, Math.min(4, count));
-    return Array.from({ length: size }).map(() => this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)));
+    return Array.from({ length: size }).map(() => this.captureMessage(this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)), 'reasoning_wave')).filter((message): message is ChatMessage => Boolean(message));
   }
 
   emitTagPlayerPrompt(): ChatMessage {
@@ -295,8 +307,51 @@ export class ChatEngine {
       freeze: this.context.freeze,
       glitchBurst: this.context.glitchBurst
     });
-    if (directed) return this.formatLine(this.applyPlayerHandle(directed.text), directed.speaker, Boolean(directed.vip));
-    return this.formatLine(this.applyPlayerHandle(this.pickStringPool('tag_player')), SANDBOX_VIP.handle, true);
+    if (directed) {
+      const message = this.formatLine(this.applyPlayerHandle(directed.text), directed.speaker, Boolean(directed.vip));
+      return this.captureMessage(message, 'tag_player_phase') ?? message;
+    }
+    const fallback = this.formatLine(this.applyPlayerHandle(this.pickStringPool('tag_player')), SANDBOX_VIP.handle, true);
+    return this.captureMessage(fallback, 'tag_player_phase') ?? fallback;
+  }
+
+  getAuditDebugState(): {
+    lastEmitKey: string;
+    lastSpeaker: string;
+    recentEmitKeys: string[];
+    duplicateSpamCount: number;
+    speakerSpamCount: number;
+    freezeLeakCount: number;
+    thaiViewer: { lastUsedField: 'thai' | 'text'; count: number };
+  } {
+    return {
+      lastEmitKey: this.lastEmitKey,
+      lastSpeaker: this.lastSpeaker,
+      recentEmitKeys: [...this.recentEmitKeys],
+      duplicateSpamCount: this.duplicateSpamCount,
+      speakerSpamCount: this.speakerSpamCount,
+      freezeLeakCount: this.freezeLeakCount,
+      thaiViewer: {
+        lastUsedField: this.thaiViewerLastUsedField,
+        count: this.thaiViewerUseCount
+      }
+    };
+  }
+
+  private captureMessage(message: ChatMessage | null, emitKey: string): ChatMessage | null {
+    if (!message) return null;
+    if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_PLAYER_CONSONANT' || this.context.flowStep === 'WAIT_PLAYER_MEANING')) {
+      this.freezeLeakCount += 1;
+    }
+    const speaker = message.user;
+    this.sameEmitKeyStreak = this.lastEmitKey === emitKey ? this.sameEmitKeyStreak + 1 : 1;
+    this.sameSpeakerStreak = this.lastSpeaker === speaker ? this.sameSpeakerStreak + 1 : 1;
+    if (this.sameEmitKeyStreak > 2) this.duplicateSpamCount += 1;
+    if (this.sameSpeakerStreak > 3) this.speakerSpamCount += 1;
+    this.lastEmitKey = emitKey;
+    this.lastSpeaker = speaker;
+    this.recentEmitKeys = [...this.recentEmitKeys, emitKey].slice(-20);
+    return message;
   }
 
   shouldEmitJoin(): boolean {

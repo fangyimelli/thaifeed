@@ -125,6 +125,27 @@
 - 4) tag timeout/recovery 固定文案：PASS
 - 5) sandbox 不再出現「選項：...」：PASS
 
+## 2026-03-06（sandbox only：audit debug fields + non-blocking spam/leak audit）
+
+### Changed
+- [sandbox/debug] debug 面板新增 audit 區塊欄位：
+  - `introGate.startedAt/minDurationMs/passed`
+  - `flow.step/stepEnteredAt/questionIndex`
+  - `freeze.frozen/reason/frozenAt`
+  - `glitchBurst.pending/remaining`
+  - `tagAskedThisStep/askedAt`
+  - `lastEmitKey/lastSpeaker`
+  - `recentEmitKeys`（ring buffer 20）
+  - `transitions`（ring buffer 20）
+  - `thaiViewer.lastUsedField/count`
+- [sandbox/chat] `chat_engine` 新增 audit counters（偵測到只記錄，不阻擋）：
+  - `duplicateSpamCount`：同 key 連續 emit > 2
+  - `speakerSpamCount`：同 speaker 連續 emit > 3
+  - `freezeLeakCount`：`WAIT_PLAYER_*` + freeze 期間仍發生 emit
+
+### Scope
+- classic mode 無修改。
+
 ## 2026-03-05（sandbox only：chat pools corpus expansion）
 
 ### Changed
