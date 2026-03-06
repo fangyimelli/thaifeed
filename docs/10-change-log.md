@@ -1,3 +1,22 @@
+
+## 2026-03-06（sandbox only：reply preview lookup / WAIT_REPLY scheduler pause / ADVANCE_NEXT transition dedupe）
+
+### Changed
+- [sandbox/ui] `src/ui/chat/ChatPanel.tsx`
+  - reply preview 查找改為使用完整訊息集合（full `messages` sanitize 後索引），不再只查 `slice(-MAX_RENDER_COUNT)`。
+  - 聊天列表仍只 render 最後 `MAX_RENDER_COUNT`；僅 reply preview lookup 改為 full list。
+- [sandbox/chat] `src/sandbox/chat/chat_engine.ts`
+  - `WAIT_REPLY_1/2/3` 新增 scheduler hard pause（清除 timer 並停止下一輪排程），不再只靠 emit gate 丟棄輸出。
+  - 離開 WAIT_REPLY step（玩家回覆後）自動 resume scheduler。
+- [sandbox/flow] `src/app/App.tsx`
+  - `ADVANCE_NEXT` 移除外層重複 `setFlowStep('TAG_PLAYER_1')`，避免與 `forceAdvanceNode()` 雙重寫 transition log。
+
+### Validation
+- 1) reply preview：只要 target 仍在 `state.messages` 即可正常顯示，不再誤顯示「原始訊息已不存在」：PASS
+- 2) WAIT_REPLY 期間 scheduler 不再持續 `scheduleNext()`：PASS
+- 3) flow transition log 不再出現 `ADVANCE_NEXT -> TAG_PLAYER_1` 雙寫：PASS
+- 4) classic mode 行為未修改：PASS
+
 ## 2026-03-06
 Sandbox Flow Update
 

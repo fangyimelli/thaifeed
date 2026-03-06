@@ -22,5 +22,6 @@ Last Updated By: Codex
 
 ## Rules Snapshot
 - reply-to active 時，聊天室必須 0 output，且 reply-to 不可取消。
+- `WAIT_REPLY_1/2/3` 期間 scheduler 必須硬暫停（不可持續 schedule 再靠 emit gate 丟棄）；玩家回覆離開 WAIT_REPLY 後才可恢復排程。
 - 技術故障訊息只能在 `WAIT_REPLY_3` 累積，並在 `FLUSH_TECH_BACKLOG` 才顯示。
 - 若 sandbox 與 classic 共享邏輯，必須沿用 classic reply-to 形式，不得建立 sandbox 專屬 pinned reply UI。
