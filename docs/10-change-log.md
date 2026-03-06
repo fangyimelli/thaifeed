@@ -1,3 +1,23 @@
+## 2026-03-06 — Sandbox NIGHT_01 mention/reply/prompt/debug 全鏈路稽核（audit only）
+
+### Scope
+- 稽核範圍：sandbox story / chat / mention / reply / prompt / debug render。
+- 本次不實作修復，不改功能邏輯。
+
+### Audit artifacts
+- 新增：`docs/sandbox-night01-audit-report-2026-03-06.md`。
+
+### Confirmed findings
+- `behindyou` 的 `@玩家` 由 `SandboxChatDirector` 建立，經 `ChatEngine -> App.convertSandboxChatMessage -> dispatchChatMessage` 進入 mention pipeline，訊息本體無 reply 欄位。
+- `↳ @mod_live` / `（原始訊息已不存在）` 來自 `ChatPanel` 全域 reply pin bar（`qnaStatus + questionMessageId`），非該則 mention message 被畫成 reply。
+- `@t` 來源是玩家 handle 值（資料建立時即為單字元），非 UI truncation。
+- 已定位 fallback 觸發路徑：tag flow append 失敗仍可 commit `questionMessageId`，導致 lookup miss。
+- 已標記 cross-mode leakage：sandbox 與 classic 共享 reply/qna 控制面造成干擾。
+
+### SSOT / Debug 欄位變更
+- SSOT：無變更（audit only）。
+- Debug 欄位：無 runtime 欄位新增/刪除（僅文件化稽核證據鏈）。
+
 ## 2026-03-06 — Sandbox pinned reply body 空字串修復（sandbox only）
 
 ### Root cause

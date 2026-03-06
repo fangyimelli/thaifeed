@@ -1,3 +1,22 @@
+## 2026-03-06 Sandbox NIGHT_01 全鏈路稽核（audit only）
+
+### Summary
+- 本次為 audit-only；不改功能邏輯、不改 classic mode。
+- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-06.md`。
+- 已確認：
+  1. `behindyou @玩家` 是 mention 訊息，不是 reply schema。
+  2. `↳ @mod_live` / `（原始訊息已不存在）` 來自全域 reply pin bar fallback。
+  3. `@t` 來源是玩家 handle 本值，不是 renderer truncation。
+  4. sandbox 與 classic 共用 reply/qna control plane，存在 cross-mode leakage 風險。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：無 runtime schema 變更（audit only）。
+- Debug：無新增欄位；補齊 trace 與 root-cause 文件化。
+
+### Integration rule check
+- 只動 sandbox 稽核文檔，classic mode 程式碼未改。
+- `.github/pull_request_template.md` 與 `PR_NOTES.md` 皆存在。
+
 ## 2026-03-06 Sandbox pinned reply body 為空修復（sandbox only）
 
 ### 1) Root cause

@@ -1,3 +1,20 @@
+## 2026-03-06 Sandbox NIGHT_01 chat pipeline audit（audit only, sandbox only）
+
+- 本次為 **稽核-only**，未修改功能邏輯；classic mode 無改動。
+- 產出可執行稽核報告：`docs/sandbox-night01-audit-report-2026-03-06.md`。
+- 已確認 `behindyou` 事件為 mention message（非 reply schema），`↳ @mod_live` 與 `（原始訊息已不存在）` 來自全域 reply pin bar 條件渲染。
+- 已確認 `@t` 來源為玩家 handle 本值（資料建立時即為單字元），非 render truncation。
+- 已標記 cross-mode leakage 風險：sandbox reply/pin 控制面與 classic qna/lock state 共用。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無資料模型變更（audit only）。
+- Debug：無新增 runtime debug 欄位（僅補文件稽核結論與 trace map）。
+
+### Removed / Deprecated Log（本次）
+
+- 本次 audit-only，無移除/廢棄功能邏輯。
+
 ## 2026-03-06 Sandbox pinned body 空字串修復（sandbox only）
 
 - 僅 sandbox 變更，classic mode 無改動。
