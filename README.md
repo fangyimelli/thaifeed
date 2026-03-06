@@ -1,3 +1,24 @@
+## 2026-03-06 Sandbox P0 修復：交易式 question commit / pin guard / debug 隔離（sandbox only）
+
+- 僅 sandbox 路徑調整，classic mode 行為不變。
+- `runTagStartFlow` 改為交易式：append 必須回傳 `{ok,messageId}` 才能進入 pin/freeze/commit；append 失敗直接中止，不寫入 `qna.active.questionMessageId`。
+- `dispatchChatMessage` 改回傳落地 `messageId`；所有 sandbox tag flow / qna flow 皆以「實際 append 成功的 messageId」作唯一 commit 來源。
+- reply pin bar guard 升級：必須同時滿足 `AWAITING_REPLY + questionMessageId + source message 存在 + lock/source 一致` 才 render。
+- source 缺失或不一致時，採安全降級：清除 reply UI、解除 freeze、停止 `AWAITING_REPLY`，避免誤導 fallback。
+- debug actions 改 sandbox-safe：
+  - `Emit NPC Tag @You` 僅送出 isolated debug 訊息，不再直接改寫正式 qna/lock/pin。
+  - `Simulate Send` 改為 isolated debug message path，不推進正式送出流程。
+  - `Toggle TagLock(Self)` 改為 isolated debug flag（不再寫正式 replyTarget/lock）。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無資料模型新增；強化 runtime invariant（question commit 必須依賴 append success）。
+- Debug：新增/更新 `sandbox.debug.isolatedTagLock` 與 `sandbox.debug.isolatedActions.*`，標示 debug 隔離路徑。
+
+### Removed / Deprecated Log（本次）
+
+- 移除 debug 直接推進正式 qna/pin/lock 的舊路徑（改為 isolated debug path）。
+
 ## 2026-03-06 Sandbox NIGHT_01 chat pipeline audit（audit only, sandbox only）
 
 - 本次為 **稽核-only**，未修改功能邏輯；classic mode 無改動。

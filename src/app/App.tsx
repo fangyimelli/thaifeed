@@ -591,6 +591,7 @@ export default function App() {
   const [layoutMetricsTick, setLayoutMetricsTick] = useState(0);
   const [debugOpen, setDebugOpen] = useState(false);
   const [debugModeSwitching, setDebugModeSwitching] = useState(false);
+  const [debugIsolatedTagLock, setDebugIsolatedTagLock] = useState(false);
   const [lastModeSwitch, setLastModeSwitch] = useState<LastModeSwitchStatus>(() => {
     const fallback = {
       clickAt: null,
@@ -1031,7 +1032,7 @@ export default function App() {
   const dispatchChatMessage = (
     message: ChatMessage,
     options?: { source?: ChatSendSource; sourceTag?: string }
-  ): { ok: true } | { ok: false; blockedReason: string } => {
+  ): { ok: true; messageId: string } | { ok: false; blockedReason: string } => {
     const source = options?.source ?? 'unknown';
     const sourceTag = options?.sourceTag ?? source;
     const sandboxForcedReplyActive = modeRef.current.id === 'sandbox_story'
@@ -1299,7 +1300,7 @@ export default function App() {
         }
       }
     };
-    return { ok: true };
+    return { ok: true, messageId: linted.message.id };
   };
 
   const syncChatEngineDebug = useCallback(() => {
@@ -1736,6 +1737,9 @@ export default function App() {
   }, [clearChatFreeze, clearReplyUi, resolveQna]);
 
   const setPinnedQuestionMessage = useCallback((payload: { source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'autoPinFreeze' | 'unknown'; messageId: string; hasTagToActiveUser: boolean }) => {
+    const sourceMessage = state.messages.find((entry) => entry.id === payload.messageId) ?? null;
+    if (!sourceMessage) return false;
+
     if (modeRef.current.id !== 'sandbox_story') {
       setLastQuestionMessageId(payload.messageId);
       setLastQuestionMessageHasTag(payload.hasTagToActiveUser);
@@ -1756,7 +1760,7 @@ export default function App() {
     sandboxModeRef.current.commitPromptPinnedRendered(payload.messageId);
     sandboxModeRef.current.commitPinnedWriter({ source: payload.source === 'autoPinFreeze' ? 'eventEngine' : payload.source, writerBlocked: false, blockedReason: '' });
     return true;
-  }, []);
+  }, [state.messages]);
 
 
 
@@ -2065,6 +2069,31 @@ export default function App() {
       setPendingForceScrollReason(null);
     }
   }, [state.messages.length]);
+
+  useEffect(() => {
+    if (qnaStateRef.current.active.status !== 'AWAITING_REPLY') return;
+    const questionMessageId = qnaStateRef.current.active.questionMessageId;
+    const questionMessage = questionMessageId ? state.messages.find((entry) => entry.id === questionMessageId) : null;
+    const hasQuestionSource = Boolean(questionMessageId && questionMessage);
+    const lockConsistent = Boolean(
+      !lockStateRef.current.isLocked
+      || !lockStateRef.current.target
+      || !questionMessage
+      || lockStateRef.current.target === questionMessage.username
+    );
+
+    if (hasQuestionSource && lockConsistent) return;
+
+    clearReplyUi('qna_awaiting_reply_missing_or_inconsistent_source');
+    if (chatFreeze.isFrozen || chatAutoScrollMode !== 'FOLLOW') {
+      clearChatFreeze('qna_awaiting_reply_missing_or_inconsistent_source');
+    }
+    setChatAutoPaused(false);
+    qnaStateRef.current.awaitingReply = false;
+    qnaStateRef.current.active.status = 'ABORTED';
+    qnaStateRef.current.active.abortReason = hasQuestionSource ? 'source_inconsistent' : 'source_missing';
+    qnaStateRef.current.active.resolvedAt = Date.now();
+  }, [chatAutoScrollMode, chatFreeze.isFrozen, clearChatFreeze, clearReplyUi, state.messages]);
 
   useEffect(() => {
     if (!chatFreeze.isFrozen) return;
@@ -2464,13 +2493,17 @@ export default function App() {
       tagTarget: questionActor
     };
 
-    await runTagStartFlow({
+    const tagFlowResult = await runTagStartFlow({
       tagMessage,
       pinnedText: line,
       shouldFreeze: true,
       appendMessage: (message) => {
         const sent = dispatchChatMessage(message, { source: 'qna_question', sourceTag: 'tag_start_flow' });
-        if (!sent.ok) appendFailedReason = sent.blockedReason;
+        if (!sent.ok) {
+          appendFailedReason = sent.blockedReason;
+          return sent;
+        }
+        return { ok: true as const, messageId: sent.messageId };
       },
       forceScrollToBottom: async ({ reason }) => {
         setScrollMode('FOLLOW', `tag_start_${reason}`);
@@ -2479,15 +2512,15 @@ export default function App() {
         await nextAnimationFrame();
         setPendingForceScrollReason(`${reason}:timeout0`);
       },
-      setPinnedReply: ({ visible, text }) => {
+      setPinnedReply: ({ visible, text, messageId: resolvedMessageId }) => {
         if (!visible) return;
         const now = Date.now();
-        markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt: now });
-        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: messageId };
+        markQnaQuestionCommitted(qnaStateRef.current, { messageId: resolvedMessageId, askedAt: now });
+        lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: resolvedMessageId };
         eventExclusiveStateRef.current.currentLockOwner = questionActor;
         const pinnedOk = setPinnedQuestionMessage({
           source: 'qnaEngine',
-          messageId,
+          messageId: resolvedMessageId,
           hasTagToActiveUser: true
         });
         if (!pinnedOk) {
@@ -2504,6 +2537,10 @@ export default function App() {
         setChatAutoPaused(true);
       }
     });
+
+    if (!tagFlowResult.ok) {
+      appendFailedReason = tagFlowResult.blockedReason;
+    }
 
     if (appendFailedReason) {
       setLastBlockedReason(appendFailedReason ?? 'qna_question_send_failed');
@@ -4277,12 +4314,26 @@ export default function App() {
   }, [input, submitChat]);
 
   const submit = useCallback((source: SendSource) => {
+    if (source === 'debug_simulate') {
+      const sent = dispatchChatMessage({
+        id: crypto.randomUUID(),
+        username: 'debug_bot',
+        type: 'system',
+        text: '[isolated debug] Simulate Send invoked',
+        language: 'zh',
+        translation: '[isolated debug] Simulate Send invoked'
+      }, { source: 'debug_tester', sourceTag: 'debug_simulate_isolated' });
+      const debugResult: SendResult = sent.ok
+        ? { ok: true, status: 'sent', reason: 'debug_simulate_isolated' }
+        : { ok: false, status: 'blocked', reason: sent.blockedReason };
+      return Promise.resolve(debugResult);
+    }
     if (source === 'submit') {
       setSendDebug((prev) => ({ ...prev, lastSubmitAt: Date.now() }));
       logSendDebug('submit', { source });
     }
     return submitChat(input, source);
-  }, [input, logSendDebug, submitChat]);
+  }, [dispatchChatMessage, input, logSendDebug, submitChat]);
 
   const registerActiveUser = useCallback((rawHandle: string) => {
     const normalizedHandle = normalizeHandle(rawHandle);
@@ -4430,23 +4481,23 @@ export default function App() {
       setLastBlockedReason(sent.ok ? 'debug_emit_failed' : (sent.blockedReason ?? 'debug_emit_failed'));
       return;
     }
-    const now = Date.now();
-    lockStateRef.current = { isLocked: true, target: 'mod_live', startedAt: now, replyingToMessageId: sent.lineId };
-    eventExclusiveStateRef.current.currentLockOwner = 'mod_live';
-    const hasTagToActiveUser = parseMentionHandles(line).some((handle) => toHandleKey(handle) === toHandleKey(activeUserInitialHandleRef.current));
-    const pinnedOk = setPinnedQuestionMessage({
-      source: modeRef.current.id === 'sandbox_story' ? 'eventEngine' : 'unknown',
-      messageId: sent.lineId,
-      hasTagToActiveUser
-    });
-    if (!pinnedOk) {
-      setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
-    }
+    window.__CHAT_DEBUG__ = {
+      ...(window.__CHAT_DEBUG__ ?? {}),
+      sandbox: {
+        ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
+        debug: {
+          ...((window.__CHAT_DEBUG__ as any)?.sandbox?.debug ?? {}),
+          isolatedActions: {
+            ...((window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.isolatedActions ?? {}),
+            lastEmitNpcTagAt: Date.now(),
+            lastEmitNpcTagMessageId: sent.lineId,
+            mode: 'isolated_message_only'
+          }
+        }
+      }
+    } as any;
     setLastBlockedReason(null);
-    if (hasTagToActiveUser) {
-      void scrollThenPauseForTaggedQuestion({ questionMessageId: sent.lineId });
-    }
-  }, [dispatchEventLine, scrollThenPauseForTaggedQuestion]);
+  }, [dispatchEventLine]);
 
 
   useEffect(() => {
@@ -4700,7 +4751,7 @@ export default function App() {
 
     const line = `@${activeUser || 'player'} 看到了嗎？先回我`;
     const messageId = promptId;
-    await runTagStartFlow({
+    const tagFlowResult = await runTagStartFlow({
       tagMessage: {
         id: messageId,
         username: tagOwner,
@@ -4713,7 +4764,9 @@ export default function App() {
       pinnedText: line,
       shouldFreeze: true,
       appendMessage: (message) => {
-        dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_prompt' });
+        const sent = dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_prompt' });
+        if (!sent.ok) return sent;
+        return { ok: true as const, messageId: sent.messageId };
       },
       forceScrollToBottom: async ({ reason }) => {
         setScrollMode('FOLLOW', `sandbox_consonant_${reason}`);
@@ -4721,13 +4774,13 @@ export default function App() {
         setPendingForceScrollReason(`sandbox_consonant_${reason}`);
         await nextAnimationFrame();
       },
-      setPinnedReply: () => {
+      setPinnedReply: ({ messageId: resolvedMessageId }) => {
         const now = Date.now();
-        markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt: now });
-        lockStateRef.current = { isLocked: true, target: tagOwner, startedAt: now, replyingToMessageId: messageId };
+        markQnaQuestionCommitted(qnaStateRef.current, { messageId: resolvedMessageId, askedAt: now });
+        lockStateRef.current = { isLocked: true, target: tagOwner, startedAt: now, replyingToMessageId: resolvedMessageId };
         const pinnedOk = setPinnedQuestionMessage({
           source: 'sandboxPromptCoordinator',
-          messageId,
+          messageId: resolvedMessageId,
           hasTagToActiveUser: true
         });
         if (!pinnedOk) {
@@ -4743,6 +4796,10 @@ export default function App() {
         setChatAutoPaused(true);
       }
     });
+    if (!tagFlowResult.ok) {
+      setLastBlockedReason(tagFlowResult.blockedReason);
+      return;
+    }
     const askedAt = Date.now();
     modeRef.current.onIncomingTag(line);
     sandboxModeRef.current.markTagAskedThisStep(askedAt);
@@ -4985,10 +5042,9 @@ export default function App() {
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = Math.random() < 0.5 ? 'mod_live' : SANDBOX_VIP.handle;
       const line = `@${taggedUser} 所以到底怎麼唸？`;
-      const messageId = crypto.randomUUID();
       void runTagStartFlow({
         tagMessage: {
-          id: messageId,
+          id: crypto.randomUUID(),
           username: speaker,
           type: 'chat',
           text: line,
@@ -4999,7 +5055,9 @@ export default function App() {
         pinnedText: line,
         shouldFreeze: true,
         appendMessage: (message) => {
-          dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_2' });
+          const sent = dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_2' });
+          if (!sent.ok) return sent;
+          return { ok: true as const, messageId: sent.messageId };
         },
         forceScrollToBottom: async ({ reason }) => {
           setScrollMode('FOLLOW', `sandbox_tag2_${reason}`);
@@ -5007,7 +5065,7 @@ export default function App() {
           setPendingForceScrollReason(`sandbox_tag2_${reason}`);
           await nextAnimationFrame();
         },
-        setPinnedReply: () => {
+        setPinnedReply: ({ messageId }) => {
           const askedAt = Date.now();
           markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
           lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: messageId };
@@ -5031,10 +5089,9 @@ export default function App() {
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = Math.random() < 0.5 ? 'mod_live' : SANDBOX_VIP.handle;
       const line = `@${taggedUser} 這個單字你覺得代表什麼？在指誰？`;
-      const messageId = crypto.randomUUID();
       void runTagStartFlow({
         tagMessage: {
-          id: messageId,
+          id: crypto.randomUUID(),
           username: speaker,
           type: 'chat',
           text: line,
@@ -5045,7 +5102,9 @@ export default function App() {
         pinnedText: line,
         shouldFreeze: true,
         appendMessage: (message) => {
-          dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_3' });
+          const sent = dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_tag_player_3' });
+          if (!sent.ok) return sent;
+          return { ok: true as const, messageId: sent.messageId };
         },
         forceScrollToBottom: async ({ reason }) => {
           setScrollMode('FOLLOW', `sandbox_tag3_${reason}`);
@@ -5053,7 +5112,7 @@ export default function App() {
           setPendingForceScrollReason(`sandbox_tag3_${reason}`);
           await nextAnimationFrame();
         },
-        setPinnedReply: () => {
+        setPinnedReply: ({ messageId }) => {
           const askedAt = Date.now();
           markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
           lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: messageId };
@@ -5751,6 +5810,7 @@ export default function App() {
                     <div>sandbox.judge.debugOverride.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.active ?? false)}</div>
                     <div>sandbox.judge.debugOverride.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.source ?? '-'}</div>
                     <div>sandbox.judge.debugOverride.consumedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.consumedAt ?? 0}</div>
+                    <div>sandbox.debug.isolatedTagLock: {String(debugIsolatedTagLock)}</div>
                     <div>sandbox.prompt.overlay.consonantShown: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.overlay?.consonantShown ?? '-'}</div>
                     <div>sandbox.prompt.pinned.promptIdRendered: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.promptIdRendered ?? '-'}</div>
                     <div>sandbox.prompt.mismatch: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.mismatch ?? false)}</div>
@@ -5795,7 +5855,7 @@ export default function App() {
             isComposing={debugComposingOverride ?? isComposing}
             onDebugSimulateSend={() => submit('debug_simulate')}
             onDebugToggleSelfTag={() => {
-              setReplyTarget((prev) => (prev ? null : 'you'));
+              setDebugIsolatedTagLock((prev) => !prev);
             }}
             onDebugToggleComposing={() => {
               setDebugComposingOverride((prev) => (prev == null ? true : !prev));
@@ -5807,7 +5867,7 @@ export default function App() {
                 username: 'npc_mod',
                 text: `測試提及 @${handle}，請看高亮與自動滾動`,
                 language: 'zh'
-              }, { source: 'debug_tester', sourceTag: 'mention_autoscroll' });
+              }, { source: 'debug_tester', sourceTag: 'mention_autoscroll_isolated' });
             }}
             onSendButtonClick={handleSendButtonClick}
             isLocked={lockStateRef.current.isLocked}
