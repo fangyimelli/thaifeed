@@ -8,8 +8,11 @@ export type SandboxDirectorStep =
   | 'POSSESSION_AUTOFILL'
   | 'POSSESSION_AUTOSEND'
   | 'CROWD_REACT_WORD'
+  | 'VIP_SUMMARY_1'
   | 'TAG_PLAYER_2_PRONOUNCE'
   | 'WAIT_REPLY_2'
+  | 'DISCUSS_PRONOUNCE'
+  | 'VIP_SUMMARY_2'
   | 'TAG_PLAYER_3_MEANING'
   | 'WAIT_REPLY_3'
   | 'FLUSH_TECH_BACKLOG'
@@ -50,7 +53,7 @@ export class SandboxChatDirector {
     if (state.freeze.frozen) return 'FROZEN';
     if (state.flowStep === 'PREJOIN') return 'FROZEN';
     if (state.flowStep === 'PREHEAT') return 'PREHEAT';
-    if (state.flowStep === 'POSSESSION_AUTOFILL' || state.flowStep === 'POSSESSION_AUTOSEND' || state.flowStep === 'CROWD_REACT_WORD') return 'REACTIVE';
+    if (state.flowStep === 'POSSESSION_AUTOFILL' || state.flowStep === 'POSSESSION_AUTOSEND' || state.flowStep === 'CROWD_REACT_WORD' || state.flowStep === 'DISCUSS_PRONOUNCE') return 'REACTIVE';
     return 'RANDOM';
   }
 
@@ -72,7 +75,7 @@ export class SandboxChatDirector {
   getRandomPoolWeights(state: DirectorContext): PoolWeights {
     const mode = this.getChatMode(state);
     if (mode === 'PREHEAT') {
-      return { casual: 45, observation: 35, fear: 4, theory: 2, tag_player: 0, vip_summary: 8, final_fear: 1, thai_viewer: 3, san_idle: 2 };
+      return { casual: 54, observation: 34, fear: 2, theory: 1, tag_player: 0, vip_summary: 8, final_fear: 0, thai_viewer: 1, san_idle: 0 };
     }
     if (mode === 'REACTIVE') {
       return { casual: 12, observation: 28, fear: 14, theory: 18, tag_player: 0, vip_summary: 8, final_fear: 6, thai_viewer: 6, san_idle: 8 };

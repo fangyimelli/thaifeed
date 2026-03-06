@@ -24,8 +24,11 @@ export type SandboxFlowStep =
   | 'POSSESSION_AUTOFILL'
   | 'POSSESSION_AUTOSEND'
   | 'CROWD_REACT_WORD'
+  | 'VIP_SUMMARY_1'
   | 'TAG_PLAYER_2_PRONOUNCE'
   | 'WAIT_REPLY_2'
+  | 'DISCUSS_PRONOUNCE'
+  | 'VIP_SUMMARY_2'
   | 'TAG_PLAYER_3_MEANING'
   | 'WAIT_REPLY_3'
   | 'FLUSH_TECH_BACKLOG'
@@ -397,14 +400,18 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'TAG_PLAYER_3_MEANING') return 'awaitingTag';
     if (step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3') return 'awaitingAnswer';
     if (step === 'POSSESSION_AUTOFILL' || step === 'POSSESSION_AUTOSEND') return 'revealingWord';
-    if (step === 'CROWD_REACT_WORD') return 'chatRiot';
+    if (step === 'CROWD_REACT_WORD' || step === 'DISCUSS_PRONOUNCE') return 'chatRiot';
+    if (step === 'VIP_SUMMARY_1' || step === 'VIP_SUMMARY_2') return 'vipTranslate';
     if (step === 'FLUSH_TECH_BACKLOG') return 'supernaturalEvent';
     return 'awaitingTag';
   };
   const setFlowStepInternal = (step: SandboxFlowStep, reason = '', now = Date.now()) => {
     const prevStep = state.flow.step;
+    if (prevStep === step) {
+      return;
+    }
     const currentTagIndex: 1 | 2 | 3 =
-      step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'WAIT_REPLY_2'
+      step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'WAIT_REPLY_2' || step === 'DISCUSS_PRONOUNCE' || step === 'VIP_SUMMARY_2'
         ? 2
         : step === 'TAG_PLAYER_3_MEANING' || step === 'WAIT_REPLY_3' || step === 'FLUSH_TECH_BACKLOG'
           ? 3

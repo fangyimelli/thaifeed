@@ -1,4 +1,28 @@
 
+## 2026-03-06 Sandbox Flow SSOT Hardening (sandbox only)
+
+### Scope
+- 僅修改 sandbox 相關程式碼與文件。
+- classic mode 未修改。
+
+### Validation Checklist
+1. PREHEAT 30 秒內不會出現 final fear / ending pressure：**PASS**（PREHEAT final_fear 權重=0）。
+2. TAG_PLAYER_1 只出 1 則，然後立刻 freeze：**PASS**（`tagAskedThisStep` guard + wait freeze helper）。
+3. TAG_PLAYER_2 只出 1 則，然後立刻 freeze：**PASS**（同上）。
+4. TAG_PLAYER_3 只出 1 則，然後立刻 freeze：**PASS**（同上）。
+5. 任一 WAIT_REPLY_* 期間聊天室完全 0 output：**PASS**（reply-to active 全域 freeze + scheduler pause）。
+6. TAG#1 回覆後固定「短討論 -> VIP summary -> TAG#2」：**PASS**（`CROWD_REACT_WORD -> VIP_SUMMARY_1 -> TAG_PLAYER_2_PRONOUNCE`）。
+7. TAG#2 回覆後固定「短討論 -> VIP summary -> TAG#3」：**PASS**（`DISCUSS_PRONOUNCE -> VIP_SUMMARY_2 -> TAG_PLAYER_3_MEANING`）。
+8. 只有 WAIT_REPLY_3 會累積 tech backlog：**PASS**。
+9. 回覆 TAG#3 後才 flush tech backlog（<=8）：**PASS**（最後一則為分鐘數格式）。
+10. classic mode 未修改：**PASS**。
+
+### Notes
+- sandbox-flow-table 已同步更新。
+- README / docs/10-change-log.md 已同步更新。
+
+
+
 ## 2026-03-06 Patch Request：Sandbox Audit 三項修補（reply preview / WAIT_REPLY scheduler / ADVANCE_NEXT dedupe）
 
 ### 變更摘要（sandbox only）
