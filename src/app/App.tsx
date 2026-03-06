@@ -1610,7 +1610,7 @@ export default function App() {
         sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
         clearReplyUi('sandbox_wait_reply_2_consumed');
         clearChatFreeze('sandbox_wait_reply_2_consumed');
-        sandboxModeRef.current.setFlowStep('TAG_PLAYER_3_MEANING', 'player_reply_2_consumed');
+        sandboxModeRef.current.setFlowStep('DISCUSS_PRONOUNCE', 'player_reply_2_consumed');
         setSandboxRevealTick(Date.now());
         return true;
       }
@@ -2731,21 +2731,18 @@ export default function App() {
       if (modeRef.current.id === 'sandbox_story' && canAskConsonantNow(sandboxState)) {
         void askSandboxConsonantNow();
       }
-      if (modeRef.current.id === 'sandbox_story' && (sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3')) {
+      const sandboxReplyToActive = modeRef.current.id === 'sandbox_story' && lockStateRef.current.isLocked && Boolean(lockStateRef.current.replyingToMessageId);
+      if (sandboxReplyToActive) {
         sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: sandboxState.freeze.frozenAt || now });
         setChatAutoPaused(true);
-        const isTechBacklogEnabled = sandboxState.flow.currentTagIndex === 3 && sandboxState.flow.step === 'WAIT_REPLY_3';
-        const replyToActive = lockStateRef.current.isLocked && Boolean(lockStateRef.current.replyingToMessageId);
-        if (isTechBacklogEnabled && replyToActive) {
-          if (sandboxTechBacklogLastAtRef.current <= 0) sandboxTechBacklogLastAtRef.current = now;
-          if (now - sandboxTechBacklogLastAtRef.current >= 30_000) {
-            sandboxTechBacklogTotalWaitMsRef.current += 30_000;
-            const waitedMs = Math.max(sandboxTechBacklogTotalWaitMsRef.current, now - (sandboxState.flow.stepStartedAt || now));
-            const roundedMinutes = Math.max(5, Math.round((waitedMs / 60000) / 5) * 5);
-            sandboxTechBacklogRef.current.push('技術故障：訊號不穩，暫時卡住');
-            sandboxTechBacklogRef.current.push(`奇怪卡了大約 ${roundedMinutes} 分鐘`);
-            sandboxTechBacklogLastAtRef.current = now;
-          }
+      }
+      if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'WAIT_REPLY_3' && sandboxReplyToActive) {
+        if (sandboxTechBacklogLastAtRef.current <= 0) sandboxTechBacklogLastAtRef.current = now;
+        if (now - sandboxTechBacklogLastAtRef.current >= 30_000) {
+          sandboxTechBacklogTotalWaitMsRef.current += 30_000;
+          sandboxTechBacklogRef.current.push('技術故障：訊號不穩，暫時卡住');
+          sandboxTechBacklogRef.current.push('技術故障：系統延遲，先別重整');
+          sandboxTechBacklogLastAtRef.current = now;
         }
       } else {
         sandboxTechBacklogLastAtRef.current = 0;
@@ -4286,6 +4283,7 @@ export default function App() {
     const node = sandboxModeRef.current.getCurrentNode();
     if (!node) return;
     if (!canAskConsonantNow(sandboxState)) return;
+    if (sandboxState.flow.tagAskedThisStep) return;
     if (sandboxState.last.lastAskAt && sandboxState.last.lastAskAt >= sandboxState.flow.stepStartedAt) return;
 
     const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
@@ -4358,17 +4356,16 @@ export default function App() {
         setChatAutoPaused(true);
       }
     });
+    const askedAt = Date.now();
     modeRef.current.onIncomingTag(line);
-    sandboxModeRef.current.setLastTimestamps({ lastAskAt: Date.now() });
+    sandboxModeRef.current.markTagAskedThisStep(askedAt);
+    sandboxModeRef.current.setLastTimestamps({ lastAskAt: askedAt });
     sandboxTechBacklogRef.current = [];
     sandboxTechBacklogLastAtRef.current = 0;
     sandboxTechBacklogTotalWaitMsRef.current = 0;
-    sandboxModeRef.current.setFlowStep('WAIT_REPLY_1', 'tag_player_1_enter_wait');
-    sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: Date.now() });
-    sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt: Date.now(), timeoutMs: 60_000, pausedChat: true });
-    setChatAutoPaused(true);
+    sandboxFreezeAndWaitForReply(askedAt, 'sandbox_tag_player_1', 'WAIT_REPLY_1');
     sandboxConsonantPromptNodeIdRef.current = node.id;
-    sandboxPromptIssuedAtRef.current = Date.now();
+    sandboxPromptIssuedAtRef.current = askedAt;
   }
 
   const forceRevealCurrent = useCallback(() => {
@@ -4490,6 +4487,20 @@ export default function App() {
   }, []);
 
 
+
+  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3') => {
+    sandboxModeRef.current.setFlowStep(waitStep, `${waitStep.toLowerCase()}_entered`, askedAt);
+    sandboxModeRef.current.markTagAskedThisStep(askedAt);
+    sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
+    sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
+    setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
+    setPauseSetAt(askedAt);
+    setPauseReason(reason);
+    setScrollMode('FROZEN', reason);
+    setChatAutoPaused(true);
+  }, []);
+
+
   useEffect(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
     const sandboxState = sandboxModeRef.current.getState();
@@ -4549,12 +4560,41 @@ export default function App() {
       });
       window.setTimeout(() => {
         sandboxWaveRunningRef.current = false;
-        sandboxModeRef.current.setFlowStep('TAG_PLAYER_2_PRONOUNCE', 'crowd_react_done', Date.now());
+        sandboxModeRef.current.setFlowStep('VIP_SUMMARY_1', 'crowd_react_done', Date.now());
         setSandboxRevealTick(Date.now());
       }, 900);
       setSandboxRevealTick(Date.now());
     }
+    if (sandboxState.flow.step === 'VIP_SUMMARY_1') {
+      const line = 'VIP 總結：先把剛剛那個單字記住，下一步確認發音。';
+      dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: line, language: 'zh', translation: line, isVip: 'VIP_NORMAL', role: 'vip', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_summary_1' });
+      sandboxModeRef.current.setFlowStep('TAG_PLAYER_2_PRONOUNCE', 'vip_summary_1_done', Date.now());
+      setSandboxRevealTick(Date.now());
+    }
+
+    if (sandboxState.flow.step === 'DISCUSS_PRONOUNCE' && !sandboxWaveRunningRef.current) {
+      sandboxWaveRunningRef.current = true;
+      const discuss = sandboxChatEngineRef.current?.emitReasoningWave(randomInt(3, 5)) ?? [];
+      discuss.forEach((message) => {
+        dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_discuss_pronounce' });
+      });
+      window.setTimeout(() => {
+        sandboxWaveRunningRef.current = false;
+        sandboxModeRef.current.setFlowStep('VIP_SUMMARY_2', 'discuss_pronounce_done', Date.now());
+        setSandboxRevealTick(Date.now());
+      }, 900);
+      setSandboxRevealTick(Date.now());
+    }
+
+    if (sandboxState.flow.step === 'VIP_SUMMARY_2') {
+      const line = 'VIP 總結：發音方向差不多了，最後確認這個詞在指誰。';
+      dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: line, language: 'zh', translation: line, isVip: 'VIP_NORMAL', role: 'vip', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_summary_2' });
+      sandboxModeRef.current.setFlowStep('TAG_PLAYER_3_MEANING', 'vip_summary_2_done', Date.now());
+      setSandboxRevealTick(Date.now());
+    }
+
     if (sandboxState.flow.step === 'TAG_PLAYER_2_PRONOUNCE') {
+      if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = Math.random() < 0.5 ? 'mod_live' : SANDBOX_VIP.handle;
       const line = `@${taggedUser} 所以到底怎麼唸？`;
@@ -4592,20 +4632,15 @@ export default function App() {
           sandboxTechBacklogRef.current = [];
           sandboxTechBacklogLastAtRef.current = 0;
           sandboxTechBacklogTotalWaitMsRef.current = 0;
-          sandboxModeRef.current.setFlowStep('WAIT_REPLY_2', 'tag_player_2_once');
-          sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
-          sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
-          setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
-          setPauseSetAt(askedAt);
-          setPauseReason(reason);
-          setScrollMode('FROZEN', reason);
-          setChatAutoPaused(true);
+          sandboxModeRef.current.markTagAskedThisStep(askedAt);
+          sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_2');
         }
       });
       setSandboxRevealTick(Date.now());
     }
 
     if (sandboxState.flow.step === 'TAG_PLAYER_3_MEANING') {
+      if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = Math.random() < 0.5 ? 'mod_live' : SANDBOX_VIP.handle;
       const line = `@${taggedUser} 這個單字你覺得代表什麼？在指誰？`;
@@ -4643,20 +4678,17 @@ export default function App() {
           sandboxTechBacklogRef.current = [];
           sandboxTechBacklogTotalWaitMsRef.current = 0;
           sandboxTechBacklogLastAtRef.current = askedAt;
-          sandboxModeRef.current.setFlowStep('WAIT_REPLY_3', 'tag_player_3_once');
-          sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
-          sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
-          setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
-          setPauseSetAt(askedAt);
-          setPauseReason(reason);
-          setScrollMode('FROZEN', reason);
-          setChatAutoPaused(true);
+          sandboxModeRef.current.markTagAskedThisStep(askedAt);
+          sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_3');
         }
       });
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'FLUSH_TECH_BACKLOG') {
-      const backlog = sandboxTechBacklogRef.current.slice(-8);
+      const waitedMs = Math.max(sandboxTechBacklogTotalWaitMsRef.current, Date.now() - (sandboxState.flow.stepStartedAt || Date.now()));
+      const roundedMinutes = Math.max(5, Math.round((waitedMs / 60000) / 5) * 5);
+      const backlogBase = sandboxTechBacklogRef.current.filter((line) => !line.startsWith('奇怪卡了大約 '));
+      const backlog = [...backlogBase.slice(-7), `奇怪卡了大約 ${roundedMinutes} 分鐘`].slice(-8);
       backlog.forEach((line) => {
         dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_tech_backlog_flush' });
       });

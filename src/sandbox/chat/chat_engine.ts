@@ -27,7 +27,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
-  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
+  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'VIP_SUMMARY_1' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'DISCUSS_PRONOUNCE' | 'VIP_SUMMARY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
   stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
@@ -177,7 +177,7 @@ export class ChatEngine {
   }
 
   nextMessage(): ChatMessage | null {
-    if (this.context.freeze.frozen && !this.context.glitchBurst.pending) {
+    if (this.context.freeze.frozen) {
       return null;
     }
 
@@ -256,7 +256,8 @@ export class ChatEngine {
       return this.captureMessage(this.formatLine(this.pickSanIdleLine('general')), 'san_idle_general');
     }
 
-    const isHighPressure = this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent';
+    const isPreheatFlow = this.context.flowStep === 'PREHEAT';
+    const isHighPressure = !isPreheatFlow && (this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent');
     if (isHighPressure && Math.random() < 0.5) {
       return this.captureMessage(this.formatLine(this.pickStringPool('final_fear')), 'final_fear');
     }
@@ -276,7 +277,7 @@ export class ChatEngine {
       { key: 'fear_pool', weight: weights.fear },
       { key: 'theory_pool', weight: weights.theory },
       { key: 'vip_summary', weight: weights.vip_summary },
-      { key: 'final_fear', weight: weights.final_fear },
+      { key: 'final_fear', weight: isPreheatFlow ? 0 : weights.final_fear },
       { key: 'san_idle', weight: weights.san_idle }
     ];
     const total = weightedPool.reduce((acc, item) => acc + item.weight, 0);
@@ -299,12 +300,12 @@ export class ChatEngine {
   }
 
   private resumeScheduler(): void {
-    if (!this.running || this.timer !== null || ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep)) return;
+    if (!this.running || this.timer !== null || ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep) || this.context.freeze.frozen) return;
     this.scheduleNext();
   }
 
   private scheduleNext(): void {
-    if (!this.running || ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep)) {
+    if (!this.running || ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep) || this.context.freeze.frozen) {
       this.pauseScheduler();
       return;
     }

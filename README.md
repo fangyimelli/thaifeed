@@ -69,6 +69,19 @@ npm run build
 - 修正 `ADVANCE_NEXT` transition 單一來源：`forceAdvanceNode()` 負責切到 `TAG_PLAYER_1`，外層 effect 不再重複 `setFlowStep('TAG_PLAYER_1')`。
 - classic mode 未修改。
 
+
+## 2026-03-06 Sandbox Flow SSOT Hardening（sandbox only）
+
+- PREHEAT 路由防呆：`final_fear` 在 PREHEAT 權重固定為 0，避免預熱期出現收尾高壓訊息。
+- TAG step 防重送：`TAG_PLAYER_1/2/3` 每 step 只能送一次 tag，送出後即標記 `tagAskedThisStep=true`。
+- reply-to active 全域 freeze：WAIT_REPLY 期間 sandbox scheduler 暫停，聊天室維持 0 output。
+- 回覆後硬流程：
+  - TAG#1 後：`CROWD_REACT_WORD -> VIP_SUMMARY_1 -> TAG_PLAYER_2_PRONOUNCE`
+  - TAG#2 後：`DISCUSS_PRONOUNCE -> VIP_SUMMARY_2 -> TAG_PLAYER_3_MEANING`
+  - TAG#3 後：`FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`
+- tech backlog 僅 `WAIT_REPLY_3` 可累積（每 30 秒 2 則），flush 最多 8 則且最後一則固定分鐘數。
+- classic mode 未修改。
+
 ## Sandbox Chat Pools
 
 - SSOT：`src/sandbox/chat/chat_pools.ts` 是 sandbox 聊天語料唯一來源（`CHAT_POOLS`），總數固定 **2050 entries**。

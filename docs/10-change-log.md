@@ -1,4 +1,15 @@
 
+## 2026-03-06 — Sandbox Flow SSOT Hardening (sandbox only)
+
+- 新增硬步驟：`VIP_SUMMARY_1`、`DISCUSS_PRONOUNCE`、`VIP_SUMMARY_2`，取代原本依賴隨機池的 summary 行為。
+- 修正 WAIT_REPLY freeze：reply-to active 時全域 0 output，並暫停 sandbox scheduler。
+- 修正三段 tag 防重送：每 step 只允許一次 tag emit，重跑直接 return。
+- 修正 PREHEAT routing：`final_fear` 權重在 PREHEAT 固定為 0。
+- 修正 tech backlog：僅 `WAIT_REPLY_3` 累積、`FLUSH_TECH_BACKLOG` 才 flush（<=8；尾行分鐘數固定格式）。
+- 修正 step transition：同 step 不再重覆 set（避免多來源重推進）。
+- classic mode 無變更。
+
+
 ## 2026-03-06（sandbox only：reply preview lookup / WAIT_REPLY scheduler pause / ADVANCE_NEXT transition dedupe）
 
 ### Changed
