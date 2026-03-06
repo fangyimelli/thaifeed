@@ -23,18 +23,12 @@ type ForceScrollDebugPayload = {
 
 type SandboxPinnedEntry = {
   id: string;
-  sourceMessageId: string;
-  sourceEventType: string;
-  reason: 'vip_direct_mention' | 'story_critical_hint_followup' | 'answer_reply';
+  messageId: string;
   createdAt: number;
   expiresAt: number;
   visible: boolean;
-  actor: string;
-  text: string;
-  metadata?: {
-    eventName?: string;
-    linkedPlayerId?: string;
-  };
+  author: string;
+  body: string;
 };
 
 type Props = {
@@ -440,8 +434,8 @@ export default function ChatPanel({
 
       {shouldRenderSandboxPinned && sandboxPinnedEntry && (
         <div className="replyPinBar replyPinBar-sandbox" role="status" aria-live="polite">
-          <div className="replyPinHeader">📌 @{sandboxPinnedEntry.actor} · {sandboxPinnedEntry.reason}</div>
-          <div className="replyPinText">「{truncateReplyText(sandboxPinnedEntry.text, 64)}」</div>
+          <div className="replyPinHeader">↳ @{sandboxPinnedEntry.author}</div>
+          <div className="replyPinText">「{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}」</div>
         </div>
       )}
 

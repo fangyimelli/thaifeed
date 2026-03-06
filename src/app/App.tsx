@@ -144,18 +144,12 @@ type ChatFreezeState = {
 
 type SandboxPinnedEntry = {
   id: string;
-  sourceMessageId: string;
-  sourceEventType: string;
-  reason: 'vip_direct_mention' | 'story_critical_hint_followup' | 'answer_reply';
+  messageId: string;
   createdAt: number;
   expiresAt: number;
   visible: boolean;
-  actor: string;
-  text: string;
-  metadata?: {
-    eventName?: string;
-    linkedPlayerId?: string;
-  };
+  author: string;
+  body: string;
 };
 
 type BootstrapActivatedBy = 'username_submit' | 'debug' | null;
@@ -1810,24 +1804,17 @@ export default function App() {
     const sourceMessage = state.messages.find((entry) => entry.id === payload.messageId) ?? null;
     const actor = sourceMessage?.username || SANDBOX_VIP.handle;
     const text = sourceMessage?.text || '';
-    const sourceEventType = sourceMessage?.chatType || sourceMessage?.type || 'chat';
-    const nextPinned: SandboxPinnedEntry = {
+        const nextPinned: SandboxPinnedEntry = {
       id: `sandbox-pin:${payload.messageId}`,
-      sourceMessageId: payload.messageId,
-      sourceEventType,
-      reason: payload.reason,
+      messageId: payload.messageId,
       createdAt: now,
       expiresAt: now + freezeMs + 3000,
       visible: true,
-      actor,
-      text,
-      metadata: {
-        eventName: sourceMessage?.hintEventName,
-        linkedPlayerId: activeUserProfileRef.current?.id ?? 'activeUser'
-      }
+      author: actor,
+      body: text
     };
     setSandboxPinnedEntry((prev) => {
-      if (prev?.visible && prev.sourceMessageId !== payload.messageId) {
+      if (prev?.visible && prev.messageId !== payload.messageId) {
         setSandboxDebugAutoPinFreeze({
           pinnedOverwrittenByMessageId: payload.messageId,
           lastPinnedOverwriteAt: now
@@ -1885,7 +1872,7 @@ export default function App() {
       lastPinnedCreatedAt: now,
       pinnedSourceReason: payload.reason,
       pinnedStateKey: 'sandboxPinnedEntry',
-      pinnedStateSummary: `${nextPinned.id}:${nextPinned.reason}`,
+      pinnedStateSummary: `${nextPinned.id}:${payload.reason}`,
       pinnedExpiresAt: nextPinned.expiresAt,
       pinnedComponentMounted: sandboxPinnedMounted,
       highlightWithoutPinned: false,
@@ -1901,7 +1888,7 @@ export default function App() {
       clearChatFreeze(`sandbox_auto_pin_timeout:${payload.reason}`);
       setChatAutoPaused(false);
       setSandboxPinnedEntry((prev) => {
-        if (!prev || prev.sourceMessageId !== payload.messageId) return prev;
+        if (!prev || prev.messageId !== payload.messageId) return prev;
         setSandboxDebugAutoPinFreeze({
           lastPinnedAutoClearAt: Date.now(),
           lastPinnedAutoClearReason: `timeout:${payload.reason}`,
@@ -1912,7 +1899,7 @@ export default function App() {
     }, freezeMs + 120);
     window.setTimeout(() => {
       setSandboxPinnedEntry((prev) => {
-        if (!prev || prev.sourceMessageId !== payload.messageId) return prev;
+        if (!prev || prev.messageId !== payload.messageId) return prev;
         if (Date.now() < prev.expiresAt) return prev;
         setSandboxDebugAutoPinFreeze({
           lastPinnedAutoClearAt: Date.now(),
@@ -3746,9 +3733,9 @@ export default function App() {
               lastPinnedRenderVisible: Boolean(sandboxPinnedEntry?.visible),
               pinnedStateKey: 'sandboxPinnedEntry',
               pinnedStateSummary: sandboxPinnedEntry
-                ? `${sandboxPinnedEntry.id}:${sandboxPinnedEntry.reason}:${sandboxPinnedEntry.sourceMessageId}`
+                ? `${sandboxPinnedEntry.id}:${sandboxAutoPinFreezeRef.current.pinnedSourceReason}:${sandboxPinnedEntry.messageId}`
                 : 'null',
-              pinnedSourceReason: sandboxPinnedEntry?.reason ?? '-',
+              pinnedSourceReason: sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
               pinnedExpiresAt: sandboxPinnedEntry?.expiresAt ?? 0,
               pinnedComponentMounted: sandboxPinnedMounted,
               highlightWithoutPinned: lastHighlightReasonRef.current === 'mentions_activeUser' && !sandboxPinnedEntry,
@@ -3779,13 +3766,13 @@ export default function App() {
           qnaQuestionMessageIdRendered,
           pinned: {
             visible: Boolean(sandboxPinnedEntry?.visible),
-            textPreview: (sandboxPinnedEntry?.text ?? '-').slice(0, 60)
+            textPreview: (sandboxPinnedEntry?.body ?? '-').slice(0, 60)
           },
           sandboxPinned: {
             mounted: sandboxPinnedMounted,
             visible: Boolean(sandboxPinnedEntry?.visible),
-            reason: sandboxPinnedEntry?.reason ?? '-',
-            sourceMessageId: sandboxPinnedEntry?.sourceMessageId ?? '-',
+            reason: sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
+            sourceMessageId: sandboxPinnedEntry?.messageId ?? '-',
             expiresAt: sandboxPinnedEntry?.expiresAt ?? 0,
             remainingMs: sandboxPinnedEntry ? Math.max(0, sandboxPinnedEntry.expiresAt - now) : 0
           },
