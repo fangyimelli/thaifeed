@@ -18,6 +18,7 @@ export type ChatMessage = {
   showTranslation?: boolean;
   donateAmount?: number;
   chatType?: string;
+  hintEventName?: string;
   personaId?: string;
   tagTarget?: string;
   mentions?: string[];

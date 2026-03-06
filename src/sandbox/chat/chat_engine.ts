@@ -15,6 +15,8 @@ export type ChatMessage = {
   vip?: boolean;
   role?: 'viewer' | 'vip' | 'mod';
   badge?: 'crown';
+  chatType?: 'sandbox_story_critical_hint_followup';
+  hintEventName?: string;
 };
 
 type StoryPhase = 'boot' | 'intro' | 'awaitingTag' | 'awaitingAnswer' | 'revealingWord' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' | 'reasoningPhase' | 'tagPlayerPhase';
@@ -54,6 +56,21 @@ const GHOST_HINT_REASONING = [
   '我覺得線索在提醒我們先拼出完整詞',
   '這段像在暗示別急著亂猜角色'
 ] as const;
+
+const GHOST_HINT_VIP_FOLLOW_UP: Record<GhostHintEvent, readonly string[]> = {
+  ghost_voice: [
+    '先別分心，剛剛那個音節要先記住。',
+    '你先把剛剛聽到的音節打出來，別亂猜。'
+  ],
+  screen_glitch: [
+    '畫面在提醒順序，先把音節拼起來。',
+    '不要只看雜訊，重點是剛才那個音節。'
+  ],
+  tv_on: [
+    '先不要亂猜，先把音節拼出來。',
+    '先回我那個音節，主線才推得動。'
+  ]
+};
 
 const CROWD_REACT_WORD_LINES = [
   '這是什麼意思？',
@@ -332,10 +349,14 @@ export class ChatEngine {
   private buildGhostHintQueue(): ChatMessage[] {
     const hint = GHOST_HINT_POOL[Math.floor(Math.random() * GHOST_HINT_POOL.length)] ?? 'ghost_voice';
     const queue: ChatMessage[] = [];
-    queue.push(this.formatLine(`[GHOST_HINT_EVENT] ${hint.toUpperCase()}`, 'system', false));
-    for (let i = 0; i < 3; i += 1) {
-      queue.push(this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)));
-    }
+    const hintEventName = hint.toUpperCase();
+    queue.push(this.formatLine(`[GHOST_HINT_EVENT] ${hintEventName}`, 'system', false));
+    queue.push({
+      ...this.formatLine(this.pickSafeArray(GHOST_HINT_VIP_FOLLOW_UP[hint]), SANDBOX_VIP.handle, true),
+      chatType: 'sandbox_story_critical_hint_followup',
+      hintEventName
+    });
+    queue.push(this.formatLine(this.pickSafeArray(GHOST_HINT_REASONING)));
     return queue;
   }
 

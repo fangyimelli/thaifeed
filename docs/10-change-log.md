@@ -1,4 +1,41 @@
 
+## 2026-03-06 — Sandbox：VIP direct mention pin/freeze + GHOST_HINT_EVENT 主線接續修復（sandbox only）
+
+### Root cause
+- sandbox chat engine 輸出的 VIP 訊息雖然帶有 `vip=true`，但 App 端只有既有 QnA tag flow（`runTagStartFlow` / `sandboxPromptCoordinator`）會進入 pinned + freeze。
+- 一般 sandbox chat 訊息（包含 VIP `@玩家`）未進入 forced-reply pipeline，因此被當成 casual chat，不會 pin、不會 freeze。
+- `GHOST_HINT_EVENT` 事件佇列原本是 `system + 3 則觀眾推理`，沒有 VIP follow-up 主線位階，導致提示被一般訊息稀釋。
+
+### Changed
+- [sandbox/chat] `src/sandbox/chat/chat_engine.ts`
+  - `buildGhostHintQueue()` 改為：`[GHOST_HINT_EVENT]` 後強制插入 1 則 VIP 主線 follow-up（標記 `chatType=sandbox_story_critical_hint_followup` + `hintEventName`），再接 1 則觀眾推理。
+  - 新增每種 ghost hint 對應的 VIP follow-up 文案池，確保 NIGHT_01 提示節奏可見。
+- [sandbox/routing] `src/app/App.tsx`
+  - 在 `dispatchChatMessage()` 新增 sandbox 專屬判定：`VIP + @玩家` => `vip_direct_mention`。
+  - 命中 `vip_direct_mention` 或 `story_critical_hint_followup` 時，統一走自動 pin+freeze 路徑（可配置區間 5~8 秒，預設 6s/7s）。
+  - freeze 到期後自動解除（並 guard：若仍在既有 WAIT_REPLY forced-reply，不會誤解除）。
+- [sandbox/debug] `src/app/App.tsx`
+  - 新增 `sandbox.audit.autoPinFreeze.*`：
+    - `evaluation.directToPlayer`
+    - `evaluation.hitVipDirectMentionRule`
+    - `evaluation.hitStoryCriticalRule`
+    - `evaluation.shouldPin`
+    - `evaluation.failureReason`
+    - `evaluation.pinnedReason`
+    - `evaluation.freezeReason`
+    - `freezeRemainingMs`
+    - `lastMessageId / lastReason / lastHintFollowUpEvent`
+- [schema] `src/core/state/types.ts`
+  - `ChatMessage` 新增 `hintEventName`（供 debug 與主線 follow-up 追蹤）。
+
+### Validation
+- 1) VIP `@玩家` 訊息：會進 pin + freeze（sandbox only）：PASS
+- 2) 一般 VIP 閒聊（未 @玩家）不會 auto pin：PASS
+- 3) `[GHOST_HINT_EVENT]` 後會出 VIP 主線 follow-up，且 pin + freeze：PASS
+- 4) freeze 到時可自動恢復，不會卡死：PASS
+- 5) classic mode 無變更：PASS
+
+
 ## 2026-03-06 — Sandbox Flow SSOT Hardening (sandbox only)
 
 - 新增硬步驟：`VIP_SUMMARY_1`、`DISCUSS_PRONOUNCE`、`VIP_SUMMARY_2`，取代原本依賴隨機池的 summary 行為。

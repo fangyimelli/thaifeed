@@ -4,6 +4,25 @@ Last Updated By: Codex
 
 > SSOT for sandbox flow. This document applies to sandbox mode only. Classic mode behavior is unchanged.
 
+
+## 2026-03-06 補充規則（sandbox only）
+
+### VIP Direct Mention Routing
+- 命中條件：`speaker=VIP` 且 `message` 含 `@<activePlayerHandle>`。
+- 命中後效果：
+  - 寫入 pinned reply（沿用既有 reply pin UI path）。
+  - 觸發 chat freeze（預設 6000ms；可配置 5000~8000ms）。
+  - freeze 結束自動解除並恢復聊天。
+- 排除條件：VIP 但未 mention active player，視為一般聊天，不自動 pin。
+
+### GHOST_HINT_EVENT Follow-up Routing
+- 事件型別：`[GHOST_HINT_EVENT] <TYPE>`（目前 `GHOST_VOICE/SCREEN_GLITCH/TV_ON`）。
+- routing：`system hint event -> 強制 1 則 VIP follow-up(story-critical) -> 觀眾推理`。
+- VIP follow-up 規則：
+  - 標記 `chatType=sandbox_story_critical_hint_followup`。
+  - 強制 pin + freeze（預設 7000ms；可配置 5000~8000ms）。
+  - debug 記錄 `lastHintFollowUpEvent`。
+
 | Step | Description | Chat Frequency | Reply-To | Tech Backlog | Overlay | Example Messages |
 |---|---|---|---|---|---|---|
 | PREJOIN | 玩家尚未提交使用者名稱，sandbox 不得輸出聊天室訊息、不得預熱、不得出題。 | 0 output（完全靜止） | inactive | disabled | hidden | （無訊息） |

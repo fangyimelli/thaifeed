@@ -1,3 +1,16 @@
+
+## 2026-03-06 Sandbox 修復：VIP @玩家未 pin/freeze + GHOST_HINT_EVENT 主線接續
+
+- 僅 sandbox 變更，classic mode 無改動。
+- 新增 sandbox direct interaction 規則：`VIP + @玩家` 視為 direct-to-player，會觸發 pinned reply + chat freeze（預設 6 秒，範圍 5~8 秒）。
+- 新增 `GHOST_HINT_EVENT` 主線接續：system hint 後強制一則 VIP follow-up（story-critical），並觸發 pin + freeze（預設 7 秒）。
+- 新增 sandbox debug 欄位 `sandbox.audit.autoPinFreeze.*`，可直接觀測「為何有/沒有 pin+freeze」。
+- SSOT/Debug 追蹤：已同步更新 `docs/sandbox-flow-table.md`、`docs/10-change-log.md`、`PR_NOTES.md`。
+
+### Removed / Deprecated Log（本次）
+
+- 本次未新增移除/廢棄條目；採整合既有 pinned/freeze pipeline，未引入並存舊邏輯。
+
 # ThaiFeed 團隊維護手冊入口
 
 > 官方維護手冊以 `/docs` 為準。
