@@ -1,3 +1,25 @@
+## 2026-03-06 Patch Request：Sandbox join 後先 PREHEAT（移除 join 即時強制回覆）
+
+### 變更摘要（sandbox only）
+- 調整 Step：`PREJOIN`、`PREHEAT`。
+- 刪除流程：移除「玩家一 join 就立刻發 tag + 綁定 reply-to + freeze」的舊邏輯。
+- 整合流程：join 後改為先清理 reply/freeze 狀態，直接進 30 秒 `PREHEAT`，保留既有 `TAG_PLAYER_1 -> WAIT_REPLY_* -> ...` 主流程。
+- `reply-to` 規格不變：仍沿用 classic reply-to UI，且 active 時 0 output。
+- `tech backlog` 規格不變：仍只允許 `WAIT_REPLY_3` 累積、`FLUSH_TECH_BACKLOG` 一次 flush。
+- classic mode 未修改。
+
+### Sandbox Flow Table 變更說明
+- 影響 Step：`PREJOIN`、`PREHEAT`（描述與訊息範例同步更新）。
+- 新增 Step：無。
+- 刪除 Step：無。
+- Message Examples：有更新（含 PREJOIN 無訊息、PREHEAT 寒暄示例，並補齊各 step 範例）。
+
+### 驗證（Debug Consistency Rule）
+1. flow step 與 `docs/sandbox-flow-table.md` 一致：PASS。
+2. reply-to 行為符合表格規格（active 時 0 output）：PASS。
+3. tech backlog 僅在 `WAIT_REPLY_3` 出現：PASS。
+4. classic mode smoke 行為未改：PASS。
+
 ## Summary
 - 新增 `src/sandbox/chat/chat_director.ts`，以 Director 作為 sandbox chat 的唯一節奏來源（mode / directed line / pool weights / shouldEmitJoin）。
 - `src/sandbox/chat/chat_engine.ts` 改為 Director 驅動，並落實 freeze 0 output 與 glitch burst 優先邏輯。

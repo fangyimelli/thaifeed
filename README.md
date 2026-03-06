@@ -1939,3 +1939,11 @@ Console（debug 模式）可觀察：
 - 只有 Tag#3 WAIT 期間，且 reply-to active 時，才每 30 秒背景累積 2 則 tech backlog（第二則固定為「奇怪卡了大約 X 分鐘」）。
 - 玩家回覆 Tag#3 後才進 `FLUSH_TECH_BACKLOG`，一次 flush（最多 8 則，含最後分鐘訊息）再推進下一題。
 - classic mode 未修改。
+
+## Sandbox Flow Update（2026-03-06）
+
+- sandbox only：Join 後改為純 PREHEAT（30 秒）不再立即建立強制 reply-to 問句。
+- PREHEAT 期間僅寒暄與一般互動，禁止出題；第一次強制回覆從 `TAG_PLAYER_1` 才開始。
+- `reply-to active => 0 output`、`tech backlog only in WAIT_REPLY_3` 維持不變。
+- 新增 sandbox flow SSOT 文件：`docs/sandbox-flow-table.md`。
+- classic mode 未修改。

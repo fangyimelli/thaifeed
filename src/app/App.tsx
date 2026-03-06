@@ -3931,56 +3931,14 @@ export default function App() {
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: submittedAt });
     sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
     sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
-    const greetingText = `@${sanitizedName} 第一次看嗎？`;
-    const messageId = crypto.randomUUID();
-    await runTagStartFlow({
-      tagMessage: {
-        id: messageId,
-        username: SANDBOX_VIP.handle,
-        type: 'chat',
-        text: greetingText,
-        language: 'zh',
-        translation: greetingText,
-        isVip: 'VIP_NORMAL',
-        role: SANDBOX_VIP.role,
-        badge: SANDBOX_VIP.badge,
-        tagTarget: SANDBOX_VIP.handle
-      },
-      pinnedText: greetingText,
-      shouldFreeze: true,
-      appendMessage: (message) => {
-        dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_join_gate_prompt' });
-      },
-      forceScrollToBottom: async ({ reason }) => {
-        setScrollMode('FOLLOW', `sandbox_join_${reason}`);
-        setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
-        setPendingForceScrollReason(`sandbox_join_${reason}`);
-        await nextAnimationFrame();
-      },
-      setPinnedReply: () => {
-        const askedAt = Date.now();
-        markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
-        lockStateRef.current = { isLocked: true, target: SANDBOX_VIP.handle, startedAt: askedAt, replyingToMessageId: messageId };
-        const pinnedOk = setPinnedQuestionMessage({
-          source: 'sandboxPromptCoordinator',
-          messageId,
-          hasTagToActiveUser: true
-        });
-        if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
-      },
-      freezeChat: ({ reason }) => {
-        const askedAt = Date.now();
-        sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
-        sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
-        setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
-        setPauseSetAt(askedAt);
-        setPauseReason(reason);
-        setScrollMode('FROZEN', reason);
-        setChatAutoPaused(true);
-      }
-    });
+    clearReplyUi('sandbox_join_preheat_reset');
+    clearChatFreeze('sandbox_join_preheat_reset');
+    setScrollMode('FOLLOW', 'sandbox_join_preheat_reset');
+    setChatAutoPaused(false);
+    setPendingForceScrollReason('sandbox_join_preheat_reset');
+    await nextAnimationFrame();
     return true;
-  }, [nextAnimationFrame, registerActiveUser, setPinnedQuestionMessage, setScrollMode]);
+  }, [clearChatFreeze, clearReplyUi, nextAnimationFrame, registerActiveUser, setScrollMode]);
 
   const emitAudioEnabledSystemMessageOnce = useCallback(() => {
     if (audioEnabledSystemMessageSentRef.current) return;
