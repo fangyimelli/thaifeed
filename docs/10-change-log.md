@@ -1,3 +1,21 @@
+## 2026-03-06 — Sandbox pinned reply body 空字串修復（sandbox only）
+
+### Root cause
+- auto pin 觸發點發生在訊息 append 前，`triggerSandboxAutoPinFreeze()` 以 `state.messages.find(messageId)` 取 source message 時可能拿不到資料。
+- 取得失敗時 pinned body 寫入 `''`，在 `ChatPanel` 被渲染為 `「」`。
+
+### Changed
+- `src/app/App.tsx`
+  - `triggerSandboxAutoPinFreeze()` 新增 `sourceMessage` 參數，優先使用 dispatch 當下 message，避免 stale read。
+  - 新增 sandbox pinned body 欄位解析 fallback：`text -> content -> body -> displayText -> payload.text`（與 Classic 以 `text` 為主一致，並補防呆）。
+- `src/ui/chat/ChatPanel.tsx`
+  - sandbox pin body 不再包 `「」`，直接顯示完整文字；空值時統一 fallback `（原始訊息已不存在）`。
+
+### Validation
+1. VIP direct mention pinned body 顯示完整訊息：PASS。
+2. 不再出現 `「」` 空字串 pinned：PASS。
+3. classic mode：未變更。
+
 ## 2026-03-06 — Sandbox pinned reply parity hardening（sandbox only）
 
 ### Root cause

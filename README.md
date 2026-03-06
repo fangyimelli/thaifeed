@@ -1,3 +1,11 @@
+## 2026-03-06 Sandbox pinned body 空字串修復（sandbox only）
+
+- 僅 sandbox 變更，classic mode 無改動。
+- Root cause：sandbox auto pin 在同一個 dispatch tick 讀 `state.messages` 查 source message，當 message 尚未進 state 時，pinned entry 會拿到空 `text`，UI 最終渲染成 `「」`。
+- 修復：`triggerSandboxAutoPinFreeze` 改接收當下 `sourceMessage`，避免 stale state lookup；並新增 pinned body 欄位解析器（`text/content/body/displayText/payload.text`）與 trim 防呆。
+- sandbox pinned render 改為「header + 完整 body」；不再輸出空引號，body 為空時顯示 `（原始訊息已不存在）`。
+- 驗收重點：VIP direct mention 會顯示完整 pinned reply 文字，非僅 metadata/reason。
+
 ## 2026-03-06 Sandbox pinned reply parity with Classic（sandbox only）
 
 - 僅 sandbox 變更，classic mode 無改動。
