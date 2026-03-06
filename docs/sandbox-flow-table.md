@@ -1,3 +1,15 @@
+## 2026-03-06 NIGHT_01 Audit Addendum（audit only）
+
+| Topic | 稽核結論 | 影響層 |
+| --- | --- | --- |
+| behindyou `@玩家` | 屬 mention 訊息（非 reply schema） | `chat_director -> chat_engine -> App dispatch -> ChatMessage` |
+| `↳ @mod_live` + `（原始訊息已不存在）` | 來自全域 reply pin bar；條件為 `qnaStatus=AWAITING_REPLY && questionMessageId` 且 target lookup miss | `ChatPanel` |
+| `@t` | 來源為玩家 handle 本值（資料建立時），非 render 截斷 | `join/registerActiveUser + directed line template` |
+| prompt 混線 | prompt/reveal state 未直接寫入 `ChatMessage` schema；但 reply/pin 控制面與 qna 共用，存在 cross-mode coupling 風險 | `sandboxStoryMode + App control plane` |
+| debug 按鈕污染 | debug action 可直接改 lock/pin 或推訊息，可能與正式流程狀態並存 | `App debug handlers` |
+
+> 詳細 trace 與 root cause 請見：`docs/sandbox-night01-audit-report-2026-03-06.md`。
+
 ## 2026-03-06 Sandbox pinned reply body pipeline 修正（sandbox only）
 
 | Pipeline 階段 | 修正前 | 修正後 |
