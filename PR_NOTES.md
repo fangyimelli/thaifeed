@@ -1,3 +1,35 @@
+## 2026-03-06 Sandbox reply/mention/pin pipeline P0 修復（實作）
+
+### P0-1 self-tag root cause
+- 修正 `triggerSandboxAutoPinFreeze()`：lock target 來源改為 source actor（message author），不再使用 active user。
+- 修正 `submitChat()`：新增 self-target guard；若 lock target 等價 active user handle，禁止 rewrite 為 `@self`，並清掉 lock。
+- 安全降級：source actor 不可正規化時，不建立可 rewrite lock（保留 pin/freeze 行為）。
+
+### P0-2 preview 互斥
+- `ChatPanel` 增加最小互斥：`shouldRenderReplyPreview === true` 時，`sandboxPinnedEntry` 不渲染。
+- 避免同 messageId 同時出現 top pin + inline pin 雙焦點。
+
+### P0-3 preview 位置
+- 將 sandbox pinned preview render 位置移到 composer 前方（chat list 後、input 前）。
+- 同步 render guard，避免只改 CSS 造成 top/inline 競態仍存在。
+
+### P0-4 debug 防干擾
+- `Emit NPC Tag @You` 改為 isolated debug chat injection（`debug_tester:emit_npc_tag_isolated`），不經事件管線。
+- debug action 不再留下正式 lock target=self 的殘留狀態；`submitChat()` 也有 self-lock 防呆兜底。
+
+### 驗收對照
+1. 回覆 pinned message 不再送出 `@me/@自己`（submit guard + auto pin target 修正）。
+2. `submitChat()` self-target 不 rewrite（guard 已實作）。
+3. 同一 messageId 不會同時 top pin + inline pin（互斥 guard）。
+4. 主要 reply preview 在 composer/input 附近（render 位置調整）。
+5. debug action 不再污染正式 lock/pin/reply（Emit 改 isolated）。
+6. mention behindyou/其他 NPC 路徑不變（未動 mention parser/highlight）。
+7. classic mode 未修改。
+
+## SSOT / debug 欄位變更紀錄（本次）
+- SSOT：無新增 schema；補強 `lockTarget != activeUser` 執行期 invariant。
+- debug：新增 `self_lock_target_guard` anomaly 紀錄，延續 `sandbox.debug.isolatedActions.*`。
+
 ## 2026-03-06 Sandbox P0 修復：交易式 commit + pin source guard + debug 隔離
 
 ### Summary

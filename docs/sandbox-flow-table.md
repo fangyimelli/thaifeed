@@ -1,3 +1,11 @@
+
+## 2026-03-06 P0 補丁（reply/pin 控制面互斥與 self-tag 防呆）
+
+- Auto Pin Freeze：lock target = source actor（speaker/question actor），禁止指向 active user。
+- Submit guard：若 lock target 與 active user 等價，降級為一般送出（不 rewrite mention，並清除 lock）。
+- Preview 規則：reply preview 與 sandbox pinned preview 互斥；主要回覆焦點固定在 composer 前。
+- Debug 規則：`Emit NPC Tag @You` 為 isolated debug message，不得改寫正式 lock/pin/reply state。
+
 ## 2026-03-06 P0 Guardrails（sandbox only）
 
 ### Transactional question commit
