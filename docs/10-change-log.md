@@ -1,3 +1,11 @@
+## 2026-03-06
+Sandbox Flow Update
+
+- 修改 Step：`PREJOIN`、`PREHEAT`。
+- 修改流程：sandbox 玩家提交名稱後不再立刻進入 join 強制回覆；改為先解除任何 reply/freeze 狀態並進入 30 秒 PREHEAT，待 PREHEAT 結束才進 `TAG_PLAYER_1`。
+- 修改原因：對齊 sandbox 固定流程（名稱提交後先預熱、預熱期間不得出題），並避免 join 當下就卡入 reply-to 導致流程衝突。
+- 影響範圍：僅 sandbox path（`src/app/App.tsx`）；classic mode 行為未改動。
+
 ## 2026-03-06（sandbox only：classic reply-to 強制回覆 gate + riot 上限）
 
 - 僅調整 sandbox（`src/app/App.tsx` sandbox 路徑）與文件；classic mode 未修改。
