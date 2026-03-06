@@ -1,3 +1,24 @@
+## 2026-03-06 — Sandbox pinned reply parity hardening（sandbox only）
+
+### Root cause
+- sandbox pinned entry 使用獨立欄位（`sourceMessageId/sourceEventType/reason/actor/text/metadata`），與 Classic reply pin schema/formatter 不一致。
+- sandbox pin bar 顯示 `reason` 並截斷 `text`，造成 UI 與 Classic 不一致且外露 internal metadata。
+
+### Changed
+- `src/app/App.tsx`
+  - 將 sandbox pinned schema 收斂為 `id/messageId/createdAt/expiresAt/visible/author/body`。
+  - 自動 pin 建立與清除流程改用新 schema，並保留既有 freeze + clear lifecycle。
+  - debug 顯示調整：`pinnedSourceReason` 取自 audit state，不從 pinned entry 讀取。
+- `src/ui/chat/ChatPanel.tsx`
+  - sandbox pin formatter 改與 Classic 一致：`↳ @author` + `「完整 body」`。
+  - 移除 `reason`/metadata 直接渲染。
+
+### Validation
+1. VIP direct mention：highlight + pinned + freeze（PASS）
+2. GHOST_HINT_EVENT follow-up：pinned + freeze（PASS）
+3. sandbox pin bar 視覺與 Classic reply pin 一致（PASS）
+4. classic mode 無改動（PASS）
+
 
 ## 2026-03-06 — Sandbox：修復 VIP direct mention 只有 highlight、未顯示 pinned reply 區塊（sandbox only）
 

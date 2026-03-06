@@ -1,3 +1,26 @@
+## 2026-03-06 Pinned parity 規則補充（sandbox only）
+
+### Sandbox vs Classic pinned schema 對齊
+- sandbox pinned entry 統一採用 Classic reply pin 欄位語意：
+  - `id`
+  - `messageId`
+  - `createdAt`
+  - `expiresAt`
+  - `visible`
+  - `author`
+  - `body`
+
+### Render 規則
+- formatter 與 Classic 一致：
+  - Header：`↳ @<author>`
+  - Body：`「<full body>」`（不截斷）
+- pinned UI 不得顯示 internal metadata（如 reason/eventName/sourceEventType）。
+
+### Lifecycle 對齊
+- 建立：`VIP direct mention` 與 `story-critical follow-up` 進同一 auto pin route，建立 pin + freeze。
+- 顯示：以 `replyPinBar` 樣式顯示，sandbox 只負責 gating。
+- 清除：沿用既有 `clearReplyUi`、freeze timeout、expiresAt auto clear。
+
 # Sandbox Flow Spec
 Version: 2026-03-06
 Last Updated By: Codex

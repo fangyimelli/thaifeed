@@ -1,3 +1,31 @@
+## 2026-03-06 Sandbox：Pinned reply schema/formatter/component parity（sandbox only）
+
+### 本次修正重點
+- sandbox pinned schema 對齊 Classic reply pin。
+- sandbox pinned formatter 對齊 Classic（`↳ @author` + full body）。
+- sandbox pinned component 對齊 Classic 呈現，不再顯示 internal metadata。
+- sandbox pinned pipeline 與 lifecycle 對齊 Classic（建立 / 顯示 / 清除）。
+
+### Sandbox vs Classic pinned pipeline 差異（修正後）
+1. **Message schema**
+   - Classic：以 chat message + `questionMessageId` 對應 reply pin。
+   - Sandbox：auto pin 建立 `sandboxPinnedEntry(messageId/author/body)`，並透過 messageId 回指原訊息。
+2. **Pinned entry schema**
+   - 修正前：含 `reason/sourceEventType/metadata`。
+   - 修正後：收斂為 Classic 同語意欄位 `id/messageId/createdAt/expiresAt/visible/author/body`。
+3. **Pinned creation**
+   - VIP direct mention / GHOST_HINT follow-up：同一 auto pin route 建立 pin，並同步 freeze。
+4. **Pinned formatter/component**
+   - 改為 Classic 同格式（不顯示 reason、不截斷 body）。
+5. **Pinned clear lifecycle**
+   - 沿用 `clearReplyUi` + timeout/expiresAt，自動解除 pin/freeze。
+
+### 驗證
+1. VIP direct mention：highlight + pinned + freeze（PASS）
+2. GHOST_HINT_EVENT follow-up：pinned + freeze（PASS）
+3. sandbox pinned 與 Classic 外觀一致（PASS）
+4. Classic Mode 完全不受影響（PASS）
+
 
 ## 2026-03-06 Sandbox：VIP direct mention + GHOST_HINT follow-up 節奏修復（sandbox only）
 

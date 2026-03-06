@@ -1,3 +1,14 @@
+## 2026-03-06 Sandbox pinned reply parity with Classic（sandbox only）
+
+- 僅 sandbox 變更，classic mode 無改動。
+- 將 sandbox pinned schema 對齊 Classic reply pin：`id/messageId/createdAt/expiresAt/visible/author/body`。
+- sandbox pinned formatter 改與 Classic 一致：`↳ @author` + 完整 `body`（不截斷）。
+- 移除 sandbox pinned UI 顯示 internal metadata（不再顯示 reason / sourceEventType / metadata）。
+- sandbox pinned component 改共用 Classic reply pin 呈現格式（同 `replyPinBar` 結構，僅走 sandbox gating）。
+- sandbox pinned lifecycle 對齊 Classic：建立時同步鎖定 reply target、顯示於 pin bar、清除時經既有 `clearReplyUi`/timeout/expiresAt 路徑。
+- VIP direct mention 驗收目標維持：chat highlight + pinned reply + chat freeze 同步發生；GHOST_HINT_EVENT follow-up 同樣適用。
+- SSOT/Debug 文件同步：`docs/10-change-log.md`、`docs/sandbox-flow-table.md`、`PR_NOTES.md`。
+
 
 ## 2026-03-06 Sandbox 修復：VIP direct mention 只有 highlight、未進 pinned render pipeline（sandbox only）
 
