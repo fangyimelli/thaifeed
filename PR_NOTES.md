@@ -1,4 +1,46 @@
 
+## 2026-03-06 Sandbox：VIP direct mention + GHOST_HINT follow-up 節奏修復（sandbox only）
+
+### root cause
+- sandbox 只有既有 `runTagStartFlow`（題目提問）會走 pinned/freeze，chat engine 的 VIP 訊息（即使 `@玩家`）未進入這條 pipeline。
+- `[GHOST_HINT_EVENT]` 佇列缺少 VIP story-critical follow-up，導致事件後常被 casual crowd 稀釋。
+
+### 修改策略
+- 在 sandbox `dispatchChatMessage` 新增 direct interaction routing：`VIP + @activePlayer` 命中 `vip_direct_mention` 規則，觸發 auto pin+freeze。
+- 在 `chat_engine` 的 ghost hint queue 強制插入 VIP follow-up，並標記 `chatType=sandbox_story_critical_hint_followup` 供 App routing。
+- 以單一路徑整合 pin/freeze（沿用既有 reply pin UI 與 freeze state），避免雙軌 UI。
+
+### 影響範圍
+- `src/sandbox/chat/chat_engine.ts`
+- `src/app/App.tsx`
+- `src/core/state/types.ts`
+- `README.md`
+- `docs/10-change-log.md`
+- `docs/sandbox-flow-table.md`
+
+### 驗證情境
+1. VIP 直接 `@玩家`：應 pin + freeze（PASS）
+2. 一般 VIP 閒聊：不應 pin（PASS）
+3. `GHOST_HINT_EVENT` 後 VIP 主線接續：應 pin + freeze（PASS）
+4. freeze timeout 後聊天室恢復（PASS）
+5. sandbox 其餘流程（WAIT_REPLY / tag flow）維持可運作（PASS）
+6. classic mode 無影響（PASS）
+
+### 是否有移除/整合舊邏輯
+- 整合：將 sandbox chat engine 輸出納入既有 pinned/freeze 路徑（非另開 UI）。
+- 移除：無額外刪除；以 routing 補強避免舊行為分裂。
+
+### 尚未處理但相關風險點
+- 目前 `focus/spotlight` 無獨立 state machine，本次以 freeze + pinned 強化節奏；若後續要做視覺 spotlight，建議新增明確 state 與 timeout guard。
+
+## SSOT / debug 欄位變更紀錄（本次）
+- 新增 `sandbox.audit.autoPinFreeze`：
+  - `lastMessageId/lastReason/freezeMs/freezeUntil/freezeRemainingMs`
+  - `lastHintFollowUpEvent`
+  - `evaluation.{directToPlayer,hitVipDirectMentionRule,hitStoryCriticalRule,shouldPin,failureReason,pinnedReason,freezeReason}`
+- 新增 message schema 欄位：`hintEventName`（sandbox hint follow-up 追蹤）。
+
+
 ## 2026-03-06 Sandbox Flow SSOT Hardening (sandbox only)
 
 ### Scope

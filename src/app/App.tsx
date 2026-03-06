@@ -138,7 +138,7 @@ const FREEZE_AFTER_MESSAGE_COUNT = 10;
 
 type ChatFreezeState = {
   isFrozen: boolean;
-  reason: 'tagged_question' | null;
+  reason: 'tagged_question' | 'vip_direct_mention' | 'story_critical_hint_followup' | null;
   startedAt: number | null;
 };
 
@@ -1094,6 +1094,52 @@ export default function App() {
     lastMessageMentionsActiveUserRef.current = textHasActiveUserTag;
     lastParsedMentionsRef.current = { messageId: message.id, mentions: normalizedMentions };
     const messageWithMentions: ChatMessage = { ...message, mentions: normalizedMentions };
+    if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
+      const sandboxPlayerHandle = normalizeHandle(activeUserInitialHandleRef.current || sandboxModeRef.current.getState().player?.handle || '');
+      const mentionHandles = parseMentionHandles(message.text).map((handle) => normalizeHandle(handle));
+      const hasPlayerMention = Boolean(sandboxPlayerHandle) && mentionHandles.some((handle) => toHandleKey(handle) === toHandleKey(sandboxPlayerHandle));
+      const isVipSpeaker = Boolean(message.isVip === 'VIP_NORMAL' || message.role === 'vip' || normalizeHandle(message.username) === SANDBOX_VIP.handle);
+      const isStoryCriticalHintFollowUp = message.chatType === 'sandbox_story_critical_hint_followup';
+      const directToPlayer = isVipSpeaker && hasPlayerMention && message.type !== 'system';
+      const hitVipDirectMentionRule = directToPlayer;
+      const hitStoryCriticalRule = isStoryCriticalHintFollowUp;
+      const shouldPin = hitVipDirectMentionRule || hitStoryCriticalRule;
+      const failureReason = shouldPin
+        ? '-'
+        : (!isVipSpeaker
+          ? 'speaker_not_vip'
+          : (!hasPlayerMention
+            ? 'no_player_mention'
+            : 'not_story_critical'));
+      const pinnedReason = hitVipDirectMentionRule
+        ? 'vip_direct_mention'
+        : (hitStoryCriticalRule ? 'story_critical_hint_followup' : '-');
+      const freezeReason = pinnedReason;
+      setSandboxDebugAutoPinFreeze({
+        lastEvaluation: {
+          messageId: message.id,
+          isVip: isVipSpeaker,
+          hasPlayerMention,
+          directToPlayer,
+          hitVipDirectMentionRule,
+          hitStoryCriticalRule,
+          shouldPin,
+          failureReason,
+          pinnedReason,
+          freezeReason
+        },
+        ...(message.hintEventName ? { lastHintFollowUpEvent: message.hintEventName } : {})
+      });
+      if (shouldPin) {
+        const freezeMs = hitStoryCriticalRule ? 7000 : 6000;
+        triggerSandboxAutoPinFreeze({
+          messageId: message.id,
+          reason: hitStoryCriticalRule ? 'story_critical_hint_followup' : 'vip_direct_mention',
+          freezeMs,
+          hasTagToActiveUser: hitStoryCriticalRule ? true : hasPlayerMention
+        });
+      }
+    }
     if (eventExclusiveStateRef.current.exclusive && textHasActiveUserTag && message.username !== eventExclusiveStateRef.current.currentLockOwner) {
       foreignTagBlockedCountRef.current += 1;
       lastBlockedReasonRef.current = 'foreign_tag_during_exclusive';
@@ -1317,7 +1363,7 @@ export default function App() {
   }, []);
 
 
-  const convertSandboxChatMessage = useCallback((message: { user: string; text: string; thai?: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown' }): ChatMessage => {
+  const convertSandboxChatMessage = useCallback((message: { user: string; text: string; thai?: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown'; chatType?: 'sandbox_story_critical_hint_followup'; hintEventName?: string }): ChatMessage => {
     const [maybeUser, ...rest] = message.text.split(': ');
     const parsedHasPrefix = maybeUser === message.user && rest.length > 0;
     const text = parsedHasPrefix ? rest.join(': ') : message.text;
@@ -1330,7 +1376,9 @@ export default function App() {
       type: 'chat',
       isVip: message.vip ? 'VIP_NORMAL' : undefined,
       role: message.role,
-      badge: message.badge
+      badge: message.badge,
+      chatType: message.chatType,
+      hintEventName: message.hintEventName
     };
   }, []);
 
@@ -1661,6 +1709,99 @@ export default function App() {
     return true;
   }, []);
 
+
+
+  const setSandboxDebugAutoPinFreeze = useCallback((patch: Partial<{
+    lastMessageId: string;
+    lastReason: '-' | 'vip_direct_mention' | 'story_critical_hint_followup';
+    freezeUntil: number;
+    freezeMs: number;
+    lastHintFollowUpEvent: string;
+    lastEvaluation: {
+      messageId: string;
+      isVip: boolean;
+      hasPlayerMention: boolean;
+      directToPlayer: boolean;
+      hitVipDirectMentionRule: boolean;
+      hitStoryCriticalRule: boolean;
+      shouldPin: boolean;
+      failureReason: string;
+      pinnedReason: string;
+      freezeReason: string;
+    };
+  }>) => {
+    const current = sandboxAutoPinFreezeRef.current;
+    sandboxAutoPinFreezeRef.current = {
+      ...current,
+      ...patch,
+      lastEvaluation: {
+        ...current.lastEvaluation,
+        ...(patch.lastEvaluation ?? {})
+      }
+    };
+  }, []);
+
+  const triggerSandboxAutoPinFreeze = useCallback((payload: {
+    messageId: string;
+    reason: 'vip_direct_mention' | 'story_critical_hint_followup';
+    freezeMs: number;
+    hasTagToActiveUser: boolean;
+  }) => {
+    const now = Date.now();
+    const freezeMs = Math.max(5000, Math.min(8000, payload.freezeMs));
+    lockStateRef.current = {
+      isLocked: true,
+      target: normalizeHandle(activeUserInitialHandleRef.current || '') || 'activeUser',
+      startedAt: now,
+      replyingToMessageId: payload.messageId
+    };
+    const pinnedOk = setPinnedQuestionMessage({
+      source: 'sandboxPromptCoordinator',
+      messageId: payload.messageId,
+      hasTagToActiveUser: payload.hasTagToActiveUser
+    });
+    if (!pinnedOk) {
+      setReplyPreviewSuppressedReason('sandbox_auto_pin_writer_guard');
+      return false;
+    }
+    const freezeReason = payload.reason === 'vip_direct_mention' ? 'vip_direct_mention' : 'story_critical_hint_followup';
+    setChatFreeze({ isFrozen: true, reason: freezeReason, startedAt: now });
+    setPauseSetAt(now);
+    setPauseReason(freezeReason);
+    setScrollMode('FROZEN', freezeReason);
+    setChatAutoPaused(true);
+    setChatFreezeCountdownRemaining(0);
+    setChatFreezeCountdownStartedAt(now);
+    setSandboxDebugAutoPinFreeze({
+      lastMessageId: payload.messageId,
+      lastReason: payload.reason,
+      freezeUntil: now + freezeMs,
+      freezeMs,
+      lastEvaluation: {
+        messageId: payload.messageId,
+        isVip: true,
+        hasPlayerMention: payload.hasTagToActiveUser,
+        directToPlayer: payload.reason === 'vip_direct_mention',
+        hitVipDirectMentionRule: payload.reason === 'vip_direct_mention',
+        hitStoryCriticalRule: payload.reason === 'story_critical_hint_followup',
+        shouldPin: true,
+        failureReason: '-',
+        pinnedReason: payload.reason,
+        freezeReason
+      }
+    });
+    window.setTimeout(() => {
+      if (modeRef.current.id !== 'sandbox_story') return;
+      const current = sandboxAutoPinFreezeRef.current;
+      if (current.lastMessageId !== payload.messageId) return;
+      if (Date.now() < current.freezeUntil) return;
+      if (qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId)) return;
+      clearReplyUi(`sandbox_auto_pin_timeout:${payload.reason}`);
+      clearChatFreeze(`sandbox_auto_pin_timeout:${payload.reason}`);
+      setChatAutoPaused(false);
+    }, freezeMs + 120);
+    return true;
+  }, [activeUserInitialHandleRef, clearChatFreeze, clearReplyUi, setPinnedQuestionMessage, setSandboxDebugAutoPinFreeze, setScrollMode]);
 
   const rollbackEventCooldown = useCallback((eventKey: StoryEventKey) => {
     eventCooldownsRef.current[eventKey] = 0;
@@ -2860,6 +3001,15 @@ export default function App() {
           thaiViewer: {
             lastUsedField: sandboxEngineAudit?.thaiViewer.lastUsedField ?? 'text',
             count: sandboxEngineAudit?.thaiViewer.count ?? 0
+          },
+          autoPinFreeze: {
+            lastMessageId: sandboxAutoPinFreezeRef.current.lastMessageId,
+            lastReason: sandboxAutoPinFreezeRef.current.lastReason,
+            freezeMs: sandboxAutoPinFreezeRef.current.freezeMs,
+            freezeUntil: sandboxAutoPinFreezeRef.current.freezeUntil,
+            freezeRemainingMs: Math.max(0, sandboxAutoPinFreezeRef.current.freezeUntil - now),
+            lastHintFollowUpEvent: sandboxAutoPinFreezeRef.current.lastHintFollowUpEvent,
+            evaluation: sandboxAutoPinFreezeRef.current.lastEvaluation
           }
         },
         pendingQuestions: {
@@ -3211,6 +3361,43 @@ export default function App() {
   const usersByHandleRef = useRef<Map<string, ActiveUserProfile>>(new Map());
   const lastMessageMentionsActiveUserRef = useRef(false);
   const lastParsedMentionsRef = useRef<{ messageId: string; mentions: string[] }>({ messageId: '-', mentions: [] });
+  const sandboxAutoPinFreezeRef = useRef<{
+    lastMessageId: string;
+    lastReason: '-' | 'vip_direct_mention' | 'story_critical_hint_followup';
+    freezeUntil: number;
+    freezeMs: number;
+    lastHintFollowUpEvent: string;
+    lastEvaluation: {
+      messageId: string;
+      isVip: boolean;
+      hasPlayerMention: boolean;
+      directToPlayer: boolean;
+      hitVipDirectMentionRule: boolean;
+      hitStoryCriticalRule: boolean;
+      shouldPin: boolean;
+      failureReason: string;
+      pinnedReason: string;
+      freezeReason: string;
+    };
+  }>({
+    lastMessageId: '-',
+    lastReason: '-',
+    freezeUntil: 0,
+    freezeMs: 0,
+    lastHintFollowUpEvent: '-',
+    lastEvaluation: {
+      messageId: '-',
+      isVip: false,
+      hasPlayerMention: false,
+      directToPlayer: false,
+      hitVipDirectMentionRule: false,
+      hitStoryCriticalRule: false,
+      shouldPin: false,
+      failureReason: 'not_evaluated',
+      pinnedReason: '-',
+      freezeReason: '-'
+    }
+  });
   const lastHighlightReasonRef = useRef<'mentions_activeUser' | 'none'>('none');
   const tagHighlightAppliedCountRef = useRef(0);
   const [sendDebug, setSendDebug] = useState({
@@ -5307,6 +5494,12 @@ export default function App() {
                     <div>audit.transitions(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.transitions ?? [])}</div>
                     <div>audit.spam.duplicate/speaker/freezeLeak: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.duplicateSpamCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.speakerSpamCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.freezeLeakCount ?? 0}</div>
                     <div>audit.thaiViewer.lastUsedField/count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.thaiViewer?.lastUsedField ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.thaiViewer?.count ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.lastMessageId/reason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastReason ?? '-'}</div>
+                    <div>sandbox.autoPinFreeze.freezeMs/remaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.freezeMs ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.freezeRemainingMs ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.lastHintFollowUpEvent: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastHintFollowUpEvent ?? '-'}</div>
+                    <div>sandbox.autoPinFreeze.eval.direct_to_player/vip_direct/story_critical: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.directToPlayer ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.hitVipDirectMentionRule ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.hitStoryCriticalRule ?? false)}</div>
+                    <div>sandbox.autoPinFreeze.eval.shouldPin/failure: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.shouldPin ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.failureReason ?? '-'}</div>
+                    <div>sandbox.autoPinFreeze.eval.pinnedReason/freezeReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.pinnedReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.freezeReason ?? '-'}</div>
                     <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
                     <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
                     <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>
