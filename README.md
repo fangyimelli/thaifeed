@@ -1,4 +1,14 @@
 
+## 2026-03-06 Sandbox 修復：VIP direct mention 只有 highlight、未進 pinned render pipeline（sandbox only）
+
+- 僅 sandbox 變更，classic mode 無改動。
+- Root cause：sandbox 自動 pin 流程沿用 `setPinnedQuestionMessage`，但該函式僅允許 `sandboxPromptCoordinator`，導致 `VIP + @玩家` 自動 pin 寫入被 writer guard 擋掉；結果只剩聊天室 highlight/focus，沒有獨立 pinned reply 區塊。
+- 修復：新增 sandbox 專用 `sandboxPinnedEntry`（獨立於 highlight/freeze），讓 direct mention 與 story-critical follow-up 都會建立 pinned entry 並透過 `ChatPanel` sandbox 區塊渲染。
+- pinned / highlight / freeze 三狀態已拆分：highlight 僅樣式、pinned 為獨立資料與 UI、freeze 為聊天室暫停；同事件可同時觸發三者。
+- direct mention 規則（sandbox）：`VIP + @玩家 + direct interaction` ⇒ 保留原訊息高亮 + 建立 pinned entry + freeze，且 pinned 保留時間可觀測（`expiresAt/remainingMs`）。
+- 新增 debug 可觀測欄位：`lastDirectMentionDetected`、`lastPinnedCandidateMessageId`、`lastPinnedCreatedAt`、`lastPinnedRenderVisible`、`pinnedStateKey/summary`、`pinnedSourceReason`、`pinnedExpiresAt/pinnedRemainingMs`、`lastPinnedDroppedReason`、`highlightWithoutPinned`、`cleanupClearedPinned`、`pinnedOverwrittenByMessageId`、`pinnedComponentMounted`。
+- SSOT/Debug 文件已同步：`docs/10-change-log.md`、`docs/sandbox-flow-table.md`、`PR_NOTES.md`。
+
 ## 2026-03-06 Sandbox 修復：VIP @玩家未 pin/freeze + GHOST_HINT_EVENT 主線接續
 
 - 僅 sandbox 變更，classic mode 無改動。

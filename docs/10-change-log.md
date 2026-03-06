@@ -1,4 +1,48 @@
 
+## 2026-03-06 — Sandbox：修復 VIP direct mention 只有 highlight、未顯示 pinned reply 區塊（sandbox only）
+
+### Root cause
+- `dispatchChatMessage()` 雖然已正確判定 `VIP + @玩家` 並觸發 auto pin/freeze。
+- 但 auto pin 寫入仍走 `setPinnedQuestionMessage()`，該 writer guard 只允許 `sandboxPromptCoordinator`，導致 direct mention 的 pin 請求被 `writerNotAllowed/phaseBusy` 擋下。
+- 結果是：聊天室 row highlight（mention style）仍生效，但 pinned reply UI（獨立區塊）沒有可渲染狀態。
+
+### Changed
+- [sandbox/pin state] `src/app/App.tsx`
+  - 新增 sandbox 專用 pinned entry model：`sandboxPinnedEntry`，最小欄位含 `id/sourceMessageId/sourceEventType/reason/createdAt/expiresAt/visible/actor/text/metadata`。
+  - `triggerSandboxAutoPinFreeze()` 改為同時建立 `sandboxPinnedEntry` + freeze，並支援 TTL 到期清除與覆寫追蹤。
+  - `setPinnedQuestionMessage()` 新增 `autoPinFreeze` 來源白名單（sandbox only），避免 direct mention pin 被 writer guard 錯殺。
+- [sandbox/render] `src/ui/chat/ChatPanel.tsx`
+  - 新增 sandbox pinned 區塊渲染條件：`sandboxControl.enabled && sandboxPinnedEntry.visible`。
+  - pinned 區塊改為獨立於 reply preview，確保 highlight / pinned 不再混用同一個判斷。
+- [sandbox/ui style] `src/styles.css`
+  - 新增 `.replyPinBar-sandbox`，確保 pinned 區塊不被聊天室列表或 input overlay 覆蓋。
+- [sandbox/debug observability] `src/app/App.tsx`
+  - 補齊 autoPinFreeze 可追蹤欄位：
+    - `lastDirectMentionDetected`
+    - `lastPinnedCandidateMessageId`
+    - `lastPinnedCreatedAt`
+    - `lastPinnedRenderVisible`
+    - `pinnedStateKey/pinnedStateSummary`
+    - `pinnedSourceReason`
+    - `pinnedExpiresAt/pinnedRemainingMs`
+    - `lastPinnedDroppedReason`
+    - `highlightWithoutPinned`
+    - `cleanupClearedPinned`
+    - `pinnedOverwrittenByMessageId`
+    - `pinnedComponentMounted`
+
+### Integration decision（舊邏輯整合/淘汰）
+- 保留既有 highlight 與 freeze 邏輯（仍有必要）。
+- 淘汰「用 qna reply preview 代替所有 pinned 顯示」的隱性依賴：sandbox direct mention 改走獨立 pinned entry，不再受 qna AWAITING_REPLY gating 限制。
+
+### Validation
+- VIP 一般聊天：不建立 pinned（PASS）。
+- VIP direct mention：聊天高亮 + pinned 區塊出現 + freeze 生效（PASS）。
+- GHOST_HINT_EVENT follow-up：可建立 story-critical pinned，不再只剩 highlight（PASS）。
+- pinned 不瞬間消失，具 `expiresAt` 與 remaining ms（PASS）。
+- pinned 到期後正常清除（PASS）。
+- classic mode 無變更（PASS）。
+
 ## 2026-03-06 — Sandbox：VIP direct mention pin/freeze + GHOST_HINT_EVENT 主線接續修復（sandbox only）
 
 ### Root cause

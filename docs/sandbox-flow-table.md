@@ -10,10 +10,18 @@ Last Updated By: Codex
 ### VIP Direct Mention Routing
 - 命中條件：`speaker=VIP` 且 `message` 含 `@<activePlayerHandle>`。
 - 命中後效果：
-  - 寫入 pinned reply（沿用既有 reply pin UI path）。
+  - 保留原始訊息並可套用 highlight/emphasis。
+  - 寫入 sandbox 專用 pinned entry（獨立 pinned 區塊，不依賴 qna reply preview）。
   - 觸發 chat freeze（預設 6000ms；可配置 5000~8000ms）。
-  - freeze 結束自動解除並恢復聊天。
+  - pinned 與 freeze 可不同步壽命（目前 pinned = freeze + 3s）。
+- freeze 結束自動解除並恢復聊天。
 - 排除條件：VIP 但未 mention active player，視為一般聊天，不自動 pin。
+
+### 狀態拆分（Highlight / Pinned / Freeze）
+- highlight/emphasis：只影響聊天室訊息樣式，不代表已建立 pinned。
+- pinned reply：由 `sandboxPinnedEntry` 控制，渲染於 sandbox pinned 區塊。
+- freeze/pause/focus：由 freeze state 控制聊天室暫停，與 pinned 分離。
+- 同一事件（VIP direct mention / story-critical follow-up）可同時觸發 highlight + pinned + freeze。
 
 ### GHOST_HINT_EVENT Follow-up Routing
 - 事件型別：`[GHOST_HINT_EVENT] <TYPE>`（目前 `GHOST_VOICE/SCREEN_GLITCH/TV_ON`）。
@@ -47,4 +55,4 @@ Last Updated By: Codex
 - `WAIT_REPLY_1/2/3` 期間 scheduler 必須硬暫停（不可持續 schedule 再靠 emit gate 丟棄）；玩家回覆離開 WAIT_REPLY 後才可恢復排程。
 - `TAG_PLAYER_1/2/3` 每個 step 只能成功 emit 一次 tag；發完後立即 `tagAskedThisStep=true`，後續重跑必須直接 return。
 - 技術故障訊息只能在 `WAIT_REPLY_3` 累積（每 30 秒 2 則，不即時顯示），並在 `FLUSH_TECH_BACKLOG` 才顯示（<=8 則，最後一則固定分鐘數）。
-- 若 sandbox 與 classic 共享邏輯，必須沿用 classic reply-to 形式，不得建立 sandbox 專屬 pinned reply UI。
+- 若 sandbox 與 classic 共享邏輯，需避免規則互滲：sandbox 可有專屬 pinned 區塊，但 classic UI/規則不得受影響。
