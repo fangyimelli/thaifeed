@@ -1,3 +1,28 @@
+## 2026-03-06 Sandbox pinned reply body 為空修復（sandbox only）
+
+### 1) Root cause
+- `triggerSandboxAutoPinFreeze()` 在 message append 前就被呼叫，且只靠 `state.messages.find(messageId)` 取 source message。
+- 在該時序下可能抓不到訊息，`text` 變成空字串，導致 pinned UI 顯示 `「」`。
+
+### 2) 修改檔案
+- `src/app/App.tsx`
+- `src/ui/chat/ChatPanel.tsx`
+- `README.md`
+- `docs/10-change-log.md`
+- `docs/sandbox-flow-table.md`
+- `PR_NOTES.md`
+
+### 3) pinned text mapping 修正方式
+- 在 auto pin 觸發點直接傳入 `sourceMessage: message`，確保同 tick 取得原訊息。
+- pinned body 解析順序：`text -> content -> body -> displayText -> payload.text`，並對候選值 `trim()` 後取第一個非空字串。
+- render 時改為直接顯示 body（非 `「${body}」`）；若 body 空，顯示 `（原始訊息已不存在）`。
+
+### 4) 驗證結果
+- VIP direct mention：pinned 顯示完整 `@ne 嗨嗨，第一次看這台嗎？`。
+- pinned reply 不再只顯示 reason。
+- pinned reply 不再出現 `「」`。
+- classic mode 未受影響。
+
 ## 2026-03-06 Sandbox：Pinned reply schema/formatter/component parity（sandbox only）
 
 ### 本次修正重點

@@ -434,8 +434,8 @@ export default function ChatPanel({
 
       {shouldRenderSandboxPinned && sandboxPinnedEntry && (
         <div className="replyPinBar replyPinBar-sandbox" role="status" aria-live="polite">
-          <div className="replyPinHeader">↳ @{sandboxPinnedEntry.author}</div>
-          <div className="replyPinText">「{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}」</div>
+          <div className="replyPinHeader">📌 👑 {sandboxPinnedEntry.author}</div>
+          <div className="replyPinText">{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}</div>
         </div>
       )}
 

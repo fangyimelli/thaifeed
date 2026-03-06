@@ -1,3 +1,14 @@
+## 2026-03-06 Sandbox pinned reply body pipeline 修正（sandbox only）
+
+| Pipeline 階段 | 修正前 | 修正後 |
+| --- | --- | --- |
+| 1. source message text | auto pin 只從 `state.messages` 反查，可能拿不到當下訊息 | auto pin 可直接吃 dispatch 當下 `sourceMessage`，再 fallback state lookup |
+| 2. mention parser | mention 判定正確，但不保證 pin body 來源 | mention 判定維持不變；pin body 來源改為同 tick message，避免空 body |
+| 3. pinned entry 建立 | 可能寫入 `body=''` | 透過 `resolveSandboxPinnedBody()` 寫入完整文字 |
+| 4. pinned state 寫入 | metadata 有值、body 可能空 | metadata + body 同步寫入 |
+| 5. pinned formatter | 顯示 `「body」`，body 空時看到 `「」` | 顯示純文字 body，空值改顯示 fallback 文案 |
+| 6. pinned component render | 視覺上可出現空引號 | 不會再出現空引號；會顯示完整內容或 fallback |
+
 ## 2026-03-06 Pinned parity 規則補充（sandbox only）
 
 ### Sandbox vs Classic pinned schema 對齊

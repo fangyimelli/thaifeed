@@ -202,6 +202,24 @@ function randomInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function resolveSandboxPinnedBody(message: unknown): string {
+  if (!message || typeof message !== 'object') return '';
+  const entry = message as {
+    text?: unknown;
+    content?: unknown;
+    body?: unknown;
+    displayText?: unknown;
+    payload?: { text?: unknown };
+  };
+  const candidates = [entry.text, entry.content, entry.body, entry.displayText, entry.payload?.text];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const value = candidate.trim();
+    if (value.length > 0) return value;
+  }
+  return '';
+}
+
 function pickNonRepeatingActor(pool: string[], recentActors: string[]): string {
   if (pool.length === 0) return 'ink31';
   const lastActor = recentActors[recentActors.length - 1];
@@ -1159,7 +1177,8 @@ export default function App() {
           messageId: message.id,
           reason: hitStoryCriticalRule ? 'story_critical_hint_followup' : 'vip_direct_mention',
           freezeMs,
-          hasTagToActiveUser: hitStoryCriticalRule ? true : hasPlayerMention
+          hasTagToActiveUser: hitStoryCriticalRule ? true : hasPlayerMention,
+          sourceMessage: message
         });
       }
     }
@@ -1798,12 +1817,13 @@ export default function App() {
     reason: 'vip_direct_mention' | 'story_critical_hint_followup';
     freezeMs: number;
     hasTagToActiveUser: boolean;
+    sourceMessage?: ChatMessage | null;
   }) => {
     const now = Date.now();
     const freezeMs = Math.max(5000, Math.min(8000, payload.freezeMs));
-    const sourceMessage = state.messages.find((entry) => entry.id === payload.messageId) ?? null;
+    const sourceMessage = payload.sourceMessage ?? state.messages.find((entry) => entry.id === payload.messageId) ?? null;
     const actor = sourceMessage?.username || SANDBOX_VIP.handle;
-    const text = sourceMessage?.text || '';
+    const text = resolveSandboxPinnedBody(sourceMessage);
         const nextPinned: SandboxPinnedEntry = {
       id: `sandbox-pin:${payload.messageId}`,
       messageId: payload.messageId,
