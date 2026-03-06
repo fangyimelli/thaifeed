@@ -79,6 +79,39 @@
 3. flow transition：不再出現 `ADVANCE_NEXT -> TAG_PLAYER_1` 雙重寫入。
 4. classic mode smoke：行為不變。
 
+## 2026-03-06 — Sandbox pinned reply root-cause fix（VIP direct mention highlighted but not pinned）
+
+### root cause
+- 直接提及（VIP + @玩家）雖命中 auto pin/freeze 判定，但 pinned 寫入實際仍經過 `setPinnedQuestionMessage()` writer guard。
+- 該 guard 原本只允許 `sandboxPromptCoordinator`，導致 auto pin 路徑被擋（`writerNotAllowed/phaseBusy`），形成「highlight 有、pinned 區塊無」的錯位。
+
+### 修改策略
+1. 保留舊 highlight/freeze 行為（仍必要），補上獨立 sandbox pinned entry model（最小資料結構）。
+2. 打通 auto pin writer path（允許 `autoPinFreeze` source）。
+3. 在 ChatPanel 掛載 sandbox 專用 pinned 區塊，不再依賴 qna AWAITING_REPLY 才顯示。
+4. 補齊 debug 可觀測欄位，能定位 pinned 掉在哪個階段（判定、寫入、渲染、cleanup、覆寫）。
+
+### 影響範圍
+- `src/app/App.tsx`：sandbox pin state / auto pin pipeline / debug。
+- `src/ui/chat/ChatPanel.tsx`：sandbox pinned 區塊 render。
+- `src/styles.css`：sandbox pinned 樣式與層級。
+- 文件：`README.md`、`docs/10-change-log.md`、`docs/sandbox-flow-table.md`。
+- **classic mode 無改動。**
+
+### 驗證情境
+1. VIP 一般聊天：不 pin。
+2. VIP direct mention：message highlight + pinned 區塊 + freeze。
+3. GHOST_HINT_EVENT follow-up：story-critical pinned + freeze。
+4. pinned 非瞬間消失（有 expiresAt/remaining）。
+5. 到期後 pinned 正常清除。
+
+### 是否有移除/整合舊邏輯
+- 整合：保留舊 highlight/freeze。
+- 淘汰：不再以 qna reply preview 充當 sandbox direct mention 的 pinned 呈現。
+
+### 尚未處理但相關風險點
+- 目前 sandbox pinned 與 qna reply pin 仍並存兩條 UI（語義不同）；後續可評估抽象單一 pin presenter 以降低認知成本。
+
 ## 2026-03-06 Patch Request：Sandbox join 後先 PREHEAT（移除 join 即時強制回覆）
 
 ### 變更摘要（sandbox only）

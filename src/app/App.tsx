@@ -142,6 +142,22 @@ type ChatFreezeState = {
   startedAt: number | null;
 };
 
+type SandboxPinnedEntry = {
+  id: string;
+  sourceMessageId: string;
+  sourceEventType: string;
+  reason: 'vip_direct_mention' | 'story_critical_hint_followup' | 'answer_reply';
+  createdAt: number;
+  expiresAt: number;
+  visible: boolean;
+  actor: string;
+  text: string;
+  metadata?: {
+    eventName?: string;
+    linkedPlayerId?: string;
+  };
+};
+
 type BootstrapActivatedBy = 'username_submit' | 'debug' | null;
 
 type BootstrapState = {
@@ -539,6 +555,8 @@ export default function App() {
   const [replyPreviewSuppressedReason, setReplyPreviewSuppressedReason] = useState<string | null>(null);
   const [qnaQuestionMessageIdRendered, setQnaQuestionMessageIdRendered] = useState(false);
   const [replyPinMounted, setReplyPinMounted] = useState(false);
+  const [sandboxPinnedMounted, setSandboxPinnedMounted] = useState(false);
+  const [sandboxPinnedEntry, setSandboxPinnedEntry] = useState<SandboxPinnedEntry | null>(null);
   const [lastForceToBottomReason, setLastForceToBottomReason] = useState<string | null>(null);
   const [lastForceToBottomAt, setLastForceToBottomAt] = useState<number | null>(null);
   const [lastForceScrollMetrics, setLastForceScrollMetrics] = useState<{ top: number; height: number; client: number } | null>(null);
@@ -1115,7 +1133,15 @@ export default function App() {
         ? 'vip_direct_mention'
         : (hitStoryCriticalRule ? 'story_critical_hint_followup' : '-');
       const freezeReason = pinnedReason;
+      const now = Date.now();
       setSandboxDebugAutoPinFreeze({
+        lastDirectMentionDetected: {
+          messageId: message.id,
+          at: now,
+          hasPlayerMention,
+          isVipSpeaker,
+          directToPlayer
+        },
         lastEvaluation: {
           messageId: message.id,
           isVip: isVipSpeaker,
@@ -1126,8 +1152,11 @@ export default function App() {
           shouldPin,
           failureReason,
           pinnedReason,
-          freezeReason
+          freezeReason,
+          highlightOnly: !shouldPin && directToPlayer
         },
+        lastPinnedCandidateMessageId: shouldPin ? message.id : '-',
+        highlightWithoutPinned: directToPlayer && !shouldPin,
         ...(message.hintEventName ? { lastHintFollowUpEvent: message.hintEventName } : {})
       });
       if (shouldPin) {
@@ -1620,6 +1649,13 @@ export default function App() {
       replyingToMessageId: null
     };
     qnaStateRef.current.active.questionMessageId = null;
+    setSandboxPinnedEntry((prev) => {
+      if (!prev) return prev;
+      sandboxAutoPinFreezeRef.current.lastPinnedDroppedReason = `clearReplyUi:${reason}`;
+      sandboxAutoPinFreezeRef.current.lastPinnedDroppedAt = now;
+      sandboxAutoPinFreezeRef.current.cleanupClearedPinned = true;
+      return null;
+    });
     setLastQuestionMessageId(null);
     setLastQuestionMessageHasTag(false);
     resetQnaUiState();
@@ -1686,7 +1722,7 @@ export default function App() {
     return true;
   }, [clearChatFreeze, clearReplyUi, resolveQna]);
 
-  const setPinnedQuestionMessage = useCallback((payload: { source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'unknown'; messageId: string; hasTagToActiveUser: boolean }) => {
+  const setPinnedQuestionMessage = useCallback((payload: { source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'autoPinFreeze' | 'unknown'; messageId: string; hasTagToActiveUser: boolean }) => {
     if (modeRef.current.id !== 'sandbox_story') {
       setLastQuestionMessageId(payload.messageId);
       setLastQuestionMessageHasTag(payload.hasTagToActiveUser);
@@ -1694,7 +1730,7 @@ export default function App() {
       return true;
     }
 
-    if (payload.source !== 'sandboxPromptCoordinator') {
+    if (!(payload.source === 'sandboxPromptCoordinator' || payload.source === 'autoPinFreeze')) {
       const sandboxState = sandboxModeRef.current.getState();
       const blockedReason = sandboxState.scheduler.phase === 'awaitingAnswer' ? 'phaseBusy' : 'writerNotAllowed';
       sandboxModeRef.current.commitPinnedWriter({ source: payload.source, writerBlocked: true, blockedReason });
@@ -1705,7 +1741,7 @@ export default function App() {
     setLastQuestionMessageHasTag(payload.hasTagToActiveUser);
     setReplyPreviewSuppressedReason(null);
     sandboxModeRef.current.commitPromptPinnedRendered(payload.messageId);
-    sandboxModeRef.current.commitPinnedWriter({ source: payload.source, writerBlocked: false, blockedReason: '' });
+    sandboxModeRef.current.commitPinnedWriter({ source: payload.source === 'autoPinFreeze' ? 'eventEngine' : payload.source, writerBlocked: false, blockedReason: '' });
     return true;
   }, []);
 
@@ -1728,7 +1764,26 @@ export default function App() {
       failureReason: string;
       pinnedReason: string;
       freezeReason: string;
+      highlightOnly: boolean;
     };
+    lastDirectMentionDetected: { messageId: string; at: number; hasPlayerMention: boolean; isVipSpeaker: boolean; directToPlayer: boolean };
+    lastPinnedCandidateMessageId: string;
+    lastPinnedCreatedAt: number;
+    lastPinnedDroppedReason: string;
+    lastPinnedDroppedAt: number;
+    lastPinnedRenderVisible: boolean;
+    pinnedStateKey: string;
+    pinnedStateSummary: string;
+    pinnedSourceReason: string;
+    pinnedExpiresAt: number;
+    pinnedRemainingMs: number;
+    pinnedComponentMounted: boolean;
+    highlightWithoutPinned: boolean;
+    cleanupClearedPinned: boolean;
+    pinnedOverwrittenByMessageId: string;
+    lastPinnedOverwriteAt: number;
+    lastPinnedAutoClearAt: number;
+    lastPinnedAutoClearReason: string;
   }>) => {
     const current = sandboxAutoPinFreezeRef.current;
     sandboxAutoPinFreezeRef.current = {
@@ -1737,7 +1792,10 @@ export default function App() {
       lastEvaluation: {
         ...current.lastEvaluation,
         ...(patch.lastEvaluation ?? {})
-      }
+      },
+      pinnedRemainingMs: typeof patch.pinnedExpiresAt === 'number'
+        ? Math.max(0, patch.pinnedExpiresAt - Date.now())
+        : (patch.pinnedRemainingMs ?? current.pinnedRemainingMs)
     };
   }, []);
 
@@ -1749,6 +1807,34 @@ export default function App() {
   }) => {
     const now = Date.now();
     const freezeMs = Math.max(5000, Math.min(8000, payload.freezeMs));
+    const sourceMessage = state.messages.find((entry) => entry.id === payload.messageId) ?? null;
+    const actor = sourceMessage?.username || SANDBOX_VIP.handle;
+    const text = sourceMessage?.text || '';
+    const sourceEventType = sourceMessage?.chatType || sourceMessage?.type || 'chat';
+    const nextPinned: SandboxPinnedEntry = {
+      id: `sandbox-pin:${payload.messageId}`,
+      sourceMessageId: payload.messageId,
+      sourceEventType,
+      reason: payload.reason,
+      createdAt: now,
+      expiresAt: now + freezeMs + 3000,
+      visible: true,
+      actor,
+      text,
+      metadata: {
+        eventName: sourceMessage?.hintEventName,
+        linkedPlayerId: activeUserProfileRef.current?.id ?? 'activeUser'
+      }
+    };
+    setSandboxPinnedEntry((prev) => {
+      if (prev?.visible && prev.sourceMessageId !== payload.messageId) {
+        setSandboxDebugAutoPinFreeze({
+          pinnedOverwrittenByMessageId: payload.messageId,
+          lastPinnedOverwriteAt: now
+        });
+      }
+      return nextPinned;
+    });
     lockStateRef.current = {
       isLocked: true,
       target: normalizeHandle(activeUserInitialHandleRef.current || '') || 'activeUser',
@@ -1756,12 +1842,17 @@ export default function App() {
       replyingToMessageId: payload.messageId
     };
     const pinnedOk = setPinnedQuestionMessage({
-      source: 'sandboxPromptCoordinator',
+      source: 'autoPinFreeze',
       messageId: payload.messageId,
       hasTagToActiveUser: payload.hasTagToActiveUser
     });
     if (!pinnedOk) {
       setReplyPreviewSuppressedReason('sandbox_auto_pin_writer_guard');
+      setSandboxDebugAutoPinFreeze({
+        lastPinnedDroppedReason: 'writer_guard_blocked',
+        lastPinnedDroppedAt: now,
+        highlightWithoutPinned: true
+      });
       return false;
     }
     const freezeReason = payload.reason === 'vip_direct_mention' ? 'vip_direct_mention' : 'story_critical_hint_followup';
@@ -1787,8 +1878,18 @@ export default function App() {
         shouldPin: true,
         failureReason: '-',
         pinnedReason: payload.reason,
-        freezeReason
-      }
+        freezeReason,
+        highlightOnly: false
+      },
+      lastPinnedCandidateMessageId: payload.messageId,
+      lastPinnedCreatedAt: now,
+      pinnedSourceReason: payload.reason,
+      pinnedStateKey: 'sandboxPinnedEntry',
+      pinnedStateSummary: `${nextPinned.id}:${nextPinned.reason}`,
+      pinnedExpiresAt: nextPinned.expiresAt,
+      pinnedComponentMounted: sandboxPinnedMounted,
+      highlightWithoutPinned: false,
+      cleanupClearedPinned: false
     });
     window.setTimeout(() => {
       if (modeRef.current.id !== 'sandbox_story') return;
@@ -1799,9 +1900,30 @@ export default function App() {
       clearReplyUi(`sandbox_auto_pin_timeout:${payload.reason}`);
       clearChatFreeze(`sandbox_auto_pin_timeout:${payload.reason}`);
       setChatAutoPaused(false);
+      setSandboxPinnedEntry((prev) => {
+        if (!prev || prev.sourceMessageId !== payload.messageId) return prev;
+        setSandboxDebugAutoPinFreeze({
+          lastPinnedAutoClearAt: Date.now(),
+          lastPinnedAutoClearReason: `timeout:${payload.reason}`,
+          cleanupClearedPinned: true
+        });
+        return null;
+      });
     }, freezeMs + 120);
+    window.setTimeout(() => {
+      setSandboxPinnedEntry((prev) => {
+        if (!prev || prev.sourceMessageId !== payload.messageId) return prev;
+        if (Date.now() < prev.expiresAt) return prev;
+        setSandboxDebugAutoPinFreeze({
+          lastPinnedAutoClearAt: Date.now(),
+          lastPinnedAutoClearReason: `expiresAt:${payload.reason}`,
+          cleanupClearedPinned: true
+        });
+        return null;
+      });
+    }, freezeMs + 3200);
     return true;
-  }, [activeUserInitialHandleRef, clearChatFreeze, clearReplyUi, setPinnedQuestionMessage, setSandboxDebugAutoPinFreeze, setScrollMode]);
+  }, [activeUserInitialHandleRef, clearChatFreeze, clearReplyUi, sandboxPinnedMounted, setPinnedQuestionMessage, setSandboxDebugAutoPinFreeze, setScrollMode, state.messages]);
 
   const rollbackEventCooldown = useCallback((eventKey: StoryEventKey) => {
     eventCooldownsRef.current[eventKey] = 0;
@@ -3378,7 +3500,33 @@ export default function App() {
       failureReason: string;
       pinnedReason: string;
       freezeReason: string;
+      highlightOnly: boolean;
     };
+    lastDirectMentionDetected: {
+      messageId: string;
+      at: number;
+      hasPlayerMention: boolean;
+      isVipSpeaker: boolean;
+      directToPlayer: boolean;
+    };
+    lastPinnedCandidateMessageId: string;
+    lastPinnedCreatedAt: number;
+    lastPinnedDroppedReason: string;
+    lastPinnedDroppedAt: number;
+    lastPinnedOverrideByMessageId: string;
+    lastPinnedOverwriteAt: number;
+    lastPinnedAutoClearAt: number;
+    lastPinnedAutoClearReason: string;
+    lastPinnedRenderVisible: boolean;
+    pinnedStateKey: string;
+    pinnedStateSummary: string;
+    pinnedSourceReason: string;
+    pinnedExpiresAt: number;
+    pinnedRemainingMs: number;
+    pinnedComponentMounted: boolean;
+    highlightWithoutPinned: boolean;
+    cleanupClearedPinned: boolean;
+    pinnedOverwrittenByMessageId: string;
   }>({
     lastMessageId: '-',
     lastReason: '-',
@@ -3395,8 +3543,28 @@ export default function App() {
       shouldPin: false,
       failureReason: 'not_evaluated',
       pinnedReason: '-',
-      freezeReason: '-'
-    }
+      freezeReason: '-',
+      highlightOnly: false
+    },
+    lastDirectMentionDetected: { messageId: '-', at: 0, hasPlayerMention: false, isVipSpeaker: false, directToPlayer: false },
+    lastPinnedCandidateMessageId: '-',
+    lastPinnedCreatedAt: 0,
+    lastPinnedDroppedReason: '-',
+    lastPinnedDroppedAt: 0,
+    lastPinnedOverrideByMessageId: '-',
+    lastPinnedOverwriteAt: 0,
+    lastPinnedAutoClearAt: 0,
+    lastPinnedAutoClearReason: '-',
+    lastPinnedRenderVisible: false,
+    pinnedStateKey: 'sandboxPinnedEntry',
+    pinnedStateSummary: 'null',
+    pinnedSourceReason: '-',
+    pinnedExpiresAt: 0,
+    pinnedRemainingMs: 0,
+    pinnedComponentMounted: false,
+    highlightWithoutPinned: false,
+    cleanupClearedPinned: false,
+    pinnedOverwrittenByMessageId: '-'
   });
   const lastHighlightReasonRef = useRef<'mentions_activeUser' | 'none'>('none');
   const tagHighlightAppliedCountRef = useRef(0);
@@ -3570,6 +3738,23 @@ export default function App() {
         event: snapshot,
         sandbox: {
           ...((window.__CHAT_DEBUG__ as { sandbox?: Record<string, unknown> } | undefined)?.sandbox ?? {}),
+          audit: {
+            ...(((window.__CHAT_DEBUG__ as { sandbox?: { audit?: Record<string, unknown> } } | undefined)?.sandbox?.audit ?? {})),
+            autoPinFreeze: {
+              ...sandboxAutoPinFreezeRef.current,
+              pinnedRemainingMs: sandboxPinnedEntry ? Math.max(0, sandboxPinnedEntry.expiresAt - now) : 0,
+              lastPinnedRenderVisible: Boolean(sandboxPinnedEntry?.visible),
+              pinnedStateKey: 'sandboxPinnedEntry',
+              pinnedStateSummary: sandboxPinnedEntry
+                ? `${sandboxPinnedEntry.id}:${sandboxPinnedEntry.reason}:${sandboxPinnedEntry.sourceMessageId}`
+                : 'null',
+              pinnedSourceReason: sandboxPinnedEntry?.reason ?? '-',
+              pinnedExpiresAt: sandboxPinnedEntry?.expiresAt ?? 0,
+              pinnedComponentMounted: sandboxPinnedMounted,
+              highlightWithoutPinned: lastHighlightReasonRef.current === 'mentions_activeUser' && !sandboxPinnedEntry,
+              freezeRemainingMs: Math.max(0, sandboxAutoPinFreezeRef.current.freezeUntil - now)
+            }
+          },
           qna: {
             ...(((window.__CHAT_DEBUG__ as { sandbox?: { qna?: Record<string, unknown> } } | undefined)?.sandbox?.qna ?? {})),
             lastResolveAt: sandboxQnaDebugRef.current.lastResolveAt,
@@ -3593,8 +3778,16 @@ export default function App() {
           legacyReplyQuoteEnabled: false,
           qnaQuestionMessageIdRendered,
           pinned: {
-            visible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
-            textPreview: (sortedMessages.find((message) => message.id === qnaStateRef.current.active.questionMessageId)?.text ?? '-').slice(0, 60)
+            visible: Boolean(sandboxPinnedEntry?.visible),
+            textPreview: (sandboxPinnedEntry?.text ?? '-').slice(0, 60)
+          },
+          sandboxPinned: {
+            mounted: sandboxPinnedMounted,
+            visible: Boolean(sandboxPinnedEntry?.visible),
+            reason: sandboxPinnedEntry?.reason ?? '-',
+            sourceMessageId: sandboxPinnedEntry?.sourceMessageId ?? '-',
+            expiresAt: sandboxPinnedEntry?.expiresAt ?? 0,
+            remainingMs: sandboxPinnedEntry ? Math.max(0, sandboxPinnedEntry.expiresAt - now) : 0
           },
           qnaSyncAssert: (() => {
             const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
@@ -3686,7 +3879,7 @@ export default function App() {
       syncChatEngineDebug();
     }, 600);
     return () => window.clearInterval(timer);
-  }, [appStarted, blackoutState.endsAt, blackoutState.isActive, blackoutState.mode, chatAutoPaused, chatAutoScrollMode, chatFreeze, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, sortedMessages, syncChatEngineDebug, updateChatDebug]);
+  }, [appStarted, blackoutState.endsAt, blackoutState.isActive, blackoutState.mode, chatAutoPaused, chatAutoScrollMode, chatFreeze, chatFreezeAfterNMessages, chatFreezeCountdownRemaining, chatFreezeCountdownStartedAt, chatLastCountdownDecrementAt, chatLastMessageActorIdCounted, lastBlockedReason, lastQuestionMessageHasTag, lastQuestionMessageId, replyPreviewSuppressedReason, sandboxPinnedEntry, sandboxPinnedMounted, sortedMessages, syncChatEngineDebug, updateChatDebug]);
 
   useEffect(() => {
     if (chatAutoPaused) {
@@ -5500,6 +5693,17 @@ export default function App() {
                     <div>sandbox.autoPinFreeze.eval.direct_to_player/vip_direct/story_critical: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.directToPlayer ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.hitVipDirectMentionRule ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.hitStoryCriticalRule ?? false)}</div>
                     <div>sandbox.autoPinFreeze.eval.shouldPin/failure: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.shouldPin ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.failureReason ?? '-'}</div>
                     <div>sandbox.autoPinFreeze.eval.pinnedReason/freezeReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.pinnedReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.freezeReason ?? '-'}</div>
+                    <div>sandbox.autoPinFreeze.eval.highlightOnly: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.highlightOnly ?? false)}</div>
+                    <div>sandbox.autoPinFreeze.lastDirectMentionDetected(message/at): {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastDirectMentionDetected?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastDirectMentionDetected?.at ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.lastPinnedCandidateMessageId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedCandidateMessageId ?? '-'}</div>
+                    <div>sandbox.autoPinFreeze.lastPinnedCreatedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedCreatedAt ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.lastPinnedRenderVisible/componentMounted: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedRenderVisible ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedComponentMounted ?? false)}</div>
+                    <div>sandbox.autoPinFreeze.pinnedStateKey/stateSummary: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedStateKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedStateSummary ?? '-'}</div>
+                    <div>sandbox.autoPinFreeze.pinnedReason/expiresAt/remaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedSourceReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedExpiresAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedRemainingMs ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.lastPinnedDroppedReason/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedDroppedReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedDroppedAt ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.highlightWithoutPinned/cleanupClearedPinned: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.highlightWithoutPinned ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.cleanupClearedPinned ?? false)}</div>
+                    <div>sandbox.autoPinFreeze.overwrittenBy/overwriteAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedOverwrittenByMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedOverwriteAt ?? 0}</div>
+                    <div>sandbox.autoPinFreeze.autoClearReason/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedAutoClearReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedAutoClearAt ?? 0}</div>
                     <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
                     <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
                     <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>
@@ -5613,6 +5817,8 @@ export default function App() {
               replyPinMountedRef.current = mounted;
               setReplyPinMounted(mounted);
             }}
+            sandboxPinnedEntry={sandboxPinnedEntry}
+            onSandboxPinnedMountedChange={setSandboxPinnedMounted}
             sandboxControl={{
               enabled: modeIdRef.current === 'sandbox_story',
               valueToken: sandboxInputControl.valueToken,

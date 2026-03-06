@@ -21,6 +21,22 @@ type ForceScrollDebugPayload = {
   metrics: ScrollMetrics | null;
 };
 
+type SandboxPinnedEntry = {
+  id: string;
+  sourceMessageId: string;
+  sourceEventType: string;
+  reason: 'vip_direct_mention' | 'story_critical_hint_followup' | 'answer_reply';
+  createdAt: number;
+  expiresAt: number;
+  visible: boolean;
+  actor: string;
+  text: string;
+  metadata?: {
+    eventName?: string;
+    linkedPlayerId?: string;
+  };
+};
+
 type Props = {
   messages: ChatMessageType[];
   input: string;
@@ -52,6 +68,8 @@ type Props = {
   onForceScrollDebug?: (payload: ForceScrollDebugPayload) => void;
   onReplyPinMountedChange?: (mounted: boolean) => void;
   forceScrollSignalReason?: string | null;
+  sandboxPinnedEntry?: SandboxPinnedEntry | null;
+  onSandboxPinnedMountedChange?: (mounted: boolean) => void;
   sandboxControl?: {
     enabled: boolean;
     valueToken: number;
@@ -98,6 +116,8 @@ export default function ChatPanel({
   onForceScrollDebug,
   onReplyPinMountedChange,
   forceScrollSignalReason = null,
+  sandboxPinnedEntry = null,
+  onSandboxPinnedMountedChange,
   sandboxControl
 }: Props) {
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -128,6 +148,7 @@ export default function ChatPanel({
   const originalMessage = questionMessageId ? sanitizedMessagesById.get(questionMessageId) ?? null : null;
 
   const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId);
+  const shouldRenderSandboxPinned = Boolean(sandboxControl?.enabled && sandboxPinnedEntry?.visible);
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
@@ -396,6 +417,10 @@ export default function ChatPanel({
   }, [onReplyPinMountedChange, shouldRenderReplyPreview]);
 
   useEffect(() => {
+    onSandboxPinnedMountedChange?.(shouldRenderSandboxPinned);
+  }, [onSandboxPinnedMountedChange, shouldRenderSandboxPinned]);
+
+  useEffect(() => {
     if (!forceScrollSignalReason) return;
     scrollChatToBottom(forceScrollSignalReason);
   }, [forceScrollSignalReason]);
@@ -412,6 +437,13 @@ export default function ChatPanel({
       <header className="chat-header input-surface">
         <strong>聊天室</strong>
       </header>
+
+      {shouldRenderSandboxPinned && sandboxPinnedEntry && (
+        <div className="replyPinBar replyPinBar-sandbox" role="status" aria-live="polite">
+          <div className="replyPinHeader">📌 @{sandboxPinnedEntry.actor} · {sandboxPinnedEntry.reason}</div>
+          <div className="replyPinText">「{truncateReplyText(sandboxPinnedEntry.text, 64)}」</div>
+        </div>
+      )}
 
 
       <div
