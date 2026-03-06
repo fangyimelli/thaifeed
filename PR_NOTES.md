@@ -1,3 +1,18 @@
+
+## 2026-03-06 Patch Request：Sandbox Audit 三項修補（reply preview / WAIT_REPLY scheduler / ADVANCE_NEXT dedupe）
+
+### 變更摘要（sandbox only）
+- `ChatPanel` reply preview 查找改為 full message list（仍保留最後 100 則 render optimization）。
+- `chat_engine` 在 `WAIT_REPLY_1/2/3` 期間改為真正 pause scheduler（timer clear + stop scheduling）；離開 WAIT_REPLY 後 resume。
+- `App.tsx` 在 `ADVANCE_NEXT` 移除外層重複 `setFlowStep('TAG_PLAYER_1')`，由 `forceAdvanceNode()` 單一來源管理 step transition。
+- classic mode 未修改。
+
+### 驗收
+1. reply preview：原訊息在 state 仍存在時可正確顯示，不再誤報不存在。
+2. WAIT_REPLY：期間無 `scheduleNext()` 持續排程。
+3. flow transition：不再出現 `ADVANCE_NEXT -> TAG_PLAYER_1` 雙重寫入。
+4. classic mode smoke：行為不變。
+
 ## 2026-03-06 Patch Request：Sandbox join 後先 PREHEAT（移除 join 即時強制回覆）
 
 ### 變更摘要（sandbox only）

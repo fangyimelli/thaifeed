@@ -123,9 +123,9 @@ export default function ChatPanel({
     text: sanitizeMentions(message.text, activeSet),
     translation: message.translation ? sanitizeMentions(message.translation, activeSet) : message.translation
   }));
-  const originalMessage = questionMessageId
-    ? sanitizedMessages.find((message) => message.id === questionMessageId)
-    : null;
+  const renderedMessages = sanitizedMessages.slice(-MAX_RENDER_COUNT);
+  const sanitizedMessagesById = new Map(sanitizedMessages.map((message) => [message.id, message]));
+  const originalMessage = questionMessageId ? sanitizedMessagesById.get(questionMessageId) ?? null : null;
 
   const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId);
 
@@ -430,7 +430,7 @@ export default function ChatPanel({
       >
         <div className="chat-items">
           {!isReady && <div className="chat-loading-banner">{loadingStatusText || '初始化中'}</div>}
-          {sanitizedMessages.slice(-MAX_RENDER_COUNT).map((message) => (
+          {renderedMessages.map((message) => (
             <ChatMessage
               key={message.id}
               message={message}

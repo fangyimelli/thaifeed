@@ -4669,7 +4669,6 @@ export default function App() {
     if (sandboxState.flow.step === 'ADVANCE_NEXT') {
       sandboxWaveRunningRef.current = false;
       sandboxModeRef.current.forceAdvanceNode();
-      sandboxModeRef.current.setFlowStep('TAG_PLAYER_1', 'advance_next');
       sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
       sandboxModeRef.current.setLastTimestamps({ lastAskAt: 0 });
       sandboxConsonantPromptNodeIdRef.current = null;

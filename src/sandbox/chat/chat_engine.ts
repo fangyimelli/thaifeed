@@ -72,6 +72,11 @@ const VIP_TRANSLATE_LINES = [
 
 export class ChatEngine {
   private readonly options: ChatEngineOptions;
+  private static readonly WAIT_REPLY_STEPS: ReadonlySet<ChatEngineContext['flowStep']> = new Set([
+    'WAIT_REPLY_1',
+    'WAIT_REPLY_2',
+    'WAIT_REPLY_3'
+  ]);
   private readonly userGen = new SandboxUserGenerator();
   private readonly users: string[] = [];
   private timer: number | null = null;
@@ -137,7 +142,10 @@ export class ChatEngine {
   }
 
   setContext(context: Partial<ChatEngineContext>): void {
-    this.context = { ...this.context, ...context };
+    const wasWaitReply = ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep);
+    const nextContext = { ...this.context, ...context };
+    const isWaitReply = ChatEngine.WAIT_REPLY_STEPS.has(nextContext.flowStep);
+    this.context = nextContext;
     if (this.context.phase === 'chatRiot' && this.lastPhase !== 'chatRiot') {
       this.waveRemaining = 3 + Math.floor(Math.random() * 4);
       this.waveTotal = this.waveRemaining;
@@ -152,6 +160,11 @@ export class ChatEngine {
     if (this.context.isEnding && this.collapseQueue.length === 0) {
       this.prepareCollapse();
     }
+    if (isWaitReply) {
+      this.pauseScheduler();
+    } else if (wasWaitReply || this.timer === null) {
+      this.resumeScheduler();
+    }
   }
 
   markPlayerReply(at = Date.now()): void {
@@ -164,10 +177,6 @@ export class ChatEngine {
   }
 
   nextMessage(): ChatMessage | null {
-    if (this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2' || this.context.flowStep === 'WAIT_REPLY_3') {
-      return null;
-    }
-
     if (this.context.freeze.frozen && !this.context.glitchBurst.pending) {
       return null;
     }
@@ -283,8 +292,22 @@ export class ChatEngine {
     return this.captureMessage(this.formatLine(this.pickStringPool('casual_pool')), 'casual_pool');
   }
 
+  private pauseScheduler(): void {
+    if (this.timer === null) return;
+    window.clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  private resumeScheduler(): void {
+    if (!this.running || this.timer !== null || ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep)) return;
+    this.scheduleNext();
+  }
+
   private scheduleNext(): void {
-    if (!this.running) return;
+    if (!this.running || ChatEngine.WAIT_REPLY_STEPS.has(this.context.flowStep)) {
+      this.pauseScheduler();
+      return;
+    }
     const message = this.nextMessage();
     if (message) this.options.onMessage(message);
     const delay = this.context.glitchBurst.pending && this.context.glitchBurst.remaining > 0

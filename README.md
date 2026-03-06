@@ -61,6 +61,14 @@ npm run build
 - `src/sandbox/chat/chat_engine.ts` 新增防洗版檢測計數（只記錄不阻擋）：`duplicateSpamCount` / `speakerSpamCount` / `freezeLeakCount`。
 - classic mode 無變更。
 
+
+## Sandbox 修補（2026-03-06）
+
+- 修正 sandbox reply preview 查找來源：預覽改為從完整 `state.messages`（傳入 `ChatPanel.messages`）查找 reply target，不再受最後 100 則 render window 限制。
+- 修正 sandbox chat scheduler：`WAIT_REPLY_1/2/3` 期間會真正 pause scheduler（停止 `scheduleNext()` 計時），玩家回覆推進 step 後才 resume。
+- 修正 `ADVANCE_NEXT` transition 單一來源：`forceAdvanceNode()` 負責切到 `TAG_PLAYER_1`，外層 effect 不再重複 `setFlowStep('TAG_PLAYER_1')`。
+- classic mode 未修改。
+
 ## Sandbox Chat Pools
 
 - SSOT：`src/sandbox/chat/chat_pools.ts` 是 sandbox 聊天語料唯一來源（`CHAT_POOLS`），總數固定 **2050 entries**。
