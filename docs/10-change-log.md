@@ -1,3 +1,17 @@
+## 2026-03-06 Sandbox P0 Fixes（transactional commit / reply pin source guard / debug isolation）
+
+- `src/chat/tagFlow.ts`：append 改為 success-or-abort；回傳 resolved messageId，只有成功才進 pin/freeze。
+- `src/app/App.tsx`：
+  - `dispatchChatMessage` 回傳 `{ ok: true, messageId }`。
+  - qna/sandbox tag flow 一律以 append 成功回傳的 messageId commit `markQnaQuestionCommitted`。
+  - 新增 `AWAITING_REPLY` source guard：source 缺失或 lock/source 不一致即清除 reply UI + freeze，並標記 aborted。
+  - debug actions（Emit NPC Tag / Simulate Send / Toggle TagLock）改 isolated path，不再直接寫正式 qna/lock/pin。
+- `src/ui/chat/ChatPanel.tsx`：reply pin render guard 升級（status + id + source + consistency），移除全域 pin bar 的 missing-source fallback。
+
+### Debug consistency
+- 新增 `sandbox.debug.isolatedTagLock`。
+- 新增 `sandbox.debug.isolatedActions.*`，明確標示 debug-only injection 路徑。
+
 ## 2026-03-06 — Sandbox NIGHT_01 mention/reply/prompt/debug 全鏈路稽核（audit only）
 
 ### Scope

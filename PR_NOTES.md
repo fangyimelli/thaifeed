@@ -1,3 +1,18 @@
+## 2026-03-06 Sandbox P0 修復：交易式 commit + pin source guard + debug 隔離
+
+### Summary
+- 完成 P0-1：`runTagStartFlow` / caller 改交易式 append-commit，append 失敗不再 commit `questionMessageId`。
+- 完成 P0-2：reply pin bar 僅在 source 可解析且 lock/source 一致時顯示；source 缺失時直接安全降級，不再顯示誤導 fallback。
+- 完成 P0-3：debug actions 改 isolation-first，不再直接污染正式 qna / lock / pin state。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：無 schema 新增；新增 runtime invariant（question source 必須存在才可維持 AWAITING_REPLY）。
+- Debug：新增 `sandbox.debug.isolatedTagLock`、`sandbox.debug.isolatedActions.lastEmitNpcTagAt/lastEmitNpcTagMessageId/mode`。
+
+### Integration rule check
+- 僅動 sandbox 相關流程與文件，classic mode 程式碼未更動。
+- `.github/pull_request_template.md` 與 `PR_NOTES.md` 皆存在。
+
 ## 2026-03-06 Sandbox NIGHT_01 全鏈路稽核（audit only）
 
 ### Summary

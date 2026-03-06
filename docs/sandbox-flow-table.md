@@ -1,3 +1,22 @@
+## 2026-03-06 P0 Guardrails（sandbox only）
+
+### Transactional question commit
+- `questionMessageId` 僅可由 append 成功後回傳的 resolved message id 寫入。
+- append 失敗時不得進入 pin/freeze/awaiting_reply，也不得殘留 lock。
+
+### Reply pin bar render guard
+- 必須同時成立才顯示 pin bar：
+  1) `qna.active.status === 'AWAITING_REPLY'`
+  2) `questionMessageId` 非空
+  3) message store 可查到該 id
+  4) lock target 與 source actor 一致（若 lock 存在）
+- source 缺失或不一致時：安全降級（清除 pin / reset awaiting state / 不 render）。
+- `（原始訊息已不存在）` fallback 不再用於全域 pin bar。
+
+### Debug action isolation
+- `Emit NPC Tag @You` / `Simulate Send` / `Toggle TagLock(Self)` 為 isolated debug path，不可直接推進正式 qna/pin/lock。
+- debug 注入訊息仍走 schema + append gate，但預設只產生可觀察測試訊息。
+
 ## 2026-03-06 NIGHT_01 Audit Addendum（audit only）
 
 | Topic | 稽核結論 | 影響層 |

@@ -141,7 +141,18 @@ export default function ChatPanel({
   const sanitizedMessagesById = new Map(sanitizedMessages.map((message) => [message.id, message]));
   const originalMessage = questionMessageId ? sanitizedMessagesById.get(questionMessageId) ?? null : null;
 
-  const shouldRenderReplyPreview = Boolean(qnaStatus === 'AWAITING_REPLY' && questionMessageId);
+  const replyPreviewLockConsistent = Boolean(
+    !isLocked
+    || !lockTarget
+    || !originalMessage
+    || lockTarget === originalMessage.username
+  );
+  const shouldRenderReplyPreview = Boolean(
+    qnaStatus === 'AWAITING_REPLY'
+    && questionMessageId
+    && originalMessage
+    && replyPreviewLockConsistent
+  );
   const shouldRenderSandboxPinned = Boolean(sandboxControl?.enabled && sandboxPinnedEntry?.visible);
 
   const truncateReplyText = (text: string, limit: number) => {
@@ -154,7 +165,7 @@ export default function ChatPanel({
     if (segmented.length <= limit) return singleLine;
     return `${segmented.slice(0, limit).join('')}…`;
   };
-  const replyPreviewText = originalMessage ? truncateReplyText(originalMessage.text, 40) : '（原始訊息已不存在）';
+  const replyPreviewText = originalMessage ? truncateReplyText(originalMessage.text, 40) : '';
 
   const logDebugState = (reason: string) => {
     if (!debugEnabled) return;
@@ -549,7 +560,7 @@ export default function ChatPanel({
       {debugEnabled && (
         <div className="chat-debug-send-tools">
           <button type="button" onClick={() => { void onDebugSimulateSend?.(); }}>Simulate Send</button>
-          <button type="button" onClick={onDebugToggleSelfTag}>Toggle TagLock(Self)</button>
+          <button type="button" onClick={onDebugToggleSelfTag}>Toggle TagLock(Self, isolated)</button>
           <button type="button" onClick={onDebugToggleComposing}>Toggle isComposing ({String(isComposing)})</button>
           <button type="button" onClick={onDebugInjectMention}>Inject NPC Tag @You</button>
           <div className="chat-debug-note">forceMentionAutoscroll=1 → 強制每次 @你 都自動滾到底</div>
