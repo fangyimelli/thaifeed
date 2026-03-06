@@ -2048,3 +2048,22 @@ Console（debug 模式）可觀察：
 - `reply-to active => 0 output`、`tech backlog only in WAIT_REPLY_3` 維持不變。
 - 新增 sandbox flow SSOT 文件：`docs/sandbox-flow-table.md`。
 - classic mode 未修改。
+
+## 2026-03-06 Sandbox Reply/Mention/Pin Pipeline Audit（audit only, sandbox only）
+
+- 本次為 **audit-only**，未修改程式邏輯；classic mode 無改動。
+- 新增稽核報告：`docs/sandbox-reply-pipeline-audit-2026-03-06.md`。
+- 稽核結論（重點）：
+  - `@me`（自 tag）主因為 auto-pin 分支把 `lockStateRef.target` 指向 active user，送出時被 `submitChat` 強制前綴重寫。
+  - sandbox pinned preview 顯示在 chat panel 頂部屬 DOM render order（`replyPinBar-sandbox` 在 message list 前），且原訊息 row 不會被移除，故會雙重顯示。
+  - inline reply preview 與 sandbox top pin 為兩條並行 pipeline，現況缺少互斥 guard。
+  - debug action 多數已 isolated，但 `Emit NPC Tag @You` 仍走 event 發送管線，存在殘餘耦合風險。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無資料模型變更（audit only）。
+- Debug：無新增欄位（僅補充稽核文件與風險地圖）。
+
+### Removed / Deprecated Log（本次）
+
+- 本次 audit-only，無移除/廢棄功能。
