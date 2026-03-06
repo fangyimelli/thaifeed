@@ -1,3 +1,19 @@
+## 2026-03-06 Sandbox P0 Fixes（self-tag guard / pin preview mutex / composer-near preview / debug-safe）
+
+- `src/app/App.tsx`
+  - auto pin lock target 改以 source actor（提問者）為準，不再寫成 active user。
+  - `submitChat()` 新增 self-target 防呆：`lockTarget === activeUserHandle`（大小寫/等價 handle）時，不做 mention rewrite，並清掉 lock。
+  - `Emit NPC Tag @You` 改為 isolated debug chat injection（不走 event pipeline，不干擾正式 qna/lock/pin）。
+- `src/ui/chat/ChatPanel.tsx`
+  - 建立 preview 互斥：reply preview 顯示時，sandbox pinned preview 隱藏，避免 top pin + inline pin 雙重焦點。
+  - sandbox pinned preview 改顯示於 composer 前方（非 chat panel 頂部）。
+- `src/styles.css`
+  - 調整 sandbox pin bar spacing，確保 preview 與 input/composer 相鄰且不遮擋 message list。
+
+### Debug consistency
+- 新增/使用 `self_lock_target_guard` anomaly 標記，追蹤自鎖定防呆降級。
+- `sandbox.debug.isolatedActions.lastEmitNpcTag*` 保持為 debug-only，不寫入正式流程 state。
+
 ## 2026-03-06 Sandbox P0 Fixes（transactional commit / reply pin source guard / debug isolation）
 
 - `src/chat/tagFlow.ts`：append 改為 success-or-abort；回傳 resolved messageId，只有成功才進 pin/freeze。

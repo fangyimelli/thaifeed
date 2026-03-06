@@ -153,7 +153,7 @@ export default function ChatPanel({
     && originalMessage
     && replyPreviewLockConsistent
   );
-  const shouldRenderSandboxPinned = Boolean(sandboxControl?.enabled && sandboxPinnedEntry?.visible);
+  const shouldRenderSandboxPinned = Boolean(sandboxControl?.enabled && sandboxPinnedEntry?.visible && !shouldRenderReplyPreview);
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
@@ -442,15 +442,6 @@ export default function ChatPanel({
       <header className="chat-header input-surface">
         <strong>聊天室</strong>
       </header>
-
-      {shouldRenderSandboxPinned && sandboxPinnedEntry && (
-        <div className="replyPinBar replyPinBar-sandbox" role="status" aria-live="polite">
-          <div className="replyPinHeader">📌 👑 {sandboxPinnedEntry.author}</div>
-          <div className="replyPinText">{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}</div>
-        </div>
-      )}
-
-
       <div
         ref={chatScrollRef}
         className="chat-messages chat-list"
@@ -496,6 +487,13 @@ export default function ChatPanel({
         </button>
       )}
 
+
+      {shouldRenderSandboxPinned && sandboxPinnedEntry && (
+        <div className="replyPinBar replyPinBar-sandbox replyPinBar-near-composer" role="status" aria-live="polite">
+          <div className="replyPinHeader">📌 👑 {sandboxPinnedEntry.author}</div>
+          <div className="replyPinText">{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}</div>
+        </div>
+      )}
 
       {shouldRenderReplyPreview && (
         <div className="replyPinBar replyPinBar-inline" role="status" aria-live="polite">

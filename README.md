@@ -1,3 +1,21 @@
+## 2026-03-06 Sandbox P0 修復：self-tag / pin preview 互斥 / composer 聚焦 / debug 防干擾（sandbox only）
+
+- 僅調整 sandbox 路徑；classic mode 未修改。
+- `triggerSandboxAutoPinFreeze()` 不再把 lock target 指向 active user；改為 source actor（提問者）。若 actor 無法正規化，安全降級為不建立可 rewrite 的 lock。
+- `submitChat()` 新增 self-target guard：當 lock target 與 active user handle 等價（大小寫不敏感、含 `me`/`t` 等任意 handle）時，不進行 `@target` 重寫，且立即清除 lock，避免送出 `@自己`。
+- `ChatPanel` 建立最小互斥：同一時間 reply preview 與 sandbox top pin 不再雙顯示；進入 reply composer flow 時，sandbox pin 自動隱藏。
+- pinned 主要焦點改放在 composer 前方（message list 與 input 之間），不再固定在 chat panel 頂部造成誤解。
+- debug 防干擾：`Emit NPC Tag @You` 改為 isolated chat injection，不再走事件管線（不寫正式 qna/lock/pin）。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無新增資料模型；強化 invariant：lock target 不可為 active user，否則 submit 時降級為一般送出。
+- Debug：新增 `self_lock_target_guard` 異常標記；`Emit NPC Tag @You` 記錄維持在 `sandbox.debug.isolatedActions.*` isolated namespace。
+
+### Removed / Deprecated Log（本次）
+
+- 移除（sandbox debug path）`Emit NPC Tag @You` 經 event pipeline 影響正式 reply/pin/lock 的舊邏輯，改為 isolated debug message-only。
+
 ## 2026-03-06 Sandbox P0 修復：交易式 question commit / pin guard / debug 隔離（sandbox only）
 
 - 僅 sandbox 路徑調整，classic mode 行為不變。

@@ -1827,8 +1827,9 @@ export default function App() {
     const freezeMs = Math.max(5000, Math.min(8000, payload.freezeMs));
     const sourceMessage = payload.sourceMessage ?? state.messages.find((entry) => entry.id === payload.messageId) ?? null;
     const actor = sourceMessage?.username || SANDBOX_VIP.handle;
+    const normalizedActor = normalizeHandle(actor);
     const text = resolveSandboxPinnedBody(sourceMessage);
-        const nextPinned: SandboxPinnedEntry = {
+    const nextPinned: SandboxPinnedEntry = {
       id: `sandbox-pin:${payload.messageId}`,
       messageId: payload.messageId,
       createdAt: now,
@@ -1846,12 +1847,19 @@ export default function App() {
       }
       return nextPinned;
     });
-    lockStateRef.current = {
-      isLocked: true,
-      target: normalizeHandle(activeUserInitialHandleRef.current || '') || 'activeUser',
-      startedAt: now,
-      replyingToMessageId: payload.messageId
-    };
+    lockStateRef.current = normalizedActor
+      ? {
+          isLocked: true,
+          target: normalizedActor,
+          startedAt: now,
+          replyingToMessageId: payload.messageId
+        }
+      : {
+          isLocked: false,
+          target: null,
+          startedAt: 0,
+          replyingToMessageId: payload.messageId
+        };
     const pinnedOk = setPinnedQuestionMessage({
       source: 'autoPinFreeze',
       messageId: payload.messageId,
@@ -4070,9 +4078,26 @@ export default function App() {
     const raw = rawText.trim();
     if (!raw) return markBlocked('empty_input');
     if (debugComposingOverride ?? isComposing) return markBlocked('is_composing');
+    const normalizeHandleToken = (value: string | null | undefined) => {
+      const normalized = normalizeHandle(value || '');
+      return normalized ? normalized.toLowerCase() : '';
+    };
+    const isSelfHandle = (value: string | null | undefined) => {
+      const normalized = normalizeHandleToken(value);
+      if (!normalized) return false;
+      const activeHandle = normalizeHandleToken(activeUserInitialHandleRef.current || activeUserProfileRef.current?.handle || '');
+      return Boolean(activeHandle) && normalized === activeHandle;
+    };
     const stripLeadingMentions = (text: string) => text.replace(/^\s*(?:@[\w_]+\s*)+/, '').trim();
-    const outgoingText = lockStateRef.current.isLocked && lockStateRef.current.target
-      ? `@${lockStateRef.current.target} ${stripLeadingMentions(raw)}`.trim()
+    const lockTarget = lockStateRef.current.isLocked ? (lockStateRef.current.target ?? null) : null;
+    const shouldRewriteForLock = Boolean(lockTarget && !isSelfHandle(lockTarget));
+    if (lockTarget && isSelfHandle(lockTarget)) {
+      lockStateRef.current = { isLocked: false, target: null, startedAt: 0, replyingToMessageId: null };
+      setReplyPreviewSuppressedReason('self_lock_target_guard');
+      sandboxQnaDebugRef.current.lastAnomaly = 'self_lock_target_guard';
+    }
+    const outgoingText = shouldRewriteForLock
+      ? `@${lockTarget} ${stripLeadingMentions(raw)}`.trim()
       : raw;
     if (lockStateRef.current.isLocked && lockStateRef.current.target) {
       const explicitReplyTarget = raw.match(/^\s*@([\w_]+)/u)?.[1] ?? null;
@@ -4475,9 +4500,16 @@ export default function App() {
       setLastBlockedReason('active_user_not_registered');
       return;
     }
-    const line = `@${activeHandle} Debug tester：請回覆我現在有沒有鎖定成功？`;
-    const sent = dispatchEventLine(line, 'mod_live', 'debug_tester', 'debug_tester');
-    if (!sent.ok || !sent.lineId) {
+    const line = `@${activeHandle} [isolated debug] NPC tag injection`;
+    const sent = dispatchChatMessage({
+      id: crypto.randomUUID(),
+      username: 'mod_live',
+      type: 'chat',
+      text: line,
+      language: 'zh',
+      translation: line
+    }, { source: 'debug_tester', sourceTag: 'emit_npc_tag_isolated' });
+    if (!sent.ok || !sent.messageId) {
       setLastBlockedReason(sent.ok ? 'debug_emit_failed' : (sent.blockedReason ?? 'debug_emit_failed'));
       return;
     }
@@ -4490,14 +4522,14 @@ export default function App() {
           isolatedActions: {
             ...((window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.isolatedActions ?? {}),
             lastEmitNpcTagAt: Date.now(),
-            lastEmitNpcTagMessageId: sent.lineId,
+            lastEmitNpcTagMessageId: sent.messageId,
             mode: 'isolated_message_only'
           }
         }
       }
     } as any;
     setLastBlockedReason(null);
-  }, [dispatchEventLine]);
+  }, [dispatchChatMessage]);
 
 
   useEffect(() => {
