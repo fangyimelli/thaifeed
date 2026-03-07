@@ -1,3 +1,14 @@
+## 2026-03-07 NIGHT_01 Audit Addendum（AUDIT ONLY）
+
+| Topic | 稽核結論 | 影響層 |
+| --- | --- | --- |
+| 玩家回覆未判題 | `submitChat -> dispatch` 有成功，但需同時命中 `WAIT_REPLY_* + prompt.current.consonant` 才會走 `parseAndJudgeUsingClassic` | `App.consumePlayerReply` |
+| preheat vs 題目 prompt | `@<player> 嗨嗨，第一次看這台嗎？` 屬 preheat 導演台詞，不等於 consonant answer target | `SandboxChatDirector` vs `askSandboxConsonantNow` |
+| prompt 殘留觀測 | `consonant.promptText/promptCurrent` 可能殘留，必須搭配 `prompt.current.id` / `answerGate.waiting` 判斷有效題目 | `sandboxStoryMode` state |
+| mention 前綴 | parser 具備 leading mention strip；本案主因不是 mention sanitize，而是 judge 未 armed | `classicConsonantAdapter` |
+
+> 詳細 trace 與 root cause 請見：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。
+
 ## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY）
 
 - 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-06-night01-stall.md`。

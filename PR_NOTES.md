@@ -1,3 +1,20 @@
+## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY）
+
+- 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。
+- 未修改 runtime code；classic mode 無改動。
+- 結論重點：
+  1. `@behindyou 對/怎?` 有送出成功，但在非 `WAIT_REPLY_* + prompt.current.consonant` 時不會觸發 parser/judge。
+  2. preheat mention 與實際 consonant prompt 為不同來源；玩家可能回覆到聊天 target。
+  3. `consonant.promptText/promptCurrent` 可能是歷史殘留，需搭配 `prompt.current.id`、`answerGate.waiting` 一起判讀。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：無變更（audit only）。
+- Debug：無新增欄位；補充 full-chain trace 文件化。
+
+### Integration rule check
+- 只動 sandbox 稽核文檔，classic mode 程式碼未改。
+- `.github/pull_request_template.md` 與 `PR_NOTES.md` 皆存在。
+
 ## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY）
 
 - 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-06-night01-stall.md`。

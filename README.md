@@ -1,3 +1,21 @@
+## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY, sandbox only）
+
+- 本次為 audit-only，不修改 runtime code、不修復、不重構；classic mode 無改動。
+- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。
+- 稽核結論（重點）：
+  - 玩家訊息有成功送出並 append，但當下未命中 `WAIT_REPLY_* + prompt.current.consonant` 條件，judge pipeline 未啟動。
+  - preheat mention（`@<player> 嗨嗨，第一次看這台嗎？`）與真正子音題 prompt 非同源，玩家容易回錯 target。
+  - `consonant.promptText/promptCurrent` 可殘留，需以 `prompt.current.promptId + answerGate.waiting` 判斷是否真的在等作答。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無 schema 變更（audit only）。
+- Debug：無新增 runtime 欄位；新增 trace 文件，明確區分「訊息送出成功」與「judge 未 armed」。
+
+### Removed / Deprecated Log（本次）
+
+- audit-only，未移除功能邏輯。
+
 ## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY, sandbox only）
 
 - 本次為 audit-only，不修改 runtime code，不修復、不重構；classic mode 無改動。

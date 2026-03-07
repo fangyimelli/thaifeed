@@ -1,3 +1,13 @@
+
+## 2026-03-07（audit only）SSOT 判讀補充：有效題目狀態
+
+- sandbox 有效作答 target 的 SSOT 以 `sandboxStoryMode.state.prompt.current`（含 `promptId/kind`）為主。
+- `consonant.promptText` / `consonant.promptCurrent` 屬文案/顯示輔助狀態，不可單獨作為「正在等待作答」判斷。
+- 是否進入判題應同時看：
+  1. `flow.step ∈ WAIT_REPLY_1/2/3`
+  2. `prompt.current.kind === 'consonant'`
+  3. `answerGate.waiting === true`
+
 # 02｜SSOT Map（唯一真相索引）
 
 ## 這份文件在管什麼
