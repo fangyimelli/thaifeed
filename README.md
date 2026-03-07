@@ -1,3 +1,21 @@
+## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY, sandbox only）
+
+- 本次為 audit-only，不修改 runtime code，不修復、不重構；classic mode 無改動。
+- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-06-night01-stall.md`。
+- 稽核結論（重點）：
+  - 玩家訊息有成功送出並 dispatch，但 sandbox consonant judge pipeline 未接線（`commitConsonantJudgeResult` 無實際呼叫鏈）。
+  - `askSandboxConsonantNow()` 的 pinned 文案與有效判題 prompt 非同源，導致玩家視覺 target 與 judge target 不一致。
+  - `2jo` 對 `บ` 規則上屬不合法輸入，但本案主因仍是 parser/judge 未執行。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無 schema 變更（audit only）。
+- Debug：無新增 runtime 欄位；補充「有 prompt 但 flow/judge 可脫鉤」的稽核結論與 trace。
+
+### Removed / Deprecated Log（本次）
+
+- audit-only，未移除功能邏輯。
+
 ## 2026-03-06 Sandbox P0 修復：self-tag / pin preview 互斥 / composer 聚焦 / debug 防干擾（sandbox only）
 
 - 僅調整 sandbox 路徑；classic mode 未修改。
