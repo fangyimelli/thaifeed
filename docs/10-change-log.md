@@ -1,3 +1,16 @@
+## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY）
+
+- 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。
+- 未修改 runtime code；classic mode 無改動。
+- 結論重點：
+  1. 玩家送出成功，但若未處於 `WAIT_REPLY_* + prompt.current.consonant`，sandbox judge 不會啟動。
+  2. preheat mention 與子音題 prompt 來源不同，可能造成玩家回覆 target 錯位。
+  3. `consonant.promptText/promptCurrent` 可殘留，不能單獨視為有效作答狀態。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：無變更（audit only）。
+- Debug：無新增欄位；補充 trace/根因文件化。
+
 ## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY）
 
 - 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-06-night01-stall.md`。

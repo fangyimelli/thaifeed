@@ -1,3 +1,11 @@
+
+## 2026-03-07（audit only）sandbox debug 判讀補充
+
+NIGHT_01 類型問題建議避免只看單欄位：
+- `consonant.promptText/promptCurrent` 有值 ≠ parser 已啟動。
+- 需同看 `prompt.current.id`、`flow.step`、`answerGate.waiting`、`consonant.judge.lastInput`。
+- 若 `lastInput` 為 `-` 且 `parse.inputRaw` 空，優先檢查是否未命中 `WAIT_REPLY_* + prompt.current.consonant`（judge 未 armed）。
+
 # 07｜Debug System（除錯系統）
 
 ## 這份文件在管什麼
