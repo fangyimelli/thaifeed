@@ -142,3 +142,18 @@ Last Updated By: Codex
 - `TAG_PLAYER_1/2/3` 每個 step 只能成功 emit 一次 tag；發完後立即 `tagAskedThisStep=true`，後續重跑必須直接 return。
 - 技術故障訊息只能在 `WAIT_REPLY_3` 累積（每 30 秒 2 則，不即時顯示），並在 `FLUSH_TECH_BACKLOG` 才顯示（<=8 則，最後一則固定分鐘數）。
 - 若 sandbox 與 classic 共享邏輯，需避免規則互滲：sandbox 可有專屬 pinned 區塊，但 classic UI/規則不得受影響。
+
+## 2026-03-07 NIGHT_01 Judge Gate 補丁（sandbox only）
+
+### WAIT_REPLY 判題/推進規則（更新）
+- `WAIT_REPLY_1/2/3` 且存在 `prompt.current.kind=consonant` 時，玩家送出訊息必須先跑 parser/judge：
+  - `parseAndJudgeUsingClassic`
+  - `commitConsonantJudgeResult`
+- 推進條件改為 judge-driven：
+  - `correct/pass`：允許離開 WAIT，推進既有 step。
+  - `wrong/unknown`：不得離開 WAIT。
+- parser 需容忍前置 mention：leading `@handle` 會先被 strip 後再 normalize/judge。
+
+### Prompt 與 Pinned 同源規則（更新）
+- `askSandboxConsonantNow` 發送的 tag message text 與 pinned text 必須使用同一題目 prompt（同 source string）。
+- `runTagStartFlow` pinned 顯示優先採用已 append 的 `tagMessage.text`，避免題目與 pinned 文案分歧。

@@ -57,7 +57,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getClassicConsonantPrompt, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
@@ -1694,6 +1694,63 @@ export default function App() {
   const consumePlayerReply = useCallback((raw: string) => {
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
+      const currentPrompt = sandboxState.prompt.current;
+      const shouldRunSandboxJudge = (sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3')
+        && currentPrompt?.kind === 'consonant';
+
+      if (shouldRunSandboxJudge) {
+        const node = sandboxModeRef.current.getCurrentNode();
+        const judgeCtx = {
+          nodeChar: currentPrompt.consonant,
+          node: node && node.id === currentPrompt.wordKey ? node : undefined,
+          activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
+        };
+        const pipeline = parseAndJudgeUsingClassic(raw, judgeCtx);
+        sandboxModeRef.current.commitConsonantJudgeResult({
+          input: raw,
+          parsed: pipeline.parsed,
+          judge: pipeline.result,
+          classicJudgeResult: pipeline.result
+        });
+
+        if (pipeline.result === 'unknown') {
+          const hintLine = pipeline.hintText?.trim() || '';
+          if (hintLine) {
+            sandboxModeRef.current.commitHintText(hintLine, 'classic_shared');
+            dispatchChatMessage({
+              id: crypto.randomUUID(),
+              username: sandboxConsonantTagOwnerRef.current || 'mod_live',
+              text: hintLine,
+              language: 'zh',
+              translation: hintLine
+            }, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_hint_unknown' });
+          }
+          setSandboxRevealTick(Date.now());
+          return true;
+        }
+
+        if (pipeline.result === 'wrong') {
+          setSandboxRevealTick(Date.now());
+          return true;
+        }
+
+        if (pipeline.result === 'correct' || pipeline.result === 'pass') {
+          sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
+          sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
+          clearReplyUi(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
+          clearChatFreeze(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
+          if (sandboxState.flow.step === 'WAIT_REPLY_1') {
+            sandboxModeRef.current.setFlowStep('POSSESSION_AUTOFILL', 'player_reply_1_judge_correct');
+          } else if (sandboxState.flow.step === 'WAIT_REPLY_2') {
+            sandboxModeRef.current.setFlowStep('DISCUSS_PRONOUNCE', 'player_reply_2_judge_correct');
+          } else {
+            sandboxModeRef.current.setFlowStep('FLUSH_TECH_BACKLOG', 'player_reply_3_judge_correct');
+          }
+          setSandboxRevealTick(Date.now());
+          return true;
+        }
+      }
+
       if (sandboxState.flow.step === 'WAIT_REPLY_1') {
         sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
         sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
@@ -1734,7 +1791,7 @@ export default function App() {
       sandboxQnaDebugRef.current.lastAnomaly = 'replyBarVisible_after_resolve';
     }
     return true;
-  }, [clearChatFreeze, clearReplyUi, resolveQna]);
+  }, [clearChatFreeze, clearReplyUi, dispatchChatMessage, resolveQna]);
 
   const setPinnedQuestionMessage = useCallback((payload: { source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'autoPinFreeze' | 'unknown'; messageId: string; hasTagToActiveUser: boolean }) => {
     const sourceMessage = state.messages.find((entry) => entry.id === payload.messageId) ?? null;
@@ -3331,6 +3388,12 @@ export default function App() {
               lastResult: sandboxState.consonant.judge.lastResult,
               timeoutEnabled: sandboxState.consonant.judge.timeoutEnabled
             }
+          },
+          judge: {
+            result: sandboxState.parity.sandboxJudgeResult,
+            classicResult: sandboxState.parity.classicJudgeResult,
+            sandboxClassicParity: sandboxState.parity.sandboxClassicParity,
+            blockedReason: sandboxState.advance.blockedReason || '-'
           }
         },
         lock: {
@@ -4781,7 +4844,7 @@ export default function App() {
     sandboxModeRef.current.setCurrentPrompt(sandboxPrompt);
     sandboxModeRef.current.commitPromptOverlay(sandboxPrompt.consonant);
 
-    const line = `@${activeUser || 'player'} 看到了嗎？先回我`;
+    const line = prompt.promptText;
     const messageId = promptId;
     const tagFlowResult = await runTagStartFlow({
       tagMessage: {
@@ -4793,7 +4856,7 @@ export default function App() {
         translation: line,
         tagTarget: tagOwner
       },
-      pinnedText: line,
+      pinnedText: prompt.promptText,
       shouldFreeze: true,
       appendMessage: (message) => {
         const sent = dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_prompt' });
