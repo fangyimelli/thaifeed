@@ -19,6 +19,10 @@ export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
 export type SandboxFlowStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'TAG_PLAYER_WARMUP'
+  | 'WARMUP_TAG_REPLY'
+  | 'WARMUP_NPC_ACK'
+  | 'WARMUP_CHATTER'
   | 'TAG_PLAYER_1'
   | 'WAIT_REPLY_1'
   | 'POSSESSION_AUTOFILL'
@@ -86,6 +90,7 @@ export type SandboxStoryState = {
   introGate: { startedAt: number; minDurationMs: number; passed: boolean; remainingMs: number };
   preheat: { enabled: boolean; joinTarget: number; lastJoinAt: number };
   answerGate: { waiting: boolean; askedAt: number; timeoutMs: number; pausedChat: boolean };
+  warmup: { gateActive: boolean; replyReceived: boolean; replyAt: number; normalizedReply: string; judgeArmed: boolean };
   flow: {
     questionIndex: number;
     step: SandboxFlowStep;
@@ -242,6 +247,7 @@ export type SandboxStoryMode = GameMode & {
   setJoinGate: (payload: Partial<SandboxStoryState['joinGate']>) => void;
   setIntroGate: (payload: Partial<SandboxStoryState['introGate']>) => void;
   setAnswerGate: (payload: Partial<SandboxStoryState['answerGate']>) => void;
+  setWarmupState: (payload: Partial<SandboxStoryState['warmup']>) => void;
   setLastTimestamps: (payload: Partial<SandboxStoryState['last']>) => void;
   setPreheatState: (payload: Partial<SandboxStoryState['preheat']>) => void;
 };
@@ -274,6 +280,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     introGate: { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 },
     preheat: { enabled: true, joinTarget: 10, lastJoinAt: 0 },
     answerGate: { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false },
+    warmup: { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false },
     flow: { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: 0, tagAskedThisStep: false, tagAskedAt: 0 },
     freeze: { frozen: false, reason: 'NONE' },
     glitchBurst: { pending: false, remaining: 0, lastEmitAt: 0 },
@@ -397,10 +404,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const schedulerPhaseByStep = (step: SandboxFlowStep): SandboxStoryPhase => {
     if (step === 'PREJOIN') return 'boot';
     if (step === 'PREHEAT') return 'intro';
-    if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'TAG_PLAYER_3_MEANING') return 'awaitingTag';
-    if (step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3') return 'awaitingAnswer';
+    if (step === 'TAG_PLAYER_WARMUP' || step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'TAG_PLAYER_3_MEANING') return 'awaitingTag';
+    if (step === 'WARMUP_TAG_REPLY' || step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3') return 'awaitingAnswer';
     if (step === 'POSSESSION_AUTOFILL' || step === 'POSSESSION_AUTOSEND') return 'revealingWord';
-    if (step === 'CROWD_REACT_WORD' || step === 'DISCUSS_PRONOUNCE') return 'chatRiot';
+    if (step === 'WARMUP_NPC_ACK' || step === 'WARMUP_CHATTER' || step === 'CROWD_REACT_WORD' || step === 'DISCUSS_PRONOUNCE') return 'chatRiot';
     if (step === 'VIP_SUMMARY_1' || step === 'VIP_SUMMARY_2') return 'vipTranslate';
     if (step === 'FLUSH_TECH_BACKLOG') return 'supernaturalEvent';
     return 'awaitingTag';
@@ -417,6 +424,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
           ? 3
           : 1;
     state.flow = { ...state.flow, step, currentTagIndex, stepStartedAt: now, tagAskedThisStep: false, tagAskedAt: 0 };
+    state.warmup.gateActive = step === 'WARMUP_TAG_REPLY';
+    state.warmup.judgeArmed = step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3';
     state.audit.transitions = [...state.audit.transitions, { at: now, from: prevStep, to: step, reason: reason || '-' }].slice(-20);
     state.scheduler.phase = schedulerPhaseByStep(step);
     clearSchedulerBlockedReason();
@@ -563,6 +572,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.introGate = { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
+      state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
@@ -600,6 +610,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         syncFear();
         return;
       }
+      if (state.flow.step === 'TAG_PLAYER_WARMUP') {
+        state.answerGate = { waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false };
+        setFlowStepInternal('WARMUP_TAG_REPLY', 'incoming_warmup_tag');
+      }
       if (state.flow.step === 'TAG_PLAYER_1') {
         state.answerGate = { waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false };
         setFlowStepInternal('WAIT_REPLY_1', 'incoming_tag');
@@ -615,7 +629,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncIntroGate();
       if (state.flow.step === 'PREHEAT' && state.introGate.passed) {
         state.preheat.enabled = false;
-        setFlowStepInternal('TAG_PLAYER_1', 'intro_passed');
+        setFlowStepInternal('TAG_PLAYER_WARMUP', 'intro_passed');
       }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
@@ -672,6 +686,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.introGate = { startedAt: 0, minDurationMs: 30_000, passed: false, remainingMs: 30_000 };
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
+      state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
@@ -979,6 +994,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     setAnswerGate(payload) {
       state.answerGate = { ...state.answerGate, ...payload };
+    },
+    setWarmupState(payload) {
+      state.warmup = { ...state.warmup, ...payload };
     },
     setLastTimestamps(payload) {
       state.last = { ...state.last, ...payload };

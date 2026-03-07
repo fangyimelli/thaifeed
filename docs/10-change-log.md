@@ -1,3 +1,17 @@
+## 2026-03-07 Sandbox NIGHT_01 開場暖場 gate patch（sandbox only）
+
+- 新增 warmup 專用 flow step：`TAG_PLAYER_WARMUP / WARMUP_TAG_REPLY / WARMUP_NPC_ACK / WARMUP_CHATTER`。
+- 第一個暖場 tag 改為獨立 gate：玩家任意非空回覆即成立，且不進 `parseAndJudgeUsingClassic / commitConsonantJudgeResult`。
+- 回覆後固定 NPC 接一句「今天氛圍跟之前不一樣」語意，並補 2~4 句自然聊天室續聊。
+- 完成暖場後才切入 `TAG_PLAYER_1` 並建立正式子音題 prompt/judge。
+- 新增 debug 一致性：`sandbox.warmup.*` 與 `answer.judgeArmed` 可直接辨識暖場中/已完成/正式判題 armed。
+- classic mode 無改動。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：sandbox flow table 補上 warmup gate 階段。
+- Debug：新增 `warmup` 物件與對應 debug panel 顯示欄位。
+
+
 ## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY）
 
 - 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。

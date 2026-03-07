@@ -1,3 +1,19 @@
+## 2026-03-07 NIGHT_01 Warmup Reply Gate Patch（sandbox only）
+
+| Step | Description | Judge | Reply Gate | Overlay | Example |
+| --- | --- | --- | --- | --- | --- |
+| TAG_PLAYER_WARMUP | 暖場 NPC 第一次 tag 玩家（非正式子音題）。 | disabled | active（等待任意非空回覆） | hidden | `behindyou: @player 嗨嗨，第一次看這台嗎？` |
+| WARMUP_TAG_REPLY | 暖場回覆等待階段。玩家任意非空字串（可含前置 mention）即通過。 | disabled | active | hidden | `@behindyou 對` / `嗨` / `123` |
+| WARMUP_NPC_ACK | 收到暖場回覆後，NPC 固定接「今天氛圍跟之前不一樣」語意。 | disabled | inactive | hidden | `今天這裡的感覺跟平常不太一樣。` |
+| WARMUP_CHATTER | 暖場後聊天室自然續聊 2~4 句，維持微妙不對勁。 | disabled | inactive | hidden | `我也覺得今天好安靜。` |
+| TAG_PLAYER_1 | 暖場完成後才進正式第一題子音，建立 prompt / answer gate / pending question。 | enabled | active | shown | `@player 你先回一個你看到的子音。` |
+
+### Rule updates
+- `WARMUP_TAG_REPLY` 期間不可進 consonant parser/judge，不可寫入 consonant parser debug state。
+- 只有 `WAIT_REPLY_1/2/3 + prompt.current.kind=consonant` 才屬正式判題狀態（judge armed）。
+- 暖場與正式子音題不可共用同一個 active prompt object。
+
+
 ## 2026-03-07 NIGHT_01 Audit Addendum（AUDIT ONLY）
 
 | Topic | 稽核結論 | 影響層 |
