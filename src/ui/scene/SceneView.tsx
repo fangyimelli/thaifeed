@@ -333,6 +333,12 @@ declare global {
             timeoutEnabled?: boolean;
           };
         };
+        judge?: {
+          result?: string;
+          classicResult?: string;
+          sandboxClassicParity?: boolean;
+          blockedReason?: string;
+        };
         prompt?: {
           current?: {
             kind?: string;

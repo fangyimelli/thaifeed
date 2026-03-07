@@ -29,6 +29,7 @@ export async function nextPaint() {
 
 export async function runTagStartFlow(params: RunTagStartFlowParams): Promise<RunTagStartFlowResult> {
   const { tagMessage, pinnedText, shouldFreeze, appendMessage, forceScrollToBottom, setPinnedReply, freezeChat, onStep } = params;
+  const resolvedPinnedText = (tagMessage.text || '').trim() || pinnedText;
 
   const appendResult = await appendMessage(tagMessage);
   if (!appendResult.ok) {
@@ -43,7 +44,7 @@ export async function runTagStartFlow(params: RunTagStartFlowParams): Promise<Ru
 
   setPinnedReply({
     visible: true,
-    text: pinnedText,
+    text: resolvedPinnedText,
     author: tagMessage.username || 'system',
     messageId: appendResult.messageId
   });

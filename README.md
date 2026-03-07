@@ -2103,3 +2103,11 @@ Console（debug 模式）可觀察：
 ### Removed / Deprecated Log（本次）
 
 - 本次 audit-only，無移除/廢棄功能。
+
+## 2026-03-07 Sandbox NIGHT_01 判題接線修復（sandbox only）
+
+- 玩家在 sandbox `WAIT_REPLY_*` 且存在 consonant prompt 時，送出訊息會強制進入 classic parser/judge pipeline：`parseAndJudgeUsingClassic -> commitConsonantJudgeResult`。
+- `WAIT_REPLY_*` 不再由「任意字串送出」直接通關；只有 judge `correct/pass` 會推進步驟，`wrong/unknown` 會留在 WAIT。
+- `askSandboxConsonantNow` 改為訊息內容與 pinned 皆使用同一份題目 prompt，避免 UI 題目與 judge target 不一致。
+- sandbox parser 在 normalize 前會先移除前置 mention（例如 `@behindyou บ` / `@behindyou 2` / `@behindyou 不知道` 仍可判題）。
+- classic mode 未修改。

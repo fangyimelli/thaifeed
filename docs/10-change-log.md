@@ -1163,3 +1163,12 @@ Sandbox Flow Update
 - 4) 回覆 Tag#3 後一次 flush（<=8，含「卡了 X 分鐘」）再推進：PASS。
 - 5) 技術故障字樣只出現在 Tag#3 回覆後 flush 波次：PASS。
 - 6) classic mode 未修改：PASS。
+
+## 2026-03-07 Sandbox NIGHT_01 判題接線修復（sandbox only）
+
+- 修復 sandbox 玩家回覆後未跑 parser/judge：`submitChat -> consumePlayerReply` 在 `WAIT_REPLY_* + consonant prompt` 期間改為接 classic 判題 pipeline。
+- 新增 WAIT_REPLY gate：僅 `correct/pass` 可離開 WAIT；`wrong/unknown` 保持等待，不再直接完成題目。
+- 修正 prompt/pinned 同源：`askSandboxConsonantNow` 發送訊息與 pinned 皆採同一題目 prompt。
+- 新增 mention 前綴容錯：parser normalize 先 strip leading mentions，避免 `@npc` 阻斷答案解析。
+- 補齊 sandbox debug judge 區塊輸出：`sandbox.judge.result/classicResult/sandboxClassicParity/blockedReason`。
+- classic mode 未修改。

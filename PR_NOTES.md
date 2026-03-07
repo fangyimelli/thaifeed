@@ -444,3 +444,20 @@
 4. 回覆 Tag#3 後：一次 flush（<=8，含「卡了X分鐘」）再推進。
 5. 技術故障字樣只出現在 Tag#3 回覆後 flush 的那一波；其他時段不得出現。
 6. classic mode 未修改。
+
+## 2026-03-07 Sandbox NIGHT_01：玩家回覆未判題修復（sandbox only）
+
+### 變更摘要
+- `submitChat()` 路徑中的 `consumePlayerReply()` 在 sandbox `WAIT_REPLY_1/2/3` 且存在 consonant prompt 時，改為執行：
+  - `parseAndJudgeUsingClassic(raw, ctx)`
+  - `sandboxMode.commitConsonantJudgeResult(...)`
+- `WAIT_REPLY_*` 改為依 judge result 推進：
+  - `correct/pass`：解除 freeze、清 reply UI、推進下一步。
+  - `unknown/wrong`：維持 WAIT，不再直接完成題目。
+- `askSandboxConsonantNow()` 的聊天室題目與 pinned text 改為同一 prompt source（`getClassicConsonantPrompt().promptText`）。
+- parser normalize 新增 leading mention strip（`@behindyou บ`、`@behindyou 2`、`@behindyou 不知道` 皆可解析）。
+- sandbox debug 補齊 `sandbox.judge.result/classicResult/sandboxClassicParity/blockedReason`。
+
+### 影響範圍
+- 僅 sandbox 相關流程（App sandbox reply consume、sandbox classic consonant adapter、sandbox tag pin text resolve、debug typing）。
+- classic mode 程式碼未修改。

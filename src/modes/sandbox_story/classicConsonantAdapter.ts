@@ -26,7 +26,8 @@ export type SandboxInputNormalizeResult = {
 };
 
 export function normalizeSandboxConsonantInput(raw: string): SandboxInputNormalizeResult {
-  const norm = raw
+  const strippedLeadingMentions = raw.replace(/^[\s\u3000]*(?:@[^\s\u3000@]+[\s\u3000]*)+/u, '');
+  const norm = strippedLeadingMentions
     .replace(/\u3000/g, ' ')
     .replace(/[\t\n\r]+/g, ' ')
     .replace(/\s+/g, ' ')
