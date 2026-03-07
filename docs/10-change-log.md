@@ -1,3 +1,16 @@
+## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY）
+
+- 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-06-night01-stall.md`。
+- 未修改 runtime code；classic mode 無改動。
+- 結論重點：
+  1. 玩家送出成功，但 sandbox consonant parser/judge 未接線（judge 欄位維持預設值）。
+  2. pinned 文案來源與有效子音 prompt 非同源，造成 UI target 誤導。
+  3. `2jo` 對 `บ` 依現規則本來不合法，但本案先是 parser 沒跑。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：無變更（audit only）。
+- Debug：無新增欄位；補充 trace/根因文件化。
+
 ## 2026-03-06 Sandbox P0 Fixes（self-tag guard / pin preview mutex / composer-near preview / debug-safe）
 
 - `src/app/App.tsx`
