@@ -29,7 +29,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
-  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_WARMUP' | 'WARMUP_TAG_REPLY' | 'WARMUP_NPC_ACK' | 'WARMUP_CHATTER' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'VIP_SUMMARY_1' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'DISCUSS_PRONOUNCE' | 'VIP_SUMMARY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
+  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'VIP_SUMMARY_1' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'DISCUSS_PRONOUNCE' | 'VIP_SUMMARY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
   stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
@@ -438,7 +438,7 @@ export class ChatEngine {
   private captureMessage(message: ChatMessage | null, emitKey: string): ChatMessage | null {
     if (!message) return null;
     const now = Date.now();
-    if (this.context.freeze.frozen && (this.context.flowStep === 'WARMUP_TAG_REPLY' || this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2' || this.context.flowStep === 'WAIT_REPLY_3')) {
+    if (this.context.freeze.frozen && (this.context.flowStep === 'WAIT_REPLY_1' || this.context.flowStep === 'WAIT_REPLY_2' || this.context.flowStep === 'WAIT_REPLY_3')) {
       this.freezeLeakCount += 1;
     }
     const speaker = message.user;
@@ -480,14 +480,7 @@ export class ChatEngine {
   }
 
   shouldEmitJoin(): boolean {
-    return this.director.shouldEmitJoin({
-      introStartedAt: this.context.introStartedAt,
-      playerHandle: this.context.playerHandle,
-      flowStep: this.context.flowStep,
-      stepStartedAt: this.context.stepStartedAt,
-      freeze: this.context.freeze,
-      glitchBurst: this.context.glitchBurst
-    });
+    return false;
   }
 
   private buildSupernaturalQueue(): ChatMessage[] {

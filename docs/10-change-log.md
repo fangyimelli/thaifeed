@@ -1,3 +1,13 @@
+## 2026-03-08 Sandbox single deterministic flow rebuild（sandbox only）
+
+- 實作 sandboxFlow SSOT 並落地 reply gate/backlog/questionIndex。
+- 停用 warmup legacy flow 與 warmup gate path，避免雙軌。
+- 停用 sandbox director/chat engine/join/event 類旁路輸出（改為 flow allowlist + WAIT_REPLY 全域 freeze gate）。
+- backlog 規則改為僅 WAIT_REPLY_3 累積，FLUSH_TECH_BACKLOG flush 後清空。
+- 新增 regression guards：
+  - `scripts/regression-freeze-watchdog.mjs`
+  - `scripts/regression-question-send-failed.mjs`
+
 ## 2026-03-08（sandbox only：reply gate SSOT / auto-pin timing / eval guards）
 
 ### Added

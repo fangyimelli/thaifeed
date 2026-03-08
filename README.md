@@ -1,3 +1,13 @@
+## 2026-03-08 Sandbox deterministic flow rebuild（sandbox only）
+
+- Sandbox flow 收斂為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> VIP_SUMMARY_1 -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> DISCUSS_PRONOUNCE -> VIP_SUMMARY_2 -> TAG_PLAYER_3_MEANING -> WAIT_REPLY_3 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
+- 新增 `sandboxFlow` SSOT（step/stepStartedAt/replyGateActive/replyTarget/backlogTechMessages/playerLastReply/questionIndex），sandbox reply gate 與 backlog 僅由此來源控制。
+- 移除 sandbox warmup 舊分支（`TAG_PLAYER_WARMUP/WARMUP_*`）及其對 reply gate 的控制。
+- sandbox chat 輸出改為 flow-source allowlist；非 flow source（director/chat engine/join/event injectors）在 sandbox 一律阻擋。
+- WAIT_REPLY_1/2/3 升級為全域 hard freeze；非玩家輸出直接拒絕。
+- tech backlog 併入 `sandboxFlow.backlogTechMessages`，僅 WAIT_REPLY_3 可累積，於 FLUSH_TECH_BACKLOG 一次 flush（最多 8 則）後清空。
+- debug 面板固定顯示 `sandboxFlow.step/replyGateActive/replyTarget/backlogTechMessages.length/lastReplyEval`。
+
 ## 2026-03-08 Sandbox replyability SSOT 修補（sandbox only）
 
 - 實作單一 reply gate derive：`replyGateArmed/replyGateType/replyTarget/replySourceMessageId/replySourceType/canReply`。

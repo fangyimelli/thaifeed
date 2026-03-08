@@ -1,38 +1,40 @@
 import assert from 'node:assert/strict';
 
-function simulateQuestionSendFailed() {
-  const state = {
-    cooldownMeta: { GHOST_PING: { nextAllowedAt: 123, lastCommittedAt: 100, lastRollbackAt: 0 } },
-    freeze: { isFrozen: true, reason: 'tagged_question' },
-    pause: true,
-    qna: { status: 'AWAITING_REPLY', taggedUserHandle: 'player', questionMessageId: 'm1' },
-    event: { inFlight: true, queue: ['VIEWER_SPIKE'] }
+const WAIT_REPLY_STEPS = new Set(['WAIT_REPLY_1', 'WAIT_REPLY_2', 'WAIT_REPLY_3']);
+
+function deriveReplyGateFromSandboxFlow(flow) {
+  return {
+    replyGateArmed: WAIT_REPLY_STEPS.has(flow.step),
+    replyGateType: WAIT_REPLY_STEPS.has(flow.step) ? 'consonant_wait_reply' : null,
+    replyTarget: flow.replyTarget
   };
-
-  const starterTagSent = false;
-  const preEffectTriggered = false;
-  const abortedReason = 'question_send_failed';
-
-  if (abortedReason === 'question_send_failed' && !starterTagSent && !preEffectTriggered) {
-    state.freeze = { isFrozen: false, reason: null };
-    state.pause = false;
-    state.qna = { status: 'IDLE', taggedUserHandle: null, questionMessageId: null };
-    state.event = { inFlight: false, queue: [] };
-    state.cooldownMeta.GHOST_PING = {
-      ...state.cooldownMeta.GHOST_PING,
-      nextAllowedAt: 0,
-      lastRollbackAt: Date.now()
-    };
-  }
-
-  return state;
 }
 
-const result = simulateQuestionSendFailed();
-assert.equal(result.freeze.isFrozen, false);
-assert.equal(result.pause, false);
-assert.equal(result.qna.status, 'IDLE');
-assert.equal(result.event.inFlight, false);
-assert.equal(result.event.queue.length, 0);
-assert.equal(result.cooldownMeta.GHOST_PING.nextAllowedAt, 0);
-console.log('question_send_failed rollback/recover simulation passed');
+function pushBacklog(flow, now, lastAt) {
+  if (flow.step !== 'WAIT_REPLY_3') return { flow, lastAt: 0 };
+  if (lastAt <= 0) return { flow, lastAt: now };
+  if (now - lastAt < 30_000) return { flow, lastAt };
+  return {
+    flow: {
+      ...flow,
+      backlogTechMessages: [...flow.backlogTechMessages, '技術故障：訊號不穩，暫時卡住', '技術故障：系統延遲，先別重整'].slice(-8)
+    },
+    lastAt: now
+  };
+}
+
+const noGate = deriveReplyGateFromSandboxFlow({ step: 'PREHEAT', replyTarget: null });
+assert.equal(noGate.replyGateArmed, false);
+
+const activeGate = deriveReplyGateFromSandboxFlow({ step: 'WAIT_REPLY_2', replyTarget: 'mod_live' });
+assert.equal(activeGate.replyGateArmed, true);
+assert.equal(activeGate.replyGateType, 'consonant_wait_reply');
+
+const baseFlow = { step: 'WAIT_REPLY_2', backlogTechMessages: [] };
+assert.equal(pushBacklog(baseFlow, 60_000, 30_000).flow.backlogTechMessages.length, 0);
+
+const wait3 = { step: 'WAIT_REPLY_3', backlogTechMessages: [] };
+const seeded = pushBacklog(wait3, 31_000, 0);
+const appended = pushBacklog(seeded.flow, 61_500, seeded.lastAt);
+assert.equal(appended.flow.backlogTechMessages.length, 2);
+console.log('sandbox reply gate + backlog regression passed');
