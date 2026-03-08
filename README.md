@@ -1,3 +1,22 @@
+## 2026-03-07 Sandbox NIGHT_01 開場暖場 gate 實作（sandbox only）
+
+- 本次直接實作 patch（非 audit-only），僅調整 sandbox 路徑；classic mode 無改動。
+- NIGHT_01 開場改為「暖場先行、子音題延後」：
+  - 新增 warmup flow steps：`TAG_PLAYER_WARMUP -> WARMUP_TAG_REPLY -> WARMUP_NPC_ACK -> WARMUP_CHATTER -> TAG_PLAYER_1`。
+  - 第一個 tag 只作暖場互動，玩家任意非空回覆（含 `@behindyou 對`）即視為完成，不進 parser/judge。
+  - 收到暖場回覆後固定由 NPC 接一句「今天氛圍跟之前不一樣」語意，再補 2~4 句自然聊天室續聊。
+  - 暖場完成後才建立正式第一題子音 prompt / answer gate / pending question，才進 consonant judge。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT（sandbox flow）：新增 warmup 階段步驟，並將第一題子音切入點延後到 warmup 後。
+- Debug：新增 `sandbox.warmup`（`gateActive/replyReceived/replyAt/normalizedReply/judgeArmed`）與 answer 區塊的 warmup/judge armed 快速觀測欄位。
+
+### Removed / Deprecated Log（本次）
+
+- 移除「第一個暖場 tag 同時當成正式子音題」的舊邏輯；改為單一路徑 warmup gate（避免雙軌判題）。
+
+
 ## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY, sandbox only）
 
 - 本次為 audit-only，不修改 runtime code、不修復、不重構；classic mode 無改動。

@@ -1,3 +1,44 @@
+## 2026-03-07 Sandbox NIGHT_01 Warmup Reply Gate Patch
+
+### 1) Changed files
+- `src/app/App.tsx`
+- `src/modes/sandbox_story/sandboxStoryMode.ts`
+- `src/sandbox/chat/chat_director.ts`
+- `src/sandbox/chat/chat_engine.ts`
+- `README.md`
+- `docs/10-change-log.md`
+- `docs/sandbox-flow-table.md`
+- `PR_NOTES.md`
+
+### 2) Patch summary
+- 開場第一個 tag 改為 warmup gate，玩家任意非空回覆即可推進。
+- 暖場回覆不進 consonant judge；暖場完成後先 NPC ack + 2~4 句聊天室續聊，再進第一題子音。
+- 新增 debug warmup 狀態與 judge armed 可視欄位，強化 UI/debug 一致性。
+
+### 3) Warmup reply gate implementation
+- 新增 flow steps：`TAG_PLAYER_WARMUP -> WARMUP_TAG_REPLY -> WARMUP_NPC_ACK -> WARMUP_CHATTER -> TAG_PLAYER_1`。
+- `WARMUP_TAG_REPLY` 用 mention-stripped 非空判定通過，不做答案正誤檢查。
+
+### 4) Guard against consonant judge during warmup
+- `consumePlayerReply()` 先處理 `WARMUP_TAG_REPLY`，直接消費並推進到 `WARMUP_NPC_ACK`。
+- 只有 `WAIT_REPLY_1/2/3` 才允許觸發 `parseAndJudgeUsingClassic()` / `commitConsonantJudgeResult()`。
+
+### 5) Delayed first consonant prompt
+- 自動出題條件改為 `TAG_PLAYER_1`；`TAG_PLAYER_WARMUP` 只發暖場 tag。
+- 暖場未完成前不建立 `prompt.current`，避免 UI 看起來像正式子音題。
+
+### 6) Acceptance snapshot
+- 任意非空回覆（含 mention 前綴）可推進暖場。
+- 暖場回覆後固定 NPC ack，並有 2~4 句續聊。
+- 續聊完成後才進正式第一題子音。
+
+### 7) Follow-up ideas
+- 可再加 warmup ack/chatter 語境池（時間段/SAN 區分）提升重播感。
+
+### 8) Docs synced
+- README / change-log / sandbox-flow-table / PR_NOTES 已同步。
+
+
 ## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY）
 
 - 本次僅新增 audit report：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。

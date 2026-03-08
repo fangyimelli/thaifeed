@@ -3,6 +3,10 @@ import { SANDBOX_VIP } from './vip_identity';
 export type SandboxDirectorStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'TAG_PLAYER_WARMUP'
+  | 'WARMUP_TAG_REPLY'
+  | 'WARMUP_NPC_ACK'
+  | 'WARMUP_CHATTER'
   | 'TAG_PLAYER_1'
   | 'WAIT_REPLY_1'
   | 'POSSESSION_AUTOFILL'
@@ -53,6 +57,7 @@ export class SandboxChatDirector {
     if (state.freeze.frozen) return 'FROZEN';
     if (state.flowStep === 'PREJOIN') return 'FROZEN';
     if (state.flowStep === 'PREHEAT') return 'PREHEAT';
+    if (state.flowStep === 'WARMUP_TAG_REPLY') return 'FROZEN';
     if (state.flowStep === 'POSSESSION_AUTOFILL' || state.flowStep === 'POSSESSION_AUTOSEND' || state.flowStep === 'CROWD_REACT_WORD' || state.flowStep === 'DISCUSS_PRONOUNCE') return 'REACTIVE';
     return 'RANDOM';
   }
