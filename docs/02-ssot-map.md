@@ -64,3 +64,10 @@
   - `judgeClassicConsonantAnswer()`
 - sandbox 子音題 parse/debug state SSOT：`src/modes/sandbox_story/sandboxStoryMode.ts` 的 `state.consonant.parse`。
 - sandbox prompt glyph 顏色 token 與 scope SSOT：`src/styles.css` 的 `.video-area.sandbox-story-mode .sandbox-story-prompt-glyph`。
+
+
+## 2026-03-08（sandbox warmup gate SSOT 補充）
+
+- warmup gate prompt SSOT：`src/app/App.tsx -> askSandboxWarmupTagNow()`（唯一允許發出 `@<player> 嗨嗨，第一次看這台嗎？` 的入口）。
+- PREHEAT direct mention SSOT：`src/sandbox/chat/chat_director.ts`（僅 casual direct mention，不承載可 consume gate）。
+- warmup consume SSOT：`src/app/App.tsx -> consumePlayerReply()` 在 `flow.step==='WARMUP_TAG_REPLY'` 時的 strip mention + 非空 consume 規則。

@@ -79,3 +79,11 @@ sandbox_story 建議固定檢查以下欄位：
 - `ui.promptGlyph.isBlueExpected`
 
 補充規則：若某問題連續 3 次 PR 都未提及，才可自 debug 頁移除；後續再次出現則重新加回。
+
+
+## 2026-03-08 Sandbox warmup/pin debug 欄位補充
+
+- 新增 `sandbox.replyGate`：`type/armed/sourceMessageId/targetActor/consumePolicy`。
+- 新增 `sandbox.lastReplyEval`：`messageId/gateType/consumed/reason`。
+- 新增 `sandbox.pinned.sourceType`：至少區分 `warmup_gate`、`auto_pin_freeze`、`qna_reply`、`prompt_preview`。
+- 目的：快速判斷目前 UI pin 是否正式可 consume gate，或僅為 auto pin highlight。

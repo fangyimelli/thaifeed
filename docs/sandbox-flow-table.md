@@ -196,3 +196,29 @@ Last Updated By: Codex
 ### Prompt 與 Pinned 同源規則（更新）
 - `askSandboxConsonantNow` 發送的 tag message text 與 pinned text 必須使用同一題目 prompt（同 source string）。
 - `runTagStartFlow` pinned 顯示優先採用已 append 的 `tagMessage.text`，避免題目與 pinned 文案分歧。
+
+
+## 2026-03-08 NIGHT_01 warmup gate / preheat mention conflict（P0）
+
+### Flow 修補
+- PREHEAT direct mention 與 warmup gate 文案拆分；PREHEAT 不再使用會被視為等待回答的問句。
+- 正式 warmup gate 仍由 `TAG_PLAYER_WARMUP -> WARMUP_TAG_REPLY` 單一路徑發出與 consume。
+- warmup consume 成功後固定：`WARMUP_NPC_ACK -> WARMUP_CHATTER(2~4句) -> TAG_PLAYER_1`。
+
+### Pin / Freeze 分流
+- `vip_direct_mention` 在 PREHEAT 僅做 highlight 記錄，不再建立可回覆 gate。
+- sandbox pinned entry 增加 `sourceType`，UI 可區分 `auto_pin_freeze` 與正式 reply gate。
+
+### SSOT / Debug 欄位變更紀錄
+- SSOT：`askSandboxWarmupTagNow()` 為 warmup gate 唯一正式出入口；PREHEAT director 不再共用 gate 文案。
+- Debug：新增
+  - `sandbox.replyGate.type`
+  - `sandbox.replyGate.armed`
+  - `sandbox.replyGate.sourceMessageId`
+  - `sandbox.replyGate.targetActor`
+  - `sandbox.replyGate.consumePolicy`
+  - `sandbox.lastReplyEval.messageId`
+  - `sandbox.lastReplyEval.gateType`
+  - `sandbox.lastReplyEval.consumed`
+  - `sandbox.lastReplyEval.reason`
+  - `sandbox.pinned.sourceType`
