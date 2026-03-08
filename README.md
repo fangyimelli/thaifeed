@@ -1,3 +1,15 @@
+## 2026-03-08 Sandbox NIGHT_01 Q1 WAIT_REPLY 全段重構（sandbox only）
+
+- 先更新 `docs/sandbox-flow-table.md`，將 Q1 流程收斂為唯一路徑：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1 -> ADVANCE_NEXT`。
+- `sandboxFlow` 新增 WAIT_REPLY contract 欄位（`questionEmitterId/retryEmitterId/glitchEmitterIds/retryCount/retryLimit/lastPromptAt/nextRetryAt/dedupeWindowMs/unresolvedBehavior/activeSpeakerRoles`）作為 SSOT。
+- WAIT_REPLY_1 角色分離：question=`mod_live`、retry=`vip_luna`、glitch emitter 使用 viewer pool；retry 冷卻 7 秒、最多 1 次且固定變體文案。
+- 新增 sender dedupe + sender cooldown guard，阻止同 sender 在同 gate 短時間同句刷屏與連續霸佔輸出。
+- `POST_ANSWER_GLITCH_1` 改為多 viewer 分散發話，不再由 questionEmitter 發送 glitch/anomaly。
+- debug panel 補強顯示 `retryCount/retryLimit/questionEmitter/retryEmitter/activeSpeakerRoles`，並明示 debug override 為 no formal impact。
+
+### Removed / Deprecated Log
+- 移除 WAIT_REPLY 期間以 backlog 同句迴圈堆疊「送不出去/網路怪」的舊節奏，改為 SSOT 合約驅動的 glitch pool + retry 機制。
+
 ## 2026-03-08 Sandbox NIGHT_01 live-chat flow hardening（sandbox only）
 
 - NIGHT_01 首題 emitter 收斂：移除 system 教材式出題文案，第一題正式提問只允許聊天室角色（`mod_live`）tag 玩家。

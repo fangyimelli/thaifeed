@@ -85,6 +85,16 @@ export type SandboxFlowState = {
   replyGateActive: boolean;
   gateType: 'none' | 'warmup_chat_reply' | 'consonant_guess' | 'meaning_reply' | 'confirm_reply';
   canReply: boolean;
+  questionEmitterId: string | null;
+  retryEmitterId: string | null;
+  glitchEmitterIds: string[];
+  retryCount: number;
+  retryLimit: number;
+  lastPromptAt: number;
+  nextRetryAt: number;
+  dedupeWindowMs: number;
+  unresolvedBehavior: 'idle' | 'glitch_only' | 'retry_once_then_idle';
+  activeSpeakerRoles: string[];
   replyTarget: string | null;
   backlogTechMessages: string[];
   playerLastReply: string | null;

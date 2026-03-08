@@ -1,6 +1,7 @@
 import { NIGHT1 } from '../../ssot/sandbox_story/night1';
 import type { NightScript, WordNode } from '../../ssot/sandbox_story/types';
 import type { GameMode } from '../types';
+import { SANDBOX_VIP } from '../../sandbox/chat/vip_identity';
 
 export type SandboxStoryPhase =
   | 'boot'
@@ -92,6 +93,16 @@ export type SandboxStoryState = {
     replyGateActive: boolean;
     gateType: 'none' | 'warmup_chat_reply' | 'consonant_guess' | 'meaning_reply' | 'confirm_reply';
     canReply: boolean;
+    questionEmitterId: string | null;
+    retryEmitterId: string | null;
+    glitchEmitterIds: string[];
+    retryCount: number;
+    retryLimit: number;
+    lastPromptAt: number;
+    nextRetryAt: number;
+    dedupeWindowMs: number;
+    unresolvedBehavior: 'idle' | 'glitch_only' | 'retry_once_then_idle';
+    activeSpeakerRoles: string[];
     allowNaturalChat: boolean;
     autoplayMockOnWait: boolean;
     replyTarget: string | null;
@@ -301,7 +312,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   let extraFear = 0;
   const REVEAL_DURATION_MS = 4000;
   const state: SandboxStoryState = {
-    sandboxFlow: { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 },
+    sandboxFlow: { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, questionEmitterId: null, retryEmitterId: null, glitchEmitterIds: [], retryCount: 0, retryLimit: 1, lastPromptAt: 0, nextRetryAt: 0, dedupeWindowMs: 5000, unresolvedBehavior: 'idle', activeSpeakerRoles: [], allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 },
     nodeIndex: 0,
     lastCategory: null,
     pendingDisambiguation: { active: false, attempts: 0, promptId: '' },
@@ -462,6 +473,33 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       : (step === 'WAIT_REPLY_1' ? 'consonant_guess' : (step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3' ? 'meaning_reply' : 'none'));
     const replyGateActive = gateType !== 'none';
     state.flow = { ...state.flow, step, currentTagIndex, stepStartedAt: now, tagAskedThisStep: false, tagAskedAt: 0 };
+    const waitReplyContract: {
+      questionEmitterId: string | null;
+      retryEmitterId: string | null;
+      glitchEmitterIds: string[];
+      retryLimit: number;
+      dedupeWindowMs: number;
+      unresolvedBehavior: SandboxStoryState['sandboxFlow']['unresolvedBehavior'];
+      activeSpeakerRoles: string[];
+    } = step === 'WAIT_REPLY_1'
+      ? {
+          questionEmitterId: 'mod_live',
+          retryEmitterId: SANDBOX_VIP.handle,
+          glitchEmitterIds: ['viewer_118', 'viewer_203', 'viewer_409'],
+          retryLimit: 1,
+          dedupeWindowMs: 5000,
+          unresolvedBehavior: 'retry_once_then_idle',
+          activeSpeakerRoles: ['questionEmitter', 'retryEmitter', 'glitchEmitterPool', 'ambientViewerPool']
+        }
+      : {
+          questionEmitterId: null,
+          retryEmitterId: null,
+          glitchEmitterIds: [] as string[],
+          retryLimit: 0,
+          dedupeWindowMs: 5000,
+          unresolvedBehavior: step === 'POST_ANSWER_GLITCH_1' ? 'glitch_only' : 'idle',
+          activeSpeakerRoles: [] as string[]
+        };
     state.sandboxFlow = {
       ...state.sandboxFlow,
       step,
@@ -473,6 +511,16 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       replyGateActive,
       gateType,
       canReply: replyGateActive,
+      questionEmitterId: waitReplyContract.questionEmitterId,
+      retryEmitterId: waitReplyContract.retryEmitterId,
+      glitchEmitterIds: waitReplyContract.glitchEmitterIds,
+      retryCount: 0,
+      retryLimit: waitReplyContract.retryLimit,
+      lastPromptAt: 0,
+      nextRetryAt: 0,
+      dedupeWindowMs: waitReplyContract.dedupeWindowMs,
+      unresolvedBehavior: waitReplyContract.unresolvedBehavior,
+      activeSpeakerRoles: waitReplyContract.activeSpeakerRoles,
       allowNaturalChat: step === 'PREHEAT' || step === 'REVEAL_1_RIOT' || step === 'POST_ANSWER_GLITCH_1' || step === 'NETWORK_ANOMALY_1' || step === 'CROWD_REACT_WORD' || step === 'DISCUSS_PRONOUNCE',
       autoplayMockOnWait: replyGateActive,
       waitingForMockReply: replyGateActive,
@@ -628,7 +676,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
       state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
-      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 };
+      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, questionEmitterId: null, retryEmitterId: null, glitchEmitterIds: [], retryCount: 0, retryLimit: 1, lastPromptAt: 0, nextRetryAt: 0, dedupeWindowMs: 5000, unresolvedBehavior: 'idle', activeSpeakerRoles: [], allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
@@ -745,7 +793,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
       state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
-      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 };
+      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, questionEmitterId: null, retryEmitterId: null, glitchEmitterIds: [], retryCount: 0, retryLimit: 1, lastPromptAt: 0, nextRetryAt: 0, dedupeWindowMs: 5000, unresolvedBehavior: 'idle', activeSpeakerRoles: [], allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
