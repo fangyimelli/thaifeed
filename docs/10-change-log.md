@@ -1,3 +1,12 @@
+## 2026-03-08（sandbox only：NIGHT_01 Q1 WAIT_REPLY 合約重構）
+- [sandbox/flow-table] 先更新 `docs/sandbox-flow-table.md`，定義 Q1 唯一路徑與 WAIT_REPLY_1 合約欄位。
+- [sandbox/ssot] `SandboxFlowState` / `sandboxFlow` 新增 emitter-role 與 retry/dedupe/cooldown 欄位，作為正式判斷來源。
+- [sandbox/tag] `TAG_PLAYER_1` 正式問句收斂為單一 `questionEmitter(mod_live)`，並在進 WAIT_REPLY_1 時寫入 contract。
+- [sandbox/wait-reply] 新增 glitch emitter pool（viewer 分散）與 retryEmitter（VIP）一次重問機制（cooldown + variant）。
+- [sandbox/guard] 新增 system formal question block、questionEmitter glitch conflict block、sender dedupe window、sender cooldown。
+- [sandbox/debug] debug panel 增加 `retryCount/retryLimit/questionEmitter/retryEmitter/activeSpeakerRoles`；debug flags 標示 purely visual。
+- [sandbox/autoplay] 保持 gateType 對齊 mock consume，`autoplayNightEnabled=true` 可從 WAIT_REPLY_1 推進至 `ADVANCE_NEXT`。
+
 ## 2026-03-08（sandbox only：NIGHT_01 live-chat emitter/autoplay regression guards）
 
 ### Changed
