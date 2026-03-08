@@ -26,6 +26,9 @@
 - `retryLimit: 1`
 - `lastPromptAt: epoch_ms`
 - `nextRetryAt: epoch_ms`
+- `questionPromptFingerprint: step+questionIndex+sender+normalizedText`
+- `normalizedPrompt: normalized chat text`
+- `gateConsumed: boolean`
 - `dedupeWindowMs: 5000`
 - `unresolvedBehavior: retry_once_then_idle`
 - `activeSpeakerRoles: [questionEmitter, retryEmitter, glitchEmitterPool, ambientViewerPool]`
@@ -33,9 +36,10 @@
 ## UI Output Contract（WAIT_REPLY_1）
 
 1. 先一條正式 tag 問句（questionEmitter）。
-2. 玩家未回時，僅 glitchEmitterPool 零散出現 lag/send-fail。
+2. 玩家未回時，僅 glitchEmitterPool 零散出現 lag/send-fail（最多 1~3 則）。
 3. cooldown 到期後，最多一條 retry（retryEmitter，且文案變體）。
-4. 禁止同 sender 在同 gate 內同時扮演 question + glitch + retry。
+4. consume 成功後必須 `gateConsumed=true`、`nextRetryAt=0`、停止後續 retry。
+5. 禁止同 sender 在同 gate 內同時扮演 question + glitch + retry。
 
 ## Hard Guards / Regression Invariants
 
@@ -50,3 +54,4 @@
 9. 每次玩家輸入都必須寫入 `lastReplyEval`（成功/失敗皆記錄）。
 10. UI debug 必顯示 `state/gateType/canReply/lastReplyEval/retryCount/activeSpeakerRoles`。
 11. debug flag 必須標示 non-authoritative（no formal impact）。
+12. `retryCount` 不得超過 `retryLimit`，且 consume 後不得再次觸發同 gate retry。
