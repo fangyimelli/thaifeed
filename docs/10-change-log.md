@@ -1253,3 +1253,11 @@ Sandbox Flow Update
 - [sandbox/ui] sandbox pinned 新增 `sourceType`，`auto_pin_freeze` 以「⭐ 高亮提示」樣式顯示，與 reply gate 視覺切分。
 - [sandbox/debug] 新增 `sandbox.replyGate.{type,armed,sourceMessageId,targetActor,consumePolicy}`、`sandbox.lastReplyEval.{messageId,gateType,consumed,reason}`、`sandbox.pinned.sourceType`。
 - classic mode 未修改。
+
+## 2026-03-08 Sandbox experience-first integration patch
+- 將 sandbox night 流程收斂為單一 `sandboxFlow` 控制（phase/reply gate/backlog/sanity/autoplay）。
+- 停用 sandbox chat scheduler 的自由輸出，避免 WAIT_REPLY 旁路發話。
+- 第一層回覆後改為「先 backlog flush，再補字」，確保玩家感知到因回覆觸發推進。
+- 正式 tag emitter 統一為單一發問者，避免 VIP 與 mod 同步重複 tag。
+- 導入 autoplay mock reply 驅動 WAIT_REPLY，夜晚可自動推進完整回合。
+- 更新 Night1 題幹語義到「身份(1~4) / 動機(5~9) / 恐怖總結(10)」。
