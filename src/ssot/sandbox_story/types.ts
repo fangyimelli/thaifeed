@@ -58,8 +58,14 @@ export type GhostMotionPack = {
 export type SandboxDeterministicFlowStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'WARMUP_TAG'
+  | 'WARMUP_WAIT_REPLY'
+  | 'INTRO_IDLE'
+  | 'REVEAL_1_RIOT'
   | 'TAG_PLAYER_1'
   | 'WAIT_REPLY_1'
+  | 'POST_ANSWER_GLITCH_1'
+  | 'NETWORK_ANOMALY_1'
   | 'POSSESSION_AUTOFILL'
   | 'POSSESSION_AUTOSEND'
   | 'CROWD_REACT_WORD'
@@ -77,6 +83,8 @@ export type SandboxFlowState = {
   step: SandboxDeterministicFlowStep;
   stepStartedAt: number;
   replyGateActive: boolean;
+  gateType: 'none' | 'warmup_chat_reply' | 'consonant_guess' | 'meaning_reply' | 'confirm_reply';
+  canReply: boolean;
   replyTarget: string | null;
   backlogTechMessages: string[];
   playerLastReply: string | null;
