@@ -1,3 +1,22 @@
+## 2026-03-08 Sandbox NIGHT_01 warmup reply gate stall 稽核（AUDIT ONLY, sandbox only）
+
+- 本次為 audit-only：不修改 runtime code、不修復、不重構；classic mode 無改動。
+- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-08-warmup-reply-gate-stall.md`。
+- 稽核結論（重點）：
+  - 玩家 `@behindyou 24` 送出與 append 均成功，`submitChat()` 後續有執行；問題不在送出失敗。
+  - `WARMUP_TAG_REPLY` consume gate 已存在且條件寬鬆（strip mention 後非空即通過）。
+  - 真正衝突點是 preheat director 也會送出同句 `@player 嗨嗨，第一次看這台嗎？`，且被 autoPinFreeze pin/freeze，造成 UI 看似在等 warmup 回覆，但 flow 未 armed 到 warmup gate。
+
+### SSOT / Debug 欄位變更紀錄（本次）
+
+- SSOT：無 schema 變更（audit only）。
+- Debug：無 runtime 欄位修改；報告明確標示現有可觀測欄位與缺口（缺 `lastReplyEval` / gate source type）。
+
+### Removed / Deprecated Log（本次）
+
+- audit-only，未移除功能邏輯。
+
+
 ## 2026-03-07 Sandbox NIGHT_01 開場暖場 gate 實作（sandbox only）
 
 - 本次直接實作 patch（非 audit-only），僅調整 sandbox 路徑；classic mode 無改動。

@@ -1,3 +1,15 @@
+## 2026-03-08 NIGHT_01 Warmup Stall Audit Addendum（AUDIT ONLY）
+
+| Topic | 稽核結論 | 影響層 |
+| --- | --- | --- |
+| 玩家回覆是否落地 | `submitChat -> dispatchChatMessage(PLAYER_MESSAGE)` 成功；訊息 schema 與 append 正常 | `App.submitChat/dispatchChatMessage` |
+| warmup gate 是否存在 | `consumePlayerReply` 已有 `flow.step==='WARMUP_TAG_REPLY'` consume 分支；非空即通過 | `App.consumePlayerReply` |
+| 真正卡點 | preheat director 與 warmup gate 使用同句 tag，前者經 `autoPinFreeze` 也會 pin/freeze，易被誤認為 warmup waiting | `SandboxChatDirector + App.autoPinFreeze` |
+| free chat 化原因 | 回覆發生時 `flow.step` 非 `WARMUP_TAG_REPLY`，因此 warmup consume 不觸發，訊息改走 `sandbox_free_chat_sent` | `App.submitChat` |
+
+> 詳細 trace 與 P0/P1/P2 計畫請見：`docs/sandbox-night01-audit-report-2026-03-08-warmup-reply-gate-stall.md`。
+
+
 ## 2026-03-07 NIGHT_01 Warmup Reply Gate Patch（sandbox only）
 
 | Step | Description | Judge | Reply Gate | Overlay | Example |
