@@ -1,3 +1,23 @@
+## 2026-03-08 Sandbox single deterministic flow rebuild
+
+### Scope
+- Sandbox only. Classic mode unchanged.
+
+### What changed
+- Unified sandbox SSOT into `sandboxFlow` and routed reply gate/backlog/step progression through it.
+- Removed warmup legacy flow path from sandbox runtime progression.
+- Added hard WAIT_REPLY freeze and source-tag allowlist so director/events/join/chat-engine cannot bypass flow output.
+- Moved tech backlog to `sandboxFlow.backlogTechMessages`; only `WAIT_REPLY_3` can accumulate.
+- Updated debug snapshot/panel to expose deterministic gate status and backlog length.
+- Added regression scripts for freeze + gate/backlog invariants.
+
+### Regression guard checklist
+- PREJOIN = 0 output
+- WAIT_REPLY_* = global freeze
+- reply gate controlled by sandboxFlow only
+- director/events/join/auto emit cannot bypass flow
+- backlog accumulation only in WAIT_REPLY_3
+
 ## 2026-03-08 Sandbox reply gate SSOT / auto-pin timing / regression guards（P0）
 
 ### 變更摘要

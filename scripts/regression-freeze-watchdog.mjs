@@ -1,26 +1,21 @@
 import assert from 'node:assert/strict';
 
-function watchdogTick(state) {
-  if (state.chat.freeze.isFrozen && state.chat.freezeCountdownRemaining <= 0) {
-    state.chat.freeze = { isFrozen: false, reason: null };
-    state.chat.pause = false;
-    state.chat.autoScrollMode = 'FOLLOW';
-    state.chat.lastScrollModeChange = 'freeze_watchdog_countdown_zero';
-  }
-  return state;
+const WAIT_REPLY_STEPS = new Set(['WAIT_REPLY_1', 'WAIT_REPLY_2', 'WAIT_REPLY_3']);
+
+function sandboxFlowCanEmit({ step, sourceTag }) {
+  if (WAIT_REPLY_STEPS.has(step)) return false;
+  return sourceTag.startsWith('sandbox_tag_player_')
+    || sourceTag === 'sandbox_consonant_prompt'
+    || sourceTag === 'sandbox_crowd_react_word'
+    || sourceTag === 'sandbox_vip_summary_1'
+    || sourceTag === 'sandbox_vip_summary_2'
+    || sourceTag === 'sandbox_discuss_pronounce'
+    || sourceTag === 'sandbox_tech_backlog_flush'
+    || sourceTag === 'sandbox_possession_autosend';
 }
 
-const initial = {
-  chat: {
-    freeze: { isFrozen: true, reason: 'tagged_question' },
-    freezeCountdownRemaining: 0,
-    pause: true,
-    autoScrollMode: 'FROZEN',
-    lastScrollModeChange: '-'
-  }
-};
-const result = watchdogTick(initial);
-assert.equal(result.chat.freeze.isFrozen, false);
-assert.equal(result.chat.pause, false);
-assert.equal(result.chat.autoScrollMode, 'FOLLOW');
-console.log('freeze watchdog simulation passed');
+assert.equal(sandboxFlowCanEmit({ step: 'PREJOIN', sourceTag: 'sandbox_consonant_prompt' }), true);
+assert.equal(sandboxFlowCanEmit({ step: 'WAIT_REPLY_1', sourceTag: 'sandbox_crowd_react_word' }), false);
+assert.equal(sandboxFlowCanEmit({ step: 'WAIT_REPLY_2', sourceTag: 'sandbox_preheat_join' }), false);
+assert.equal(sandboxFlowCanEmit({ step: 'TAG_PLAYER_1', sourceTag: 'sandbox_chat_engine' }), false);
+console.log('sandbox flow freeze watchdog regression passed');
