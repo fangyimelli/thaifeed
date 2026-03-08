@@ -1,3 +1,20 @@
+## 2026-03-08 Sandbox NIGHT_01 single-orchestrator takeover（sandbox only）
+
+- NIGHT_01 前期 flow 改為實際由 `sandboxFlow` 接管：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，不再經 `WARMUP_TAG` 雙軌切換。
+- 移除 reducer `initialState.messages` 的泰文教材式 system seed，開場提示僅能由 sandbox story emitter 發送。
+- `canAskConsonantNow()` 移除 hardcoded false，改為 `joinGate + flow.step + gateType + replyGate` 正式條件 gating。
+- sandbox 前期阻斷 classic scheduler emitter：`audience_idle`/`dispatchForcedBaseMessage` 在 sandbox 不再送訊息。
+- `REVEAL_1_RIOT` 改由 sandbox orchestration sourceTag（`sandbox_reveal_1_riot`）輸出，不再使用 App 端 scripted riot 雙軌來源。
+- `TAG_PLAYER_1` 首問改為 ask-once SSOT：先寫入 `questionPromptFingerprint/normalizedPrompt/lastPromptAt/tagAskedThisStep` 再發話，append callback 失敗也不會無限重問。
+- 更新文件：`README.md` / `docs/10-change-log.md` / `docs/sandbox-flow-table.md` / `PR_NOTES.md`。
+
+### Regression Guards
+- `initialState.messages=[]`（防 boot seed 汙染）。
+- sandbox 前期 classic emitter hard block。
+- TAG_PLAYER_1 首問 fingerprint dedupe（同 step/question/speaker/text 只允許一次）。
+- `canAskConsonantNow` 以正式 state gating。
+
+
 ## 2026-03-08 Sandbox NIGHT_01 WAIT_REPLY_1 loop hotfix（sandbox only）
 
 - 只修 `WAIT_REPLY_1` loop 根因：consume 後同步關閉 retry 排程與 gate，避免 `mod_live` / retry emitter 持續重送。

@@ -1091,8 +1091,11 @@ export default function App() {
       || sourceTag === 'sandbox_preheat_join'
       || sourceTag === 'sandbox_autoplay_mock_reply'
       || sourceTag === 'sandbox_warmup_tag'
-      || sourceTag === 'sandbox_warmup_riot'
-      || sourceTag === 'sandbox_post_answer_glitch';
+      || sourceTag === 'sandbox_reveal_1_riot'
+      || sourceTag === 'sandbox_post_answer_glitch'
+      || sourceTag === 'sandbox_wait_reply_1_retry'
+      || sourceTag === 'sandbox_wait_reply_1_glitch_pool'
+      || sourceTag === 'sandbox_post_answer_glitch_pool';
   }, []);
 
   const dispatchChatMessage = (
@@ -3202,9 +3205,11 @@ export default function App() {
           }
         }
       }
-      emitChatEvent({ type: 'IDLE_TICK', topicWeights });
-      if (!chatAutoPaused && Date.now() - lastChatMessageAtRef.current > 2500) {
-        dispatchForcedBaseMessage();
+      if (modeRef.current.id !== 'sandbox_story') {
+        emitChatEvent({ type: 'IDLE_TICK', topicWeights });
+        if (!chatAutoPaused && Date.now() - lastChatMessageAtRef.current > 2500) {
+          dispatchForcedBaseMessage();
+        }
       }
       const delay = nextInterval();
       eventNextDueAtRef.current = Date.now() + delay;
@@ -5057,8 +5062,14 @@ export default function App() {
 
 
 
-  const canAskConsonantNow = useCallback((_sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
-    return false;
+  const canAskConsonantNow = useCallback((sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
+    if (modeRef.current.id !== 'sandbox_story') return false;
+    if (!sandboxState.joinGate.satisfied) return false;
+    if (sandboxState.flow.step !== 'TAG_PLAYER_1') return false;
+    if (!sandboxState.introGate.passed) return false;
+    if (sandboxState.sandboxFlow.gateType !== 'none') return false;
+    if (sandboxState.sandboxFlow.replyGateActive || sandboxState.sandboxFlow.canReply) return false;
+    return true;
   }, []);
 
   async function askSandboxConsonantNow() {
@@ -5329,17 +5340,57 @@ export default function App() {
       };
     }
 
-    if (sandboxState.flow.step === 'WARMUP_TAG') {
-      if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
-      sandboxModeRef.current.setFlowStep('REVEAL_1_RIOT', 'warmup_tag_to_reveal', Date.now());
+    if (sandboxState.flow.step === 'REVEAL_1_RIOT' && !sandboxWaveRunningRef.current) {
+      sandboxWaveRunningRef.current = true;
+      const riot: Array<{ user: string; text: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown' }> = [
+        { user: 'viewer_118', text: '欸剛剛是不是有字閃過？', translation: '欸剛剛是不是有字閃過？' },
+        { user: 'viewer_203', text: '看起來像泰文耶', translation: '看起來像泰文耶' },
+        { user: 'viewer_409', text: '那個像子音嗎還是整個單字？', translation: '那個像子音嗎還是整個單字？' },
+        { user: SANDBOX_VIP.handle, text: '我有看到一瞬間，聊天室有人會唸嗎', translation: '我有看到一瞬間，聊天室有人會唸嗎', vip: true, role: 'vip' as const, badge: 'crown' as const }
+      ];
+      riot.forEach((message) => {
+        dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_reveal_1_riot' });
+      });
+      window.setTimeout(() => {
+        sandboxWaveRunningRef.current = false;
+        sandboxModeRef.current.setFlowStep('TAG_PLAYER_1', 'reveal_riot_done', Date.now());
+        setSandboxRevealTick(Date.now());
+      }, 900);
       setSandboxRevealTick(Date.now());
     }
-
     if (sandboxState.flow.step === 'TAG_PLAYER_1') {
       if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = 'mod_live';
       const line = `@${taggedUser} 你知道剛剛閃過那個字怎麼唸嗎？`;
+      const normalizedLine = line.trim().toLowerCase().replace(/\s+/g, ' ');
+      const askedAt = Date.now();
+      const questionFingerprint = `WAIT_REPLY_1:${sandboxState.sandboxFlow.questionIndex}:${speaker}:${normalizedLine}`;
+      const dedupeWindowMs = sandboxState.sandboxFlow.dedupeWindowMs || 5000;
+      const previousAskedAt = sandboxQuestionFingerprintRef.current[questionFingerprint] || 0;
+      if (previousAskedAt > 0 && askedAt - previousAskedAt < dedupeWindowMs) {
+        sandboxModeRef.current.markTagAskedThisStep(previousAskedAt);
+        sandboxModeRef.current.setFlowStep('WAIT_REPLY_1', 'tag_player_1_question_deduped', askedAt);
+        setSandboxRevealTick(askedAt);
+        return () => { clearSandboxRevealDoneTimer(); };
+      }
+      sandboxQuestionFingerprintRef.current[questionFingerprint] = askedAt;
+      sandboxModeRef.current.markTagAskedThisStep(askedAt);
+      sandboxModeRef.current.setSandboxFlow({
+        questionEmitterId: speaker,
+        retryEmitterId: SANDBOX_VIP.handle,
+        glitchEmitterIds: ['viewer_118', 'viewer_203', 'viewer_409'],
+        retryCount: 0,
+        retryLimit: 1,
+        lastPromptAt: askedAt,
+        nextRetryAt: askedAt + 7000,
+        questionPromptFingerprint: questionFingerprint,
+        normalizedPrompt: normalizedLine,
+        gateConsumed: false,
+        dedupeWindowMs,
+        unresolvedBehavior: 'retry_once_then_idle',
+        activeSpeakerRoles: ['questionEmitter', 'retryEmitter', 'glitchEmitterPool', 'ambientViewerPool']
+      });
       void runTagStartFlow({
         tagMessage: { id: crypto.randomUUID(), username: speaker, type: 'chat', text: line, language: 'zh', translation: line, tagTarget: speaker },
         pinnedText: line,
@@ -5356,54 +5407,15 @@ export default function App() {
           await nextAnimationFrame();
         },
         setPinnedReply: ({ messageId }) => {
-          const askedAt = Date.now();
           markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
           lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: messageId };
           const pinnedOk = setPinnedQuestionMessage({ source: 'sandboxPromptCoordinator', messageId, hasTagToActiveUser: true });
           if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
         },
         freezeChat: ({ reason }) => {
-          const askedAt = Date.now();
-          const normalizedLine = line.trim().toLowerCase().replace(/\s+/g, ' ');
-          const questionFingerprint = `WAIT_REPLY_1:${sandboxState.sandboxFlow.questionIndex}:${speaker}:${normalizedLine}`;
-          sandboxQuestionFingerprintRef.current[questionFingerprint] = askedAt;
-          sandboxModeRef.current.markTagAskedThisStep(askedAt);
-          sandboxModeRef.current.setSandboxFlow({
-            questionEmitterId: speaker,
-            retryEmitterId: SANDBOX_VIP.handle,
-            glitchEmitterIds: ['viewer_118', 'viewer_203', 'viewer_409'],
-            retryCount: 0,
-            retryLimit: 1,
-            lastPromptAt: askedAt,
-            nextRetryAt: askedAt + 7000,
-            questionPromptFingerprint: questionFingerprint,
-            normalizedPrompt: normalizedLine,
-            gateConsumed: false,
-            dedupeWindowMs: 5000,
-            unresolvedBehavior: 'retry_once_then_idle',
-            activeSpeakerRoles: ['questionEmitter', 'retryEmitter', 'glitchEmitterPool', 'ambientViewerPool']
-          });
           sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_1');
         }
       });
-      setSandboxRevealTick(Date.now());
-    }
-    if (sandboxState.flow.step === 'REVEAL_1_RIOT' && !sandboxWaveRunningRef.current) {
-      sandboxWaveRunningRef.current = true;
-      const riot: Array<{ user: string; text: string; translation: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown' }> = [
-        { user: 'viewer_118', text: '欸剛剛是不是有字閃過？', translation: '欸剛剛是不是有字閃過？' },
-        { user: 'viewer_203', text: '看起來像泰文耶', translation: '看起來像泰文耶' },
-        { user: 'viewer_409', text: '那個像子音嗎還是整個單字？', translation: '那個像子音嗎還是整個單字？' },
-        { user: 'vip_luna', text: '我有看到一瞬間，聊天室有人會唸嗎', translation: '我有看到一瞬間，聊天室有人會唸嗎', vip: true, role: 'vip', badge: 'crown' }
-      ];
-      riot.forEach((message) => {
-        dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_warmup_riot' });
-      });
-      window.setTimeout(() => {
-        sandboxWaveRunningRef.current = false;
-        sandboxModeRef.current.setFlowStep('TAG_PLAYER_1', 'reveal_riot_done', Date.now());
-        setSandboxRevealTick(Date.now());
-      }, 900);
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'POST_ANSWER_GLITCH_1') {

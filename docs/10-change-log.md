@@ -1,3 +1,23 @@
+## 2026-03-08 Sandbox NIGHT_01 single-orchestrator takeover（sandbox only）
+
+### Added
+- [docs/flow] `docs/sandbox-flow-table.md` 補齊 flow 啟動條件、joinGate contract、sandbox/classic emitter exclusion、TAG_PLAYER_1 ask-once contract。
+
+### Changed
+- [sandbox/flow] `PREHEAT` 逾時後改直接進 `REVEAL_1_RIOT`，讓 NIGHT_01 前期由單一路徑接管。
+- [sandbox/guard] `setJoinGate(satisfied=true)` 時若仍在 `PREJOIN` 會直接切入 `PREHEAT`。
+- [sandbox/emit] `REVEAL_1_RIOT` sourceTag 統一為 `sandbox_reveal_1_riot`；`TAG_PLAYER_1` 首問改為先寫 ask-once SSOT 再發話。
+- [sandbox/gate] `canAskConsonantNow` 改為 state/gateType/replyGate 條件判斷。
+- [classic-block] sandbox 模式停用 scheduler `audience_idle` 與 `dispatchForcedBaseMessage`。
+- [state] `reducer.initialState.messages` 清空，移除教材式 boot seed system 訊息。
+
+### Regression Guards
+1. sandbox mode 不允許 classic idle/fallback emitter 混入。
+2. TAG_PLAYER_1 同 fingerprint 不可重覆首問。
+3. canAskConsonantNow 不可 hardcoded false。
+4. reducer 初始 state 不可注入教材式 seed。
+
+
 ## 2026-03-08（sandbox only：NIGHT_01 WAIT_REPLY_1 loop hotfix）
 - [sandbox/root-cause] 修正 WAIT_REPLY_1 loop 根因：consume 後未同步寫回 gate 關閉狀態，retry timer 條件仍成立導致重送。
 - [sandbox/retry] WAIT_REPLY_1 補齊 retry SSOT：`retryCount/retryLimit/lastPromptAt/nextRetryAt/questionPromptFingerprint/normalizedPrompt/gateConsumed`。

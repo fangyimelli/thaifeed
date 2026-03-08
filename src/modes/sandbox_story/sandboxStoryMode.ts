@@ -741,7 +741,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.sandboxFlow.introElapsedMs = state.introGate.startedAt > 0 ? Math.max(0, now - state.introGate.startedAt) : 0;
       if (state.flow.step === 'PREHEAT' && state.sandboxFlow.introElapsedMs >= state.introGate.minDurationMs) {
         state.preheat.enabled = false;
-        setFlowStepInternal('WARMUP_TAG', 'intro_passed');
+        setFlowStepInternal('REVEAL_1_RIOT', 'intro_passed');
       }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
@@ -1101,6 +1101,9 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     setJoinGate(payload) {
       state.joinGate = { ...state.joinGate, ...payload };
+      if (state.joinGate.satisfied && state.flow.step === 'PREJOIN') {
+        setFlowStepInternal('PREHEAT', 'join_gate_satisfied');
+      }
     },
     setIntroGate(payload) {
       state.introGate = { ...state.introGate, ...payload };

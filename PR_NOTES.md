@@ -1,3 +1,23 @@
+# PR Notes - Sandbox NIGHT_01 single-orchestrator takeover
+
+## 修改原因
+- NIGHT_01 前期仍存在多條 emitter 路徑（reducer seed / App scripted riot / TAG 首問路徑 / classic scheduler / legacy qna），造成看似 flow 在跑但並非單一 SSOT。
+
+## 本次變更（sandbox only）
+- flow 啟動修補：`joinGate.satisfied=true` 且仍在 `PREJOIN` 時，立即推進 `PREHEAT`。
+- `PREHEAT` 倒數結束後改進 `REVEAL_1_RIOT`，讓 NIGHT_01 前期流程對齊：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`。
+- 移除 reducer boot seed 泰文教材式 system 訊息（`initialState.messages=[]`）。
+- `canAskConsonantNow()` 改為正式 state gating（joinGate/flow.step/introGate/gateType/replyGate）。
+- sandbox 前期阻斷 classic emitter：scheduler idle 與 forced fallback 在 sandbox 不再 dispatch。
+- `REVEAL_1_RIOT` / `TAG_PLAYER_1` 收斂為 sandbox sourceTag orchestration。
+- TAG_PLAYER_1 首問改為 ask-once contract：先寫 fingerprint + asked state，再進 `runTagStartFlow`，避免 callback 失敗導致重問 loop。
+
+## Regression guards
+1. reducer 初始訊息不得注入教材式 seed。
+2. sandbox 模式阻斷 classic `audience_idle` / forced fallback。
+3. TAG_PLAYER_1 同 fingerprint 問句不可重覆 append。
+4. `canAskConsonantNow` 不可 hardcoded false。
+
 # PR Notes - Sandbox NIGHT_01 WAIT_REPLY_1 loop hotfix
 
 ## 修改原因

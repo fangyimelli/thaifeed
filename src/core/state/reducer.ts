@@ -24,22 +24,7 @@ export const initialState: GameState = {
   wrongStreak: 0,
   vipStillHereTriggered: false,
   currentAnchor: 'door',
-  messages: [
-    {
-      id: 'boot-1',
-      username: 'system',
-      text: 'เหมือนเราเห็นพยัญชนะบางตัว...มันอ่านว่าอะไรนะ?',
-      language: 'th',
-      translation: '好像看到了某個子音…這個子音怎麼唸呢？'
-    },
-    {
-      id: 'boot-2',
-      username: 'system',
-      text: 'ลองพิมพ์ออกมาดูสิ ถ้าถูกอาจเห็นตัวถัดไป',
-      language: 'th',
-      translation: '試著把你看到的內容打出來，先感受房間的變化。'
-    }
-  ]
+  messages: []
 };
 
 function ensurePlayableState(state: GameState): GameState {
