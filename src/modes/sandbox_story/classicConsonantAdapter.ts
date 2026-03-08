@@ -49,9 +49,8 @@ export function normalizeSandboxConsonantInput(raw: string): SandboxInputNormali
 const toCompact = (value: string): string => value.toLowerCase().replace(/\u3000/g, ' ').replace(/\s+/g, '');
 
 export function getClassicConsonantPrompt(ctx: ClassicConsonantContext): { promptText: string; expectedChar?: string; meta?: any } {
-  const expected = ctx.node?.correctKeywords?.[0] ?? ctx.nodeChar;
   const user = (ctx.activeUser || 'you').replace(/^@+/, '');
-  const promptText = `@${user} 請回覆本題子音（直接輸入：${expected}），或回覆：不知道`;
+  const promptText = `@${user} 你知道剛剛那個字怎麼唸嗎？`;
   return {
     promptText,
     expectedChar: ctx.nodeChar,

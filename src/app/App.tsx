@@ -752,6 +752,7 @@ export default function App() {
   const sandboxAdvanceRetryTimerRef = useRef<number | null>(null);
   const sandboxTagPhaseTimeoutRef = useRef<number | null>(null);
   const sandboxTagPhaseTimeoutFiredRef = useRef(false);
+  const sandboxSenderGateDedupeRef = useRef<Record<string, { step: string; text: string }>>({});
   const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxTechBacklogRef = useRef<string[]>([]);
@@ -1099,7 +1100,7 @@ export default function App() {
     const sourceTag = options?.sourceTag ?? source;
     if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
       const sandboxFlow = sandboxModeRef.current.getState().sandboxFlow;
-      const isWaitReplyStep = sandboxFlow.step === 'WAIT_REPLY_1' || sandboxFlow.step === 'WAIT_REPLY_2' || sandboxFlow.step === 'WAIT_REPLY_3';
+      const isWaitReplyStep = sandboxFlow.step === 'WARMUP_WAIT_REPLY' || sandboxFlow.step === 'WAIT_REPLY_1' || sandboxFlow.step === 'WAIT_REPLY_2' || sandboxFlow.step === 'WAIT_REPLY_3';
       if (isWaitReplyStep) {
         return { ok: false, blockedReason: 'sandbox_wait_reply_global_freeze' };
       }
@@ -1158,6 +1159,17 @@ export default function App() {
         }
       };
       return { ok: false, blockedReason: 'activeUser_auto_speak_blocked' };
+    }
+
+    if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
+      const step = sandboxModeRef.current.getState().sandboxFlow.step;
+      const sender = normalizeHandle(message.username || '') || (message.username || '-');
+      const normalizedText = (message.translation || message.text || '').trim();
+      const prev = sandboxSenderGateDedupeRef.current[sender];
+      if (normalizedText && prev && prev.step === step && prev.text === normalizedText) {
+        return { ok: false, blockedReason: 'sandbox_same_sender_duplicate_in_gate' };
+      }
+      sandboxSenderGateDedupeRef.current[sender] = { step, text: normalizedText };
     }
 
     let pendingSandboxAutoPin: null | {
@@ -1880,7 +1892,7 @@ export default function App() {
       } else if (sandboxState.flow.step === 'WAIT_REPLY_2') {
         sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'player_reply_2_consumed');
       } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
-        sandboxModeRef.current.setFlowStep('FLUSH_TECH_BACKLOG', 'player_reply_3_consumed');
+        sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed');
       } else {
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: 'submit_rejected', gate });
         return false;
@@ -3234,7 +3246,7 @@ export default function App() {
           const preheatGap = now - (sandboxState.preheat.lastJoinAt || 0);
           if (preheatGap >= randomInt(4000, 7000) && sandboxChatEngineRef.current?.shouldEmitJoin()) {
             const joinName = `viewer_${Math.floor(Math.random() * 899 + 100)}`;
-            dispatchChatMessage({ id: crypto.randomUUID(), username: 'system', type: 'system', text: `${joinName} 加入聊天室`, language: 'zh' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_join' });
+            dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: `${joinName} 進來了`, language: 'zh', translation: `${joinName} 進來了` }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_join' });
             sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
           }
         }
@@ -4978,10 +4990,8 @@ export default function App() {
 
 
 
-  const canAskConsonantNow = useCallback((sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
-    if (modeRef.current.id !== 'sandbox_story') return false;
-    if (sandboxState.sandboxFlow.introElapsedMs < sandboxState.introGate.minDurationMs) return false;
-    return sandboxState.flow.step === 'TAG_PLAYER_1';
+  const canAskConsonantNow = useCallback((_sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
+    return false;
   }, []);
 
   async function askSandboxConsonantNow() {
@@ -5254,9 +5264,15 @@ export default function App() {
 
     if (sandboxState.flow.step === 'WARMUP_TAG') {
       if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
+      sandboxModeRef.current.setFlowStep('REVEAL_1_RIOT', 'warmup_tag_to_reveal', Date.now());
+      setSandboxRevealTick(Date.now());
+    }
+
+    if (sandboxState.flow.step === 'TAG_PLAYER_1') {
+      if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = 'mod_live';
-      const line = `@${taggedUser} 你剛剛有看到畫面那個泰文字嗎？`;
+      const line = `@${taggedUser} 你知道那個字怎麼唸嗎？`;
       void runTagStartFlow({
         tagMessage: { id: crypto.randomUUID(), username: speaker, type: 'chat', text: line, language: 'zh', translation: line, tagTarget: speaker },
         pinnedText: line,
@@ -5282,20 +5298,25 @@ export default function App() {
         freezeChat: ({ reason }) => {
           const askedAt = Date.now();
           sandboxModeRef.current.markTagAskedThisStep(askedAt);
-          sandboxFreezeAndWaitForReply(askedAt, reason, 'WARMUP_WAIT_REPLY');
+          sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_1');
         }
       });
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'REVEAL_1_RIOT' && !sandboxWaveRunningRef.current) {
       sandboxWaveRunningRef.current = true;
-      const riot = sandboxChatEngineRef.current?.emitCrowdReactWord(5) ?? [];
+      const riot: Array<{ user: string; text: string; translation: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown' }> = [
+        { user: 'viewer_118', text: '欸剛剛是不是有字閃過？', translation: '欸剛剛是不是有字閃過？' },
+        { user: 'viewer_203', text: '看起來像泰文耶', translation: '看起來像泰文耶' },
+        { user: 'viewer_409', text: '那個像子音嗎還是整個單字？', translation: '那個像子音嗎還是整個單字？' },
+        { user: 'vip_luna', text: '我有看到一瞬間，聊天室有人會唸嗎', translation: '我有看到一瞬間，聊天室有人會唸嗎', vip: true, role: 'vip', badge: 'crown' }
+      ];
       riot.forEach((message) => {
         dispatchChatMessage(convertSandboxChatMessage(message), { source: 'sandbox_consonant', sourceTag: 'sandbox_warmup_riot' });
       });
       window.setTimeout(() => {
         sandboxWaveRunningRef.current = false;
-        sandboxModeRef.current.setFlowStep('TAG_PLAYER_1', 'warmup_riot_done', Date.now());
+        sandboxModeRef.current.setFlowStep('TAG_PLAYER_1', 'reveal_riot_done', Date.now());
         setSandboxRevealTick(Date.now());
       }, 900);
       setSandboxRevealTick(Date.now());
@@ -5308,7 +5329,7 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'NETWORK_ANOMALY_1') {
-      sandboxModeRef.current.setFlowStep('FLUSH_TECH_BACKLOG', 'network_anomaly_done');
+      sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'network_anomaly_done');
       setSandboxRevealTick(Date.now());
     }
 
