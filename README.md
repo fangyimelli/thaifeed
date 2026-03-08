@@ -1,3 +1,12 @@
+## 2026-03-08 Sandbox replyability SSOT 修補（sandbox only）
+
+- 實作單一 reply gate derive：`replyGateArmed/replyGateType/replyTarget/replySourceMessageId/replySourceType/canReply`。
+- `canReply` 改為唯一正式判斷來源，preview / submit / consume / debug 全部對齊。
+- `sandboxPinnedEntry` 改為純顯示層，新增 `linkedToReplyGate/pinnedSourceId/pinnedSourceType`，明確落實 `pin visible ≠ canReply`。
+- auto-pin 改為 message append 後才觸發 pin+gate 連結，修正 source message 未入列時的 writer/source mismatch。
+- `lastReplyEval` 擴充為每次 sandbox 玩家輸入必寫，覆蓋 no gate / gate not armed / parse miss / stripped empty / submit accepted / submit rejected / consume fallback。
+- debug 顯示補上 `sandbox.replyGate.canReply/sourceType`、`sandbox.lastReplyEval.raw/normalized` 與 pinned linked 狀態。
+
 ## 2026-03-08 Sandbox NIGHT_01 warmup reply gate stall 稽核（AUDIT ONLY, sandbox only）
 
 - 本次為 audit-only：不修改 runtime code、不修復、不重構；classic mode 無改動。
