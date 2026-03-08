@@ -1,3 +1,22 @@
+## 2026-03-08（sandbox only：NIGHT_01 live-chat emitter/autoplay regression guards）
+
+### Changed
+- [sandbox/emitter] 第一題提問 emitter 改為單一聊天室角色 tag（`mod_live`），移除 system 教材式 prompt 文案。
+- [sandbox/preheat] PREHEAT join 改為聊天室訊息來源（mod_live）而非 system 訊息。
+- [sandbox/flow] `WARMUP_TAG` 只作為轉場（INTRO_CHAT_RIOT），正式 gate 直接使用 `TAG_PLAYER_1 -> WAIT_REPLY_1`。
+- [sandbox/reveal] 首題 reveal 固定節奏：先發現畫面，再 2~4 則混亂討論，再進玩家 tag 問題。
+- [sandbox/autoplay] NIGHT autoplay 依 `gateType` 組 mock reply，並直接 consume，確保可推進 `ADVANCE_NEXT`。
+- [sandbox/spam] 新增 sender+gate 文案重複阻擋，同 sender 同 gate 同句不可連續重送。
+
+### Regression Guards
+- PREHEAT 30 秒內不得出現正式題目。
+- 第一題前不得出現 system 出題。
+- 同 sender 不得在同 gate 連刷同句。
+- autoplayNightEnabled=true 必須可推進到 ADVANCE_NEXT。
+- 每次玩家輸入都必須記錄 lastReplyEval。
+- WAIT_REPLY gate 必須有 gateType。
+- debug flag 不得影響正式 flow。
+
 ## 2026-03-08（sandbox only：NIGHT_01 P0 + P1 flow/gate SSOT）
 
 ### Changed

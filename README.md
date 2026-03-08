@@ -1,3 +1,12 @@
+## 2026-03-08 Sandbox NIGHT_01 live-chat flow hardening（sandbox only）
+
+- NIGHT_01 首題 emitter 收斂：移除 system 教材式出題文案，第一題正式提問只允許聊天室角色（`mod_live`）tag 玩家。
+- PREHEAT 30s 僅保留自然聊天來源（viewer/mod/vip + join），不再由 system 送「加入聊天室」訊息。
+- flow 推進收斂為：`PREJOIN -> PREHEAT -> WARMUP_TAG(INTRO_CHAT_RIOT) -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1 -> ADVANCE_NEXT`。
+- autoplay mock 依 `gateType` 產生回覆並直接 `consumePlayerReply`，確保 WAIT_REPLY 可自動推進到 `ADVANCE_NEXT`。
+- 新增 sender+gate duplicate guard：同 sender 在同 gate 同句重送會被阻擋（防刷屏）。
+- `lastReplyEval` 維持每次玩家輸入必寫（consume success / reject / parse miss / no gate）。
+
 ## 2026-03-08 Sandbox NIGHT_01 SSOT P0+P1 integration（sandbox only）
 
 - NIGHT_01 flow 以 `sandboxFlow` 單一路徑推進，新增 warmup 與 glitch/anomaly 節點：`PREHEAT -> WARMUP_TAG -> WARMUP_WAIT_REPLY -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1`。

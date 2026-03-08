@@ -1,20 +1,23 @@
-# PR Notes - Sandbox NIGHT_01 P0+P1 Integration
+# PR Notes - Sandbox NIGHT_01 live-chat flow + autoplay stabilization
 
-## 修改原因
-- 上輪 audit 指出 NIGHT_01 存在雙軌 gate（App phase gate vs sandbox flow）與 autoplay mock/judge 類型不匹配，導致暖場與 WAIT_REPLY 卡死。
+## Why
+- NIGHT_01 首題存在舊 emitter（system/教材式 prompt）與聊天室 emitter 並存，造成體驗不自然且 autoplay 在 WAIT gate 易卡住。
+- 本次只調整 sandbox 路徑，將 flow/gate/emitter 收斂為單一 SSOT，避免雙軌。
 
-## 影響的系統 state
-- `sandboxFlow`: 新增 `gateType/canReply/allowNaturalChat/autoplayMockOnWait/introElapsedMs/nextBeatAt`。
-- flow steps 新增 warmup/anomaly 節點：`WARMUP_TAG/WARMUP_WAIT_REPLY/REVEAL_1_RIOT/POST_ANSWER_GLITCH_1/NETWORK_ANOMALY_1`。
-- `lastReplyEval`: 維持每次輸入必寫，並改由 flow gateType 對齊判定。
+## What changed
+- `TAG_PLAYER_1` 成為首題唯一正式提問 emitter（`mod_live @player ...`）。
+- `PREHEAT` 改為純自然聊天來源，`sandbox_preheat_join` 不再用 system message。
+- `WARMUP_TAG` 改為 intro 過渡 state，不再發出正式提問並進 wait gate。
+- 首題 reveal 固定節奏：先發現字樣、再 2~4 則討論、最後 tag 玩家。
+- `WAIT_REPLY` consume 後固定轉 `POST_ANSWER_GLITCH -> NETWORK_ANOMALY -> ADVANCE_NEXT`，不重播舊 prompt。
+- autoplay mock reply 依 gateType 生成並直接 consume，避免被 sourceTag 白名單阻擋。
+- 新增 sender+gate duplicate guard，防止同 sender 在同 gate 連刷同句。
 
-## Regression guard
-- 已新增（程式內 guard + flow table 規格）:
-  1. PREHEAT 30 秒內不進正式 TAG_PLAYER_1
-  2. PREHEAT 允許合法聊天室演出 sourceTag
-  3. WAIT_REPLY 必有非 none gateType
-  4. autoplay 開啟時可推進至 `ADVANCE_NEXT`
-  5. debug flag 不直接改 flow state
-
-## 備註
-- classic mode 無修改。
+## Regression guards
+- PREHEAT 30 秒內不得出現正式題目。
+- 第一題前不得有 system emitter 出題。
+- 同 sender 同 gate 不得連續同句。
+- autoplay enabled 必須推進到 ADVANCE_NEXT。
+- 每次玩家輸入都必寫 lastReplyEval。
+- WAIT_REPLY gateType 不可為 none。
+- debug flag 不得影響正式 flow state。
