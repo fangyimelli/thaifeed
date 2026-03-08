@@ -1217,3 +1217,14 @@ Sandbox Flow Update
 - 新增 mention 前綴容錯：parser normalize 先 strip leading mentions，避免 `@npc` 阻斷答案解析。
 - 補齊 sandbox debug judge 區塊輸出：`sandbox.judge.result/classicResult/sandboxClassicParity/blockedReason`。
 - classic mode 未修改。
+
+
+## 2026-03-08（sandbox only：NIGHT_01 warmup gate vs preheat direct-mention conflict 修復）
+
+- [sandbox/preheat] `chat_director` 移除 PREHEAT 與 warmup gate 共用文案；PREHEAT 改為不需回答的 casual direct mention。
+- [sandbox/warmup-gate] 正式 warmup 問句保留 `@<player> 嗨嗨，第一次看這台嗎？`，僅由 `askSandboxWarmupTagNow()` 發送。
+- [sandbox/consume] `consumePlayerReply` 對 `WARMUP_TAG_REPLY` 維持 strip leading mention + 非空即 consume，並固定推進 ACK/CHATTER/Tag#1。
+- [sandbox/auto-pin-freeze] PREHEAT 期間的 vip direct mention 不再觸發可回覆 pin/freeze gate；避免偽裝成正式 warmup。
+- [sandbox/ui] sandbox pinned 新增 `sourceType`，`auto_pin_freeze` 以「⭐ 高亮提示」樣式顯示，與 reply gate 視覺切分。
+- [sandbox/debug] 新增 `sandbox.replyGate.{type,armed,sourceMessageId,targetActor,consumePolicy}`、`sandbox.lastReplyEval.{messageId,gateType,consumed,reason}`、`sandbox.pinned.sourceType`。
+- classic mode 未修改。

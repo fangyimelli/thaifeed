@@ -122,9 +122,9 @@ const SANDBOX_WORD_RIOT_BURST_COUNT = 6;
 const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
 const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
 const SANDBOX_WARMUP_ACK_POOL = [
-  '今天的氣氛跟之前真的不太一樣。',
-  '不知道為什麼，今天這裡的感覺跟平常不太一樣。',
-  '今天這台有點不一樣，你有感覺到嗎？'
+  '今天的氛圍跟之前不太一樣。',
+  '今天這台安靜得有點不太自然。',
+  '今天感覺跟平常不同，先慢慢看。'
 ] as const;
 const SANDBOX_WARMUP_CHATTER_POOL = [
   '我也覺得今天好安靜。',
@@ -162,6 +162,7 @@ type SandboxPinnedEntry = {
   visible: boolean;
   author: string;
   body: string;
+  sourceType: 'warmup_gate' | 'auto_pin_freeze' | 'qna_reply' | 'prompt_preview';
 };
 
 type BootstrapActivatedBy = 'username_submit' | 'debug' | null;
@@ -776,6 +777,31 @@ export default function App() {
     lastAnomaly: '-'
   });
 
+  const sandboxReplyGateDebugRef = useRef<{
+    type: 'none' | 'warmup_tag_reply' | 'consonant_wait_reply';
+    armed: boolean;
+    sourceMessageId: string;
+    targetActor: string;
+    consumePolicy: string;
+  }>({
+    type: 'none',
+    armed: false,
+    sourceMessageId: '-',
+    targetActor: '-',
+    consumePolicy: '-'
+  });
+  const sandboxLastReplyEvalRef = useRef<{
+    messageId: string;
+    gateType: string;
+    consumed: boolean;
+    reason: string;
+  }>({
+    messageId: '-',
+    gateType: 'none',
+    consumed: false,
+    reason: '-'
+  });
+
   const qnaStateRef = useRef(createInitialQnaState());
   const messageSeqRef = useRef(0);
   const eventQueueRef = useRef<{ key: StoryEventKey; source: 'qna' }[]>([]);
@@ -1146,14 +1172,15 @@ export default function App() {
       const directToPlayer = isVipSpeaker && hasPlayerMention && message.type !== 'system';
       const hitVipDirectMentionRule = directToPlayer;
       const hitStoryCriticalRule = isStoryCriticalHintFollowUp;
-      const shouldPin = hitVipDirectMentionRule || hitStoryCriticalRule;
+      const isPreheatFlow = sandboxModeRef.current.getState().flow.step === 'PREHEAT';
+      const shouldPin = hitStoryCriticalRule || (hitVipDirectMentionRule && !isPreheatFlow);
       const failureReason = shouldPin
         ? '-'
         : (!isVipSpeaker
           ? 'speaker_not_vip'
           : (!hasPlayerMention
             ? 'no_player_mention'
-            : 'not_story_critical'));
+            : (isPreheatFlow ? 'preheat_non_reply_highlight_only' : 'not_story_critical')));
       const pinnedReason = hitVipDirectMentionRule
         ? 'vip_direct_mention'
         : (hitStoryCriticalRule ? 'story_critical_hint_followup' : '-');
@@ -1710,6 +1737,12 @@ export default function App() {
 
       if (sandboxState.flow.step === 'WARMUP_TAG_REPLY') {
         if (!stripped) {
+          sandboxLastReplyEvalRef.current = {
+            messageId: `player:${Date.now()}`,
+            gateType: 'warmup_tag_reply',
+            consumed: false,
+            reason: 'empty_after_strip_mentions'
+          };
           return false;
         }
         const repliedAt = Date.now();
@@ -1719,6 +1752,16 @@ export default function App() {
         clearReplyUi('sandbox_warmup_reply_consumed');
         clearChatFreeze('sandbox_warmup_reply_consumed');
         sandboxModeRef.current.setFlowStep('WARMUP_NPC_ACK', 'warmup_reply_consumed', repliedAt);
+        sandboxReplyGateDebugRef.current = {
+          ...sandboxReplyGateDebugRef.current,
+          armed: false
+        };
+        sandboxLastReplyEvalRef.current = {
+          messageId: `player:${repliedAt}`,
+          gateType: 'warmup_tag_reply',
+          consumed: true,
+          reason: 'consumed_non_empty_reply'
+        };
         setSandboxRevealTick(repliedAt);
         return true;
       }
@@ -1768,6 +1811,7 @@ export default function App() {
           sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
           clearReplyUi(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
           clearChatFreeze(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
+          sandboxReplyGateDebugRef.current = { ...sandboxReplyGateDebugRef.current, armed: false };
           if (sandboxState.flow.step === 'WAIT_REPLY_1') {
             sandboxModeRef.current.setFlowStep('POSSESSION_AUTOFILL', 'player_reply_1_judge_correct');
           } else if (sandboxState.flow.step === 'WAIT_REPLY_2') {
@@ -1809,7 +1853,16 @@ export default function App() {
         return true;
       }
     }
-    if (!(qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply)) return false;
+    if (!(qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply)) {
+      const currentStep = sandboxModeRef.current.getState().flow.step;
+      sandboxLastReplyEvalRef.current = {
+        messageId: `player:${Date.now()}`,
+        gateType: currentStep === 'WARMUP_TAG_REPLY' ? 'warmup_tag_reply' : 'none',
+        consumed: false,
+        reason: currentStep === 'WARMUP_TAG_REPLY' ? 'warmup_strip_empty_or_invalid' : `no_gate_for_step:${currentStep}`
+      };
+      return false;
+    }
     const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
     const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
     if (!parsed) return false;
@@ -1922,7 +1975,8 @@ export default function App() {
       expiresAt: now + freezeMs + 3000,
       visible: true,
       author: actor,
-      body: text
+      body: text,
+      sourceType: 'auto_pin_freeze'
     };
     setSandboxPinnedEntry((prev) => {
       if (prev?.visible && prev.messageId !== payload.messageId) {
@@ -3217,6 +3271,8 @@ export default function App() {
         },
         flow: sandboxState.flow,
         warmup: sandboxState.warmup,
+        replyGate: { ...sandboxReplyGateDebugRef.current },
+        lastReplyEval: { ...sandboxLastReplyEvalRef.current },
         freeze: sandboxState.freeze,
         glitchBurst: sandboxState.glitchBurst,
         player: sandboxState.player,
@@ -3937,6 +3993,7 @@ export default function App() {
             mounted: sandboxPinnedMounted,
             visible: Boolean(sandboxPinnedEntry?.visible),
             reason: sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
+            sourceType: sandboxPinnedEntry?.sourceType ?? '-',
             sourceMessageId: sandboxPinnedEntry?.messageId ?? '-',
             expiresAt: sandboxPinnedEntry?.expiresAt ?? 0,
             remainingMs: sandboxPinnedEntry ? Math.max(0, sandboxPinnedEntry.expiresAt - now) : 0
@@ -4889,6 +4946,13 @@ export default function App() {
         await nextAnimationFrame();
       },
       setPinnedReply: ({ messageId: resolvedMessageId }) => {
+        sandboxReplyGateDebugRef.current = {
+          type: 'warmup_tag_reply',
+          armed: true,
+          sourceMessageId: resolvedMessageId,
+          targetActor: speaker,
+          consumePolicy: 'strip_leading_mentions_then_non_empty'
+        };
         const now = Date.now();
         markQnaQuestionCommitted(qnaStateRef.current, { messageId: resolvedMessageId, askedAt: now });
         lockStateRef.current = { isLocked: true, target: speaker, startedAt: now, replyingToMessageId: resolvedMessageId };
@@ -4980,6 +5044,13 @@ export default function App() {
         await nextAnimationFrame();
       },
       setPinnedReply: ({ messageId: resolvedMessageId }) => {
+        sandboxReplyGateDebugRef.current = {
+          type: 'consonant_wait_reply',
+          armed: true,
+          sourceMessageId: resolvedMessageId,
+          targetActor: tagOwner,
+          consumePolicy: 'classic_parse_and_judge'
+        };
         const now = Date.now();
         markQnaQuestionCommitted(qnaStateRef.current, { messageId: resolvedMessageId, askedAt: now });
         lockStateRef.current = { isLocked: true, target: tagOwner, startedAt: now, replyingToMessageId: resolvedMessageId };
@@ -5995,6 +6066,7 @@ export default function App() {
                     <div>sandbox.autoPinFreeze.lastPinnedRenderVisible/componentMounted: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedRenderVisible ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedComponentMounted ?? false)}</div>
                     <div>sandbox.autoPinFreeze.pinnedStateKey/stateSummary: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedStateKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedStateSummary ?? '-'}</div>
                     <div>sandbox.autoPinFreeze.pinnedReason/expiresAt/remaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedSourceReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedExpiresAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedRemainingMs ?? 0}</div>
+                    <div>sandbox.pinned.sourceType: {(window.__CHAT_DEBUG__ as any)?.ui?.sandboxPinned?.sourceType ?? '-'}</div>
                     <div>sandbox.autoPinFreeze.lastPinnedDroppedReason/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedDroppedReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedDroppedAt ?? 0}</div>
                     <div>sandbox.autoPinFreeze.highlightWithoutPinned/cleanupClearedPinned: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.highlightWithoutPinned ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.cleanupClearedPinned ?? false)}</div>
                     <div>sandbox.autoPinFreeze.overwrittenBy/overwriteAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedOverwrittenByMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedOverwriteAt ?? 0}</div>
@@ -6005,6 +6077,11 @@ export default function App() {
                     <div>warmup.gateActive: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.warmup?.gateActive ?? false)}</div>
                     <div>warmup.replyReceived: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.warmup?.replyReceived ?? false)}</div>
                     <div>warmup.judgeArmed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.warmup?.judgeArmed ?? false)}</div>
+                    <div>sandbox.replyGate.type/armed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.type ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
+                    <div>sandbox.replyGate.sourceMessageId/targetActor: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetActor ?? '-'}</div>
+                    <div>sandbox.replyGate.consumePolicy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.consumePolicy ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.consumed/reason: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.consumed ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.reason ?? '-'}</div>
                     <div>pendingQuestions.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.length ?? 0}</div>
                     <div>pendingQuestions.revisiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.revisiting ?? false)}</div>
                     <div>sandbox.lastCategory: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastCategory ?? '-'}</div>

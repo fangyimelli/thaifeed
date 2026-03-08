@@ -1,3 +1,21 @@
+## 2026-03-08 Sandbox NIGHT_01 warmup gate vs preheat direct-mention conflict（P0）
+
+### 變更摘要
+- 修正 PREHEAT 與 warmup gate 同文案衝突：PREHEAT 改為非問答 casual mention，正式 warmup 問句保留單一入口。
+- 避免 autoPinFreeze 偽裝 reply gate：PREHEAT vip_direct_mention 不再進入可 consume pin/freeze 路徑。
+- warmup gate consume 規則維持：`WARMUP_TAG_REPLY` 期間 strip mention 後非空即 consume。
+- warmup consume 後固定進 `WARMUP_NPC_ACK -> WARMUP_CHATTER(2~4) -> TAG_PLAYER_1`。
+- 新增 debug 可觀測：`sandbox.replyGate.*`、`sandbox.lastReplyEval.*`、`sandbox.pinned.sourceType`。
+- sandbox pinned UI 對 `auto_pin_freeze` 改用「⭐ 高亮提示」樣式，與正式 reply gate 區隔。
+
+### 驗收重點
+- PREHEAT 不再出現「嗨嗨，第一次看這台嗎？」。
+- 正式 warmup gate 才能 consume；`@behindyou 24` 等非空回覆可被 consume。
+- consume 後先 ack（今天氣氛不同語意）再 chatter 2~4 句，才進第一題子音。
+- classic mode 未修改。
+
+---
+
 ## 2026-03-08 Sandbox NIGHT_01 warmup reply gate stall audit（AUDIT ONLY, sandbox only）
 
 ### Summary

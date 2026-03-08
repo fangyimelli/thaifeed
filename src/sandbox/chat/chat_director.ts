@@ -51,6 +51,11 @@ export class SandboxChatDirector {
   private preheatVipEntranceDone = false;
   private preheatVipTagDone = false;
   private lastJoinAt = 0;
+  private readonly preheatCasualDirectPool = [
+    '@{player} 先一起看一下今天的節奏。',
+    '@{player} 今天這台氣氛有點不一樣，先別急。',
+    '@{player} 先觀察一下，等等可能會更有意思。'
+  ] as const;
 
   getChatMode(state: DirectorContext): DirectorMode {
     if (state.glitchBurst.pending) return 'GLITCH_BURST';
@@ -71,7 +76,8 @@ export class SandboxChatDirector {
       }
       if (!this.preheatVipTagDone && elapsed >= 5_000 && elapsed <= 25_000) {
         this.preheatVipTagDone = true;
-        return { speaker: SANDBOX_VIP.handle, text: `@${state.playerHandle || '000'} 嗨嗨，第一次看這台嗎？`, vip: true };
+        const template = this.preheatCasualDirectPool[Math.floor(Math.random() * this.preheatCasualDirectPool.length)] ?? this.preheatCasualDirectPool[0];
+        return { speaker: SANDBOX_VIP.handle, text: template.replace('{player}', state.playerHandle || '000'), vip: true };
       }
     }
     return null;

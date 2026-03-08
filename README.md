@@ -2167,3 +2167,14 @@ Console（debug 模式）可觀察：
 - `askSandboxConsonantNow` 改為訊息內容與 pinned 皆使用同一份題目 prompt，避免 UI 題目與 judge target 不一致。
 - sandbox parser 在 normalize 前會先移除前置 mention（例如 `@behindyou บ` / `@behindyou 2` / `@behindyou 不知道` 仍可判題）。
 - classic mode 未修改。
+
+
+## 2026-03-08 Sandbox NIGHT_01 warmup gate vs preheat mention conflict（sandbox only）
+
+- PREHEAT 導演 direct mention 已與正式 warmup gate 文案拆分：PREHEAT 僅保留「可互動但不需回覆」句型，正式 `@<player> 嗨嗨，第一次看這台嗎？` 僅由 `askSandboxWarmupTagNow()` 發送。
+- autoPinFreeze 在 PREHEAT 不再把 VIP direct mention 當 reply gate；僅保留 highlight 記錄，避免 UI 偽裝成可 consume 問答門。
+- warmup consume 維持 `WARMUP_TAG_REPLY` 單一入口，strip leading mentions 後非空即 consume，並固定推進 `WARMUP_NPC_ACK -> WARMUP_CHATTER -> TAG_PLAYER_1`。
+- warmup ack 語意池統一為「今天氣氛跟平常不一樣」；ack 後再接 2~4 句 chatter 才進第一題子音。
+- Debug 新增 `sandbox.replyGate.*`、`sandbox.lastReplyEval.*` 與 `sandbox.pinned.sourceType`，可區分 `warmup_gate` / `auto_pin_freeze` / `qna_reply` / `prompt_preview`。
+- Removed/Deprecated（sandbox）：移除 PREHEAT 與 warmup gate 共用同句問句路徑。
+- classic mode 未修改。

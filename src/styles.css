@@ -253,6 +253,11 @@ body {
   z-index: 3;
 }
 
+
+.replyPinBar-highlight {
+  border-color: rgba(120, 210, 255, 0.4);
+  background: rgba(80, 170, 220, 0.14);
+}
 .replyPinBar-near-composer {
   flex-shrink: 0;
 }

@@ -29,6 +29,7 @@ type SandboxPinnedEntry = {
   visible: boolean;
   author: string;
   body: string;
+  sourceType: 'warmup_gate' | 'auto_pin_freeze' | 'qna_reply' | 'prompt_preview';
 };
 
 type Props = {
@@ -489,8 +490,12 @@ export default function ChatPanel({
 
 
       {shouldRenderSandboxPinned && sandboxPinnedEntry && (
-        <div className="replyPinBar replyPinBar-sandbox replyPinBar-near-composer" role="status" aria-live="polite">
-          <div className="replyPinHeader">📌 👑 {sandboxPinnedEntry.author}</div>
+        <div
+          className={`replyPinBar replyPinBar-sandbox replyPinBar-near-composer ${sandboxPinnedEntry.sourceType === 'auto_pin_freeze' ? 'replyPinBar-highlight' : ''}`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="replyPinHeader">{sandboxPinnedEntry.sourceType === 'auto_pin_freeze' ? `⭐ 高亮提示 · ${sandboxPinnedEntry.author}` : `📌 👑 ${sandboxPinnedEntry.author}`}</div>
           <div className="replyPinText">{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}</div>
         </div>
       )}
