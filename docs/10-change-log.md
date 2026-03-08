@@ -1,3 +1,17 @@
+## 2026-03-08（sandbox only：NIGHT_01 P0 + P1 flow/gate SSOT）
+
+### Changed
+- [sandbox/flow] NIGHT_01 state table 收斂到單一 `sandboxFlow`（新增 `gateType/canReply/allowNaturalChat/autoplayMockOnWait/introElapsedMs/nextBeatAt`）。
+- [sandbox/gate] WAIT gates 由 flow `gateType` 決定 consume/judge，不再依 `currentPrompt.kind` 一刀切。
+- [sandbox/autoplay] mock reply 改依 gateType 生成（warmup chat / consonant guess / meaning）。
+- [sandbox/debug] `debugComposingOverride` 改為 non-authoritative；debug panel 顯示「不影響正式 submit」。
+- [sandbox/cleanup] 移除 App 層 `sandboxStoryPhaseGateRef` 雙軌 intro phase。
+
+### Regression Guards
+- PREHEAT 30 秒 guard + preheat sourceTag allowlist guard。
+- WAIT_REPLY gateType non-none guard。
+- autoplay must reach ADVANCE_NEXT guard。
+
 ## 2026-03-08 Sandbox single deterministic flow rebuild（sandbox only）
 
 - 實作 sandboxFlow SSOT 並落地 reply gate/backlog/questionIndex。

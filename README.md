@@ -1,3 +1,14 @@
+## 2026-03-08 Sandbox NIGHT_01 SSOT P0+P1 integration（sandbox only）
+
+- NIGHT_01 flow 以 `sandboxFlow` 單一路徑推進，新增 warmup 與 glitch/anomaly 節點：`PREHEAT -> WARMUP_TAG -> WARMUP_WAIT_REPLY -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1`。
+- 移除 App 端 `sandboxStoryPhaseGateRef` 雙軌 intro gate，30 秒暖場改由 `sandboxFlow.introElapsedMs` + `introGate.minDurationMs` 決定。
+- `gateType` 改為 flow state 欄位（`warmup_chat_reply/consonant_guess/meaning_reply/none`），judge 與 autoplay mock reply 依 gateType 配對。
+- debug composing override 改為 purely visual，不再影響正式 submit blocker；debug panel 顯示其 non-authoritative 狀態。
+- 更新文件：README / `docs/10-change-log.md` / `docs/sandbox-flow-table.md` / `PR_NOTES.md`。
+
+### Removed / Deprecated Log
+- 移除 `sandboxStoryPhaseGateRef`（N1_INTRO_CHAT/N1_QUIZ_LOOP）雙軌 phase gate。
+
 ## 2026-03-08 Sandbox deterministic flow rebuild（sandbox only）
 
 - Sandbox flow 收斂為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> VIP_SUMMARY_1 -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> DISCUSS_PRONOUNCE -> VIP_SUMMARY_2 -> TAG_PLAYER_3_MEANING -> WAIT_REPLY_3 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。

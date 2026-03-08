@@ -29,7 +29,7 @@ type ChatEngineContext = {
   san: number;
   playerHandle: string;
   phase: StoryPhase;
-  flowStep: 'PREJOIN' | 'PREHEAT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'VIP_SUMMARY_1' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'DISCUSS_PRONOUNCE' | 'VIP_SUMMARY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
+  flowStep: 'PREJOIN' | 'PREHEAT' | 'WARMUP_TAG' | 'WARMUP_WAIT_REPLY' | 'INTRO_IDLE' | 'REVEAL_1_RIOT' | 'TAG_PLAYER_1' | 'WAIT_REPLY_1' | 'POST_ANSWER_GLITCH_1' | 'NETWORK_ANOMALY_1' | 'POSSESSION_AUTOFILL' | 'POSSESSION_AUTOSEND' | 'CROWD_REACT_WORD' | 'VIP_SUMMARY_1' | 'TAG_PLAYER_2_PRONOUNCE' | 'WAIT_REPLY_2' | 'DISCUSS_PRONOUNCE' | 'VIP_SUMMARY_2' | 'TAG_PLAYER_3_MEANING' | 'WAIT_REPLY_3' | 'FLUSH_TECH_BACKLOG' | 'ADVANCE_NEXT';
   stepStartedAt: number;
   introStartedAt: number;
   isEnding: boolean;
@@ -90,6 +90,7 @@ const VIP_TRANSLATE_LINES = [
 export class ChatEngine {
   private readonly options: ChatEngineOptions;
   private static readonly WAIT_REPLY_STEPS: ReadonlySet<ChatEngineContext['flowStep']> = new Set([
+    'WARMUP_WAIT_REPLY',
     'WAIT_REPLY_1',
     'WAIT_REPLY_2',
     'WAIT_REPLY_3'
@@ -273,7 +274,7 @@ export class ChatEngine {
       return this.captureMessage(this.formatLine(this.pickSanIdleLine('general')), 'san_idle_general');
     }
 
-    const isPreheatFlow = this.context.flowStep === 'PREHEAT';
+    const isPreheatFlow = this.context.flowStep === 'PREHEAT' || this.context.flowStep === 'WARMUP_TAG';
     const isHighPressure = !isPreheatFlow && (this.context.isEnding || this.context.san <= 25 || this.context.phase === 'supernaturalEvent');
     if (isHighPressure && Math.random() < 0.5) {
       return this.captureMessage(this.formatLine(this.pickStringPool('final_fear')), 'final_fear');

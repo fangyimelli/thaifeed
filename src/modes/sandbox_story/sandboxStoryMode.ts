@@ -19,8 +19,14 @@ export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
 export type SandboxFlowStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'WARMUP_TAG'
+  | 'WARMUP_WAIT_REPLY'
+  | 'INTRO_IDLE'
+  | 'REVEAL_1_RIOT'
   | 'TAG_PLAYER_1'
   | 'WAIT_REPLY_1'
+  | 'POST_ANSWER_GLITCH_1'
+  | 'NETWORK_ANOMALY_1'
   | 'POSSESSION_AUTOFILL'
   | 'POSSESSION_AUTOSEND'
   | 'CROWD_REACT_WORD'
@@ -84,6 +90,10 @@ export type SandboxStoryState = {
     stepStartedAt: number;
     phaseStartedAt: number;
     replyGateActive: boolean;
+    gateType: 'none' | 'warmup_chat_reply' | 'consonant_guess' | 'meaning_reply' | 'confirm_reply';
+    canReply: boolean;
+    allowNaturalChat: boolean;
+    autoplayMockOnWait: boolean;
     replyTarget: string | null;
     currentEmitter: string | null;
     currentStepHasEmitted: boolean;
@@ -96,6 +106,8 @@ export type SandboxStoryState = {
     autoplayNightEnabled: boolean;
     autoplayNightStatus: 'idle' | 'running' | 'completed';
     waitingForMockReply: boolean;
+    introElapsedMs: number;
+    nextBeatAt: number;
     questionIndex: number;
   };
   joinGate: { satisfied: boolean; submittedAt?: number };
@@ -289,7 +301,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   let extraFear = 0;
   const REVEAL_DURATION_MS = 4000;
   const state: SandboxStoryState = {
-    sandboxFlow: { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, questionIndex: 1 },
+    sandboxFlow: { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 },
     nodeIndex: 0,
     lastCategory: null,
     pendingDisambiguation: { active: false, attempts: 0, promptId: '' },
@@ -422,8 +434,12 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   const schedulerPhaseByStep = (step: SandboxFlowStep): SandboxStoryPhase => {
     if (step === 'PREJOIN') return 'boot';
     if (step === 'PREHEAT') return 'intro';
+    if (step === 'WARMUP_TAG' || step === 'INTRO_IDLE') return 'awaitingTag';
+    if (step === 'WARMUP_WAIT_REPLY') return 'awaitingAnswer';
+    if (step === 'REVEAL_1_RIOT') return 'chatRiot';
     if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'TAG_PLAYER_3_MEANING') return 'awaitingTag';
     if (step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3') return 'awaitingAnswer';
+    if (step === 'POST_ANSWER_GLITCH_1' || step === 'NETWORK_ANOMALY_1') return 'supernaturalEvent';
     if (step === 'POSSESSION_AUTOFILL' || step === 'POSSESSION_AUTOSEND') return 'revealingWord';
     if (step === 'CROWD_REACT_WORD' || step === 'DISCUSS_PRONOUNCE') return 'chatRiot';
     if (step === 'VIP_SUMMARY_1' || step === 'VIP_SUMMARY_2') return 'vipTranslate';
@@ -441,6 +457,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         : step === 'TAG_PLAYER_3_MEANING' || step === 'WAIT_REPLY_3' || step === 'FLUSH_TECH_BACKLOG'
           ? 3
           : 1;
+    const gateType: SandboxStoryState['sandboxFlow']['gateType'] = step === 'WARMUP_WAIT_REPLY'
+      ? 'warmup_chat_reply'
+      : (step === 'WAIT_REPLY_1' ? 'consonant_guess' : (step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3' ? 'meaning_reply' : 'none'));
+    const replyGateActive = gateType !== 'none';
     state.flow = { ...state.flow, step, currentTagIndex, stepStartedAt: now, tagAskedThisStep: false, tagAskedAt: 0 };
     state.sandboxFlow = {
       ...state.sandboxFlow,
@@ -450,8 +470,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       phaseStartedAt: now,
       currentStepHasEmitted: false,
       questionIndex: state.flow.questionIndex,
-      replyGateActive: step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3',
-      waitingForMockReply: step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3'
+      replyGateActive,
+      gateType,
+      canReply: replyGateActive,
+      allowNaturalChat: step === 'PREHEAT' || step === 'REVEAL_1_RIOT' || step === 'POST_ANSWER_GLITCH_1' || step === 'NETWORK_ANOMALY_1' || step === 'CROWD_REACT_WORD' || step === 'DISCUSS_PRONOUNCE',
+      autoplayMockOnWait: replyGateActive,
+      waitingForMockReply: replyGateActive,
+      nextBeatAt: replyGateActive ? 0 : now + 1200
     };
     state.warmup.gateActive = false;
     state.warmup.judgeArmed = state.sandboxFlow.replyGateActive;
@@ -603,7 +628,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
       state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
-      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, questionIndex: 1 };
+      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
@@ -641,6 +666,10 @@ export function createSandboxStoryMode(): SandboxStoryMode {
         syncFear();
         return;
       }
+      if (state.flow.step === 'WARMUP_TAG') {
+        state.answerGate = { waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false };
+        setFlowStepInternal('WARMUP_WAIT_REPLY', 'incoming_tag_warmup');
+      }
       if (state.flow.step === 'TAG_PLAYER_1') {
         state.answerGate = { waiting: true, askedAt: Date.now(), timeoutMs: 15_000, pausedChat: false };
         setFlowStepInternal('WAIT_REPLY_1', 'incoming_tag');
@@ -649,14 +678,16 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     },
     onPlayerReply() { syncFear(); },
     tick() {
+      const now = Date.now();
       if (state.flow.step === 'PREJOIN' || !state.joinGate.satisfied) {
         syncFear();
         return;
       }
       syncIntroGate();
-      if (state.flow.step === 'PREHEAT' && state.introGate.passed) {
+      state.sandboxFlow.introElapsedMs = state.introGate.startedAt > 0 ? Math.max(0, now - state.introGate.startedAt) : 0;
+      if (state.flow.step === 'PREHEAT' && state.sandboxFlow.introElapsedMs >= state.introGate.minDurationMs) {
         state.preheat.enabled = false;
-        setFlowStepInternal('TAG_PLAYER_1', 'intro_passed');
+        setFlowStepInternal('WARMUP_TAG', 'intro_passed');
       }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;
@@ -676,8 +707,8 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       syncFear();
       return node;
     },
-    forceAskConsonantNow() { if (!state.introGate.passed) return; setFlowStepInternal('TAG_PLAYER_1', 'force_ask_consonant'); syncFear(); },
-    forceAskComprehensionNow() { if (!state.introGate.passed) return; setFlowStepInternal('TAG_PLAYER_1', 'force_ask_comprehension'); syncFear(); },
+    forceAskConsonantNow() { if (state.sandboxFlow.introElapsedMs < state.introGate.minDurationMs) return; setFlowStepInternal('TAG_PLAYER_1', 'force_ask_consonant'); syncFear(); },
+    forceAskComprehensionNow() { if (state.sandboxFlow.introElapsedMs < state.introGate.minDurationMs) return; setFlowStepInternal('TAG_PLAYER_1', 'force_ask_comprehension'); syncFear(); },
     forceGhostMotion(motionId) {
       state.ghostMotion = { lastId: motionId ?? 'disabled_no_ghost_entity', state: 'idle' };
       syncFear();
@@ -714,7 +745,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
       state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
-      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, questionIndex: 1 };
+      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, gateType: 'none', canReply: false, allowNaturalChat: false, autoplayMockOnWait: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, introElapsedMs: 0, nextBeatAt: 0, questionIndex: 1 };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };

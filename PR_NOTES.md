@@ -1,22 +1,20 @@
-# PR Notes - Sandbox Experience-First Rebuild
+# PR Notes - Sandbox NIGHT_01 P0+P1 Integration
 
-## Scope
-- Applied on current branch (no new branch).
-- Sandbox-only integration patch; classic mode left untouched.
+## 修改原因
+- 上輪 audit 指出 NIGHT_01 存在雙軌 gate（App phase gate vs sandbox flow）與 autoplay mock/judge 類型不匹配，導致暖場與 WAIT_REPLY 卡死。
 
-## What changed
-1. `sandboxFlow` expanded as SSOT fields:
-   - `phase`, `phaseStartedAt`, `replyGateActive`, `replyTarget`
-   - `currentEmitter`, `currentStepHasEmitted`
-   - `pendingBacklogMessages`, `pendingGlyph`, `pendingWord`
-   - `playerLastReply`, `sanityPressure`
-   - `autoplayNightEnabled`, `autoplayNightStatus`, `waitingForMockReply`
-2. PREHEAT keeps 30s warmup before first question.
-3. WAIT_REPLY is hard freeze; non-player chatter disabled from scheduler path.
-4. Player reply now drives backlog flush -> immediate word reveal progression.
-5. Tag emitter normalized to single `mod_live` to avoid duplicate mixed tags.
-6. Auto play night injects mock replies during WAIT_REPLY and advances flow.
-7. Night1 question text updated to align with identity/motive/horror arc.
+## 影響的系統 state
+- `sandboxFlow`: 新增 `gateType/canReply/allowNaturalChat/autoplayMockOnWait/introElapsedMs/nextBeatAt`。
+- flow steps 新增 warmup/anomaly 節點：`WARMUP_TAG/WARMUP_WAIT_REPLY/REVEAL_1_RIOT/POST_ANSWER_GLITCH_1/NETWORK_ANOMALY_1`。
+- `lastReplyEval`: 維持每次輸入必寫，並改由 flow gateType 對齊判定。
 
-## Regression guards
-- Added script `scripts/regression-sandbox-experience-first.mjs` to validate flow-table/spec invariants.
+## Regression guard
+- 已新增（程式內 guard + flow table 規格）:
+  1. PREHEAT 30 秒內不進正式 TAG_PLAYER_1
+  2. PREHEAT 允許合法聊天室演出 sourceTag
+  3. WAIT_REPLY 必有非 none gateType
+  4. autoplay 開啟時可推進至 `ADVANCE_NEXT`
+  5. debug flag 不直接改 flow state
+
+## 備註
+- classic mode 無修改。
