@@ -753,8 +753,9 @@ export default function App() {
   const sandboxTagPhaseTimeoutRef = useRef<number | null>(null);
   const sandboxTagPhaseTimeoutFiredRef = useRef(false);
   const sandboxSenderGateDedupeRef = useRef<Record<string, { step: string; text: string; at: number }>>({});
+  const sandboxQuestionFingerprintRef = useRef<Record<string, number>>({});
   const sandboxSenderCooldownRef = useRef<Record<string, number>>({});
-  const sandboxWaitReplyRuntimeRef = useRef<{ lastGlitchAt: number; lastGlitchSender: string; }>({ lastGlitchAt: 0, lastGlitchSender: '' });
+  const sandboxWaitReplyRuntimeRef = useRef<{ lastGlitchAt: number; lastGlitchSender: string; glitchCount: number; }>({ lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0 });
   const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxTechBacklogRef = useRef<string[]>([]);
@@ -1177,8 +1178,9 @@ export default function App() {
       const normalizedText = (message.translation || message.text || '').trim().toLowerCase().replace(/\s+/g, ' ');
       const dedupeWindowMs = sandboxModeRef.current.getState().sandboxFlow.dedupeWindowMs || 5000;
       const now = Date.now();
+      const dedupeGateKey = `${step}:${sandboxFlowState.questionIndex}`;
       const prev = sandboxSenderGateDedupeRef.current[sender];
-      if (normalizedText && prev && prev.step === step && prev.text === normalizedText && now - prev.at < dedupeWindowMs) {
+      if (normalizedText && prev && prev.step === dedupeGateKey && prev.text === normalizedText && now - prev.at < dedupeWindowMs) {
         return { ok: false, blockedReason: 'sandbox_same_sender_duplicate_in_gate' };
       }
       const senderCooldownMs = 1200;
@@ -1186,7 +1188,7 @@ export default function App() {
       if (now - lastSenderAt < senderCooldownMs) {
         return { ok: false, blockedReason: 'sandbox_sender_cooldown' };
       }
-      sandboxSenderGateDedupeRef.current[sender] = { step, text: normalizedText, at: now };
+      sandboxSenderGateDedupeRef.current[sender] = { step: dedupeGateKey, text: normalizedText, at: now };
       sandboxSenderCooldownRef.current[sender] = now;
     }
 
@@ -1890,13 +1892,22 @@ export default function App() {
           });
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result === 'wrong' || pipeline.result === 'unknown') {
-            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: pipeline.result === 'wrong' ? 'submit_rejected' : 'parse_miss', gate });
+            const invalidReason = pipeline.result === 'wrong' ? 'wrong_format' : 'parse_miss';
+            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: invalidReason, gate });
             setSandboxRevealTick(Date.now());
             return false;
           }
         }
       }
 
+      sandboxModeRef.current.setSandboxFlow({
+        gateConsumed: true,
+        retryCount: sandboxState.sandboxFlow.retryLimit,
+        nextRetryAt: 0,
+        waitingForMockReply: false,
+        canReply: false,
+        replyGateActive: false
+      });
       sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
       sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
       clearReplyUi(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
@@ -3295,24 +3306,44 @@ export default function App() {
         }
       }
       if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'WAIT_REPLY_1' && sandboxReplyToActive) {
+        const gateClosed = sandboxState.sandboxFlow.gateConsumed || !sandboxState.sandboxFlow.replyGateActive || !sandboxState.sandboxFlow.canReply;
         const glitchPool = sandboxState.sandboxFlow.glitchEmitterIds.length > 0 ? sandboxState.sandboxFlow.glitchEmitterIds : ['viewer_118', 'viewer_203', 'viewer_409'];
-        if (sandboxWaitReplyRuntimeRef.current.lastGlitchAt <= 0 || now - sandboxWaitReplyRuntimeRef.current.lastGlitchAt >= 4200) {
+        const allowAmbientGlitch = sandboxState.sandboxFlow.unresolvedBehavior === 'retry_once_then_idle' && sandboxWaitReplyRuntimeRef.current.glitchCount < 3;
+        if (!gateClosed && allowAmbientGlitch && (sandboxWaitReplyRuntimeRef.current.lastGlitchAt <= 0 || now - sandboxWaitReplyRuntimeRef.current.lastGlitchAt >= 4200)) {
           const nextGlitchSender = glitchPool.find((sender) => sender !== sandboxWaitReplyRuntimeRef.current.lastGlitchSender) ?? glitchPool[0];
           const glitchLines = ['怎麼訊息送不出去', '奇怪網路怪怪的', '聊天室是不是卡住', '我這邊一直轉圈'];
           const glitchLine = glitchLines[Math.floor(Math.random() * glitchLines.length)] ?? '聊天室是不是卡住';
           dispatchChatMessage({ id: crypto.randomUUID(), username: nextGlitchSender, type: 'chat', text: glitchLine, language: 'zh', translation: glitchLine }, { source: 'sandbox_consonant', sourceTag: 'sandbox_wait_reply_1_glitch_pool' });
           sandboxWaitReplyRuntimeRef.current.lastGlitchAt = now;
           sandboxWaitReplyRuntimeRef.current.lastGlitchSender = nextGlitchSender;
+          sandboxWaitReplyRuntimeRef.current.glitchCount += 1;
         }
-        if (sandboxState.sandboxFlow.retryCount < sandboxState.sandboxFlow.retryLimit && sandboxState.sandboxFlow.nextRetryAt > 0 && now >= sandboxState.sandboxFlow.nextRetryAt) {
+        const shouldRetry = !gateClosed
+          && sandboxState.sandboxFlow.retryCount < sandboxState.sandboxFlow.retryLimit
+          && sandboxState.sandboxFlow.nextRetryAt > 0
+          && now >= sandboxState.sandboxFlow.nextRetryAt;
+        if (shouldRetry) {
           const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
           const retryEmitter = sandboxState.sandboxFlow.retryEmitterId || SANDBOX_VIP.handle;
-          const retryLine = `@${taggedUser} 你還在嗎？剛剛那個字你會唸嗎？`;
-          dispatchChatMessage({ id: crypto.randomUUID(), username: retryEmitter, type: 'chat', text: retryLine, language: 'zh', translation: retryLine, isVip: retryEmitter === SANDBOX_VIP.handle ? 'VIP_NORMAL' : undefined, role: retryEmitter === SANDBOX_VIP.handle ? 'vip' : 'viewer', badge: retryEmitter === SANDBOX_VIP.handle ? 'crown' : undefined }, { source: 'sandbox_consonant', sourceTag: 'sandbox_wait_reply_1_retry' });
-          sandboxModeRef.current.setSandboxFlow({ retryCount: sandboxState.sandboxFlow.retryCount + 1, nextRetryAt: 0, lastPromptAt: now });
+          const retryLine = `@${taggedUser} 你還在嗎？剛剛那個字你會唸嗎？`; 
+          const normalizedRetry = retryLine.trim().toLowerCase().replace(/\s+/g, ' ');
+          const retryFingerprint = `${sandboxState.sandboxFlow.step}:${sandboxState.sandboxFlow.questionIndex}:${retryEmitter}:${normalizedRetry}`;
+          const lastRetryAt = sandboxQuestionFingerprintRef.current[retryFingerprint] || 0;
+          const dedupeWindowMs = sandboxState.sandboxFlow.dedupeWindowMs || 5000;
+          if (now - lastRetryAt >= dedupeWindowMs) {
+            dispatchChatMessage({ id: crypto.randomUUID(), username: retryEmitter, type: 'chat', text: retryLine, language: 'zh', translation: retryLine, isVip: retryEmitter === SANDBOX_VIP.handle ? 'VIP_NORMAL' : undefined, role: retryEmitter === SANDBOX_VIP.handle ? 'vip' : 'viewer', badge: retryEmitter === SANDBOX_VIP.handle ? 'crown' : undefined }, { source: 'sandbox_consonant', sourceTag: 'sandbox_wait_reply_1_retry' });
+            sandboxQuestionFingerprintRef.current[retryFingerprint] = now;
+            sandboxModeRef.current.setSandboxFlow({
+              retryCount: Math.min(sandboxState.sandboxFlow.retryLimit, sandboxState.sandboxFlow.retryCount + 1),
+              nextRetryAt: 0,
+              lastPromptAt: now,
+              questionPromptFingerprint: retryFingerprint,
+              normalizedPrompt: normalizedRetry
+            });
+          }
         }
       } else {
-        sandboxWaitReplyRuntimeRef.current = { lastGlitchAt: 0, lastGlitchSender: '' };
+        sandboxWaitReplyRuntimeRef.current = { lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0 };
       }
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
@@ -3336,6 +3367,11 @@ export default function App() {
           glitchEmitterIds: sandboxState.sandboxFlow.glitchEmitterIds,
           retryCount: sandboxState.sandboxFlow.retryCount,
           retryLimit: sandboxState.sandboxFlow.retryLimit,
+          lastPromptAt: sandboxState.sandboxFlow.lastPromptAt,
+          nextRetryAt: sandboxState.sandboxFlow.nextRetryAt,
+          gateConsumed: sandboxState.sandboxFlow.gateConsumed,
+          questionPromptFingerprint: sandboxState.sandboxFlow.questionPromptFingerprint,
+          normalizedPrompt: sandboxState.sandboxFlow.normalizedPrompt,
           activeSpeakerRoles: sandboxState.sandboxFlow.activeSpeakerRoles,
           introElapsedMs: sandboxState.sandboxFlow.introElapsedMs,
           nextBeatAt: sandboxState.sandboxFlow.nextBeatAt
@@ -5328,6 +5364,9 @@ export default function App() {
         },
         freezeChat: ({ reason }) => {
           const askedAt = Date.now();
+          const normalizedLine = line.trim().toLowerCase().replace(/\s+/g, ' ');
+          const questionFingerprint = `WAIT_REPLY_1:${sandboxState.sandboxFlow.questionIndex}:${speaker}:${normalizedLine}`;
+          sandboxQuestionFingerprintRef.current[questionFingerprint] = askedAt;
           sandboxModeRef.current.markTagAskedThisStep(askedAt);
           sandboxModeRef.current.setSandboxFlow({
             questionEmitterId: speaker,
@@ -5337,6 +5376,9 @@ export default function App() {
             retryLimit: 1,
             lastPromptAt: askedAt,
             nextRetryAt: askedAt + 7000,
+            questionPromptFingerprint: questionFingerprint,
+            normalizedPrompt: normalizedLine,
+            gateConsumed: false,
             dedupeWindowMs: 5000,
             unresolvedBehavior: 'retry_once_then_idle',
             activeSpeakerRoles: ['questionEmitter', 'retryEmitter', 'glitchEmitterPool', 'ambientViewerPool']
@@ -6160,6 +6202,9 @@ export default function App() {
                     <div>sandboxFlow.replyGateActive/replyTarget: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyGateActive ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyTarget ?? '-'}</div>
                     <div>sandboxFlow.gateType/canReply: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.canReply ?? false)}</div>
                     <div>sandboxFlow.retryCount/retryLimit: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryLimit ?? 0}</div>
+                    <div>sandboxFlow.lastPromptAt/nextRetryAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.lastPromptAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.nextRetryAt ?? 0}</div>
+                    <div>sandboxFlow.gateConsumed/replyGateActive: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.gateConsumed ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyGateActive ?? false)}</div>
+                    <div>sandboxFlow.promptFingerprint/normalizedPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionPromptFingerprint ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.normalizedPrompt ?? '-'}</div>
                     <div>sandboxFlow.questionEmitter/retryEmitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionEmitterId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryEmitterId ?? '-'}</div>
                     <div>sandboxFlow.activeSpeakerRoles: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.activeSpeakerRoles ?? [])}</div>
                     <div>sandboxFlow.introElapsedMs/nextBeatAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.introElapsedMs ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.nextBeatAt ?? 0}</div>

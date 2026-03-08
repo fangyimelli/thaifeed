@@ -92,6 +92,9 @@ export type SandboxFlowState = {
   retryLimit: number;
   lastPromptAt: number;
   nextRetryAt: number;
+  questionPromptFingerprint: string;
+  normalizedPrompt: string;
+  gateConsumed: boolean;
   dedupeWindowMs: number;
   unresolvedBehavior: 'idle' | 'glitch_only' | 'retry_once_then_idle';
   activeSpeakerRoles: string[];

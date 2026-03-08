@@ -1,3 +1,12 @@
+## 2026-03-08 Sandbox NIGHT_01 WAIT_REPLY_1 loop hotfix（sandbox only）
+
+- 只修 `WAIT_REPLY_1` loop 根因：consume 後同步關閉 retry 排程與 gate，避免 `mod_live` / retry emitter 持續重送。
+- `sandboxFlow` 補齊 WAIT_REPLY_1 question retry SSOT：`retryCount/retryLimit/lastPromptAt/nextRetryAt/questionPromptFingerprint/normalizedPrompt/gateConsumed`。
+- dedupe guard 收斂為同 gate key（`step:questionIndex`）+ sender + normalizedText，避免新 messageId 仍刷出同句。
+- invalid reply（如單字元 parse miss）維持 gate active，但只記錄 `lastReplyEval`，且 retry 仍遵守 cooldown + retryLimit + dedupe。
+- unanswered 節奏固定：首問 1 次、viewer glitch 最多 3 則、retry 最多 1 次（文案變體），其後不再重問。
+- debug panel 新增 `lastPromptAt/nextRetryAt/gateConsumed/questionPromptFingerprint/normalizedPrompt` 便於驗證 loop 已關閉。
+
 ## 2026-03-08 Sandbox NIGHT_01 Q1 WAIT_REPLY 全段重構（sandbox only）
 
 - 先更新 `docs/sandbox-flow-table.md`，將 Q1 流程收斂為唯一路徑：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1 -> ADVANCE_NEXT`。

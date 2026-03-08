@@ -1,3 +1,12 @@
+## 2026-03-08（sandbox only：NIGHT_01 WAIT_REPLY_1 loop hotfix）
+- [sandbox/root-cause] 修正 WAIT_REPLY_1 loop 根因：consume 後未同步寫回 gate 關閉狀態，retry timer 條件仍成立導致重送。
+- [sandbox/retry] WAIT_REPLY_1 補齊 retry SSOT：`retryCount/retryLimit/lastPromptAt/nextRetryAt/questionPromptFingerprint/normalizedPrompt/gateConsumed`。
+- [sandbox/dedupe] sender dedupe key 改為 `sender + (step:questionIndex) + normalizedText`，避免同 gate 同句重刷。
+- [sandbox/consume] consume 成功時強制 `gateConsumed=true`、`nextRetryAt=0`、`retryCount=retryLimit`、`replyGateActive=false`，終止 retry loop。
+- [sandbox/invalid] invalid/parse_miss 寫入 `lastReplyEval.reason=wrong_format|parse_miss`，gate 可保持 active，但 retry 仍受 cooldown/limit/dedupe 約束。
+- [sandbox/unanswered] unanswered 節奏收斂為：首問一次 + viewer glitch 最多 3 則 + retry 最多一次，之後只留 ambient。
+- [sandbox/debug] debug panel 新增 `lastPromptAt/nextRetryAt/gateConsumed/questionPromptFingerprint/normalizedPrompt`。
+
 ## 2026-03-08（sandbox only：NIGHT_01 Q1 WAIT_REPLY 合約重構）
 - [sandbox/flow-table] 先更新 `docs/sandbox-flow-table.md`，定義 Q1 唯一路徑與 WAIT_REPLY_1 合約欄位。
 - [sandbox/ssot] `SandboxFlowState` / `sandboxFlow` 新增 emitter-role 與 retry/dedupe/cooldown 欄位，作為正式判斷來源。
