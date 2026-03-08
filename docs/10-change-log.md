@@ -1,3 +1,21 @@
+## 2026-03-08（sandbox only：warmup reply gate stall audit）
+
+### Added
+- [audit/sandbox] 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-08-warmup-reply-gate-stall.md`。
+- [audit/trace] 完整追蹤 submit pipeline / warmup consume / flow transition / debug entry，定位「訊息已送出但 gate 未 armed」路徑。
+
+### Findings
+- [sandbox/warmup] `WARMUP_TAG_REPLY` consume 已存在且接受任意非空回覆（含 leading mention strip 後非空）。
+- [sandbox/conflict] PREHEAT director 同文案 tag（`@player 嗨嗨，第一次看這台嗎？`）可觸發 autoPinFreeze，造成 UI 等待態與 flow waiting gate 脫鉤。
+
+### Removed / Deprecated
+- 無（audit only）。
+
+### SSOT / Debug 記錄
+- SSOT：無資料模型變更。
+- Debug：無 runtime 欄位新增；報告建議補 `lastReplyEval` 與 pinned/gate source 對應欄位。
+
+
 ## 2026-03-07 Sandbox NIGHT_01 開場暖場 gate patch（sandbox only）
 
 - 新增 warmup 專用 flow step：`TAG_PLAYER_WARMUP / WARMUP_TAG_REPLY / WARMUP_NPC_ACK / WARMUP_CHATTER`。

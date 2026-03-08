@@ -1,3 +1,28 @@
+## 2026-03-08 Sandbox NIGHT_01 warmup reply gate stall audit（AUDIT ONLY, sandbox only）
+
+### Summary
+- 新增 audit report：`docs/sandbox-night01-audit-report-2026-03-08-warmup-reply-gate-stall.md`。
+- 完整 trace submit/send、warmup consume、flow transition、NPC follow-up、first consonant arm、debug entry pipeline。
+- 結論：`@behindyou 24` 送出/append 成功，但當次 pinned 來源可來自 PREHEAT director + autoPinFreeze，非正式 `WARMUP_TAG_REPLY` gate，因此回覆被當 free chat。
+
+### Why stalled
+1. 正式 warmup consume 需要 `flow.step === 'WARMUP_TAG_REPLY'`。
+2. PREHEAT director 存在同句 `@player 嗨嗨，第一次看這台嗎？`。
+3. 這句會觸發 autoPinFreeze（vip_direct_mention）形成相似 UI（pin/freeze），但不會 arm warmup step。
+4. 玩家回覆時若 step 不在 `WARMUP_TAG_REPLY`，consume 不成立，流程不推進。
+
+### Required sync checklist
+- [x] README 已更新（audit-only 條目 + SSOT/debug/removed log）。
+- [x] `docs/10-change-log.md` 已更新。
+- [x] `docs/sandbox-flow-table.md` 已更新。
+- [x] `PR_NOTES.md` 已更新。
+- [x] `.github/pull_request_template.md` 存在。
+
+### SSOT / debug 欄位變更紀錄（本次）
+- SSOT：無 schema 變更（audit only）。
+- debug：無 runtime 欄位修改；文件建議補 `lastReplyEval` 與 pinned source vs gate source 對照欄位。
+
+
 ## 2026-03-07 Sandbox NIGHT_01 Warmup Reply Gate Patch
 
 ### 1) Changed files
