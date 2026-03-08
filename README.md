@@ -2197,3 +2197,10 @@ Console（debug 模式）可觀察：
 - Debug 新增 `sandbox.replyGate.*`、`sandbox.lastReplyEval.*` 與 `sandbox.pinned.sourceType`，可區分 `warmup_gate` / `auto_pin_freeze` / `qna_reply` / `prompt_preview`。
 - Removed/Deprecated（sandbox）：移除 PREHEAT 與 warmup gate 共用同句問句路徑。
 - classic mode 未修改。
+
+## Sandbox experience-first rebuild (Night 1)
+- Sandbox 現在以 `sandboxFlow` 為互動節奏 SSOT，並以固定 10 題體驗節奏執行。
+- PREHEAT 固定 30 秒先建立熟客聊天室感，之後才進題目。
+- WAIT_REPLY 期間採硬 freeze（非玩家輸出=0），並累積 sanity/backlog；玩家回覆後一次 flush。
+- Auto Play Night 會在 WAIT_REPLY 自動注入 mock reply，完整推進至第 10 題。
+- Classic mode 路徑不變。

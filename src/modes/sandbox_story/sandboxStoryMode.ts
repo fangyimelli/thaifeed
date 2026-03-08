@@ -80,11 +80,22 @@ export type SandboxPrompt =
 export type SandboxStoryState = {
   sandboxFlow: {
     step: SandboxFlowStep;
+    phase: string;
     stepStartedAt: number;
+    phaseStartedAt: number;
     replyGateActive: boolean;
     replyTarget: string | null;
+    currentEmitter: string | null;
+    currentStepHasEmitted: boolean;
     backlogTechMessages: string[];
+    pendingBacklogMessages: string[];
+    pendingGlyph: string | null;
+    pendingWord: string | null;
     playerLastReply: string | null;
+    sanityPressure: number;
+    autoplayNightEnabled: boolean;
+    autoplayNightStatus: 'idle' | 'running' | 'completed';
+    waitingForMockReply: boolean;
     questionIndex: number;
   };
   joinGate: { satisfied: boolean; submittedAt?: number };
@@ -278,7 +289,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
   let extraFear = 0;
   const REVEAL_DURATION_MS = 4000;
   const state: SandboxStoryState = {
-    sandboxFlow: { step: 'PREJOIN', stepStartedAt: 0, replyGateActive: false, replyTarget: null, backlogTechMessages: [], playerLastReply: null, questionIndex: 1 },
+    sandboxFlow: { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, questionIndex: 1 },
     nodeIndex: 0,
     lastCategory: null,
     pendingDisambiguation: { active: false, attempts: 0, promptId: '' },
@@ -434,9 +445,13 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     state.sandboxFlow = {
       ...state.sandboxFlow,
       step,
+      phase: step,
       stepStartedAt: now,
+      phaseStartedAt: now,
+      currentStepHasEmitted: false,
       questionIndex: state.flow.questionIndex,
-      replyGateActive: step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3'
+      replyGateActive: step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3',
+      waitingForMockReply: step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3'
     };
     state.warmup.gateActive = false;
     state.warmup.judgeArmed = state.sandboxFlow.replyGateActive;
@@ -588,7 +603,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
       state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
-      state.sandboxFlow = { step: 'PREJOIN', stepStartedAt: 0, replyGateActive: false, replyTarget: null, backlogTechMessages: [], playerLastReply: null, questionIndex: 1 };
+      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, questionIndex: 1 };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
@@ -699,7 +714,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.preheat = { enabled: true, joinTarget: 10, lastJoinAt: 0 };
       state.answerGate = { waiting: false, askedAt: 0, timeoutMs: 15_000, pausedChat: false };
       state.warmup = { gateActive: false, replyReceived: false, replyAt: 0, normalizedReply: '', judgeArmed: false };
-      state.sandboxFlow = { step: 'PREJOIN', stepStartedAt: 0, replyGateActive: false, replyTarget: null, backlogTechMessages: [], playerLastReply: null, questionIndex: 1 };
+      state.sandboxFlow = { step: 'PREJOIN', phase: 'PREJOIN', stepStartedAt: 0, phaseStartedAt: 0, replyGateActive: false, replyTarget: null, currentEmitter: null, currentStepHasEmitted: false, backlogTechMessages: [], pendingBacklogMessages: [], pendingGlyph: null, pendingWord: null, playerLastReply: null, sanityPressure: 0, autoplayNightEnabled: true, autoplayNightStatus: 'idle', waitingForMockReply: false, questionIndex: 1 };
       state.flow = { questionIndex: 1, step: 'PREJOIN', currentTagIndex: 1, stepStartedAt: Date.now(), tagAskedThisStep: false, tagAskedAt: 0 };
       state.freeze = { frozen: false, reason: 'NONE' };
       state.glitchBurst = { pending: false, remaining: 0, lastEmitAt: 0 };
