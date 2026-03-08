@@ -1,3 +1,18 @@
+## 2026-03-08（sandbox only：reply gate SSOT / auto-pin timing / eval guards）
+
+### Added
+- [sandbox/ssot] 建立 replyability SSOT derive（`replyGateArmed/replyGateType/replyTarget/replySourceMessageId/replySourceType/canReply`），並讓 preview/submit/consume/debug 共用同一來源。
+- [sandbox/eval] `lastReplyEval` 擴充為每次玩家輸入必寫（含 raw/normalized/reason/target/source）。
+- [guard/regression] `tagFlow` 補 `append_missing_message_id` guard；`qnaEngine.markQnaQuestionCommitted` 補 missing id abort guard。
+
+### Changed
+- [sandbox/pin] `sandboxPinnedEntry` 降級為 display-only，新增 `linkedToReplyGate/pinnedSourceId/pinnedSourceType`，明確區分 highlight only 與 formal gate。
+- [sandbox/timing] auto-pin 改為 message append 後才觸發（避免 source message 尚未入 store）。
+- [sandbox/ui] ChatPanel reply preview 改讀 SSOT `canReply`；pinned 未 linked 時顯示 `highlight only`，不再冒充正式可回覆。
+
+### Notes
+- `sandbox_auto_pin_writer_guard` 保留，角色改為「正式 pipeline writer/source guard」，不再當作時序問題補丁。
+
 ## 2026-03-08（sandbox only：warmup reply gate stall audit）
 
 ### Added

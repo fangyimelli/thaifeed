@@ -102,4 +102,8 @@ export class SandboxChatDirector {
     if (should) this.lastJoinAt = now;
     return should;
   }
+
+  isHighlightOnlyPreheatTag(state: DirectorContext): boolean {
+    return state.flowStep === 'PREHEAT';
+  }
 }

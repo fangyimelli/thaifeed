@@ -219,6 +219,12 @@ export function getOptionById(state: QnaState, optionId: string): QnaOption | nu
 
 
 export function markQnaQuestionCommitted(state: QnaState, payload: { messageId: string; askedAt: number }) {
+  if (!payload.messageId) {
+    state.active.status = 'ABORTED';
+    state.active.abortReason = 'missing_question_message_id';
+    state.awaitingReply = false;
+    return;
+  }
   state.active.questionMessageId = payload.messageId;
   state.active.askedAt = payload.askedAt;
   state.active.abortReason = null;

@@ -35,6 +35,9 @@ export async function runTagStartFlow(params: RunTagStartFlowParams): Promise<Ru
   if (!appendResult.ok) {
     return appendResult;
   }
+  if (!appendResult.messageId) {
+    return { ok: false, blockedReason: 'append_missing_message_id' };
+  }
 
   onStep?.('append', Date.now());
 

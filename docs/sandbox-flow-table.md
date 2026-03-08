@@ -1,3 +1,19 @@
+## 2026-03-08 Sandbox Replyability SSOT（implemented）
+
+| Stage | replyGateArmed | replyGateType | replySourceMessageId | replySourceType | replyTarget | canReply | pinnedSourceId | pinnedSourceType | linkedToReplyGate | preview | submit | consume |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| message appended | false | null | null | null | null | false | `<messageId>`(可有) | `auto_pin_freeze`/其他 | false | suppressed | free-chat | no consume |
+| reply gate armed | true | `warmup_tag_reply`/`consonant_wait_reply` | `<messageId>` | `warmup_gate`/`qna_reply`/`auto_pin_freeze` | `<speaker>` | true | `<messageId>` | same as source | true | allowed | accepted | pending |
+| pinned display linked | true | same as above | `<messageId>` | same | `<speaker>` | true | `<messageId>` | same | true | allowed | accepted | pending |
+| pinned display unlinked (highlight only) | false | null | null | null | null | false | `<messageId>` | `auto_pin_freeze` | false | suppressed | free-chat | no consume |
+| preview suppressed | false | any/null | any/null | any/null | any/null | false | any | any | false | suppressed(reason written) | rejected/fallback | no consume |
+| submit accepted | true | active gate | matched source | matched source | matched target | true | matched | matched | true | shown | accepted | consume success |
+| submit rejected | true/false | any | any | any | any | false | any | any | any | suppressed | rejected | consume=false + reason |
+| consume committed | false | previous gate | previous source | previous source | previous target | false | clear or keep highlight | any | false | hidden | next send free-chat | committed |
+| clear gate / clear pin | false | null | null | null | null | false | null | null | false | hidden | free-chat | no consume |
+
+> 規則：`canReply` 只由正式 reply gate state 推導，`pin visible ≠ canReply`。
+
 ## 2026-03-08 NIGHT_01 Warmup Stall Audit Addendum（AUDIT ONLY）
 
 | Topic | 稽核結論 | 影響層 |

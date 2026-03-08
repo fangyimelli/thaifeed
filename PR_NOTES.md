@@ -1,3 +1,19 @@
+## 2026-03-08 Sandbox reply gate SSOT / auto-pin timing / regression guards（P0）
+
+### 變更摘要
+- 建立 replyability SSOT（`replyGateArmed/replyGateType/replyTarget/replySourceMessageId/replySourceType/canReply`），並讓 preview/submit/consume/debug 全部讀同一來源。
+- `sandboxPinnedEntry` 降級為純顯示層，新增 `linkedToReplyGate/pinnedSourceId/pinnedSourceType`。
+- `dispatchChatMessage` 的 auto-pin 改為 append 成功後執行，修正「message 尚未入 store 即 writer/source guard」時序問題。
+- `lastReplyEval` 擴充為每次 sandbox 玩家輸入必寫（含 raw/normalized/reason/source/target）。
+- UI 增加 `highlight only：未 armed，不能正式回覆`，避免 pin 視覺誤判為 formal gate。
+- regression guard：
+  - `src/chat/tagFlow.ts` 增 `append_missing_message_id`。
+  - `src/game/qna/qnaEngine.ts` 增 `missing_question_message_id` abort。
+
+### 關鍵相容性
+- classic mode 未改。
+- `sandbox_auto_pin_writer_guard` 保留，用於正式 writer/source guard（非時序補丁）。
+
 ## 2026-03-08 Sandbox NIGHT_01 warmup gate vs preheat direct-mention conflict（P0）
 
 ### 變更摘要

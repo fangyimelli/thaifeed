@@ -30,6 +30,18 @@ type SandboxPinnedEntry = {
   author: string;
   body: string;
   sourceType: 'warmup_gate' | 'auto_pin_freeze' | 'qna_reply' | 'prompt_preview';
+  linkedToReplyGate: boolean;
+  pinnedSourceId: string | null;
+  pinnedSourceType: string | null;
+};
+
+type SandboxReplyGateState = {
+  replyGateArmed: boolean;
+  replyGateType: string | null;
+  replyTarget: string | null;
+  replySourceMessageId: string | null;
+  replySourceType: string | null;
+  canReply: boolean;
 };
 
 type Props = {
@@ -72,6 +84,7 @@ type Props = {
     sendToken: number;
     onAutoSend: () => void;
   };
+  sandboxReplyGateState?: SandboxReplyGateState | null;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -113,7 +126,8 @@ export default function ChatPanel({
   forceScrollSignalReason = null,
   sandboxPinnedEntry = null,
   onSandboxPinnedMountedChange,
-  sandboxControl
+  sandboxControl,
+  sandboxReplyGateState = null
 }: Props) {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -140,7 +154,8 @@ export default function ChatPanel({
   }));
   const renderedMessages = sanitizedMessages.slice(-MAX_RENDER_COUNT);
   const sanitizedMessagesById = new Map(sanitizedMessages.map((message) => [message.id, message]));
-  const originalMessage = questionMessageId ? sanitizedMessagesById.get(questionMessageId) ?? null : null;
+  const gateSourceId = sandboxReplyGateState?.replySourceMessageId ?? questionMessageId ?? null;
+  const originalMessage = gateSourceId ? sanitizedMessagesById.get(gateSourceId) ?? null : null;
 
   const replyPreviewLockConsistent = Boolean(
     !isLocked
@@ -150,11 +165,15 @@ export default function ChatPanel({
   );
   const shouldRenderReplyPreview = Boolean(
     qnaStatus === 'AWAITING_REPLY'
-    && questionMessageId
+    &&
+    sandboxReplyGateState?.canReply
+    && sandboxReplyGateState.replyGateArmed
+    && gateSourceId
     && originalMessage
     && replyPreviewLockConsistent
   );
   const shouldRenderSandboxPinned = Boolean(sandboxControl?.enabled && sandboxPinnedEntry?.visible && !shouldRenderReplyPreview);
+  const pinnedHighlightOnly = Boolean(sandboxPinnedEntry?.visible && !sandboxPinnedEntry?.linkedToReplyGate);
 
   const truncateReplyText = (text: string, limit: number) => {
     const singleLine = text.replace(/\s*\n+\s*/gu, ' ').trim();
@@ -497,6 +516,7 @@ export default function ChatPanel({
         >
           <div className="replyPinHeader">{sandboxPinnedEntry.sourceType === 'auto_pin_freeze' ? `⭐ 高亮提示 · ${sandboxPinnedEntry.author}` : `📌 👑 ${sandboxPinnedEntry.author}`}</div>
           <div className="replyPinText">{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}</div>
+          {pinnedHighlightOnly && <div className="replyPinText">（highlight only：未 armed，不能正式回覆）</div>}
         </div>
       )}
 
