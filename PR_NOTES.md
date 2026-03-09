@@ -80,3 +80,8 @@
 3. consume 後不得再觸發同 gate question retry。
 4. invalid reply 不得造成 questionEmitter/retryEmitter loop。
 5. debug panel 顯示 `retryCount/retryLimit/lastPromptAt/nextRetryAt/gateConsumed/replyGateActive/lastReplyEval` 與控制條件一致。
+
+## 2026-03-09 Remove sandbox implementation scaffold
+- Removed all sandbox-specific source trees and docs to prepare for a clean rebuild.
+- Kept classic mode files untouched.
+
