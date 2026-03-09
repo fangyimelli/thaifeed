@@ -3364,7 +3364,7 @@ export default function App() {
         const glitchPool = sandboxState.sandboxFlow.glitchEmitterIds.length > 0 ? sandboxState.sandboxFlow.glitchEmitterIds : ['viewer_118', 'viewer_203', 'viewer_409'];
         const allowAmbientGlitch = sandboxState.sandboxFlow.unresolvedBehavior === 'retry_once_then_idle' && sandboxWaitReplyRuntimeRef.current.glitchCount < 2;
         if (!gateClosed && allowAmbientGlitch && (sandboxWaitReplyRuntimeRef.current.lastGlitchAt <= 0 || now - sandboxWaitReplyRuntimeRef.current.lastGlitchAt >= 4200)) {
-          const nextGlitchSender = glitchPool.find((sender) => sender !== sandboxWaitReplyRuntimeRef.current.lastGlitchSender) ?? glitchPool[0];
+          const nextGlitchSender = glitchPool.find((sender: string) => sender !== sandboxWaitReplyRuntimeRef.current.lastGlitchSender) ?? glitchPool[0];
           const glitchLines = ['怎麼訊息送不出去', '奇怪網路怪怪的', '聊天室是不是卡住', '我這邊一直轉圈'];
           const glitchLine = glitchLines[Math.floor(Math.random() * glitchLines.length)] ?? '聊天室是不是卡住';
           dispatchChatMessage({ id: crypto.randomUUID(), username: nextGlitchSender, type: 'chat', text: glitchLine, language: 'zh', translation: glitchLine }, { source: 'sandbox_consonant', sourceTag: 'sandbox_wait_reply_1_glitch_pool' });
@@ -5715,7 +5715,7 @@ export default function App() {
     if (sandboxState.flow.step === 'FLUSH_TECH_BACKLOG') {
       const waitedMs = Math.max(sandboxTechBacklogTotalWaitMsRef.current, Date.now() - (sandboxState.flow.stepStartedAt || Date.now()));
       const roundedMinutes = Math.max(1, Math.round((waitedMs / 60000) / 5) * 5 || 1);
-      const backlogBase = sandboxModeRef.current.getState().sandboxFlow.backlogTechMessages.filter((line) => !line.startsWith('奇怪卡了大約 '));
+      const backlogBase = sandboxModeRef.current.getState().sandboxFlow.backlogTechMessages.filter((line: string) => !line.startsWith('奇怪卡了大約 '));
       const backlog = [...backlogBase.slice(-7), `奇怪卡了大約 ${roundedMinutes} 分鐘`].slice(-8);
       backlog.forEach((line) => {
         dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_tech_backlog_flush' });
