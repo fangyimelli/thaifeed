@@ -1,3 +1,12 @@
+## 2026-03-09（sandbox only：NIGHT_01 Q1 reveal/prompt/gate ordering root fix）
+- [sandbox/flow] `PREHEAT` 結束改先進 `REVEAL_1_START`，由 runtime 先建立 `currentPrompt` 與 reveal metadata，再進 `REVEAL_1_RIOT`。
+- [sandbox/ordering] `REVEAL_1_RIOT`、`TAG_PLAYER_1`、`WAIT_REPLY_1` 新增 prerequisite guard：未 reveal / prompt 空值 / consonant-wordKey 缺失時禁止 riot/tag/ask。
+- [sandbox/gate] ask-player emitter 收斂到 `WAIT_REPLY_1`（gate armed）才可送出；`TAG_PLAYER_1` 僅 transition，不直接發問。
+- [sandbox/consume] 玩家輸入先 strip mention 再 parser/judge；`lastReplyEval` 新增 `extractedAnswer` 並覆蓋成功/失敗路徑。
+- [sandbox/unresolved] unresolved ambient 由固定 3 句改成有限 burst（最多 2 則）+ retry 最多一次；consume 後立刻停止。
+- [sandbox/debug] `__CHAT_DEBUG__.sandbox` 新增 `unresolvedAmbient.active/remaining/completed`、`flow.questionEmitter`、`lastReplyEval.extractedAnswer`。
+- [regression] 新增 `scripts/regression-night01-live-chat-guards.mjs` 新版檢查：reveal-before-riot、prompt-before-tag、gate-before-ask、finite ambient、mention strip。
+
 
 ## 2026-03-09（sandbox only：sandbox_story runtime boot chain 接通）
 - [sandbox/boot] `sandbox_story` mode switch 後，改為直接執行 runtime bootstrap：joinGate 自動滿足、flow 由 `PREJOIN` 進入 `PREHEAT`、introGate 立即初始化。

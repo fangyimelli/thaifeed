@@ -1,6 +1,7 @@
 export type SandboxDirectorStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'REVEAL_1_START'
   | 'WARMUP_TAG'
   | 'WARMUP_WAIT_REPLY'
   | 'INTRO_IDLE'

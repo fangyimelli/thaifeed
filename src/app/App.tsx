@@ -763,7 +763,7 @@ export default function App() {
   const sandboxSenderGateDedupeRef = useRef<Record<string, { step: string; text: string; at: number }>>({});
   const sandboxQuestionFingerprintRef = useRef<Record<string, number>>({});
   const sandboxSenderCooldownRef = useRef<Record<string, number>>({});
-  const sandboxWaitReplyRuntimeRef = useRef<{ lastGlitchAt: number; lastGlitchSender: string; glitchCount: number; }>({ lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0 });
+  const sandboxWaitReplyRuntimeRef = useRef<{ lastGlitchAt: number; lastGlitchSender: string; glitchCount: number; burstStarted: boolean; completed: boolean; }>({ lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0, burstStarted: false, completed: false });
   const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxTechBacklogRef = useRef<string[]>([]);
@@ -809,6 +809,7 @@ export default function App() {
     messageId: string;
     rawInput: string;
     normalizedInput: string;
+    extractedAnswer: string;
     gateType: string;
     consumed: boolean;
     reason: string;
@@ -820,6 +821,7 @@ export default function App() {
     messageId: '-',
     rawInput: '',
     normalizedInput: '',
+    extractedAnswer: '',
     gateType: 'none',
     consumed: false,
     reason: '-',
@@ -1187,7 +1189,7 @@ export default function App() {
       const step = sandboxFlowState.step;
       const sender = normalizeHandle(message.username || '') || (message.username || '-');
       const normalizedSourceTag = (sourceTag || '').toLowerCase();
-      if ((step === 'PREHEAT' || step === 'REVEAL_1_RIOT' || step === 'TAG_PLAYER_1') && sender === 'system' && (normalizedSourceTag.includes('tag_player_1') || normalizedSourceTag.includes('question'))) {
+      if ((step === 'PREHEAT' || step === 'REVEAL_1_START' || step === 'REVEAL_1_RIOT' || step === 'TAG_PLAYER_1') && sender === 'system' && (normalizedSourceTag.includes('tag_player_1') || normalizedSourceTag.includes('question'))) {
         return { ok: false, blockedReason: 'sandbox_system_formal_question_blocked' };
       }
       if (step === 'WAIT_REPLY_1' && normalizedSourceTag.includes('glitch') && sandboxFlowState.questionEmitterId && sender === sandboxFlowState.questionEmitterId) {
@@ -1842,6 +1844,7 @@ export default function App() {
   const writeSandboxLastReplyEval = useCallback((payload: {
     rawInput: string;
     normalizedInput?: string;
+    extractedAnswer?: string;
     consumed: boolean;
     reason: string;
     gate?: SandboxReplyGateState;
@@ -1854,6 +1857,7 @@ export default function App() {
       messageId: `player:${now}`,
       rawInput: payload.rawInput,
       normalizedInput: payload.normalizedInput ?? payload.rawInput.trim(),
+      extractedAnswer: payload.extractedAnswer ?? payload.normalizedInput ?? payload.rawInput.trim(),
       gateType: gate.replyGateType ?? 'none',
       consumed: payload.consumed,
       reason: payload.reason,
@@ -1908,15 +1912,15 @@ export default function App() {
       const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
       const gate = deriveSandboxReplyGateState();
       if (!gate.replyGateType) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: 'no_gate', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate });
         return false;
       }
       if (!gate.replyGateArmed) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: 'gate_not_armed', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate });
         return false;
       }
       if (!stripped) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: 'stripped_empty', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate });
         return false;
       }
 
@@ -1924,15 +1928,15 @@ export default function App() {
         const currentPrompt = sandboxState.prompt.current;
         const node = sandboxModeRef.current.getCurrentNode();
         if (currentPrompt?.kind === 'consonant') {
-          const pipeline = parseAndJudgeUsingClassic(raw, {
+          const pipeline = parseAndJudgeUsingClassic(stripped, {
             nodeChar: currentPrompt.consonant,
             node: node && node.id === currentPrompt.wordKey ? node : undefined,
             activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
           });
-          sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
+          sandboxModeRef.current.commitConsonantJudgeResult({ input: stripped, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result === 'wrong' || pipeline.result === 'unknown') {
             const invalidReason = pipeline.result === 'wrong' ? 'wrong_format' : 'parse_miss';
-            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: invalidReason, gate });
+            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: invalidReason, gate });
             setSandboxRevealTick(Date.now());
             return false;
           }
@@ -1949,6 +1953,7 @@ export default function App() {
       });
       sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
       sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
+      sandboxWaitReplyRuntimeRef.current.completed = true;
       clearReplyUi(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
       clearChatFreeze(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
       sandboxReplyGateDebugRef.current = { ...sandboxReplyGateDebugRef.current, armed: false };
@@ -1962,10 +1967,10 @@ export default function App() {
       } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
         sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed');
       } else {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: 'submit_rejected', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate });
         return false;
       }
-      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: true, reason: 'consume_success', gate });
+      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: true, reason: 'consume_success', gate });
       setSandboxRevealTick(Date.now());
       return true;
     }
@@ -1975,7 +1980,7 @@ export default function App() {
     const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
     const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
     if (!parsed) {
-      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: false, reason: 'parse_miss' });
+      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'parse_miss' });
       return false;
     }
     qnaStateRef.current.matched = { optionId: parsed.optionId, keyword: parsed.matchedKeyword, at: Date.now() };
@@ -1984,7 +1989,7 @@ export default function App() {
       clearReplyUi('anomaly_reply_bar_still_visible_after_resolve');
       sandboxQnaDebugRef.current.lastAnomaly = 'replyBarVisible_after_resolve';
     }
-    writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, consumed: true, reason: 'consume_success' });
+    writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: true, reason: 'consume_success' });
     return true;
   }, [clearChatFreeze, clearReplyUi, deriveSandboxReplyGateState, resolveQna, writeSandboxLastReplyEval]);
 
@@ -3336,9 +3341,6 @@ export default function App() {
           playSfx('footsteps', { reason: 'sandbox:fear_roll', source: 'event', allowBeforeStarterTag: true });
         }
       }
-      if (modeRef.current.id === 'sandbox_story' && canAskConsonantNow(sandboxState)) {
-        void askSandboxConsonantNow();
-      }
       const sandboxReplyToActive = modeRef.current.id === 'sandbox_story' && lockStateRef.current.isLocked && Boolean(lockStateRef.current.replyingToMessageId);
       if (sandboxReplyToActive) {
         sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: sandboxState.freeze.frozenAt || now });
@@ -3360,7 +3362,7 @@ export default function App() {
       if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'WAIT_REPLY_1' && sandboxReplyToActive) {
         const gateClosed = sandboxState.sandboxFlow.gateConsumed || !sandboxState.sandboxFlow.replyGateActive || !sandboxState.sandboxFlow.canReply;
         const glitchPool = sandboxState.sandboxFlow.glitchEmitterIds.length > 0 ? sandboxState.sandboxFlow.glitchEmitterIds : ['viewer_118', 'viewer_203', 'viewer_409'];
-        const allowAmbientGlitch = sandboxState.sandboxFlow.unresolvedBehavior === 'retry_once_then_idle' && sandboxWaitReplyRuntimeRef.current.glitchCount < 3;
+        const allowAmbientGlitch = sandboxState.sandboxFlow.unresolvedBehavior === 'retry_once_then_idle' && sandboxWaitReplyRuntimeRef.current.glitchCount < 2;
         if (!gateClosed && allowAmbientGlitch && (sandboxWaitReplyRuntimeRef.current.lastGlitchAt <= 0 || now - sandboxWaitReplyRuntimeRef.current.lastGlitchAt >= 4200)) {
           const nextGlitchSender = glitchPool.find((sender) => sender !== sandboxWaitReplyRuntimeRef.current.lastGlitchSender) ?? glitchPool[0];
           const glitchLines = ['怎麼訊息送不出去', '奇怪網路怪怪的', '聊天室是不是卡住', '我這邊一直轉圈'];
@@ -3369,6 +3371,8 @@ export default function App() {
           sandboxWaitReplyRuntimeRef.current.lastGlitchAt = now;
           sandboxWaitReplyRuntimeRef.current.lastGlitchSender = nextGlitchSender;
           sandboxWaitReplyRuntimeRef.current.glitchCount += 1;
+          sandboxWaitReplyRuntimeRef.current.burstStarted = true;
+          sandboxWaitReplyRuntimeRef.current.completed = sandboxWaitReplyRuntimeRef.current.glitchCount >= 2;
         }
         const shouldRetry = !gateClosed
           && sandboxState.sandboxFlow.retryCount < sandboxState.sandboxFlow.retryLimit
@@ -3395,7 +3399,7 @@ export default function App() {
           }
         }
       } else {
-        sandboxWaitReplyRuntimeRef.current = { lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0 };
+        sandboxWaitReplyRuntimeRef.current = { lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0, burstStarted: false, completed: false };
       }
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
@@ -3415,7 +3419,9 @@ export default function App() {
           gateType: sandboxState.sandboxFlow.gateType,
           canReply: sandboxState.sandboxFlow.canReply,
           questionEmitterId: sandboxState.sandboxFlow.questionEmitterId,
+          questionEmitter: sandboxState.sandboxFlow.questionEmitterId,
           retryEmitterId: sandboxState.sandboxFlow.retryEmitterId,
+          blockedReason: sandboxState.scheduler.blockedReason || '-',
           glitchEmitterIds: sandboxState.sandboxFlow.glitchEmitterIds,
           retryCount: sandboxState.sandboxFlow.retryCount,
           retryLimit: sandboxState.sandboxFlow.retryLimit,
@@ -3427,6 +3433,11 @@ export default function App() {
           activeSpeakerRoles: sandboxState.sandboxFlow.activeSpeakerRoles,
           introElapsedMs: sandboxState.sandboxFlow.introElapsedMs,
           nextBeatAt: sandboxState.sandboxFlow.nextBeatAt
+        },
+        unresolvedAmbient: {
+          active: sandboxState.flow.step === 'WAIT_REPLY_1' && sandboxState.sandboxFlow.replyGateActive && !sandboxState.sandboxFlow.gateConsumed,
+          remaining: Math.max(0, 2 - sandboxWaitReplyRuntimeRef.current.glitchCount),
+          completed: sandboxWaitReplyRuntimeRef.current.completed
         },
         ui: {
           consonantBubble: {
@@ -5118,10 +5129,23 @@ export default function App() {
 
 
 
+  const hasSandboxQuestionPrerequisites = useCallback((sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
+    const currentPrompt = sandboxState.prompt.current;
+    return Boolean(
+      sandboxState.reveal.visible
+      && currentPrompt?.kind === 'consonant'
+      && currentPrompt.promptId
+      && currentPrompt.wordKey
+      && currentPrompt.consonant
+      && sandboxState.consonant.nodeChar
+      && sandboxState.reveal.wordKey
+    );
+  }, []);
+
   const canAskConsonantNow = useCallback((sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
     if (modeRef.current.id !== 'sandbox_story') return false;
     if (!sandboxState.joinGate.satisfied) return false;
-    if (sandboxState.flow.step !== 'TAG_PLAYER_1') return false;
+    if (!(sandboxState.flow.step === 'TAG_PLAYER_1' || sandboxState.flow.step === 'REVEAL_1_START')) return false;
     if (!sandboxState.introGate.passed) return false;
     if (sandboxState.sandboxFlow.gateType !== 'none') return false;
     if (sandboxState.sandboxFlow.replyGateActive || sandboxState.sandboxFlow.canReply) return false;
@@ -5396,7 +5420,36 @@ export default function App() {
       };
     }
 
+    if (sandboxState.flow.step === 'REVEAL_1_START') {
+      const node = sandboxModeRef.current.getCurrentNode();
+      if (!node) return () => { clearSandboxRevealDoneTimer(); };
+      const existing = sandboxModeRef.current.getCurrentPrompt();
+      if (!existing || existing.kind !== 'consonant' || existing.wordKey !== node.id) {
+        const promptId = crypto.randomUUID();
+        sandboxModeRef.current.setCurrentPrompt({
+          kind: 'consonant',
+          promptId,
+          consonant: node.char,
+          wordKey: node.id,
+          pinnedText: `請讀出剛剛閃過的字：${node.char}`,
+          correctKeywords: node.correctKeywords ?? [node.char],
+          unknownKeywords: node.unknownKeywords ?? ['不知道']
+        });
+      }
+      if (!sandboxState.reveal.visible) {
+        sandboxModeRef.current.forceRevealCurrent();
+      }
+      const hydratedState = sandboxModeRef.current.getState();
+      if (hasSandboxQuestionPrerequisites(hydratedState)) {
+        sandboxModeRef.current.setFlowStep('REVEAL_1_RIOT', 'reveal_prompt_ready', Date.now());
+      }
+      setSandboxRevealTick(Date.now());
+    }
     if (sandboxState.flow.step === 'REVEAL_1_RIOT' && !sandboxWaveRunningRef.current) {
+      if (!hasSandboxQuestionPrerequisites(sandboxState)) {
+        sandboxModeRef.current.commitAdvanceBlockedReason('reveal_not_ready_for_riot');
+        return () => { clearSandboxRevealDoneTimer(); };
+      }
       sandboxWaveRunningRef.current = true;
       const riot: Array<{ user: string; text: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown' }> = [
         { user: 'viewer_118', text: '欸剛剛是不是有字閃過？', translation: '欸剛剛是不是有字閃過？' },
@@ -5415,7 +5468,20 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'TAG_PLAYER_1') {
+      if (!hasSandboxQuestionPrerequisites(sandboxState)) {
+        sandboxModeRef.current.commitAdvanceBlockedReason('prompt_missing_for_tag');
+        return () => { clearSandboxRevealDoneTimer(); };
+      }
+      sandboxModeRef.current.setFlowStep('WAIT_REPLY_1', 'tag_gate_armed', Date.now());
+      setSandboxRevealTick(Date.now());
+    }
+    if (sandboxState.flow.step === 'WAIT_REPLY_1') {
       if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
+      if (!hasSandboxQuestionPrerequisites(sandboxState)) {
+        sandboxModeRef.current.setSandboxFlow({ canReply: false, replyGateActive: false });
+        sandboxModeRef.current.commitAdvanceBlockedReason('gate_blocked_missing_prompt_or_reveal');
+        return () => { clearSandboxRevealDoneTimer(); };
+      }
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = 'mod_live';
       const line = `@${taggedUser} 你知道剛剛閃過那個字怎麼唸嗎？`;
@@ -5426,7 +5492,6 @@ export default function App() {
       const previousAskedAt = sandboxQuestionFingerprintRef.current[questionFingerprint] || 0;
       if (previousAskedAt > 0 && askedAt - previousAskedAt < dedupeWindowMs) {
         sandboxModeRef.current.markTagAskedThisStep(previousAskedAt);
-        sandboxModeRef.current.setFlowStep('WAIT_REPLY_1', 'tag_player_1_question_deduped', askedAt);
         setSandboxRevealTick(askedAt);
         return () => { clearSandboxRevealDoneTimer(); };
       }
@@ -5676,7 +5741,7 @@ export default function App() {
     return () => {
       clearSandboxRevealDoneTimer();
     };
-  }, [advanceSandboxPrompt, clearSandboxRevealDoneTimer, convertSandboxChatMessage, sandboxRevealTick]);
+  }, [advanceSandboxPrompt, clearSandboxRevealDoneTimer, convertSandboxChatMessage, hasSandboxQuestionPrerequisites, sandboxRevealTick]);
 
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
@@ -6274,6 +6339,7 @@ export default function App() {
                     <div>sandboxFlow.gateConsumed/replyGateActive: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.gateConsumed ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyGateActive ?? false)}</div>
                     <div>sandboxFlow.promptFingerprint/normalizedPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionPromptFingerprint ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.normalizedPrompt ?? '-'}</div>
                     <div>sandboxFlow.questionEmitter/retryEmitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionEmitterId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryEmitterId ?? '-'}</div>
+                    <div>unresolvedAmbient.active/remaining/completed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.unresolvedAmbient?.active ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.unresolvedAmbient?.remaining ?? 0} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.unresolvedAmbient?.completed ?? false)}</div>
                     <div>sandboxFlow.activeSpeakerRoles: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.activeSpeakerRoles ?? [])}</div>
                     <div>sandboxFlow.introElapsedMs/nextBeatAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.introElapsedMs ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.nextBeatAt ?? 0}</div>
                     <div>sandboxFlow.backlogTechMessages.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.backlogTechMessagesLength ?? 0}</div>
@@ -6314,6 +6380,7 @@ export default function App() {
                     <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>
                     <div>sandbox.lastReplyEval.consumed/reason: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.consumed ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.reason ?? '-'}</div>
                     <div>sandbox.lastReplyEval.raw/normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.rawInput ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.normalizedInput ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.extractedAnswer: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.extractedAnswer ?? '-'}</div>
                     <div>pendingQuestions.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.length ?? 0}</div>
                     <div>pendingQuestions.revisiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.revisiting ?? false)}</div>
                     <div>sandbox.lastCategory: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastCategory ?? '-'}</div>
