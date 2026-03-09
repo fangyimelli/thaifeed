@@ -1,3 +1,5 @@
+- [sandbox][debug-panel cleanup] sandbox_story debug panel 重整為分區 SSOT 檢視：新增 `CORE FLOW STATE – TRUSTED`、`FLOW / GATE DIAGNOSTICS`、`PROMPT / JUDGE / REVEAL`、`LEGACY COMPATIBILITY`、`VISUAL STATE – NOT FLOW AUTHORITY`，並修正 `sandboxFlow.*` 讀取來源為 `sandbox.sandboxFlow.*`。
+- [sandbox][Removed/Deprecated Log] debug panel 移除 `storyPhaseGate.*` 佔位列、`sandbox.currentPrompt.*` 與 `sandbox.reveal.*` 重複欄位；`answerGate.*` 改標示為 legacy compatibility（non-authoritative）。
 - [sandbox][bootstrap SSOT] mode 進入 `sandbox_story` 後統一由 `sandboxStoryMode.bootstrapRuntime()` 建立正式 state（flow/introGate/scheduler/replyGate/currentPrompt/lastReplyEval/audit.transitions），移除 App 端雙軌 BOOT->PREHEAT 直接寫值。
 - [sandbox][reset guard] `clearReplyUi` 不再把 sandbox 留在已進 mode 但未初始化狀態；若偵測 flow/scheduler/introGate 缺失會立即 re-init（`clearReplyUi_reinit`）。
 - [sandbox][debug consistency] debug `audit.transitions` 改讀 mode 正式 `state.audit.transitions`（缺失時才由 transitions 衍生），避免 runtime 有值但 debug 顯示空。

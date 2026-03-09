@@ -1,3 +1,10 @@
+## 2026-03-09（sandbox_story debug panel SSOT clean-up）
+- [sandbox][debug-panel] debug panel 新增分區：`CORE FLOW STATE – TRUSTED`、`FLOW / GATE DIAGNOSTICS`、`PROMPT / JUDGE / REVEAL`、`LEGACY COMPATIBILITY`、`VISUAL STATE – NOT FLOW AUTHORITY`，避免混合未標註狀態來源。
+- [sandbox][debug-panel] 修正 `sandboxFlow.*` row 讀值來源：由錯誤 `sandbox.flow.*` 改為 `sandbox.sandboxFlow.*`。
+- [sandbox][debug-panel] `answerGate.*` 改為 `[LEGACY COMPATIBILITY – NON AUTHORITATIVE]` 並補充 `replyGate` 為 authoritative gate 說明。
+- [sandbox][Removed/Deprecated Log] debug panel 移除 `storyPhaseGate.*` 佔位列、`sandbox.currentPrompt.*` 與 `sandbox.reveal.*` 重複顯示欄位。
+- [sandbox][debug-panel] `audit.transitions` 顯示文案補充來源註記：`(source: state.audit.transitions | fallback)`。
+
 ## 2026-03-09（sandbox bootstrap/state mount/debug 空值修復）
 - [sandbox][bootstrap SSOT] 新增 `sandboxStoryMode.bootstrapRuntime(reason, at, minDurationMs)` 作為唯一正式初始化入口；mode switch / guard recovery 改呼叫同一入口，統一建立 `flow.step/questionIndex/stepStartedAt`、`introGate.startedAt/minDurationMs/passed`、`scheduler.phase`、`replyGate`、`currentPrompt`、`lastReplyEval`、`audit.transitions`。
 - [sandbox][clear/reset] `clearReplyUi` 新增 re-init guard：若偵測 sandbox flow/scheduler/introGate 失效，立刻執行 `bootstrapRuntime('clearReplyUi_reinit')`，避免「mode= sandbox_story 但 state 未掛起來」。

@@ -1,3 +1,12 @@
+## This PR (sandbox_story debug panel clean-up)
+- 只調整 sandbox_story debug panel（不改 classic mode / gameplay flow / replyGate-prompt-judge-reveal 行為）。
+- 修正 `sandboxFlow.*` debug rows 讀錯來源（`sandbox.flow.*` -> `sandbox.sandboxFlow.*`）。
+- 新增 `CORE FLOW STATE – TRUSTED` 最小可信區塊，集中 flow/scheduler/introGate/replyGate/lastReplyEval/prompt.current/judge/reveal。
+- `answerGate.*` 改為 `[LEGACY COMPATIBILITY – NON AUTHORITATIVE]`，並明示 replyGate 才是權威 gate。
+- 移除 debug panel 的 deprecated/重複列：`storyPhaseGate.*`、`sandbox.currentPrompt.*`、`sandbox.reveal.*`。
+- 新增 `VISUAL STATE – NOT FLOW AUTHORITY` 區塊集中 UI visual state。
+- `audit.transitions` row 加上來源標註：`source: state.audit.transitions | fallback`。
+
 ## This PR (bootstrap/state mount/debug consistency follow-up)
 - 修復 `sandbox_story` mode 已切入但正式 state 未初始化（debug 大量 `- / 0 / []`）問題。
 - 建立單一初始化權威：`sandboxStoryMode.bootstrapRuntime()`；App mode entry、guard recovery、clearReplyUi re-init 全部整併到同一路徑。
