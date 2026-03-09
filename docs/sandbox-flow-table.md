@@ -1,3 +1,6 @@
+- follow-up invariant：`init()` 與 `getState()` 皆具 bootstrap guard；即使在 guard/reset/read path 也不得回傳空 core flow。
+- trusted debug invariant：`CORE FLOW STATE – TRUSTED` 必須由 `hydrateSandboxTrustedDebug()` 直接投影 mode SSOT，不可依賴 visual/side-effect 狀態。
+
 - PREHEAT contract（強制）：
   - 啟動路徑：`BOOT -> PREHEAT_CHAT`（mode entry 即啟動，禁止停在 `-`）。
   - `introGate.minDurationMs=30000`，未滿 30 秒不得出題 / 不得要求玩家回答泰文題。
@@ -8,6 +11,10 @@
 - v2 runtime boot invariant：進入 `sandbox_story` 即需有 `flow.step=BOOT`、`scheduler.phase=BOOTSTRAP`、`ssot.version` 與完整 root objects；debug panel 僅可讀取 v2 root state，不可用 legacy fallback 偽裝初始化成功。
 
 # sandbox_story v2 flow table (NIGHT_01 MVP)
+
+- 2026-03-09 integration update：`ensureBootstrapState()` 為 sandbox_story 唯一 bootstrap authority wrapper；mode entry、guard recovery、clearReplyUi reset 一律走同一路徑。
+- core mount invariant（進入 sandbox_story 當下）：`flow.step=PREHEAT_CHAT`、`flow.questionIndex=0`、`flow.stepStartedAt>0`、`scheduler.phase=preheat`、`introGate.startedAt>0`、`introGate.minDurationMs=30000`。
+- visual alignment invariant：任何 `ui.*.visible`（含 consonant bubble）不得在 core bootstrap invariant 未成立時單獨呈現為啟動中。
 
 | State | 玩家可輸入 | Prompt | Reveal | Emitter | 轉移條件 |
 |---|---|---|---|---|---|

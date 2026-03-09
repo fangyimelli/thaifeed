@@ -1541,6 +1541,53 @@ export default function App() {
     syncChatEngineDebug();
   };
 
+
+  const hydrateSandboxTrustedDebug = useCallback((reason: string) => {
+    const sandboxState = sandboxModeRef.current.ensureBootstrapState?.(`debug_hydrate:${reason}`, Date.now(), 30_000, false)
+      ?? sandboxModeRef.current.getState();
+    window.__CHAT_DEBUG__ = {
+      ...(window.__CHAT_DEBUG__ ?? {}),
+      sandbox: {
+        ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
+        flow: {
+          ...((window.__CHAT_DEBUG__ as any)?.sandbox?.flow ?? {}),
+          step: sandboxState.flow.step,
+          questionIndex: sandboxState.flow.questionIndex,
+          stepStartedAt: sandboxState.flow.stepStartedAt
+        },
+        schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
+        scheduler: {
+          ...((window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler ?? {}),
+          phase: sandboxState.scheduler.phase,
+          blockedReason: sandboxState.scheduler.blockedReason || '-'
+        },
+        audit: {
+          ...((window.__CHAT_DEBUG__ as any)?.sandbox?.audit ?? {}),
+          introGate: {
+            startedAt: sandboxState.introGate.startedAt,
+            minDurationMs: sandboxState.introGate.minDurationMs,
+            passed: sandboxState.introGate.passed
+          },
+          transitions: Array.isArray(sandboxState.audit?.transitions) ? sandboxState.audit.transitions : []
+        },
+        replyGate: sandboxState.replyGate,
+        prompt: {
+          ...((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt ?? {}),
+          current: sandboxState.prompt.current
+            ? {
+              kind: sandboxState.prompt.current.kind,
+              id: sandboxState.prompt.current.promptId,
+              promptId: sandboxState.prompt.current.promptId,
+              consonant: sandboxState.prompt.current.kind === 'consonant' ? sandboxState.prompt.current.consonant : '-',
+              wordKey: sandboxState.prompt.current.wordKey
+            }
+            : { kind: '-', id: '-', promptId: '-', consonant: '-', wordKey: '-' }
+        },
+        lastReplyEval: sandboxState.lastReplyEval
+      }
+    } as any;
+  }, []);
+
   const updateEventDebug = useCallback((patch: Partial<NonNullable<Window['__CHAT_DEBUG__']>>) => {
     window.__CHAT_DEBUG__ = {
       ...(window.__CHAT_DEBUG__ ?? {}),
@@ -1566,11 +1613,8 @@ export default function App() {
     if (!sandboxState.joinGate.satisfied) {
       sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt: now });
     }
-    if (bootstrapMissing || sandboxState.flow.step === 'PREJOIN') {
-      sandboxModeRef.current.bootstrapRuntime?.(reason, now, 30_000);
-    }
-
-    const bootstrappedState = sandboxModeRef.current.getState();
+    const bootstrappedState = sandboxModeRef.current.ensureBootstrapState?.(reason, now, 30_000, bootstrapMissing || sandboxState.flow.step === 'PREJOIN')
+      ?? sandboxModeRef.current.getState();
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: bootstrappedState.preheat.lastJoinAt || now });
     preheatRuntime.startedAt = bootstrappedState.introGate.startedAt || now;
     preheatRuntime.lastEmitAt = 0;
@@ -1582,7 +1626,8 @@ export default function App() {
     sandboxRuntimeGuardRef.current.bootRecoveries += 1;
     sandboxRuntimeGuardRef.current.lastRecoveryReason = reason;
     sandboxRuntimeGuardRef.current.modeEnteredAt = sandboxRuntimeGuardRef.current.modeEnteredAt || now;
-  }, []);
+    hydrateSandboxTrustedDebug('runtime_started');
+  }, [hydrateSandboxTrustedDebug]);
 
   useEffect(() => {
     const selectedMode = modeIdRef.current;
@@ -1936,7 +1981,7 @@ export default function App() {
     if (modeRef.current.id === 'sandbox_story') {
       const ss = sandboxModeRef.current.getState();
       if (!ss.flow?.step || !Number.isFinite(ss.flow?.questionIndex) || !ss.scheduler?.phase || !ss.introGate?.startedAt) {
-        sandboxModeRef.current.bootstrapRuntime?.('clearReplyUi_reinit', now, 30_000);
+        sandboxModeRef.current.ensureBootstrapState?.('clearReplyUi_reinit', now, 30_000, true);
       }
     }
     sandboxQnaDebugRef.current.lastClearReplyUiAt = now;
@@ -3316,7 +3361,7 @@ export default function App() {
     eventNextDueAtRef.current = Date.now() + initialDelay;
     timer = window.setTimeout(tick, initialDelay);
     return () => window.clearTimeout(timer);
-  }, [chatAutoPaused, chatFreeze.isFrozen, deriveSandboxReplyGateState, getCurrentTopicWeights, isReady, state.curse, state.messages, syncChatEngineDebug, tryTriggerStoryEvent]);
+  }, [chatAutoPaused, chatFreeze.isFrozen, deriveSandboxReplyGateState, getCurrentTopicWeights, hydrateSandboxTrustedDebug, isReady, state.curse, state.messages, syncChatEngineDebug, tryTriggerStoryEvent]);
 
   useEffect(() => {
     const unsubscribe = onSceneEvent((event) => {
@@ -3350,8 +3395,12 @@ export default function App() {
         const guardState = sandboxModeRef.current.getState();
         sandboxRuntimeGuardRef.current.modeEnteredAt = sandboxRuntimeGuardRef.current.modeEnteredAt || now;
         if (!guardState.joinGate.satisfied || guardState.flow.step === 'PREJOIN' || !guardState.introGate.startedAt || !guardState.flow.step || !Number.isFinite(guardState.flow.questionIndex) || !guardState.scheduler.phase) {
+          sandboxModeRef.current.ensureBootstrapState?.('guard_boot_recovery', now, 30_000, true);
           ensureSandboxRuntimeStarted('guard_boot_recovery');
         }
+      }
+      if (modeRef.current.id === 'sandbox_story') {
+        hydrateSandboxTrustedDebug('interval_tick');
       }
       const promptBeforeTick = sandboxModeRef.current.getCurrentPrompt();
       const sandboxState = sandboxModeRef.current.getState();
@@ -3546,7 +3595,8 @@ export default function App() {
         },
         ui: {
           consonantBubble: {
-            visible: !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
+            visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)
+              && !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
           },
           promptGlyph: {
             className: 'glyph-blink sandbox-story-prompt-glyph',
@@ -4903,8 +4953,6 @@ export default function App() {
     sandboxModeRef.current.setPlayerIdentity({ handle: sanitizedName, id: playerId });
     ensureSandboxRuntimeStarted('sandbox_join_submitted', sanitizedName);
     sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt });
-    sandboxModeRef.current.setFlowStep('PREHEAT_CHAT', 'sandbox_join_submitted', submittedAt);
-    sandboxModeRef.current.setIntroGate({ startedAt: submittedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: submittedAt });
     sandboxPreheatOrchestrationRef.current = {
       startedAt: submittedAt,

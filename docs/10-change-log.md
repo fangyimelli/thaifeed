@@ -1,3 +1,16 @@
+## 2026-03-09（sandbox_story bootstrap guard follow-up: init/getState/debug hydration）
+- [sandbox][bootstrap] `sandboxStoryMode.init()` 加入正式 bootstrap guard；mode 實例初始化時若缺 `flow/scheduler/introGate` 立即建立 PREHEAT bootstrap state。
+- [sandbox][state read guard] `getState()` 加入 guard，任何讀取正式 state 前都先確保 bootstrap invariant，不再回傳 core 空值。
+- [sandbox][debug trusted sync] App 新增 `hydrateSandboxTrustedDebug()`，於 runtime start + interval tick 強制以 mode SSOT 回寫 trusted 欄位（flow/scheduler/introGate/replyGate/prompt/lastReplyEval/audit）。
+- [guard] 回歸檢查新增 init/getState guard 與 trusted debug hydration authority。
+
+## 2026-03-09（sandbox_story bootstrap single-entry + state-mount integrity）
+- [sandbox][bootstrap authority] 新增 `ensureBootstrapState(reason, at, minDurationMs, force)`，統一 mode entry / guard recovery / clearReplyUi re-init 的 bootstrap 入口，避免 App 與 mode 雙軌初始化。
+- [sandbox][state mount] `createSandboxV2InitialState()` 改為直接產出可用核心狀態：`flow.step=PREHEAT_CHAT`、`questionIndex=0`、`stepStartedAt>0`、`scheduler.phase=preheat`、`introGate.startedAt>0`、`introGate.minDurationMs=30000`。
+- [sandbox][reset/cleanup] `clearReplyUi` 與 runtime guard 改呼叫 `ensureBootstrapState(..., force=true)`，reset 後保證回到正式 bootstrap state，而非空 state。
+- [sandbox][visual/core alignment] `ui.consonantBubble.visible` 必須同時滿足 core bootstrap 條件（flow/scheduler/introGate）才可顯示，避免 visual state 與 core state 脫鉤。
+- [guard] `scripts/sandbox-v2-regression-guards.mjs` 更新檢查：bootstrap authority、initial PREHEAT core state、clearReplyUi re-init 與 visual/core 對齊。
+
 ## 2026-03-09（sandbox_story debug panel SSOT clean-up）
 - [sandbox][debug-panel] debug panel 新增分區：`CORE FLOW STATE – TRUSTED`、`FLOW / GATE DIAGNOSTICS`、`PROMPT / JUDGE / REVEAL`、`LEGACY COMPATIBILITY`、`VISUAL STATE – NOT FLOW AUTHORITY`，避免混合未標註狀態來源。
 - [sandbox][debug-panel] 修正 `sandboxFlow.*` row 讀值來源：由錯誤 `sandbox.flow.*` 改為 `sandbox.sandboxFlow.*`。
