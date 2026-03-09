@@ -1,16 +1,17 @@
 ## Summary
-- Fix sandbox_story v2 initialization crash caused by legacy debug nested reads (`promptVsReveal`) against partially hydrated state.
-- Added formal sandbox v2 initial runtime/debug shape and state-shape normalizer so `getState()` always returns safe nested objects.
-- Removed legacy sandbox debug field rendering and switched mismatch display to v2-safe prompt/reveal comparison.
-- Added regression guard script for shape presence, safe access, and legacy field read removal.
+- Stop story feature expansion; fix sandbox_story v2 root runtime mount only.
+- Built formal sandbox v2 root initial state with guaranteed object presence for flow/scheduler/prompt/reply/theory/backlog/ambient/ghost/ssot.
+- Ensure mode entry mounts this root state and keeps it in the runtime path.
+- Debug hydration now maps directly from real v2 root state (not legacy assembled fallbacks).
+- Added regression guards for initial shape, runtime mount, hydration source, ssot version, and non-dash flow/scheduler values.
 
 ## Root cause
-- App debug/hydration logic directly accessed `sandboxState.mismatch.promptVsReveal` while `mismatch` was absent during early sandbox v2 init.
+- Debug path read mixed legacy/fallback fields before v2 root object existed, so UI looked like sandbox mode while core root state stayed effectively unmounted (`sandbox.ssot.version` became `-`).
 
 ## Validation
 - npm run test:sandbox-guards
 - npm run build
 
 ## Scope guard
-- Only sandbox-related runtime/debug initialization safety paths were changed.
-- No classic mode behavior changes.
+- Only sandbox runtime mount + hydration paths were changed.
+- Classic mode behavior unchanged.

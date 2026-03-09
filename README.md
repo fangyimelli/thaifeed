@@ -1932,3 +1932,5 @@ Console（debug 模式）可觀察：
 - `sandbox_story v2` runtime state 新增正式 initial shape，補齊 `currentPrompt / reveal / replyGate / lastReplyEval / techBacklog / theory / blockedReason / transitions` 所需欄位，避免 hydration 前 nested undefined。
 - App 端 sandbox debug/hydration 讀值改為安全 fallback（optional chaining + 預設值），debug panel 欄位缺值時只顯示 `-`/`false`，不阻斷啟動。
 - legacy `promptVsReveal` debug 直讀路徑已從 UI/debug panel 清理，改成以 v2 `prompt.current.wordKey` 對 `reveal.wordKey` 的安全比對函式顯示 mismatch。
+
+- sandbox_story v2 root runtime mount 修正：進入 sandbox_story 後即建立完整 root state（含 ssot.version / flow / scheduler / currentPrompt / replyGate / lastReplyEval / techBacklog / theory / unresolvedAmbient / ghostMotion），並由 debug hydration 直接映射真實 state。
