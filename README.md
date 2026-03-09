@@ -1,5 +1,3 @@
-## 2026-03-09 Sandbox NIGHT_01 Q1 reveal-order hard fix（sandbox only）
-
 - runtime flow 改為 `PREJOIN -> PREHEAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，先建 reveal/prompt 再進 riot/tag。
 - `REVEAL_1_RIOT` / `TAG_PLAYER_1` / `WAIT_REPLY_1` 全面加上 reveal+prompt prerequisite guard；未 reveal 或 prompt 空值時禁止 ask-player。
 - `WAIT_REPLY_1` 才允許 questionEmitter 發問；gate 未 armed 不得發問。
@@ -7,36 +5,20 @@
 - unresolved ambient 改為有限 burst（最多 2 則）+ retry 最多一次，consume 成功後立即停止。
 - debug 補齊 `unresolvedAmbient.active/remaining/completed` 與 `lastReplyEval.extractedAnswer`。
 
-## 2026-03-08 Sandbox NIGHT_01 single-orchestrator takeover（sandbox only）
-
-- NIGHT_01 前期 flow 改為實際由 `sandboxFlow` 接管：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，不再經 `WARMUP_TAG` 雙軌切換。
-- 移除 reducer `initialState.messages` 的泰文教材式 system seed，開場提示僅能由 sandbox story emitter 發送。
 - `canAskConsonantNow()` 移除 hardcoded false，改為 `joinGate + flow.step + gateType + replyGate` 正式條件 gating。
-- sandbox 前期阻斷 classic scheduler emitter：`audience_idle`/`dispatchForcedBaseMessage` 在 sandbox 不再送訊息。
-- `REVEAL_1_RIOT` 改由 sandbox orchestration sourceTag（`sandbox_reveal_1_riot`）輸出，不再使用 App 端 scripted riot 雙軌來源。
 - `TAG_PLAYER_1` 首問改為 ask-once SSOT：先寫入 `questionPromptFingerprint/normalizedPrompt/lastPromptAt/tagAskedThisStep` 再發話，append callback 失敗也不會無限重問。
-- 更新文件：`README.md` / `docs/10-change-log.md` / `docs/sandbox-flow-table.md` / `PR_NOTES.md`。
 
 ### Regression Guards
 - `initialState.messages=[]`（防 boot seed 汙染）。
-- sandbox 前期 classic emitter hard block。
 - TAG_PLAYER_1 首問 fingerprint dedupe（同 step/question/speaker/text 只允許一次）。
 - `canAskConsonantNow` 以正式 state gating。
 
-
-## 2026-03-08 Sandbox NIGHT_01 WAIT_REPLY_1 loop hotfix（sandbox only）
-
 - 只修 `WAIT_REPLY_1` loop 根因：consume 後同步關閉 retry 排程與 gate，避免 `mod_live` / retry emitter 持續重送。
-- `sandboxFlow` 補齊 WAIT_REPLY_1 question retry SSOT：`retryCount/retryLimit/lastPromptAt/nextRetryAt/questionPromptFingerprint/normalizedPrompt/gateConsumed`。
 - dedupe guard 收斂為同 gate key（`step:questionIndex`）+ sender + normalizedText，避免新 messageId 仍刷出同句。
 - invalid reply（如單字元 parse miss）維持 gate active，但只記錄 `lastReplyEval`，且 retry 仍遵守 cooldown + retryLimit + dedupe。
 - unanswered 節奏固定：首問 1 次、viewer glitch 最多 3 則、retry 最多 1 次（文案變體），其後不再重問。
 - debug panel 新增 `lastPromptAt/nextRetryAt/gateConsumed/questionPromptFingerprint/normalizedPrompt` 便於驗證 loop 已關閉。
 
-## 2026-03-08 Sandbox NIGHT_01 Q1 WAIT_REPLY 全段重構（sandbox only）
-
-- 先更新 `docs/sandbox-flow-table.md`，將 Q1 流程收斂為唯一路徑：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1 -> ADVANCE_NEXT`。
-- `sandboxFlow` 新增 WAIT_REPLY contract 欄位（`questionEmitterId/retryEmitterId/glitchEmitterIds/retryCount/retryLimit/lastPromptAt/nextRetryAt/dedupeWindowMs/unresolvedBehavior/activeSpeakerRoles`）作為 SSOT。
 - WAIT_REPLY_1 角色分離：question=`mod_live`、retry=`vip_luna`、glitch emitter 使用 viewer pool；retry 冷卻 7 秒、最多 1 次且固定變體文案。
 - 新增 sender dedupe + sender cooldown guard，阻止同 sender 在同 gate 短時間同句刷屏與連續霸佔輸出。
 - `POST_ANSWER_GLITCH_1` 改為多 viewer 分散發話，不再由 questionEmitter 發送 glitch/anomaly。
@@ -45,8 +27,6 @@
 ### Removed / Deprecated Log
 - 移除 WAIT_REPLY 期間以 backlog 同句迴圈堆疊「送不出去/網路怪」的舊節奏，改為 SSOT 合約驅動的 glitch pool + retry 機制。
 
-## 2026-03-08 Sandbox NIGHT_01 live-chat flow hardening（sandbox only）
-
 - NIGHT_01 首題 emitter 收斂：移除 system 教材式出題文案，第一題正式提問只允許聊天室角色（`mod_live`）tag 玩家。
 - PREHEAT 30s 僅保留自然聊天來源（viewer/mod/vip + join），不再由 system 送「加入聊天室」訊息。
 - flow 推進收斂為：`PREJOIN -> PREHEAT -> WARMUP_TAG(INTRO_CHAT_RIOT) -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1 -> ADVANCE_NEXT`。
@@ -54,40 +34,18 @@
 - 新增 sender+gate duplicate guard：同 sender 在同 gate 同句重送會被阻擋（防刷屏）。
 - `lastReplyEval` 維持每次玩家輸入必寫（consume success / reject / parse miss / no gate）。
 
-## 2026-03-08 Sandbox NIGHT_01 SSOT P0+P1 integration（sandbox only）
-
-- NIGHT_01 flow 以 `sandboxFlow` 單一路徑推進，新增 warmup 與 glitch/anomaly 節點：`PREHEAT -> WARMUP_TAG -> WARMUP_WAIT_REPLY -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POST_ANSWER_GLITCH_1 -> NETWORK_ANOMALY_1`。
-- 移除 App 端 `sandboxStoryPhaseGateRef` 雙軌 intro gate，30 秒暖場改由 `sandboxFlow.introElapsedMs` + `introGate.minDurationMs` 決定。
 - `gateType` 改為 flow state 欄位（`warmup_chat_reply/consonant_guess/meaning_reply/none`），judge 與 autoplay mock reply 依 gateType 配對。
 - debug composing override 改為 purely visual，不再影響正式 submit blocker；debug panel 顯示其 non-authoritative 狀態。
-- 更新文件：README / `docs/10-change-log.md` / `docs/sandbox-flow-table.md` / `PR_NOTES.md`。
 
 ### Removed / Deprecated Log
-- 移除 `sandboxStoryPhaseGateRef`（N1_INTRO_CHAT/N1_QUIZ_LOOP）雙軌 phase gate。
 
-## 2026-03-08 Sandbox deterministic flow rebuild（sandbox only）
-
-- Sandbox flow 收斂為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> VIP_SUMMARY_1 -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> DISCUSS_PRONOUNCE -> VIP_SUMMARY_2 -> TAG_PLAYER_3_MEANING -> WAIT_REPLY_3 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
-- 新增 `sandboxFlow` SSOT（step/stepStartedAt/replyGateActive/replyTarget/backlogTechMessages/playerLastReply/questionIndex），sandbox reply gate 與 backlog 僅由此來源控制。
-- 移除 sandbox warmup 舊分支（`TAG_PLAYER_WARMUP/WARMUP_*`）及其對 reply gate 的控制。
-- sandbox chat 輸出改為 flow-source allowlist；非 flow source（director/chat engine/join/event injectors）在 sandbox 一律阻擋。
 - WAIT_REPLY_1/2/3 升級為全域 hard freeze；非玩家輸出直接拒絕。
-- tech backlog 併入 `sandboxFlow.backlogTechMessages`，僅 WAIT_REPLY_3 可累積，於 FLUSH_TECH_BACKLOG 一次 flush（最多 8 則）後清空。
-- debug 面板固定顯示 `sandboxFlow.step/replyGateActive/replyTarget/backlogTechMessages.length/lastReplyEval`。
-
-## 2026-03-08 Sandbox replyability SSOT 修補（sandbox only）
 
 - 實作單一 reply gate derive：`replyGateArmed/replyGateType/replyTarget/replySourceMessageId/replySourceType/canReply`。
 - `canReply` 改為唯一正式判斷來源，preview / submit / consume / debug 全部對齊。
-- `sandboxPinnedEntry` 改為純顯示層，新增 `linkedToReplyGate/pinnedSourceId/pinnedSourceType`，明確落實 `pin visible ≠ canReply`。
 - auto-pin 改為 message append 後才觸發 pin+gate 連結，修正 source message 未入列時的 writer/source mismatch。
-- `lastReplyEval` 擴充為每次 sandbox 玩家輸入必寫，覆蓋 no gate / gate not armed / parse miss / stripped empty / submit accepted / submit rejected / consume fallback。
-- debug 顯示補上 `sandbox.replyGate.canReply/sourceType`、`sandbox.lastReplyEval.raw/normalized` 與 pinned linked 狀態。
-
-## 2026-03-08 Sandbox NIGHT_01 warmup reply gate stall 稽核（AUDIT ONLY, sandbox only）
 
 - 本次為 audit-only：不修改 runtime code、不修復、不重構；classic mode 無改動。
-- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-08-warmup-reply-gate-stall.md`。
 - 稽核結論（重點）：
   - 玩家 `@behindyou 24` 送出與 append 均成功，`submitChat()` 後續有執行；問題不在送出失敗。
   - `WARMUP_TAG_REPLY` consume gate 已存在且條件寬鬆（strip mention 後非空即通過）。
@@ -102,10 +60,6 @@
 
 - audit-only，未移除功能邏輯。
 
-
-## 2026-03-07 Sandbox NIGHT_01 開場暖場 gate 實作（sandbox only）
-
-- 本次直接實作 patch（非 audit-only），僅調整 sandbox 路徑；classic mode 無改動。
 - NIGHT_01 開場改為「暖場先行、子音題延後」：
   - 新增 warmup flow steps：`TAG_PLAYER_WARMUP -> WARMUP_TAG_REPLY -> WARMUP_NPC_ACK -> WARMUP_CHATTER -> TAG_PLAYER_1`。
   - 第一個 tag 只作暖場互動，玩家任意非空回覆（含 `@behindyou 對`）即視為完成，不進 parser/judge。
@@ -114,18 +68,11 @@
 
 ### SSOT / Debug 欄位變更紀錄（本次）
 
-- SSOT（sandbox flow）：新增 warmup 階段步驟，並將第一題子音切入點延後到 warmup 後。
-- Debug：新增 `sandbox.warmup`（`gateActive/replyReceived/replyAt/normalizedReply/judgeArmed`）與 answer 區塊的 warmup/judge armed 快速觀測欄位。
-
 ### Removed / Deprecated Log（本次）
 
 - 移除「第一個暖場 tag 同時當成正式子音題」的舊邏輯；改為單一路徑 warmup gate（避免雙軌判題）。
 
-
-## 2026-03-07 Sandbox NIGHT_01 mention/flow 脫鉤稽核（AUDIT ONLY, sandbox only）
-
 - 本次為 audit-only，不修改 runtime code、不修復、不重構；classic mode 無改動。
-- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-07-night01-mention-stall.md`。
 - 稽核結論（重點）：
   - 玩家訊息有成功送出並 append，但當下未命中 `WAIT_REPLY_* + prompt.current.consonant` 條件，judge pipeline 未啟動。
   - preheat mention（`@<player> 嗨嗨，第一次看這台嗎？`）與真正子音題 prompt 非同源，玩家容易回錯 target。
@@ -140,13 +87,8 @@
 
 - audit-only，未移除功能邏輯。
 
-## 2026-03-06 Sandbox NIGHT_01 卡關稽核（AUDIT ONLY, sandbox only）
-
 - 本次為 audit-only，不修改 runtime code，不修復、不重構；classic mode 無改動。
-- 新增稽核報告：`docs/sandbox-night01-audit-report-2026-03-06-night01-stall.md`。
 - 稽核結論（重點）：
-  - 玩家訊息有成功送出並 dispatch，但 sandbox consonant judge pipeline 未接線（`commitConsonantJudgeResult` 無實際呼叫鏈）。
-  - `askSandboxConsonantNow()` 的 pinned 文案與有效判題 prompt 非同源，導致玩家視覺 target 與 judge target 不一致。
   - `2jo` 對 `บ` 規則上屬不合法輸入，但本案主因仍是 parser/judge 未執行。
 
 ### SSOT / Debug 欄位變更紀錄（本次）
@@ -158,32 +100,19 @@
 
 - audit-only，未移除功能邏輯。
 
-## 2026-03-06 Sandbox P0 修復：self-tag / pin preview 互斥 / composer 聚焦 / debug 防干擾（sandbox only）
-
-- 僅調整 sandbox 路徑；classic mode 未修改。
-- `triggerSandboxAutoPinFreeze()` 不再把 lock target 指向 active user；改為 source actor（提問者）。若 actor 無法正規化，安全降級為不建立可 rewrite 的 lock。
 - `submitChat()` 新增 self-target guard：當 lock target 與 active user handle 等價（大小寫不敏感、含 `me`/`t` 等任意 handle）時，不進行 `@target` 重寫，且立即清除 lock，避免送出 `@自己`。
-- `ChatPanel` 建立最小互斥：同一時間 reply preview 與 sandbox top pin 不再雙顯示；進入 reply composer flow 時，sandbox pin 自動隱藏。
 - pinned 主要焦點改放在 composer 前方（message list 與 input 之間），不再固定在 chat panel 頂部造成誤解。
 - debug 防干擾：`Emit NPC Tag @You` 改為 isolated chat injection，不再走事件管線（不寫正式 qna/lock/pin）。
 
 ### SSOT / Debug 欄位變更紀錄（本次）
 
 - SSOT：無新增資料模型；強化 invariant：lock target 不可為 active user，否則 submit 時降級為一般送出。
-- Debug：新增 `self_lock_target_guard` 異常標記；`Emit NPC Tag @You` 記錄維持在 `sandbox.debug.isolatedActions.*` isolated namespace。
 
 ### Removed / Deprecated Log（本次）
 
-- 移除（sandbox debug path）`Emit NPC Tag @You` 經 event pipeline 影響正式 reply/pin/lock 的舊邏輯，改為 isolated debug message-only。
-
-## 2026-03-06 Sandbox P0 修復：交易式 question commit / pin guard / debug 隔離（sandbox only）
-
-- 僅 sandbox 路徑調整，classic mode 行為不變。
 - `runTagStartFlow` 改為交易式：append 必須回傳 `{ok,messageId}` 才能進入 pin/freeze/commit；append 失敗直接中止，不寫入 `qna.active.questionMessageId`。
-- `dispatchChatMessage` 改回傳落地 `messageId`；所有 sandbox tag flow / qna flow 皆以「實際 append 成功的 messageId」作唯一 commit 來源。
 - reply pin bar guard 升級：必須同時滿足 `AWAITING_REPLY + questionMessageId + source message 存在 + lock/source 一致` 才 render。
 - source 缺失或不一致時，採安全降級：清除 reply UI、解除 freeze、停止 `AWAITING_REPLY`，避免誤導 fallback。
-- debug actions 改 sandbox-safe：
   - `Emit NPC Tag @You` 僅送出 isolated debug 訊息，不再直接改寫正式 qna/lock/pin。
   - `Simulate Send` 改為 isolated debug message path，不推進正式送出流程。
   - `Toggle TagLock(Self)` 改為 isolated debug flag（不再寫正式 replyTarget/lock）。
@@ -191,19 +120,14 @@
 ### SSOT / Debug 欄位變更紀錄（本次）
 
 - SSOT：無資料模型新增；強化 runtime invariant（question commit 必須依賴 append success）。
-- Debug：新增/更新 `sandbox.debug.isolatedTagLock` 與 `sandbox.debug.isolatedActions.*`，標示 debug 隔離路徑。
 
 ### Removed / Deprecated Log（本次）
 
 - 移除 debug 直接推進正式 qna/pin/lock 的舊路徑（改為 isolated debug path）。
 
-## 2026-03-06 Sandbox NIGHT_01 chat pipeline audit（audit only, sandbox only）
-
 - 本次為 **稽核-only**，未修改功能邏輯；classic mode 無改動。
-- 產出可執行稽核報告：`docs/sandbox-night01-audit-report-2026-03-06.md`。
 - 已確認 `behindyou` 事件為 mention message（非 reply schema），`↳ @mod_live` 與 `（原始訊息已不存在）` 來自全域 reply pin bar 條件渲染。
 - 已確認 `@t` 來源為玩家 handle 本值（資料建立時即為單字元），非 render truncation。
-- 已標記 cross-mode leakage 風險：sandbox reply/pin 控制面與 classic qna/lock state 共用。
 
 ### SSOT / Debug 欄位變更紀錄（本次）
 
@@ -214,43 +138,14 @@
 
 - 本次 audit-only，無移除/廢棄功能邏輯。
 
-## 2026-03-06 Sandbox pinned body 空字串修復（sandbox only）
-
-- 僅 sandbox 變更，classic mode 無改動。
-- Root cause：sandbox auto pin 在同一個 dispatch tick 讀 `state.messages` 查 source message，當 message 尚未進 state 時，pinned entry 會拿到空 `text`，UI 最終渲染成 `「」`。
-- 修復：`triggerSandboxAutoPinFreeze` 改接收當下 `sourceMessage`，避免 stale state lookup；並新增 pinned body 欄位解析器（`text/content/body/displayText/payload.text`）與 trim 防呆。
-- sandbox pinned render 改為「header + 完整 body」；不再輸出空引號，body 為空時顯示 `（原始訊息已不存在）`。
 - 驗收重點：VIP direct mention 會顯示完整 pinned reply 文字，非僅 metadata/reason。
 
-## 2026-03-06 Sandbox pinned reply parity with Classic（sandbox only）
-
-- 僅 sandbox 變更，classic mode 無改動。
-- 將 sandbox pinned schema 對齊 Classic reply pin：`id/messageId/createdAt/expiresAt/visible/author/body`。
-- sandbox pinned formatter 改與 Classic 一致：`↳ @author` + 完整 `body`（不截斷）。
-- 移除 sandbox pinned UI 顯示 internal metadata（不再顯示 reason / sourceEventType / metadata）。
-- sandbox pinned component 改共用 Classic reply pin 呈現格式（同 `replyPinBar` 結構，僅走 sandbox gating）。
-- sandbox pinned lifecycle 對齊 Classic：建立時同步鎖定 reply target、顯示於 pin bar、清除時經既有 `clearReplyUi`/timeout/expiresAt 路徑。
 - VIP direct mention 驗收目標維持：chat highlight + pinned reply + chat freeze 同步發生；GHOST_HINT_EVENT follow-up 同樣適用。
-- SSOT/Debug 文件同步：`docs/10-change-log.md`、`docs/sandbox-flow-table.md`、`PR_NOTES.md`。
 
-
-## 2026-03-06 Sandbox 修復：VIP direct mention 只有 highlight、未進 pinned render pipeline（sandbox only）
-
-- 僅 sandbox 變更，classic mode 無改動。
-- Root cause：sandbox 自動 pin 流程沿用 `setPinnedQuestionMessage`，但該函式僅允許 `sandboxPromptCoordinator`，導致 `VIP + @玩家` 自動 pin 寫入被 writer guard 擋掉；結果只剩聊天室 highlight/focus，沒有獨立 pinned reply 區塊。
-- 修復：新增 sandbox 專用 `sandboxPinnedEntry`（獨立於 highlight/freeze），讓 direct mention 與 story-critical follow-up 都會建立 pinned entry 並透過 `ChatPanel` sandbox 區塊渲染。
 - pinned / highlight / freeze 三狀態已拆分：highlight 僅樣式、pinned 為獨立資料與 UI、freeze 為聊天室暫停；同事件可同時觸發三者。
-- direct mention 規則（sandbox）：`VIP + @玩家 + direct interaction` ⇒ 保留原訊息高亮 + 建立 pinned entry + freeze，且 pinned 保留時間可觀測（`expiresAt/remainingMs`）。
 - 新增 debug 可觀測欄位：`lastDirectMentionDetected`、`lastPinnedCandidateMessageId`、`lastPinnedCreatedAt`、`lastPinnedRenderVisible`、`pinnedStateKey/summary`、`pinnedSourceReason`、`pinnedExpiresAt/pinnedRemainingMs`、`lastPinnedDroppedReason`、`highlightWithoutPinned`、`cleanupClearedPinned`、`pinnedOverwrittenByMessageId`、`pinnedComponentMounted`。
-- SSOT/Debug 文件已同步：`docs/10-change-log.md`、`docs/sandbox-flow-table.md`、`PR_NOTES.md`。
 
-## 2026-03-06 Sandbox 修復：VIP @玩家未 pin/freeze + GHOST_HINT_EVENT 主線接續
-
-- 僅 sandbox 變更，classic mode 無改動。
-- 新增 sandbox direct interaction 規則：`VIP + @玩家` 視為 direct-to-player，會觸發 pinned reply + chat freeze（預設 6 秒，範圍 5~8 秒）。
 - 新增 `GHOST_HINT_EVENT` 主線接續：system hint 後強制一則 VIP follow-up（story-critical），並觸發 pin + freeze（預設 7 秒）。
-- 新增 sandbox debug 欄位 `sandbox.audit.autoPinFreeze.*`，可直接觀測「為何有/沒有 pin+freeze」。
-- SSOT/Debug 追蹤：已同步更新 `docs/sandbox-flow-table.md`、`docs/10-change-log.md`、`PR_NOTES.md`。
 
 ### Removed / Deprecated Log（本次）
 
@@ -311,28 +206,14 @@ npm run build
 ## Architecture Docs
 
 - [20｜Classic Mode Architecture](./docs/20-classic-mode-architecture.md)
-- [30｜Sandbox Story Mode](./docs/30-sandbox-story-mode.md)
 
-## Recent Sandbox Audit Debug Additions
-
-- 新增 sandbox audit debug schema（僅 sandbox）：`introGate`、`flow`、`freeze`、`glitchBurst`、`tagAsked`、`emit key/speaker`、`recentEmitKeys(20)`、`transitions(20)`、`thaiViewer usage`。
-- `src/sandbox/chat/chat_engine.ts` 新增防洗版檢測計數（只記錄不阻擋）：`duplicateSpamCount` / `speakerSpamCount` / `freezeLeakCount`。
 - classic mode 無變更。
 
-
-## Sandbox 修補（2026-03-06）
-
-- 修正 sandbox reply preview 查找來源：預覽改為從完整 `state.messages`（傳入 `ChatPanel.messages`）查找 reply target，不再受最後 100 則 render window 限制。
-- 修正 sandbox chat scheduler：`WAIT_REPLY_1/2/3` 期間會真正 pause scheduler（停止 `scheduleNext()` 計時），玩家回覆推進 step 後才 resume。
 - 修正 `ADVANCE_NEXT` transition 單一來源：`forceAdvanceNode()` 負責切到 `TAG_PLAYER_1`，外層 effect 不再重複 `setFlowStep('TAG_PLAYER_1')`。
 - classic mode 未修改。
 
-
-## 2026-03-06 Sandbox Flow SSOT Hardening（sandbox only）
-
 - PREHEAT 路由防呆：`final_fear` 在 PREHEAT 權重固定為 0，避免預熱期出現收尾高壓訊息。
 - TAG step 防重送：`TAG_PLAYER_1/2/3` 每 step 只能送一次 tag，送出後即標記 `tagAskedThisStep=true`。
-- reply-to active 全域 freeze：WAIT_REPLY 期間 sandbox scheduler 暫停，聊天室維持 0 output。
 - 回覆後硬流程：
   - TAG#1 後：`CROWD_REACT_WORD -> VIP_SUMMARY_1 -> TAG_PLAYER_2_PRONOUNCE`
   - TAG#2 後：`DISCUSS_PRONOUNCE -> VIP_SUMMARY_2 -> TAG_PLAYER_3_MEANING`
@@ -340,9 +221,6 @@ npm run build
 - tech backlog 僅 `WAIT_REPLY_3` 可累積（每 30 秒 2 則），flush 最多 8 則且最後一則固定分鐘數。
 - classic mode 未修改。
 
-## Sandbox Chat Pools
-
-- SSOT：`src/sandbox/chat/chat_pools.ts` 是 sandbox 聊天語料唯一來源（`CHAT_POOLS`），總數固定 **2050 entries**。
 - pool 與用途（精準數量）：
   - `casual_pool`（500）：一般路人台味閒聊。
   - `observation_pool`（300）：畫面觀察與異常提示。
@@ -355,35 +233,19 @@ npm run build
   - `vip_summary`（120）：VIP 重點整理。
   - `final_fear`（80）：後段/高壓收束恐怖語氣。
 - `thai_viewer_pool.user` 僅允許 `THAI_USERS` 名單，避免多份 Thai user 來源。
-- `src/sandbox/chat/chat_engine.ts` 只 consume `CHAT_POOLS`，不再維護平行 mini-pools；Thai viewer message 保留 `thai/translation` 可供 UI/Debug 顯示。
-- phase-driven routing（sandbox）：
   - `theory_pool`：`awaitingAnswer`、`revealingWord` 提高出現率。
   - `final_fear`：僅在 ending / 高壓（低 SAN 或 supernatural phase）提高出現率。
 - 開發檢查：`assertChatPoolsCounts()` 可驗證 10 池長度與 total=2050；chat engine 僅在 DEV 初始化時呼叫一次。
 
-## Sandbox 與 Classic 子音判定同源（2026-03-05）
-
-- sandbox 子音流程（parse / judge / hint / state transition）改為透過 `parseAndJudgeUsingClassic()` 走 classic 同一套核心；sandbox 只做 thin adapter 顯示，不再自行覆寫結果。
 - 修正重大誤判：`consonant=ร` 時輸入 `บ` 現在固定 `wrong`，不再因 keyword shortcut 被判定 `correct`。
-- 新增 parity 驗證：每次 sandbox 判定同步輸出 `sandbox.judge.result`、`classic.judge.result`、`sandboxClassicParity`；若 mismatch，直接以 classic 結果覆寫並標記 `blockedReason=parity_mismatch`。
-- Debug Tester 保留 `ForceCorrect`，但改為「按鈕觸發一次性 override」：`sandbox.judge.debugOverride.active/source/consumedAt` 可驗證，且不污染一般玩家輸入。
-- unknown 提示與 pinned prompt 均沿用 classic 產生器，sandbox 不再自行改寫文案。
-
-## Sandbox 換題鎖定規則（2026-03-04）
 
 - 只允許兩種情況換題：
   1) `correct` 完成 reveal 後自動 `advancePrompt('correct_done')`
   2) Debug PASS 直接 `advancePrompt('debug_pass')`
-- 其他任何輸入（包含 wrong/unknown/亂打）都不得換題，會記錄 `sandbox.advance.blockedReason=not_correct_or_pass`。
 - `unknown` 關鍵字固定支援：`不知道 / 不確定 / idk / ?`，只顯示提示，不 reveal、不 advance。
-- prompt SSOT 強制只讀 `sandbox.prompt.current`（`id/consonant/wordKey`）；題目、judge、hint、reveal 必須一致，mismatch 時阻擋流程並記錄 `mismatch=true`。
-- 對外 debug/驗收欄位同步提供 `sandbox.currentPrompt`（`id/consonant/wordKey`）做為單一檢查點；內部 `sandbox.prompt.current` 與其保持一致。
 - parser 新增 PASS keyword：`pass / skip / p`，判定 `judge.kind=pass` 後直接 `advancePrompt('debug_pass')`。
 - `unknown`（`不知道 / 不確定 / idk / ?`）僅顯示 hint，保持同一題，不會 advance。
-- hint 只讀 `sandbox.currentPrompt.consonant`（不再從題庫重新抓提示子音）。
-- Word reveal（sandbox only）固定規格：畫面中心、純文字無底框、`4000ms` scale 放大 + opacity 漸淡，結束後才進下一題。
 - Debug 欄位（必看）：
-  - `sandbox.prompt.current.id/consonant/wordKey`
   - `judge.lastInput / judge.lastResult`
   - `hint.active / hint.lastShownAt`
   - `word.reveal.active / word.reveal.wordKey / word.reveal.durationMs`
@@ -396,76 +258,32 @@ npm run build
 - 已移除 ChatPanel 的 `fallback_click` 提交分流與 Enter 直送第二路徑，改為單一路徑 form submit handler。
 - 原因：會造成 reveal/prompt 推進分叉，導致 PASS 後卡題，且在部份裝置觸發重複提交。
 
-
-
-## Sandbox submit/advance 防重入整合（2026-03-04）
-
-- sandbox 玩家送出改為 submit gate：`sandbox.answer.submitInFlight` 進入判定前設為 `true`，流程完成（hint/reveal/advance）才釋放，重複送出會記錄 `sandbox.advance.blockedReason=double_submit`。
-- `advancePrompt` / `markWaveDone` 新增 one-shot token（`sandbox.advance.inFlight` + `sandbox.advance.lastToken`），同一次回答流程重入會被擋下並記錄 `double_advance`。
-- prompt 顯示順序固定：先更新 `sandbox.prompt.current`，overlay 只讀 current prompt，避免切題時先渲染舊題造成閃回。
-- sandbox `unknown` hint 改用與 classic 同一個 shared builder：`src/shared/hints/consonantHint.ts`，debug 會標示 `sandbox.hint.source=classic_shared`。
 - Debug 驗收重點：
-  - `sandbox.answer.submitInFlight / sandbox.answer.lastSubmitAt`
-  - `sandbox.judge.lastInput / sandbox.judge.lastResult`
-  - `sandbox.advance.inFlight / lastAt / lastReason / blockedReason`
-  - `sandbox.prompt.current.id/consonant/wordKey`
-  - `sandbox.hint.lastTextPreview / sandbox.hint.source`
 
-
-## Sandbox NIGHT_01 修正（2026-03-05）
-
-- Story Phase Gate：sandbox 進房後強制 `N1_INTRO_CHAT` 30 秒，只允許聊天室閒聊；倒數結束才切 `N1_QUIZ_LOOP`，並允許 `mod_live` 出第一題子音題。
-- NIGHT_01（sandbox only）主流程 SSOT 改為 `flow.questionIndex + flow.step`：
   - step `0~9` 固定鏈：`PREHEAT -> ASK_CONSONANT -> WAIT_ANSWER -> ANSWER_GLITCH_FLOOD -> REVEAL_WORD -> WORD_RIOT -> VIP_TRANSLATE -> MEANING_GUESS -> ASK_PLAYER_MEANING -> ADVANCE_NEXT`。
-  - `introGate/preheat/answerGate/flow/last` 全部放進 `SandboxStoryState`，phase 僅作渲染路由表象，不再作為推進真相來源。
-  - WAIT_ANSWER timeout（15s）若玩家未回覆：sandbox 會硬停聊天（`answerGate.pausedChat=true`）並顯示「等你回覆」。
   - 玩家回覆後（包含「不知道」）固定先進 glitch flood，再 reveal word，根治第 2 題後不 reveal 卡住。
-- Prompt Gate：`askSandboxConsonantNow()` 僅在 `phase=awaitingTag` 且 story gate 已進入 `N1_QUIZ_LOOP` 才會送題，避免一進房立即出題。
-- Pipeline/Input Lock：sandbox submit in-flight 時，重複輸入會回覆「收到，等一下，正在處理上一題。」並阻擋重入，不再沉默。
 - Solved 同步：同題 prompt 若已存在但未前進，會在 3 秒後允許重送同題 prompt（recover），避免「題目已 solved 但仍催同題」卡住。
 - Pipeline 強制化：每次答對後固定走 `reveal -> chatRiot -> supernaturalEvent -> vipTranslate -> reasoningPhase -> tagPlayerPhase -> next`，不再有隨機缺步。
-- Revisit Queue：`sandbox.pendingQuestions.queue` 採 FIFO；tagPlayer 未命中 `woman/girl/boy` 時先 enqueue 並先進下一題，之後優先回補直到命中才 dequeue。
-- SAN timeout/recovery（sandbox 專用）：進入 `tagPlayerPhase` 後固定 8~12 秒 timeout 刷屏 `奇怪 / 我訊息送不出去 / 聊天室卡住? / 網路怪怪的`；玩家回覆後固定刷 `喔喔喔 / 終於 / 剛剛卡住`。
-- Sandbox options guard：sandbox emit 層會擋下「payload 含 options」或文字含 `選項：` 的訊息，並累計 `sandbox.blockedOptionsCount` debug 計數。
-- Message Source Debug：新增 `chat.lastEmit.source/sourceTag/sourceMode`（sandbox/classic/system）以追蹤每次訊息 emit 來源。
 
-- Sandbox 節奏校正（sandbox only）：
   - introGate 硬門檻 30 秒：`introGate.passed=false` 時禁止出題與子音 overlay。
   - 問玩家（子音/意思）時只送一次問句，隨即進 `WAIT_PLAYER_*` 並 `freeze`，聊天室 0 output。
   - 玩家一回覆才觸發 `glitchBurst`（10 則、250~450ms/則），刷完再繼續 `REVEAL_WORD -> ... -> NEXT`。
   - 語料過濾禁字：`回頭` / `轉頭` 命中會重抽（最多 5 次），失敗 fallback 安全 observation 文案。
   - **classic mode 未修改。**
 
-- Character Disambiguation（sandbox only）：新增 `characterDisambiguation.normalize/matchCategory`，支援 woman/girl/boy 同義詞（如 媽媽/母親、姐姐/姊姊、弟弟/哥哥）。tagPlayerPhase 首次未命中會固定追問 `@玩家 你是在說誰??????`（不提供 options）；再次未命中則依 P0 規則 enqueue 當前題並先下一題，後續再回補。
-- Q10 Special（sandbox only）：NIGHT_01 第 10 題改為 `ห + หัน + 轉頭`；答對後於 `vipTranslate` 注入專屬訊息 `อย่าหัน` 與翻譯按鈕，點擊後顯示橘色 `別轉頭`（`[橘色]別轉頭[/橘色]`）。
 - Q10 限制：`อย่าหัน〔翻譯〕` 與橘色 `別轉頭` 僅允許題號 10（`nodeIndex===9`）出現；非 Q10 不會注入。
 
 ### Debug 欄位變更紀錄（本次）
 
 - 新增：
-  - `sandbox.introGate.startedAt/minDurationMs/passed/remainingMs`
-  - `sandbox.pendingQuestions.length`
-  - `sandbox.pendingQuestions.revisiting`
-  - `sandbox.blockedOptionsCount`
-  - `sandbox.scheduler.phase=reasoningPhase|tagPlayerPhase`
-  - `sandbox.lastCategory`
-  - `sandbox.pendingDisambiguation.active/attempts/promptId`
-  - `sandbox.q10Special.armed/revealed/currentQuestion/allowInject`
 
 ### Removed / Deprecated Log
 
-- Deprecated（sandbox）：禁止 sandbox 期間送出任何 options 型訊息（包含 `（選項：...）` 與 payload `options`），違規訊息會被 emit gate 擋下並計數。
-
-## Sandbox Preheat Script（固定序列，sandbox only）
-
-- 新增 `src/sandbox/chat/preheat_script.ts`，以 `PREHEAT_SCRIPT` 固定時間序列（0ms~20000ms）保證開場聊天室演出，不依賴隨機池。
-- Sandbox VIP identity 固定為 `src/sandbox/chat/vip_identity.ts`：`👑 behindyou`（`id=sandbox_vip_behindyou`、`role=vip`、`badge=crown`）。
 - 固定序列保證：
   - `👑 behindyou` 必定出場，且主動 `@{{PLAYER}}` 打招呼（emit 時替換成 `state.player.handle`）。
   - 至少 2~3 則觀眾跟 `@behindyou` 接話。
   - 至少 1 則「我覺得應該是假的吧」質疑訊息。
 - `introGate.passed=false`（前 30 秒）時：
-  - 禁止出題（`askSandboxConsonantNow()` hard gate）。
   - 禁止子音 overlay（`commitPromptOverlay('')`）。
 - 固定序列播完後，預熱剩餘時間才回到 `casual/observation` 隨機聊天。
 - **classic mode 未修改。**
@@ -476,8 +294,6 @@ npm run build
 - 觀眾池與玩家完全隔離：`state.chat.activeUser` 與 `state.chat.audienceUsers` 必須分離維護。
 - reactions / idle / event / random chatter 等所有自動訊息 actor 只允許來自 `audienceUsers`。
 - 若抽 actor 時誤命中 `activeUser`，需阻擋並記錄 `actorPickBlockedReason = audience_includes_activeUser`，再重新抽取。
-
-
 
 ## Event Exclusive Mode
 
@@ -492,7 +308,6 @@ npm run build
   - `lock.lockOwner` / `lock.lockElapsedSec`
   - `event.foreignTagBlockedCount`
   - `event.lastBlockedReason`
-
 
 ## Event Transaction Pipeline（Prepare → Commit → Effects）
 
@@ -574,7 +389,6 @@ npm run build
   - Console 會輸出 `[AUDIO-DEBUG]` snapshot/tick，可快速定位是否有多來源同播。
   - 主頁影片右上角提供小型 `Debug` 按鈕，點擊後以 overlay 開啟 DebugPanel（不跳頁、不改 layout）。
   - 若需要 SceneView 詳細診斷欄位可加上 `?debug=1`。
-
 
 ## 音效：無縫循環（fan_loop）
 
@@ -665,15 +479,12 @@ npm run build
   - preload/switch 失敗後 fallback 但先前沒有可視化
   - 目前已改為在 debug overlay 顯示 fallback 與 unavailable 原因，避免無聲退回。
 
-
 ## Debug 測試控制面板（主畫面 overlay）
 
 - 使用方式：
   - 點主畫面影片右上角 `Debug` 小按鈕即可開啟 overlay 面板（不使用 `/debug` route）。
   - Event Tester 固定可用；`?debug=1` 仍可開啟額外 SceneView 診斷欄位。
 - 按鈕用途：
-
-## Sandbox Reveal（強制 A 單一路徑）
 
 - Reveal 期間只允許 **1 個 overlay**（`WordRevealOverlay`）；題目子音泡泡會暫時隱藏，避免雙泡泡疊加。
 - Overlay 文字固定為 `baseGrapheme + restText` 同一行顯示，`base/rest` 共用 `revealGlyph`（同 `font-size/line-height`）。
@@ -684,23 +495,16 @@ npm run build
   - 優先 `Intl.Segmenter('th', { granularity:'grapheme' })`
   - fallback `Array.from()`
 
-### Sandbox Debug 必看欄位
-
 - `word.reveal.phase`
 - `word.reveal.baseGrapheme`
 - `word.reveal.restText`
 - `word.reveal.restLen`
 - `word.reveal.splitter` (`segmenter|arrayfrom`)
 - `ui.consonantBubble.visible`（reveal 期間必須 `false`）
-- `sandbox.hint.lastText`（unknown/wrong 後必須非空）
 - `lastWave.count / lastWave.kind`（correct 後 related 3~6）
 
 ## README Removed/Deprecated Log
 
-- 2026-03-04（sandbox only）：移除 reveal 期間 2100ms 快速淡出舊規格；改為固定 4000ms 置中放大淡出，且 reveal 僅允許讀取 prompt SSOT（wordKey/consonant）。
-- 2026-03-04（sandbox only）：移除「玩家回覆有效選項後僅更新訊息但保留 reply bar/freeze」舊行為；改為強制 resolve + clearReplyUi 單一路徑。
-
-- 2026-03-04（sandbox only）：移除 reveal `renderMode(pair|fullWord)` 雙路徑，改為強制 A（單一 overlay + 同步動畫）；不再以 B（完整單字替代）作為預設或保底。
   - `▶ Force LOOP`：直接呼叫 `switchTo('oldhouse_room_loop')`。
   - `▶ Force LOOP2`：直接呼叫 `switchTo('oldhouse_room_loop2')`。
   - `▶ Force MAIN`：直接呼叫 `switchTo('oldhouse_room_loop3')`。
@@ -877,7 +681,6 @@ npm run build
 - 桌機通常沒有行動鍵盤遮擋問題，套用行動端補償會造成不必要的高度抖動與版面壓縮。
 - 因此桌機維持穩定雙欄布局，不加 mobile 專用鍵盤捲底策略。
 
-
 ### 手機影片不裁切修正（2026-02）
 
 - 新增 mobile 專用 viewport class：`videoViewportMobile` / `scene-view-mobile` / `video-layer-wrapper-mobile`，僅在 `<1024px` 生效。
@@ -897,7 +700,6 @@ npm run build
 - `app-shell` 與 `app-layout` 現在固定為 viewport 高度並禁止外層滾動，避免主頁在聊天訊息增加時把影片一起推上/推下。
 - 聊天滾動仍由 `.chat-list` 承擔（`overflow-y:auto`），確保只滾聊天室內容，影片區維持固定。
 
-
 ## Mobile layout 設計規則
 
 - 避免 `100vh`：行動瀏覽器在鍵盤彈出時，`100vh` 常包含或錯算 URL bar / 系統 UI，容易造成黑畫面、header 被推離視窗、聊天室高度崩潰。
@@ -912,8 +714,6 @@ npm run build
   - 桌機恢復雙欄布局（影片 + 聊天室並排）。
   - 行動維持 TopDock + ChatScroll + InputDock 架構。
 - 聊天室送出與滾動、影片渲染、插播切換相關邏輯未改動（僅 layout 調整）。
-
-
 
 ## 全功能回歸檢查（本次）
 
@@ -1119,7 +919,6 @@ npm run build
 - `Simulate Send`：以目前 input 走同一條 submit 流程。
 - `Toggle TagLock(Self)`：把 tag/reply target 切到自己，驗證會被自動解除。
 - `Toggle isComposing`：模擬 composition 狀態，驗證不會永遠卡死。
-
 
 ## Loop4 Removal（完整移除）
 
@@ -1334,10 +1133,7 @@ npm run build
 
 - 入口：主畫面影片右上角小型 `Debug` 按鈕（overlay 模式，不跳頁）。
 - DebugPanel 改為 mode-aware，分成三塊：
-  - `Mode Debug`：顯示 `currentMode`，並在面板最上方提供 `Switch to Classic` / `Switch to Sandbox (sandbox_story)`。
   - `Classic Debug Tools`：僅在 `mode === "classic"` 時顯示。
-  - `Sandbox Story Debug Tools`：僅在 `mode === "sandbox_story"` 時顯示。
-- Mode SSOT：沿用既有 `mode` query param（`?mode=classic|sandbox_story`），debug-only switcher 會同步寫入 `localStorage['app.currentMode']` 並立即 reload 生效。
 - Debug Gate SSOT：改為共用 `src/debug/debugGate.ts`。
   - `isDebugEnabled()` 判定來源：`?debug=1` 或 `#debug=1` 或 debug session flag 或 `window.__THAIFEED_DEBUG_ENABLED__`。
   - **只要 Debug Overlay 已開啟（可見）就視為 debug enabled**，mode switch guard 不得再回傳 `debug_disabled`。
@@ -1352,7 +1148,6 @@ npm run build
 - 常見排障：若按鈕看起來沒反應，先看 `lastModeSwitch.result/reason`，例如 `debug_disabled`、`already_current_mode`、`invalid_mode`。
 - 啟動時 mode 決策：
   - `mode` query param（最高優先）
-  - 僅在 `isDebugEnabled()` 為 true 才允許讀取 `localStorage['app.currentMode']`（避免非 debug 使用者被 storage 帶入 sandbox）
   - fallback `classic`
 - `Classic Debug Tools` 內固定渲染 **Event Tester**（不依賴 DEV 或 `debug=1`），包含 7 顆事件按鈕：
   - Trigger VOICE_CONFIRM
@@ -1396,7 +1191,6 @@ npm run build
   - `event.lastReactions.count`
   - `event.lastReactions.lastReactionActors`
   - `violation=reaction_actor_system=true`（若反應誤用 system）
-- `Sandbox Story Debug Tools` 包含：
   - `Auto Play Night`
   - `Force Next Node`
   - `Force Reveal Word`
@@ -1407,19 +1201,14 @@ npm run build
     - `cooldown`（橘色）
     - `locked`（紅色）
   - `Ghost System`（`activeEvents` / `queue` / `lastEvent` / `cooldownCount`）
-  - `Fear System`（每 500ms refresh，僅 sandbox_story 顯示）
     - `fearLevel`
     - `pressureLevel`（`low=灰 / medium=黃 / high=橘 / panic=紅`）
     - `ghostProbability`（`baseProbability + fearLevelFactor`，顯示 `0.00~1.00`）
   - `Fear Meter`（`fearLevel/maxFear` 視覺化 `██████░░░░`）
   - `Triggers`（`chatSpike / storyEmotion / darkFrame / ghostNearby` + 加成值）
   - Debug 快捷按鈕：`Add Fear +10` / `Reset Fear`
-  - `Night Timeline`（顯示 `sandbox.reveal.* / sandbox.consonant.* / sandbox.ghostMotion.*`）
-- 安全保護：`mode !== "sandbox_story"` 時不渲染任何 sandbox debug tools，避免 classic engine 誤觸 sandbox controls。
 - Debug-only Mode Switcher 驗收：
   1. 以 `?debug=1` 開啟 Debug Panel。
-  2. 點 `Switch to Sandbox (sandbox_story)` 後，`lastModeSwitch.clickAt/requestedMode` 先更新，`persistedMode` 應顯示 storage 已寫入 `sandbox_story`。
-  3. 切換流程會顯示 `Switching…` 且執行 reload，回來後 `currentMode` 應變成 `sandbox_story`。
   4. 點 `Switch to Classic` 同理可切回，且 `lastModeSwitch` 顯示新的 requested/persisted/action/result。
   5. 未開啟 debug 時不顯示該切換 UI。
 
@@ -1505,7 +1294,6 @@ npm run build
 - 既有/legacy 的下方引用回覆欄已完全移除（不 hide、不保留第二套 render）。
 - 送出成功後維持既有行為：手機收鍵盤 + 自動捲到底。
 
-
 ## QNA Tag + ReplyPin 時序修正（本次）
 
 - QNA `askQuestion` 現在強制題目格式：`@${taggedUserHandle} ${prompt}`；若組字後未包含 tag，直接 abort，並記錄 `lastBlockedReason=qna_question_missing_tag`。
@@ -1581,7 +1369,6 @@ npm run build
 
 - 若某問題連續 3 次 PR 未再提及，需自 Debug 面板移除；除非再次出現才可重新加入。
 
-
 ## Player Naming
 
 - 玩家名稱只允許首次輸入一次，系統會做 normalize：`trim` + 移除前導 `@`；空字串會被阻擋。
@@ -1590,13 +1377,7 @@ npm run build
 - 所有事件 starter tag 固定使用 `@${activeUserInitialHandle}`；若不存在則於 pre-effect 前直接 blocked（`no_active_user`）。
 - 改名入口已停用；若呼叫舊改名函式會 no-op 並在 Debug 記錄 `blockedReason=rename_disabled`。
 
-## Sandbox QnA Resolve + Reply UI Clearing（sandbox only）
-
-- sandbox 玩家回覆命中有效選項（`穩住/衝/不知道`）時，必須走單一路徑：`consumePlayerReply() -> parsePlayerReplyToOption() -> resolveQna()`，禁止只 append 訊息不 resolve。
 - `resolveQna()` 會同步：`qna.awaitingReply=false`、`qna.status=RESOLVED`、解除 freeze、清空 reply UI（`replyBarVisible=false`、`replyToMessageId=null`、pinned/quote 清空）。
-- 若命中有效選項後 `ui.replyBarVisible` 仍為 `true`，會立即強制 `clearReplyUi()` 並記錄 anomaly（`sandbox.qna.lastAnomaly`）。
-- sandbox 在 `consumePlayerReply()` 命中後會立即 `markSent('sandbox_qna_consumed')` 並短路後續流程；同一送出循環禁止再進 `tryTriggerStoryEvent('user_input')`，避免已 resolve 被舊 retry 邏輯覆寫。
-- sandbox debug tester 新增：`ForceResolveQna`（resolve+clear UI）與 `ClearReplyUi`（只清 UI，隔離 UI 問題）。
 
 ## QNA Flow（Keyword + 不知道）
 
@@ -1655,8 +1436,6 @@ npm run build
 4. 選擇帶 `nextEventKey` 的選項，確認 chain event 先入 queue，再於非 inFlight 時啟動。
 5. 開 `?debug=1` 檢查 overlay 的 QNA / queue 欄位是否完整更新。
 
-
-
 ## QNA pinned reply 先置底再 pause（2026-03-02）
 
 - tagged question 成功送出後，流程固定為：
@@ -1679,7 +1458,6 @@ npm run build
 - 2026-03-02：移除「tagged question countdown 才 freeze」舊邏輯，改為 pinned reply mount 後立即執行 `scrollThenPause`（先置底、後 pause）。保留 freeze gate（阻擋 NPC/事件/鬼動）但不再等待倒數訊息，避免題目訊息未落在視窗底部。
 
 - 2026-03-02：移除 `SceneView` 內 `footsteps` / `ghost_female` 的 `<audio>` one-shot 舊播放路徑，整合為單一 WebAudio 距離模型（避免新舊音源雙聲與狀態分裂）。
-
 
 - 2026-03-01：移除 `src/app/App.tsx` 中 `cooldownsRef.loop4` 的 legacy debug/cooldown 欄位，改用語意一致的 `cooldownsRef.tv_event`。影響：`TV_EVENT` gate 與 cooldown 行為不變，只是移除舊命名避免與已移除的 `loop4` 場景語意衝突。
 
@@ -1876,7 +1654,6 @@ npm run build
   - 立刻解除 freeze/pause，並重置 qna/event queue，避免 hard-freeze 卡死。
 
 ## README Removed/Deprecated Log
-- 2026-03-04：本次 sandbox_story Consonant QnA 流程為整合更新，無新增移除項。
 
 ## 2026-03-02 事件 registry / SFX 對照修正
 
@@ -1959,24 +1736,13 @@ Console（debug 模式）可觀察：
 - `[PAUSE] set reason=tag_wait_reply`
 
 ## README Removed/Deprecated Log
-- 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
 - 2026-03-04：移除「mode switch guard 僅看 `?debug=1`」舊規則，改為共用 debug gate SSOT（overlay 可見即 debug enabled）。
 
-## Sandbox Story Mode（Stage 1）
-
-- 新增 `sandbox_story` 模式（以 query `?mode=sandbox_story` 啟用）。
 - 第一階段包含：Mode Router、Story Engine、SSOT（Night1 測試節點）。
 - 不改動 classic 行為；classic 以 wrapper 方式保留原流程。
 - Debug 面板新增：
   - `mode.id`
-  - `sandbox.nodeIndex`
-  - `sandbox.scheduler.phase`
-  - `sandbox.currentNode.word/char`
 
-
-## Sandbox Story Mode（Consonant QnA True Flow）
-
-- `sandbox_story` 子音答題採 sandbox keyword 規則（不改 classic mode）：
   - 每題 SSOT 定義 `correctKeywords`、`unknownKeywords`（`src/data/night1_words.ts`）。
   - prompt 明確提示：`@{activeUser} 請回覆本題子音（直接輸入：{keyword}），或回覆：不知道`。
   - 玩家回覆統一走同一條 `parse + judge + apply`。
@@ -1996,14 +1762,8 @@ Console（debug 模式）可觀察：
   - `lastWave.count / lastWave.kind`
   - `blockedReason`
 
-- 2026-03-04：移除 Sandbox Debug Tools 內舊 `Mode Switcher <select>`，改為共用 Debug Panel 頂部按鈕式 Mode Switcher（debug-only，避免雙入口並存）。
-
-## Sandbox Story：Word Reveal Pipeline（Night 1）
-
-- sandbox_story Night 1 已升級為 10 個拼圖字結構稿，資料 SSOT 來源：
   - `src/data/night1_words.ts`
   - `src/data/chat_templates.ts`
-  - `src/ssot/sandbox_story/night1.ts`
 - 正確答題後固定流程：
   1. `revealingWord`：中央顯示 base 子音，右側逐字補齊單字（`fadeIn 800ms → hold 900ms → fogOut 1200ms`）。
   2. 同步播放發音（`/assets/phonetics/${audioKey}.mp3`）。
@@ -2016,88 +1776,49 @@ Console（debug 模式）可觀察：
   - 命名：拉丁小寫 + 底線（例如 `klang_kuen`, `tonmai`, `pratu`）。
 
 ## README Removed/Deprecated Log
-- 2026-03-04：本次 sandbox_story Consonant QnA 流程為整合更新，無新增移除項。
 
-
-## Sandbox PromptCoordinator（單一真相來源，2026-03-04）
-
-- `sandbox_story` 新增 `sandbox.prompt.current` 作為 prompt SSOT；Overlay 與 pinned 皆只讀此 state。
-- Overlay 子音只在 `sandbox.prompt.current.kind === "consonant"` 時顯示，來源固定為 `sandbox.prompt.current.consonant`。
 - pinned 題目改由 `PromptCoordinator.setCurrentPrompt()` 產生之 promptId 驅動，避免 Overlay/pinned 分別讀舊 state。
 
-### pinned writer guard（sandbox only）
-
-- sandbox 期間，pinned 只允許 `sandboxPromptCoordinator` 寫入。
 - 若 `qnaEngine` / `eventEngine` 嘗試寫入，直接阻擋並寫 debug：
-  - `sandbox.prompt.pinned.lastWriter.source`
-  - `sandbox.prompt.pinned.lastWriter.writerBlocked`
-  - `sandbox.prompt.pinned.lastWriter.blockedReason`
 - `unknown`（不知道）流程不更換 promptId；僅加提示訊息，題目維持同一題。
 
 ### Prompt Consistency Debug 欄位
 
-- `sandbox.prompt.current.kind`
-- `sandbox.prompt.current.promptId`
-- `sandbox.prompt.overlay.consonantShown`
-- `sandbox.prompt.pinned.promptIdRendered`
-- `sandbox.prompt.mismatch`
 - `pinned.lastWriter.source`
 - `pinned.lastWriter.blockedReason`
 
 ## README Removed/Deprecated Log
 - 2026-03-04：本次 PromptCoordinator 為整合修正，無新增移除項。
 
-## Sandbox Story（2026-03-04 強制整合）
-
-- 子音題 scheduler（sandbox only）固定為：`awaitingTag → awaitingAnswer → revealingWord`。
 - PASS 後行為固定：`單字放大 + 霧化淡出 → 直接下一題`，不再觸發 related/preNextPrompt chat wave。
 - 「不知道 / 不知 / 不確定」會走 classic 風格提示，提示後維持同題重答（不推進 index）。
-- 鬼動（ghost voice / TV / light glitch）在 sandbox 只能由 `canTriggerGhostMotion()` 放行；子音題固定阻擋。
-- footsteps（sandbox）改為 fear 綁定：fearLevel 越高，觸發機率越高且冷卻越短。
 - Debug 核對欄位：
-  - `sandbox.consonant.currentIndex/currentConsonant/currentWordKey`
-  - `sandbox.consonant.judge.lastInput/lastResult`
   - `scheduler.phase`
   - `word.reveal.phase`
   - `ghost.gate.lastReason`
   - `footsteps.probability/cooldownRemaining/lastAt`
 
-## Sandbox Consonant Prompt（2026-03-04 更新）
-
-- 僅 sandbox_story：`unknown` 與 `wrong` 都會透過 classic hint adapter 產生提示文字，且維持同一題 `awaitingAnswer`（不跳題）。
 - `correct`：先做字形補字 overlay（base + appended，逐步顯示→放大→淡出），再送出 related chat wave（3~6 則），最後才進下一題。
-- overlay / pinned / judge 共享同一個 `sandbox.prompt.current`（同 `promptId`），debug `sandbox.prompt.mismatch` 應維持 `false`。
 - pronounce audio 目前保留介面，不觸發 side effect，`audio.pronounce.state` 會停在 `idle`（reserved）。
 
 ### README Removed/Deprecated Log
-- 2026-03-04：sandbox 舊「unknown 僅回覆收到不知道」行為視為 deprecated，改為強制提示文字。
 
-## Sandbox WordReveal Overlay 視覺規格（2026-03-04 重做）
-
-- sandbox_story 的 WordRevealOverlay 現在預設採 **B 保底 fullWord 模式**：
   - 同一行顯示完整 `wordText`。
   - 不再分離顯示 base 子音容器；改在完整單字中把第一個 grapheme 以 accent 色標示。
 - 若後續要啟用 A 規格，可切 `renderMode="pair"`（目前預設仍為 `fullWord`，確保可驗收穩定）。
-- 動畫 timeline（sandbox only）：
   - `enter`：200ms fade in
   - `pulse`：同步閃爍 2 次（2 x 250ms）
   - `exit`：900ms scale(1→1.18) + opacity(1→0) + translateY(-6px)
 - Thai 最小拆分規則：統一使用 `Array.from(wordText)`，由 state 提供：
   - `word.reveal.baseChar`
   - `word.reveal.restTextLen`
-- Debug 驗收欄位（sandbox）：
   - `word.reveal.renderMode`
   - `word.reveal.baseChar`
   - `word.reveal.restTextLen`
   - `word.reveal.phase`（`idle|enter|pulse|exit|done`）
 
 ### README Removed/Deprecated Log
-- 2026-03-04：sandbox WordRevealOverlay 移除舊 `fadeIn/scaleUp/fadeOut` 視覺命名，統一改為 `enter/pulse/exit` 時序。
-- 2026-03-04：sandbox WordRevealOverlay 預設停用舊「子音 + 小補字」雙容器顯示，改採 fullWord 保底模式（第一個 grapheme 上色）。
 
-## 2026-03-04（sandbox_story reveal 純文字浮現 + 隨機安全區位置）
-
-- 本次僅調整 `sandbox_story`：reveal 改為純文字 `SandboxWordRevealText`，不使用底色/邊框/泡泡樣式。
 - `base/rest` 於同一文字容器、同字體同字級同 line-height，僅 `base` 使用 accent 顏色。
 - reveal 位置在每次進入 `revealingWord` 時抽樣一次，並固定整段 reveal 期間不變；下一次 reveal 重新抽樣。
 - safeRect 固定為：`minX=8, maxX=92, minY=8, maxY=74`（底部預留約 26% 避開 pinned/input 區）。
@@ -2109,17 +1830,7 @@ Console（debug 模式）可觀察：
   - `ui.consonantBubble.visible`（reveal 期間必須 `false`）
 
 ### README Removed/Deprecated Log
-- 2026-03-04（sandbox only）：移除舊 `WordRevealOverlay`（含底色文字框樣式 `word-reveal-overlay / revealText / revealGlyph`），統一改為 `SandboxWordRevealText` 純文字疊層渲染。
 
-## 2026-03-04（sandbox only：英文/注音輸入修復 + prompt glyph 藍色恢復）
-
-- sandbox_story 子音答題輸入改為寬鬆 normalize：保留英文（A/B/C）、數字（1/2/3）、注音（U+3100–U+312F + ˇˊˋ˙）、中文、空白與常見標點，不再於 normalize 階段清空英文字或注音。
-- sandbox parser 新增對應：`A/a/1 -> A`、`B/b/2 -> B`、`C/c/3 -> C`；`不知道/不確定/idk/?/？ -> unknown`。
-- 當送出後 normalize 為空字串時，sandbox 會阻擋推題並記錄 `blockedReason=input_sanitized_to_empty`，同時顯示提示文字（對齊 classic 提示路徑）。
-- sandbox prompt glyph（題目子音）恢復藍色 token，並限定於 `.video-area.sandbox-story-mode .sandbox-story-prompt-glyph` 作用域，不影響 classic。
-- sandbox debug 新增/擴充：
-  - `input.raw`（`sandbox.consonant.parse.inputRaw`）
-  - `input.norm`（`sandbox.consonant.parse.inputNorm`）
   - `input.allowedSetsHit`（latin/bopomofo/thai/cjk）
   - `parser.kind`（使用 `judge.lastResult`）
   - `parser.matched`（`A|B|C|unknown|keyword`）
@@ -2127,114 +1838,60 @@ Console（debug 模式）可觀察：
   - `ui.promptGlyph.className/colorResolved/opacityResolved/source/isBlueExpected`
 
 ### README Removed/Deprecated Log
-- 2026-03-05（sandbox only）：移除 `chat_engine.ts` 內嵌 mini-pools 舊語料來源，統一改由 `CHAT_POOLS` 單一 SSOT 提供。
-- 2026-03-04：本次為 sandbox 輸入/樣式整合修正，無新增移除項。
 
-## Sandbox Chat Engine
-
-- 新增 sandbox 專用聊天室訊息生成系統，透過 `src/sandbox/chat/chat_engine.ts` 以 1.5~3 秒節奏自動產生訊息。
 - 支援一般觀眾、恐懼升級、中泰混合、tag 玩家、角色猜測、VIP 摘要與結尾崩潰流程。
-- 使用 `src/sandbox/chat/user_generator.ts` 生成不重複的 PTT/Twitch 風格帳號。
 
-## 2026-03-05 sandbox supernatural event system
-- sandbox story 新增 `SUPERNATURAL_EVENTS` 事件池（`none/ghost_voice/tv_on/screen_glitch/footsteps`）與固定權重：40% / 20% / 15% / 15% / 10%。
 - 答對題目後流程調整為：`PLAYER_CORRECT -> REVEAL_WORD_FRAGMENT -> CHAT_RIOT -> SUPERNATURAL_EVENT -> VIP_TRANSLATE`。
 - 新增 `GHOST_HINT_EVENT`（非答題階段可觸發），包含 `ghost_voice/screen_glitch/tv_on`，聊天室會產生推理句：
   - 鬼是不是在提示
   - 是不是在回應剛剛的字
   - 鬼是不是在等我們拼出什麼
 - `footsteps` 新增距離分層輸出：`footstep_far / footstep_mid / footstep_near`。
-- NIGHT_01 phase 與 supernatural events 已在 sandbox flow 整合，並維持 quiz/consonant 主流程不被破壞（只在 `chatRiot/supernaturalEvent/vipTranslate` 鏈條中插入）。
 
-
-## Sandbox Chat Flow（PREHEAT / Freeze / GlitchBurst）
-
-- Sandbox 現在採單一 step-driven flow：`PREHEAT -> ASK_CONSONANT -> WAIT_PLAYER_CONSONANT -> GLITCH_BURST_AFTER_CONSONANT -> REVEAL_WORD -> WORD_RIOT -> VIP_TRANSLATE -> MEANING_GUESS -> ASK_PLAYER_MEANING -> WAIT_PLAYER_MEANING -> GLITCH_BURST_AFTER_MEANING -> ADVANCE_NEXT`。
-- `player.handle` 在 sandbox init 即建立（優先 `chat.activeUser.handle` 等價來源，fallback `000`），確保預熱期就可被 VIP `@`。
 - `WAIT_PLAYER_CONSONANT` 與 `WAIT_PLAYER_MEANING` 進入後，啟動 `freeze.reason=AWAIT_PLAYER_INPUT`，聊天室輸出為 0（非 bug，debug 可見）。
 - 玩家回覆後觸發 glitch burst（10 則，250~450ms 快刷）後再恢復正常節奏。
-- Sandbox chat 平時節奏對齊 classic 常態區間（約 800~1600ms），但 freeze 期間 0 output、glitch 期間快刷。
 
 ### Removed / Deprecated Log（本次）
 
-- 移除舊的 sandbox 數字 step（0~9）語意，改為具名 `SandboxFlowStep` 枚舉，避免第 2 題後重入卡住。
 - 移除「等待玩家期間仍持續刷 chat」舊行為，統一改為 freeze gate。
 
-
-## Sandbox Hybrid Chat（Director SSOT）
-
-- sandbox 聊天改為 `Chat Director` 單一節奏來源：`PREHEAT / RANDOM / REACTIVE / FROZEN / GLITCH_BURST`。
 - 預熱 30 秒採軟編排：0~20 秒保證 VIP 出場至少一次、5~25 秒保證 VIP 至少一次 `@玩家`。
 - 問玩家（子音/意思）後立即 freeze，聊天室 0 output；玩家回覆後立即 glitch burst（預設 10 則、250~450ms/則）再繼續流程。
-- sandbox VIP 固定 `👑 behindyou`（`src/sandbox/chat/vip_identity.ts`），classic mode 不受影響。
 
-
-## Sandbox Patch Notes（2026-03-06）
-
-- Freeze 外層總閘：sandbox chat dispatch 入口新增 gate，`freeze.frozen=true` 時僅允許 `GLITCH_BURST`。
 - Glitch 專用句來源：`san_idle` 在 engine 內部分流為 general/glitch；一般路由不得抽 glitch 子集。
 - Anti-spam guard：新增 emitKey cooldown、同 speaker 連發防護、tag_player 重入抑制（實際 skip/fallback，不只記錄）。
 - ASK_PLAYER 問句 once-per-step：`ASK_PLAYER_MEANING` 成功發問後立即標記 `tagAskedThisStep=true` 並切到 `WAIT_PLAYER_MEANING`。
 - WORD_RIOT 鎖修補：每題離開 riot 都 reset wave lock，並統一單一路徑推進到 `VIP_TRANSLATE`。
-- Removed/Deprecated（sandbox）：移除 `WORD_RIOT` 多路並行推進（direct setFlowStep + callback 併存）行為，改為 timer SSOT。
 - classic mode 未修改。
 
-## Sandbox 強制回覆 Gate（沿用 classic reply-to，2026-03-06）
-
-- 僅 sandbox_story 變更；classic mode 未修改。
 - `WAIT_PLAYER_CONSONANT` 與 `WAIT_PLAYER_MEANING` 都改為沿用 classic 的 reply-to UI path：由同一個 `questionMessageId + AWAITING_REPLY` 驅動輸入框上方回覆條。
-- sandbox 問玩家訊息建立後，立即綁定 reply-to（messageId）並進入 freeze；reply-to active 期間聊天室 0 output（含 join/idle/觀眾聊天/技術訊息全阻擋）。
 - 玩家必須送出一則非空訊息才會解除 gate；送出後才進入後續 glitch/reveal/推題流程。
 
-## Sandbox Riot 上限與節奏規則（2026-03-06）
-
 - WORD_RIOT 每次固定上限 5 則（可接受區間 4~6，本次預設 5）。
-- 平常 sandbox 頻率維持 classic 節奏；freeze=0 output、glitch burst 才允許快刷。
 - 加入 WORD_RIOT step token 防重入，避免第 2 題後 timer 與 step 雙軌推進造成卡住。
 
-## Sandbox Join Gate（2026-03-06，sandbox only）
-
-- 新增 **PREJOIN / joinGate**：玩家提交名稱前 `joinGate.satisfied=false`，sandbox 聊天輸出總閘會阻擋所有非玩家訊息（0 output）。
 - 玩家提交名稱後，會立即建立 `player.id + player.handle` 並寫入 active user，**不再依賴第一則玩家聊天訊息**。
-- join 後會立即由 VIP 發送 `@玩家` 訊息，並直接走 classic 同一路徑 reply-to bar（sandbox 不自製第二套 pinned）。
 - reply-to active 期間聊天室強制 0 output；玩家送出非空回覆後才解除 gate，恢復 PREHEAT 正常節奏。
 - **classic mode 未修改。**
 
-## 2026-03-06（sandbox only：Silent Prompt + 附身自動送字 + 第二次強制回覆 + tech backlog flush）
-
-- sandbox flow 改為單一路徑：`PREJOIN -> PREHEAT -> TAG_PLAYER_1 -> WAIT_REPLY_1 -> POSSESSION_AUTOFILL -> POSSESSION_AUTOSEND -> CROWD_REACT_WORD -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
 - 30 秒 PREHEAT 到點後採 **Silent Prompt**：overlay 照常顯示子音，但聊天室不再發題目公告；改由 `mod_live` 或 `👑 behindyou` 直接 `@玩家` 並立刻進 reply-to freeze（0 output）。
-- 玩家回覆第一段後啟動「附身打字」：sandbox wrapper 會控制輸入框 value 為本題單字，並於 300~700ms 內走同一送出管線自動送出。
 - 自動送字後固定進入 `CROWD_REACT_WORD`（預設 6，區間 4~8），內容含「什麼意思／是不是拼音／這拼音怎麼唸」。
 - 接著第二次由 `mod_live` 或 `👑 behindyou` 再 `@玩家` 問「所以到底怎麼唸？」並啟用 reply-to（不可取消）；reply-to active 期間聊天室 0 output。
 - 技術故障改為 backlog：在 `WAIT_REPLY_1/WAIT_REPLY_2` 期間每 30 秒累積 2 則（含「奇怪卡了大約 X 分鐘」），玩家回覆後於 `FLUSH_TECH_BACKLOG` 一次吐出（最多 8 則）再推進下一題。
 - classic mode 未修改。
 
-## 2026-03-06（sandbox only：tech backlog 僅 Tag#3 WAIT 啟用）
-
-- sandbox flow 改為三段強制 tag 回覆：`TAG_PLAYER_1 -> WAIT_REPLY_1 -> ... -> TAG_PLAYER_2_PRONOUNCE -> WAIT_REPLY_2 -> TAG_PLAYER_3_MEANING -> WAIT_REPLY_3 -> FLUSH_TECH_BACKLOG -> ADVANCE_NEXT`。
-- `SandboxStoryState.flow` 新增 `currentTagIndex: 1|2|3`，並以 `isTechBacklogEnabled = currentTagIndex===3 && flow.step===WAIT_REPLY_3` 作為唯一 tech backlog 開關。
 - Tag#1 / Tag#2 的 WAIT 僅維持 reply-to + freeze 的 0 output；禁止累積與輸出任何技術故障文字。
 - 只有 Tag#3 WAIT 期間，且 reply-to active 時，才每 30 秒背景累積 2 則 tech backlog（第二則固定為「奇怪卡了大約 X 分鐘」）。
 - 玩家回覆 Tag#3 後才進 `FLUSH_TECH_BACKLOG`，一次 flush（最多 8 則，含最後分鐘訊息）再推進下一題。
 - classic mode 未修改。
 
-## Sandbox Flow Update（2026-03-06）
-
-- sandbox only：Join 後改為純 PREHEAT（30 秒）不再立即建立強制 reply-to 問句。
 - PREHEAT 期間僅寒暄與一般互動，禁止出題；第一次強制回覆從 `TAG_PLAYER_1` 才開始。
 - `reply-to active => 0 output`、`tech backlog only in WAIT_REPLY_3` 維持不變。
-- 新增 sandbox flow SSOT 文件：`docs/sandbox-flow-table.md`。
 - classic mode 未修改。
 
-## 2026-03-06 Sandbox Reply/Mention/Pin Pipeline Audit（audit only, sandbox only）
-
 - 本次為 **audit-only**，未修改程式邏輯；classic mode 無改動。
-- 新增稽核報告：`docs/sandbox-reply-pipeline-audit-2026-03-06.md`。
 - 稽核結論（重點）：
   - `@me`（自 tag）主因為 auto-pin 分支把 `lockStateRef.target` 指向 active user，送出時被 `submitChat` 強制前綴重寫。
-  - sandbox pinned preview 顯示在 chat panel 頂部屬 DOM render order（`replyPinBar-sandbox` 在 message list 前），且原訊息 row 不會被移除，故會雙重顯示。
-  - inline reply preview 與 sandbox top pin 為兩條並行 pipeline，現況缺少互斥 guard。
   - debug action 多數已 isolated，但 `Emit NPC Tag @You` 仍走 event 發送管線，存在殘餘耦合風險。
 
 ### SSOT / Debug 欄位變更紀錄（本次）
@@ -2246,36 +1903,15 @@ Console（debug 模式）可觀察：
 
 - 本次 audit-only，無移除/廢棄功能。
 
-## 2026-03-07 Sandbox NIGHT_01 判題接線修復（sandbox only）
-
-- 玩家在 sandbox `WAIT_REPLY_*` 且存在 consonant prompt 時，送出訊息會強制進入 classic parser/judge pipeline：`parseAndJudgeUsingClassic -> commitConsonantJudgeResult`。
 - `WAIT_REPLY_*` 不再由「任意字串送出」直接通關；只有 judge `correct/pass` 會推進步驟，`wrong/unknown` 會留在 WAIT。
-- `askSandboxConsonantNow` 改為訊息內容與 pinned 皆使用同一份題目 prompt，避免 UI 題目與 judge target 不一致。
-- sandbox parser 在 normalize 前會先移除前置 mention（例如 `@behindyou บ` / `@behindyou 2` / `@behindyou 不知道` 仍可判題）。
 - classic mode 未修改。
 
-
-## 2026-03-08 Sandbox NIGHT_01 warmup gate vs preheat mention conflict（sandbox only）
-
-- PREHEAT 導演 direct mention 已與正式 warmup gate 文案拆分：PREHEAT 僅保留「可互動但不需回覆」句型，正式 `@<player> 嗨嗨，第一次看這台嗎？` 僅由 `askSandboxWarmupTagNow()` 發送。
 - autoPinFreeze 在 PREHEAT 不再把 VIP direct mention 當 reply gate；僅保留 highlight 記錄，避免 UI 偽裝成可 consume 問答門。
 - warmup consume 維持 `WARMUP_TAG_REPLY` 單一入口，strip leading mentions 後非空即 consume，並固定推進 `WARMUP_NPC_ACK -> WARMUP_CHATTER -> TAG_PLAYER_1`。
 - warmup ack 語意池統一為「今天氣氛跟平常不一樣」；ack 後再接 2~4 句 chatter 才進第一題子音。
-- Debug 新增 `sandbox.replyGate.*`、`sandbox.lastReplyEval.*` 與 `sandbox.pinned.sourceType`，可區分 `warmup_gate` / `auto_pin_freeze` / `qna_reply` / `prompt_preview`。
-- Removed/Deprecated（sandbox）：移除 PREHEAT 與 warmup gate 共用同句問句路徑。
 - classic mode 未修改。
 
-## Sandbox experience-first rebuild (Night 1)
-- Sandbox 現在以 `sandboxFlow` 為互動節奏 SSOT，並以固定 10 題體驗節奏執行。
 - PREHEAT 固定 30 秒先建立熟客聊天室感，之後才進題目。
 - WAIT_REPLY 期間採硬 freeze（非玩家輸出=0），並累積 sanity/backlog；玩家回覆後一次 flush。
 - Auto Play Night 會在 WAIT_REPLY 自動注入 mock reply，完整推進至第 10 題。
 - Classic mode 路徑不變。
-
-
-## 2026-03-09 Sandbox Story Runtime Boot Fix（sandbox only）
-
-- `sandbox_story` mode 進入時改為直接啟動 runtime boot chain（自動 fulfill joinGate、初始化 PREHEAT 與 introGate）。
-- 新增 sandbox boot recovery guard：若 mode 已在 sandbox 但 runtime 回到 `PREJOIN` 或 `introGate.startedAt=0`，會自動重啟 sandbox runtime。
-- `__CHAT_DEBUG__.sandbox` 新增 runtime/joinGate guard 資訊，確保 debug 顯示的是活的 sandbox state。
-- `currentMode=sandbox_story` 時阻斷 classic idle tick emitter，避免 classic/sandbox 雙軌暗跑。

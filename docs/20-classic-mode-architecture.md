@@ -81,7 +81,6 @@ classic mode 是 ThaiFeed 現行主流程：
 
 1. 不做「靈異真偽分析系統」：目前只做體驗編排，不做真實偵測推理。
 2. 不做多 mode runtime 隔離：目前所有邏輯集中於 `App.tsx`。
-3. 不做 sandbox isolation：僅有 debug force hooks，尚未抽象為 mode plugin。
 
 ---
 
@@ -283,8 +282,6 @@ stateDiagram-v2
 
 ---
 
-## J. Extension Points（未來 sandbox 的可插拔插槽）
-
 > 本節為介面草案（文件設計），本次不實作。
 
 ### 建議抽象 1：Mode Runtime
@@ -318,8 +315,6 @@ interface FreezeContract {
   canEmitAutoMessage(): boolean;
 }
 ```
-
-此三層可讓 future sandbox mode 只替換 mode/pipeline，而不重寫整個 App shell。
 
 ---
 
@@ -360,9 +355,5 @@ interface FreezeContract {
    - `App.tsx` 保留 layout + name input + panel 組件。
    - 將業務 callback 改呼叫 `classicRuntime`。
 
-3. 預留 sandbox mode
-   - 新增 `src/modes/sandbox/`，可用同一套 `ModeRuntime` 介面接入。
-
 4. 最後再處理 director
    - 將空殼 `src/director/*` 改為 adapter 或刪除（需先完成 3 次 PR 規則與文件同步）。
-
