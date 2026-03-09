@@ -1,3 +1,9 @@
+## 2026-03-09（sandbox bootstrap/state mount/debug 空值修復）
+- [sandbox][bootstrap SSOT] 新增 `sandboxStoryMode.bootstrapRuntime(reason, at, minDurationMs)` 作為唯一正式初始化入口；mode switch / guard recovery 改呼叫同一入口，統一建立 `flow.step/questionIndex/stepStartedAt`、`introGate.startedAt/minDurationMs/passed`、`scheduler.phase`、`replyGate`、`currentPrompt`、`lastReplyEval`、`audit.transitions`。
+- [sandbox][clear/reset] `clearReplyUi` 新增 re-init guard：若偵測 sandbox flow/scheduler/introGate 失效，立刻執行 `bootstrapRuntime('clearReplyUi_reinit')`，避免「mode= sandbox_story 但 state 未掛起來」。
+- [sandbox][debug] `audit.transitions` 改以正式 `state.audit.transitions` 為權威來源；僅在缺失時由 transitions 衍生顯示，修正 debug 全空問題。
+- [guard] `scripts/sandbox-v2-regression-guards.mjs` 新增 bootstrapRuntime / audit bootstrap / clearReplyUi_reinit / guard recovery 檢查。
+
 - [sandbox][bootstrap/flow] NIGHT_01 前段流程整體修復：`PREHEAT_CHAT -> VIP_TAG_PLAYER -> WAIT_WARMUP_REPLY -> POST_REPLY_CHAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，禁止暖場前出題與未回覆自動跳段。
 - [sandbox][replyGate] 建立 single SSOT：autoPinFreeze 改讀正式 `replyGate`，不再由 mention detection 創造等待 gate。
 - [sandbox][input-eval] `writeSandboxLastReplyEval` 追加正式 `setLastReplyEval` 回寫，修正 evaluator 有跑但 debug 為 `-`。

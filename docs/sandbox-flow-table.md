@@ -59,3 +59,17 @@
 | 9 | ANSWER_EVAL | lastReplyEval + judge | 評分 |
 | 10 | REVEAL_WORD | word.reveal + pronounce | 顯字/發音 |
 | 11 | POST_REVEAL_CHAT | post reveal chat | reveal 後聊天室 |
+
+
+## Bootstrap SSOT（sandbox_story）
+- 唯一初始化入口：`sandboxStoryMode.bootstrapRuntime()`。
+- mode switch / guard recovery / clearReplyUi re-init 皆呼叫同一入口，不可各自寫一套 bootstrap。
+- 進入 sandbox_story 後必備正式 state：
+  - `flow.step/questionIndex/stepStartedAt`
+  - `introGate.startedAt/minDurationMs/passed`
+  - `scheduler.phase`
+  - `replyGate`（完整 shape）
+  - `currentPrompt`（可 null）
+  - `lastReplyEval`（可 null）
+  - `audit.transitions`（至少 bootstrap transition）
+

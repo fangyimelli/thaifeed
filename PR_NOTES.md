@@ -1,3 +1,9 @@
+## This PR (bootstrap/state mount/debug consistency follow-up)
+- 修復 `sandbox_story` mode 已切入但正式 state 未初始化（debug 大量 `- / 0 / []`）問題。
+- 建立單一初始化權威：`sandboxStoryMode.bootstrapRuntime()`；App mode entry、guard recovery、clearReplyUi re-init 全部整併到同一路徑。
+- `audit.transitions` 改為正式 state 權威來源，debug 不再讀到空陣列。
+- 補齊 regression guard：防止 flow.step/questionIndex/introGate/scheduler.phase 缺失與 debug 漂移。
+
 ## This PR
 - 一次整體修復 sandbox_story bootstrap/flow/replyGate/prompt/judge/reveal/debug consistency，收斂到 mode state machine SSOT。
 - NIGHT_01 前段改為正式 step-driven flow：`PREHEAT_CHAT -> VIP_TAG_PLAYER -> WAIT_WARMUP_REPLY -> POST_REPLY_CHAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`。
