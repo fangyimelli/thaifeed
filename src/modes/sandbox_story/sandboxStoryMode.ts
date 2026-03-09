@@ -22,15 +22,17 @@ export type SandboxFearDebugState = {
 };
 
 export const createSandboxV2InitialState = () => ({
-  flow: { step: 'BOOT', questionIndex: 0, stepStartedAt: Date.now(), tagAskedThisStep: false },
-  sandboxFlow: { gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false },
+  ssot: { version: NIGHT1.meta.version },
+  nightId: NIGHT1.meta.id,
+  flow: { step: 'BOOT', questionIndex: 0, stepStartedAt: Date.now(), transitions: [] as Array<{ event: string; at: number; detail?: string }>, tagAskedThisStep: false },
+  sandboxFlow: { step: 'BOOT', stepStartedAt: Date.now(), questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[] },
   prompt: {
     current: null,
     overlay: { consonantShown: '' },
     pinned: { promptIdRendered: '', lastWriter: { source: 'init', blockedReason: '', writerBlocked: false } },
     mismatch: false
   },
-  reveal: { visible: false, phase: 'idle', text: '', wordKey: '', consonantFromPrompt: '', durationMs: 0, doneAt: 0 },
+  reveal: { visible: false, phase: 'idle', text: '', wordKey: '', consonantFromPrompt: '', durationMs: 0, doneAt: 0, baseGrapheme: '', restText: '', restLen: 0, splitter: '', position: { xPct: 0, yPct: 0 }, safeRect: { minX: 0, maxX: 0, minY: 0, maxY: 0 } },
   consonant: {
     nodeChar: '',
     promptText: '',
@@ -47,9 +49,13 @@ export const createSandboxV2InitialState = () => ({
   preheat: { enabled: false, lastJoinAt: 0 },
   freeze: { frozen: false, reason: 'NONE', frozenAt: 0 },
   answerGate: { waiting: false, pausedChat: false },
+  answer: { submitInFlight: false, lastSubmitAt: 0 },
+  warmup: { gateActive: false, replyReceived: false, replyAt: 0, judgeArmed: false },
+  glitchBurst: { pending: false, remaining: 0 },
+  audio: { lastKey: '', state: 'idle' },
   player: { handle: '000', id: 'activeUser' },
   last: { lastAskAt: 0 },
-  scheduler: { phase: 'idle' },
+  scheduler: { phase: 'BOOTSTRAP', blockedReason: '' },
   nodeIndex: 0,
   ghostGate: { lastReason: '' },
   advance: { inFlight: false, lastAt: 0, lastReason: '', blockedReason: '' },
@@ -62,10 +68,13 @@ export const createSandboxV2InitialState = () => ({
   mismatch: { promptVsReveal: false },
   ghostMotion: { lastId: '', state: 'idle' },
   audit: { transitions: [] as Array<{ from: string; to: string; at: number; reason?: string }> },
-  replyGate: { type: 'none', armed: false, sourceMessageId: '', targetActor: '', canReply: false, sourceType: '', consumePolicy: 'single' },
-  lastReplyEval: { messageId: '', gateType: 'none', consumed: false, reason: '', rawInput: '', normalizedInput: '', extractedAnswer: '' },
+  currentPrompt: { id: '', kind: 'none', consonant: '', wordKey: '', thaiWord: '', translationZh: '' },
+  replyGate: { type: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetActor: '', sourceType: '', consumePolicy: 'single' },
+  lastReplyEval: { messageId: '', gateType: 'none', consumed: false, reason: '', rawInput: '', normalizedInput: '', extractedAnswer: '', raw: '', normalized: '', classifiedAs: 'none' },
   techBacklog: { queued: 0, pending: 0, lastDrainAt: 0 },
-  theory: { active: false, nodeId: '', promptId: '' },
+  theory: { active: false, nodeId: '', promptId: '', pendingQuestions: [] as string[] },
+  unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
+  blockedReason: '',
   transitions: [] as Array<{ event: string; at: number; detail?: string }>
 });
 
@@ -81,10 +90,13 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.consonant.parse = { ...base.consonant.parse, ...(raw?.consonant?.parse ?? {}) };
   next.consonant.judge = { ...base.consonant.judge, ...(raw?.consonant?.judge ?? {}) };
   next.sandboxFlow = { ...base.sandboxFlow, ...(raw?.sandboxFlow ?? {}) };
+  next.sandboxFlow.glitchEmitterIds = Array.isArray(raw?.sandboxFlow?.glitchEmitterIds) ? raw.sandboxFlow.glitchEmitterIds : [];
   next.pendingQuestions = { ...base.pendingQuestions, ...(raw?.pendingQuestions ?? {}) };
   next.pendingQuestions.queue = Array.isArray(raw?.pendingQuestions?.queue) ? raw.pendingQuestions.queue : [];
   next.pendingDisambiguation = { ...base.pendingDisambiguation, ...(raw?.pendingDisambiguation ?? {}) };
   next.q10Special = { ...base.q10Special, ...(raw?.q10Special ?? {}) };
+  next.flow = { ...base.flow, ...(raw?.flow ?? {}) };
+  next.flow.transitions = Array.isArray(raw?.flow?.transitions) ? raw.flow.transitions : [];
   next.scheduler = { ...base.scheduler, ...(raw?.scheduler ?? {}) };
   next.ghostGate = { ...base.ghostGate, ...(raw?.ghostGate ?? {}) };
   next.advance = { ...base.advance, ...(raw?.advance ?? {}) };
@@ -103,7 +115,20 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.lastReplyEval = { ...base.lastReplyEval, ...(raw?.lastReplyEval ?? {}) };
   next.techBacklog = { ...base.techBacklog, ...(raw?.techBacklog ?? {}) };
   next.theory = { ...base.theory, ...(raw?.theory ?? {}) };
+  next.theory.pendingQuestions = Array.isArray(raw?.theory?.pendingQuestions) ? raw.theory.pendingQuestions : [];
+  next.currentPrompt = { ...base.currentPrompt, ...(raw?.currentPrompt ?? {}) };
+  next.unresolvedAmbient = { ...base.unresolvedAmbient, ...(raw?.unresolvedAmbient ?? {}) };
+  next.ssot = { ...base.ssot, ...(raw?.ssot ?? {}) };
+  next.reveal.position = { ...base.reveal.position, ...(raw?.reveal?.position ?? {}) };
+  next.reveal.safeRect = { ...base.reveal.safeRect, ...(raw?.reveal?.safeRect ?? {}) };
+  next.answer = { ...base.answer, ...(raw?.answer ?? {}) };
+  next.warmup = { ...base.warmup, ...(raw?.warmup ?? {}) };
+  next.glitchBurst = { ...base.glitchBurst, ...(raw?.glitchBurst ?? {}) };
+  next.audio = { ...base.audio, ...(raw?.audio ?? {}) };
   next.transitions = Array.isArray(raw?.transitions) ? raw.transitions : [];
+  next.flow.transitions = Array.isArray(raw?.flow?.transitions) ? raw.flow.transitions : next.transitions;
+  next.nightId = raw?.nightId ?? base.nightId;
+  next.blockedReason = raw?.blockedReason ?? raw?.blocked?.reason ?? base.blockedReason;
   return next;
 }
 
@@ -125,14 +150,28 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     getCurrentNode: () => ssot.nodes[state.nodeIndex] ?? null,
     getCurrentPrompt: () => state.prompt.current,
     getSSOT: () => ssot,
-    importSSOT: (next: NightScript) => { ssot = next; return true; },
+    importSSOT: (next: NightScript) => { ssot = next; state.ssot.version = next.meta.version; state.nightId = next.meta.id; return true; },
     setPlayerIdentity: (p: any) => { state.player = { ...state.player, ...p }; },
     setJoinGate: (v: any) => { state.joinGate = { ...state.joinGate, ...v }; },
-    setFlowStep: (step: string, _reason?: string, at?: number) => { state.flow = { ...state.flow, step, stepStartedAt: at ?? Date.now(), tagAskedThisStep: false }; },
+    setFlowStep: (step: string, reason?: string, at?: number) => {
+      state.flow = { ...state.flow, step, stepStartedAt: at ?? Date.now(), tagAskedThisStep: false };
+      state.sandboxFlow = { ...state.sandboxFlow, step, stepStartedAt: at ?? Date.now(), questionIndex: state.flow.questionIndex };
+      state.transitions = [...(state.transitions ?? []), { event: reason || 'setFlowStep', at: at ?? Date.now(), detail: step }].slice(-20);
+      state.flow.transitions = state.transitions;
+    },
     setIntroGate: (v: any) => { state.introGate = { ...state.introGate, ...v }; },
     setPreheatState: (v: any) => { state.preheat = { ...state.preheat, ...v }; },
     markWaveDone: () => undefined,
-    setSandboxFlow: (v: any) => { state.sandboxFlow = { ...state.sandboxFlow, ...v }; },
+    setSandboxFlow: (v: any) => {
+      state.sandboxFlow = { ...state.sandboxFlow, ...v };
+      state.replyGate = {
+        ...state.replyGate,
+        gateConsumed: state.sandboxFlow.gateConsumed,
+        canReply: state.sandboxFlow.canReply,
+        retryCount: state.sandboxFlow.retryCount,
+        retryLimit: state.sandboxFlow.retryLimit
+      };
+    },
     commitConsonantJudgeResult: () => undefined,
     setFreeze: (v: any) => { state.freeze = { ...state.freeze, ...v }; },
     setAnswerGate: (v: any) => { state.answerGate = { ...state.answerGate, ...v }; },
@@ -142,14 +181,31 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     setPronounceState: () => undefined,
     forceRevealDone: () => undefined,
     markRevealDone: () => undefined,
-    setCurrentPrompt: (prompt: SandboxPrompt) => { state.prompt.current = prompt; state.consonant.nodeChar = prompt.consonant; },
+    setCurrentPrompt: (prompt: SandboxPrompt) => {
+      const node = ssot.nodes.find((n) => n.id === prompt.wordKey);
+      state.prompt.current = prompt;
+      state.currentPrompt = {
+        id: prompt.promptId,
+        kind: prompt.kind,
+        consonant: prompt.consonant,
+        wordKey: prompt.wordKey,
+        thaiWord: node?.wordText ?? '',
+        translationZh: node?.translationZh ?? ''
+      };
+      state.consonant.nodeChar = prompt.consonant;
+    },
     forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey }; return node; },
     commitAdvanceBlockedReason: () => undefined,
     setConsonantPromptText: () => undefined,
     commitPromptOverlay: () => undefined,
     markTagAskedThisStep: () => { state.flow.tagAskedThisStep = true; },
     setLastTimestamps: (v: any) => { state.last = { ...state.last, ...v }; },
-    forceAdvanceNode: () => { state.nodeIndex += 1; state.flow.questionIndex = state.nodeIndex; },
+    forceAdvanceNode: () => {
+      state.nodeIndex += 1;
+      state.flow.questionIndex = state.nodeIndex;
+      state.sandboxFlow = { ...state.sandboxFlow, questionIndex: state.nodeIndex };
+      state.unresolvedAmbient = { ...state.unresolvedAmbient, remaining: 0 };
+    },
     commitHintText: () => undefined,
     activateDebugOverride: () => undefined,
     advancePrompt: () => undefined,

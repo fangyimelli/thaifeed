@@ -1,3 +1,6 @@
+- [sandbox] 修正 sandbox_story v2 root runtime mount：補齊正式 initial state shape、mode 進入即掛載、debug hydration 直讀 v2 root state，避免 `sandbox.ssot.version/flow.step/scheduler.phase` 顯示 fallback `-`。
+- [guard] 擴充 `scripts/sandbox-v2-regression-guards.mjs`：initial shape、mode mount、debug hydration、ssot.version、flow.step/scheduler.phase 五項回歸檢查。
+
 - [regression] 新增 `scripts/regression-night01-live-chat-guards.mjs` 新版檢查：reveal-before-riot、prompt-before-tag、gate-before-ask、finite ambient、mention strip。
 
 ### Added

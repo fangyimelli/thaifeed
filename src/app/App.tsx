@@ -3404,11 +3404,11 @@ export default function App() {
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
-        flow: {
+        sandboxFlow: {
           ...(window.__CHAT_DEBUG__ as any)?.sandbox?.flow,
-          step: sandboxState.sandboxFlow.step,
-          stepStartedAt: sandboxState.sandboxFlow.stepStartedAt,
-          questionIndex: sandboxState.sandboxFlow.questionIndex,
+          step: sandboxState.flow.step,
+          stepStartedAt: sandboxState.flow.stepStartedAt,
+          questionIndex: sandboxState.flow.questionIndex,
           replyGateActive: sandboxState.sandboxFlow.replyGateActive,
           replyTarget: sandboxState.sandboxFlow.replyTarget,
           backlogTechMessagesLength: sandboxState.sandboxFlow.backlogTechMessages.length,
@@ -3499,12 +3499,8 @@ export default function App() {
           warmupReplyAt: sandboxState.warmup.replyAt,
           judgeArmed: sandboxState.warmup.judgeArmed
         },
-        replyGate: {
-          ...sandboxReplyGateDebugRef.current,
-          canReply: derivedReplyGate.canReply,
-          sourceType: derivedReplyGate.replySourceType ?? '-'
-        },
-        lastReplyEval: { ...sandboxLastReplyEvalRef.current },
+        replyGate: sandboxState.replyGate,
+        lastReplyEval: sandboxState.lastReplyEval,
         freeze: sandboxState.freeze,
         glitchBurst: sandboxState.glitchBurst,
         player: sandboxState.player,
@@ -3515,6 +3511,14 @@ export default function App() {
           flowStep: sandboxState.sandboxFlow.step,
           stepStartedAt: sandboxState.sandboxFlow.stepStartedAt,
           blockedReason: sandboxState.scheduler.blockedReason || '-'
+        },
+        ssot: sandboxState.ssot,
+        nightId: sandboxState.nightId,
+        flow: {
+          step: sandboxState.flow.step,
+          questionIndex: sandboxState.flow.questionIndex,
+          stepStartedAt: sandboxState.flow.stepStartedAt,
+          transitions: sandboxState.flow.transitions
         },
         introGate: sandboxState.introGate,
         audit: {
@@ -3597,11 +3601,7 @@ export default function App() {
           lastReason: sandboxState.advance.lastReason || '-',
           blockedReason: sandboxState.advance.blockedReason || '-'
         },
-        currentPrompt: {
-          id: sandboxState.prompt.current?.promptId ?? '-',
-          consonant: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '-',
-          wordKey: sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.wordKey : '-'
-        },
+        currentPrompt: sandboxState.currentPrompt,
         prompt: {
           current: {
             kind: sandboxState.prompt.current?.kind ?? '-',
@@ -3638,17 +3638,9 @@ export default function App() {
           lastAt: sandboxState.fearSystem.footsteps.lastAt
         },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
-        blockedReason: sandboxState?.blocked?.reason || '-',
-        techBacklog: {
-          queued: sandboxState?.techBacklog?.queued ?? 0,
-          pending: sandboxState?.techBacklog?.pending ?? 0,
-          lastDrainAt: sandboxState?.techBacklog?.lastDrainAt ?? 0
-        },
-        theory: {
-          active: sandboxState?.theory?.active ?? false,
-          nodeId: sandboxState?.theory?.nodeId ?? '-',
-          promptId: sandboxState?.theory?.promptId ?? '-'
-        },
+        blockedReason: sandboxState.blockedReason || sandboxState?.blocked?.reason || '-',
+        techBacklog: sandboxState.techBacklog,
+        theory: sandboxState.theory,
         transitions: Array.isArray(sandboxState?.transitions) ? sandboxState.transitions.slice(-20) : [],
         reveal: {
           visible: sandboxState.reveal.visible,
@@ -3697,7 +3689,7 @@ export default function App() {
             state: sandboxState.ghostMotion.state
           },
           ssot: {
-            version: sandboxSsotVersion
+            version: sandboxState.ssot?.version || sandboxSsotVersion
           },
           currentNode: {
             word: sandboxNode?.word ?? '-',

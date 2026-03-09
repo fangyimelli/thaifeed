@@ -1,3 +1,5 @@
+- v2 runtime boot invariant：進入 `sandbox_story` 即需有 `flow.step=BOOT`、`scheduler.phase=BOOTSTRAP`、`ssot.version` 與完整 root objects；debug panel 僅可讀取 v2 root state，不可用 legacy fallback 偽裝初始化成功。
+
 # sandbox_story v2 flow table (NIGHT_01 MVP)
 
 | State | 玩家可輸入 | Prompt | Reveal | Emitter | 轉移條件 |
