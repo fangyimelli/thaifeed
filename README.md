@@ -1,3 +1,12 @@
+## 2026-03-09 Sandbox NIGHT_01 Q1 reveal-order hard fix（sandbox only）
+
+- runtime flow 改為 `PREJOIN -> PREHEAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，先建 reveal/prompt 再進 riot/tag。
+- `REVEAL_1_RIOT` / `TAG_PLAYER_1` / `WAIT_REPLY_1` 全面加上 reveal+prompt prerequisite guard；未 reveal 或 prompt 空值時禁止 ask-player。
+- `WAIT_REPLY_1` 才允許 questionEmitter 發問；gate 未 armed 不得發問。
+- 玩家輸入改為先 strip mention 再 parser/judge，`lastReplyEval` 新增 `extractedAnswer`。
+- unresolved ambient 改為有限 burst（最多 2 則）+ retry 最多一次，consume 成功後立即停止。
+- debug 補齊 `unresolvedAmbient.active/remaining/completed` 與 `lastReplyEval.extractedAnswer`。
+
 ## 2026-03-08 Sandbox NIGHT_01 single-orchestrator takeover（sandbox only）
 
 - NIGHT_01 前期 flow 改為實際由 `sandboxFlow` 接管：`PREJOIN -> PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，不再經 `WARMUP_TAG` 雙軌切換。

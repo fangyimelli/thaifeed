@@ -1,3 +1,25 @@
+# PR Notes - Sandbox NIGHT_01 Q1 reveal/prompt/gate ordering root fix
+
+## 修改原因
+- NIGHT_01 第一題存在順序錯位：reveal/prompt 尚未建立時，riot 與 ask-player emitter 已先偷跑，導致玩家輸入無法被正式 consume。
+
+## 本次變更（sandbox only）
+- flow contract 改為 `PREJOIN -> PREHEAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`。
+- `REVEAL_1_START` 負責先寫入 SSOT：`currentPrompt + consonant/wordKey + reveal metadata`，完成後才進 riot。
+- `REVEAL_1_RIOT` / `TAG_PLAYER_1` / `WAIT_REPLY_1` 全加 prerequisite guard；未 reveal / prompt 空值時禁止進行。
+- `TAG_PLAYER_1` 改為 transition only；問句 emitter 改為 `WAIT_REPLY_1`（gate armed）才可送出。
+- 玩家輸入改為 mention strip 後才 parser/judge；`lastReplyEval` 新增 `extractedAnswer`。
+- unresolved ambient 改為有限 burst（最多 2 則）+ retry 最多一次，consume 後立即停止。
+- debug 補齊 `unresolvedAmbient.active/remaining/completed` 與 `flow.questionEmitter`、`lastReplyEval.extractedAnswer`。
+
+## Regression guards
+1. reveal 未成立時不得進 `REVEAL_1_RIOT`。
+2. currentPrompt 未建立時不得進 `TAG_PLAYER_1`。
+3. gate 未 armed 時不得送 ask-player emitter。
+4. 玩家輸入後 `lastReplyEval` 必寫入 `extractedAnswer`。
+5. consume 成功後不得再出同 gate unresolved emit。
+6. unresolved ambient 不得無限模板輪播。
+
 # PR Notes - Sandbox runtime boot chain reconnect (sandbox_story only)
 
 ## 修改原因

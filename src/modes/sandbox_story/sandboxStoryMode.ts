@@ -20,6 +20,7 @@ export type SandboxRevealSplitter = 'segmenter' | 'arrayfrom';
 export type SandboxFlowStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'REVEAL_1_START'
   | 'WARMUP_TAG'
   | 'WARMUP_WAIT_REPLY'
   | 'INTRO_IDLE'
@@ -449,6 +450,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
     if (step === 'PREJOIN') return 'boot';
     if (step === 'PREHEAT') return 'intro';
     if (step === 'WARMUP_TAG' || step === 'INTRO_IDLE') return 'awaitingTag';
+    if (step === 'REVEAL_1_START') return 'revealingWord';
     if (step === 'WARMUP_WAIT_REPLY') return 'awaitingAnswer';
     if (step === 'REVEAL_1_RIOT') return 'chatRiot';
     if (step === 'TAG_PLAYER_1' || step === 'TAG_PLAYER_2_PRONOUNCE' || step === 'TAG_PLAYER_3_MEANING') return 'awaitingTag';
@@ -741,7 +743,7 @@ export function createSandboxStoryMode(): SandboxStoryMode {
       state.sandboxFlow.introElapsedMs = state.introGate.startedAt > 0 ? Math.max(0, now - state.introGate.startedAt) : 0;
       if (state.flow.step === 'PREHEAT' && state.sandboxFlow.introElapsedMs >= state.introGate.minDurationMs) {
         state.preheat.enabled = false;
-        setFlowStepInternal('REVEAL_1_RIOT', 'intro_passed');
+        setFlowStepInternal('REVEAL_1_START', 'intro_passed');
       }
       if (state.reveal.visible && state.reveal.phase !== 'done') {
         const elapsed = Date.now() - state.reveal.startedAt;

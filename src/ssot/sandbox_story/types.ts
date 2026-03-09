@@ -58,6 +58,7 @@ export type GhostMotionPack = {
 export type SandboxDeterministicFlowStep =
   | 'PREJOIN'
   | 'PREHEAT'
+  | 'REVEAL_1_START'
   | 'WARMUP_TAG'
   | 'WARMUP_WAIT_REPLY'
   | 'INTRO_IDLE'
