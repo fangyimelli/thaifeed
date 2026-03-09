@@ -21,6 +21,8 @@ export type SandboxFearDebugState = {
   footsteps: { probability: number; cooldownMs: number; cooldownRemaining: number; lastAt: number };
 };
 
+const SANDBOX_BOOTSTRAP_MIN_DURATION_MS = 30_000;
+
 export const createSandboxV2InitialState = () => {
   const bootAt = Date.now();
   const initialTransitions = [
@@ -31,8 +33,8 @@ export const createSandboxV2InitialState = () => {
   return {
   ssot: { version: NIGHT1.meta.version },
   nightId: NIGHT1.meta.id,
-  flow: { step: 'BOOT', questionIndex: 0, stepStartedAt: bootAt, transitions: initialTransitions, tagAskedThisStep: false },
-  sandboxFlow: { step: 'BOOT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[] },
+  flow: { step: 'PREHEAT_CHAT', questionIndex: 0, stepStartedAt: bootAt, transitions: initialTransitions, tagAskedThisStep: false },
+  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[] },
   prompt: {
     current: null,
     overlay: { consonantShown: '' },
@@ -52,7 +54,7 @@ export const createSandboxV2InitialState = () => {
   lastCategory: '',
   pendingDisambiguation: { active: false, attempts: 0, promptId: '' },
   q10Special: { armed: false, revealed: false },
-  introGate: { startedAt: 0, minDurationMs: 30000, passed: false, remainingMs: 30000 },
+  introGate: { startedAt: bootAt, minDurationMs: SANDBOX_BOOTSTRAP_MIN_DURATION_MS, passed: false, remainingMs: SANDBOX_BOOTSTRAP_MIN_DURATION_MS },
   preheat: { enabled: false, lastJoinAt: 0 },
   freeze: { frozen: false, reason: 'NONE', frozenAt: 0 },
   answerGate: { waiting: false, pausedChat: false },
@@ -62,7 +64,7 @@ export const createSandboxV2InitialState = () => {
   audio: { lastKey: '', state: 'idle' },
   player: { handle: '000', id: 'activeUser' },
   last: { lastAskAt: 0 },
-  scheduler: { phase: 'BOOTSTRAP', blockedReason: '' },
+  scheduler: { phase: 'preheat', blockedReason: '' },
   nodeIndex: 0,
   ghostGate: { lastReason: '' },
   advance: { inFlight: false, lastAt: 0, lastReason: '', blockedReason: '' },
@@ -74,7 +76,7 @@ export const createSandboxV2InitialState = () => {
   blocked: { reason: '' },
   mismatch: { promptVsReveal: false },
   ghostMotion: { lastId: '', state: 'idle' },
-  audit: { transitions: [{ from: 'INIT', to: 'BOOT', at: bootAt, reason: 'mode_state_created' }] as Array<{ from: string; to: string; at: number; reason?: string }> },
+  audit: { transitions: [{ from: 'INIT', to: 'PREHEAT_CHAT', at: bootAt, reason: 'mode_state_created' }] as Array<{ from: string; to: string; at: number; reason?: string }> },
   currentPrompt: null as null | { id: string; kind: string; consonant: string; wordKey: string; thaiWord: string; translationZh: string },
   replyGate: { gateType: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetPlayerId: '', sourceType: '', consumePolicy: 'single' },
   lastReplyEval: null as null | { messageId: string; gateType: string; consumed: boolean; reason: string; rawInput: string; normalizedInput: string; extractedAnswer: string; raw: string; normalized: string; classifiedAs: string; at: number },
@@ -160,25 +162,16 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       transitions: [...(state.audit?.transitions ?? []), { from, to, at, reason }].slice(-20)
     };
   };
+  const hasBootstrapState = () => Boolean(
+    state.flow?.step
+    && Number.isFinite(state.flow?.questionIndex)
+    && state.flow?.stepStartedAt > 0
+    && state.scheduler?.phase
+    && state.introGate?.startedAt > 0
+    && state.introGate?.minDurationMs > 0
+  );
 
-  return {
-    id: 'sandbox_story',
-    label: 'Sandbox Story V2',
-    init() {},
-    onIncomingTag() {},
-    onPlayerReply() {},
-    tick() {},
-    dispose() {},
-    getState: () => ensureSandboxV2StateShape(state),
-    getFearDebugState: () => fear,
-    getCurrentNode: () => ssot.nodes[state.nodeIndex] ?? null,
-    getCurrentPrompt: () => state.prompt.current,
-    getSSOT: () => ssot,
-    importSSOT: (next: NightScript) => { ssot = next; state.ssot.version = next.meta.version; state.nightId = next.meta.id; return true; },
-    setPlayerIdentity: (p: any) => { state.player = { ...state.player, ...p }; },
-    setJoinGate: (v: any) => { state.joinGate = { ...state.joinGate, ...v }; },
-    appendTransition,
-    bootstrapRuntime: (reason = 'mode_entry', at = Date.now(), minDurationMs = 30_000) => {
+  const bootstrapRuntime = (reason = 'mode_entry', at = Date.now(), minDurationMs = SANDBOX_BOOTSTRAP_MIN_DURATION_MS) => {
       const prevStep = state.flow?.step || 'BOOT';
       const bootAt = at;
       state.flow = { ...state.flow, step: 'PREHEAT_CHAT', questionIndex: 0, stepStartedAt: bootAt, tagAskedThisStep: false };
@@ -206,12 +199,38 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         sourceType: '',
         consumePolicy: 'single'
       };
+      state.prompt = { ...state.prompt, current: null };
       state.currentPrompt = null;
       state.lastReplyEval = null;
       appendTransition('BOOTSTRAP_RUNTIME', bootAt, reason);
       appendTransition('ENTER_PREHEAT_CHAT', bootAt, reason);
       appendAuditTransition(prevStep, 'PREHEAT_CHAT', bootAt, reason);
       appendAuditTransition('scheduler', 'preheat', bootAt, reason);
+    };
+
+  return {
+    id: 'sandbox_story',
+    label: 'Sandbox Story V2',
+    init() {},
+    onIncomingTag() {},
+    onPlayerReply() {},
+    tick() {},
+    dispose() {},
+    getState: () => ensureSandboxV2StateShape(state),
+    getFearDebugState: () => fear,
+    getCurrentNode: () => ssot.nodes[state.nodeIndex] ?? null,
+    getCurrentPrompt: () => state.prompt.current,
+    getSSOT: () => ssot,
+    importSSOT: (next: NightScript) => { ssot = next; state.ssot.version = next.meta.version; state.nightId = next.meta.id; return true; },
+    setPlayerIdentity: (p: any) => { state.player = { ...state.player, ...p }; },
+    setJoinGate: (v: any) => { state.joinGate = { ...state.joinGate, ...v }; },
+    appendTransition,
+    bootstrapRuntime,
+    ensureBootstrapState: (reason = 'guard_recovery', at = Date.now(), minDurationMs = SANDBOX_BOOTSTRAP_MIN_DURATION_MS, force = false) => {
+      if (force || !hasBootstrapState() || state.flow?.step === 'PREJOIN') {
+        bootstrapRuntime(reason, at, minDurationMs);
+      }
+      return ensureSandboxV2StateShape(state);
     },
     setSchedulerPhase: (phase: string, blockedReason = '', at?: number) => {
       const previous = state.scheduler?.phase ?? 'unknown';

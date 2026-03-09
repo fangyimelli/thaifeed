@@ -1566,11 +1566,8 @@ export default function App() {
     if (!sandboxState.joinGate.satisfied) {
       sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt: now });
     }
-    if (bootstrapMissing || sandboxState.flow.step === 'PREJOIN') {
-      sandboxModeRef.current.bootstrapRuntime?.(reason, now, 30_000);
-    }
-
-    const bootstrappedState = sandboxModeRef.current.getState();
+    const bootstrappedState = sandboxModeRef.current.ensureBootstrapState?.(reason, now, 30_000, bootstrapMissing || sandboxState.flow.step === 'PREJOIN')
+      ?? sandboxModeRef.current.getState();
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: bootstrappedState.preheat.lastJoinAt || now });
     preheatRuntime.startedAt = bootstrappedState.introGate.startedAt || now;
     preheatRuntime.lastEmitAt = 0;
@@ -1936,7 +1933,7 @@ export default function App() {
     if (modeRef.current.id === 'sandbox_story') {
       const ss = sandboxModeRef.current.getState();
       if (!ss.flow?.step || !Number.isFinite(ss.flow?.questionIndex) || !ss.scheduler?.phase || !ss.introGate?.startedAt) {
-        sandboxModeRef.current.bootstrapRuntime?.('clearReplyUi_reinit', now, 30_000);
+        sandboxModeRef.current.ensureBootstrapState?.('clearReplyUi_reinit', now, 30_000, true);
       }
     }
     sandboxQnaDebugRef.current.lastClearReplyUiAt = now;
@@ -3350,6 +3347,7 @@ export default function App() {
         const guardState = sandboxModeRef.current.getState();
         sandboxRuntimeGuardRef.current.modeEnteredAt = sandboxRuntimeGuardRef.current.modeEnteredAt || now;
         if (!guardState.joinGate.satisfied || guardState.flow.step === 'PREJOIN' || !guardState.introGate.startedAt || !guardState.flow.step || !Number.isFinite(guardState.flow.questionIndex) || !guardState.scheduler.phase) {
+          sandboxModeRef.current.ensureBootstrapState?.('guard_boot_recovery', now, 30_000, true);
           ensureSandboxRuntimeStarted('guard_boot_recovery');
         }
       }
@@ -3546,7 +3544,8 @@ export default function App() {
         },
         ui: {
           consonantBubble: {
-            visible: !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
+            visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)
+              && !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
           },
           promptGlyph: {
             className: 'glyph-blink sandbox-story-prompt-glyph',
@@ -4903,8 +4902,6 @@ export default function App() {
     sandboxModeRef.current.setPlayerIdentity({ handle: sanitizedName, id: playerId });
     ensureSandboxRuntimeStarted('sandbox_join_submitted', sanitizedName);
     sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt });
-    sandboxModeRef.current.setFlowStep('PREHEAT_CHAT', 'sandbox_join_submitted', submittedAt);
-    sandboxModeRef.current.setIntroGate({ startedAt: submittedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: submittedAt });
     sandboxPreheatOrchestrationRef.current = {
       startedAt: submittedAt,
