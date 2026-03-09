@@ -13,7 +13,7 @@ const checks = [
       if (!app.includes("setFlowStep('BOOT', 'ENTER_BOOT'")) {
         throw new Error('runtime starter does not enter BOOT explicitly');
       }
-      if (!app.includes("setFlowStep('PREHEAT', 'ENTER_PREHEAT_CHAT'")) {
+      if (!app.includes("setFlowStep('PREHEAT_CHAT', 'ENTER_PREHEAT_CHAT'")) {
         throw new Error('runtime starter does not transition to PREHEAT_CHAT');
       }
     }
@@ -149,4 +149,10 @@ if (!app.includes('step: sandboxState.flow.step') || !app.includes('phase: sandb
   throw new Error('flow.step/scheduler.phase should not rely on legacy fallback after mode entry');
 }
 
+if (!app.includes("setFlowStep('VIP_TAG_PLAYER'")) { throw new Error('VIP_TAG_PLAYER transition missing'); }
+if (!app.includes("'WAIT_WARMUP_REPLY'")) { throw new Error('WAIT_WARMUP_REPLY step missing'); }
+if (!app.includes("setFlowStep('POST_REPLY_CHAT'")) { throw new Error('POST_REPLY_CHAT transition missing'); }
+if (!app.includes("setFlowStep('ANSWER_EVAL'")) { throw new Error('ANSWER_EVAL transition missing'); }
+if (!app.includes("setFlowStep('REVEAL_WORD'")) { throw new Error('REVEAL_WORD transition missing'); }
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT'")) { throw new Error('POST_REVEAL_CHAT transition missing'); }
 console.log('sandbox v2 regression guards passed');

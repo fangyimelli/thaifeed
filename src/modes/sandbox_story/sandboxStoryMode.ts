@@ -75,9 +75,9 @@ export const createSandboxV2InitialState = () => {
   mismatch: { promptVsReveal: false },
   ghostMotion: { lastId: '', state: 'idle' },
   audit: { transitions: [] as Array<{ from: string; to: string; at: number; reason?: string }> },
-  currentPrompt: { id: '', kind: 'none', consonant: '', wordKey: '', thaiWord: '', translationZh: '' },
+  currentPrompt: null as null | { id: string; kind: string; consonant: string; wordKey: string; thaiWord: string; translationZh: string },
   replyGate: { gateType: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetPlayerId: '', sourceType: '', consumePolicy: 'single' },
-  lastReplyEval: { messageId: '', gateType: 'none', consumed: false, reason: '', rawInput: '', normalizedInput: '', extractedAnswer: '', raw: '', normalized: '', classifiedAs: 'none' },
+  lastReplyEval: null as null | { messageId: string; gateType: string; consumed: boolean; reason: string; rawInput: string; normalizedInput: string; extractedAnswer: string; raw: string; normalized: string; classifiedAs: string; at: number },
   techBacklog: { queued: 0, pending: 0, lastDrainAt: 0 },
   theory: { active: false, nodeId: '', promptId: '', pendingQuestions: [] as string[] },
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
@@ -126,11 +126,11 @@ export function ensureSandboxV2StateShape(raw: any) {
     gateType: legacyReplyGate.gateType ?? legacyReplyGate.type ?? base.replyGate.gateType,
     targetPlayerId: legacyReplyGate.targetPlayerId ?? legacyReplyGate.targetActor ?? base.replyGate.targetPlayerId
   };
-  next.lastReplyEval = { ...base.lastReplyEval, ...(raw?.lastReplyEval ?? {}) };
+  next.lastReplyEval = raw?.lastReplyEval ? { ...(base.lastReplyEval ?? {}), ...(raw?.lastReplyEval ?? {}) } : null;
   next.techBacklog = { ...base.techBacklog, ...(raw?.techBacklog ?? {}) };
   next.theory = { ...base.theory, ...(raw?.theory ?? {}) };
   next.theory.pendingQuestions = Array.isArray(raw?.theory?.pendingQuestions) ? raw.theory.pendingQuestions : [];
-  next.currentPrompt = { ...base.currentPrompt, ...(raw?.currentPrompt ?? {}) };
+  next.currentPrompt = raw?.currentPrompt ? { ...(base.currentPrompt ?? {}), ...(raw?.currentPrompt ?? {}) } : null;
   next.unresolvedAmbient = { ...base.unresolvedAmbient, ...(raw?.unresolvedAmbient ?? {}) };
   next.ssot = { ...base.ssot, ...(raw?.ssot ?? {}) };
   next.reveal.position = { ...base.reveal.position, ...(raw?.reveal?.position ?? {}) };
@@ -201,6 +201,34 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         consumePolicy: state.sandboxFlow.consumePolicy ?? state.replyGate.consumePolicy,
         questionEmitter: state.sandboxFlow.questionEmitterId ?? state.replyGate.questionEmitter,
         targetPlayerId: state.sandboxFlow.replyTarget ?? state.replyGate.targetPlayerId
+      };
+    },
+    setReplyGate: (v: any) => {
+      state.replyGate = { ...state.replyGate, ...v };
+      state.sandboxFlow = {
+        ...state.sandboxFlow,
+        gateType: state.replyGate.gateType,
+        replyGateActive: Boolean(state.replyGate.armed),
+        canReply: Boolean(state.replyGate.canReply),
+        gateConsumed: Boolean(state.replyGate.gateConsumed),
+        replyTarget: state.replyGate.targetPlayerId,
+        replySourceMessageId: state.replyGate.sourceMessageId,
+        replySourceType: state.replyGate.sourceType,
+        consumePolicy: state.replyGate.consumePolicy,
+      };
+    },
+    setLastReplyEval: (evalPatch: any) => {
+      const prev = state.lastReplyEval ?? { messageId: '', gateType: 'none', consumed: false, reason: '', rawInput: '', normalizedInput: '', extractedAnswer: '', raw: '', normalized: '', classifiedAs: 'none', at: 0 };
+      state.lastReplyEval = { ...prev, ...evalPatch };
+    },
+    setJudgeResult: (result: string, detail?: any) => {
+      state.consonant = {
+        ...state.consonant,
+        judge: {
+          ...state.consonant.judge,
+          lastResult: result,
+          ...(detail ?? {})
+        }
       };
     },
     commitConsonantJudgeResult: () => undefined,

@@ -1,3 +1,9 @@
+- [sandbox][night_01] 前段 flow 正式改為 `PREHEAT_CHAT -> VIP_TAG_PLAYER -> WAIT_WARMUP_REPLY -> POST_REPLY_CHAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，暖場回覆未 consume 前不得前進。
+- [sandbox][replyGate SSOT] `deriveSandboxReplyGateState()` 改為直接讀正式 `state.replyGate`；warmup/題目 wait step 由 flow controller 寫入 `replyGate(gateType/armed/canReply/targetPlayerId/sourceMessageId/sourceType/consumePolicy/createdAt)`。
+- [sandbox][evaluator/debug] 每次玩家輸入一律以 `setLastReplyEval()` 寫回 mode 正式 state（含 `messageId/gateType/rawInput/normalizedInput/extractedAnswer/consumed/reason/at`），debug 與 evaluator 同源。
+- [sandbox][prompt/judge/reveal] 第一題鏈路改為 `WAIT_REPLY_1 -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT`，由正式 flow step 驅動 currentPrompt/judge/reveal/pronounce。
+- [sandbox][Removed/Deprecated Log] deprecated flow step aliases: `PREHEAT`, `WARMUP_WAIT_REPLY`, `POST_ANSWER_GLITCH_1`, `NETWORK_ANOMALY_1`（以 NIGHT_01 正式 step 命名替代）。
+
 - [sandbox][SSOT] replyGate 正式欄位改為 `gateType/armed/canReply/targetPlayerId/sourceMessageId/sourceType/consumePolicy`，移除 `type/targetActor` 作為權威來源；hydration 仍向下相容舊欄位。
 - [sandbox][flow/debug] 每個 tick 以 `deriveSandboxReplyGateState()` 回寫正式 `replyGate` state（含 gateType/sourceMessageId/targetPlayerId），確保 flow/state/debug 同源。
 - [guard] 新增 regression guard：replyGate schema 必須包含 `gateType + targetPlayerId`，且 debug panel 必須顯示 `sandbox.replyGate.gateType/armed`。

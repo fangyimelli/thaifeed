@@ -43,3 +43,19 @@
 - transitions: 永遠為 array（預設 `[]`，UI 顯示最近 20 筆）
 
 > 設計原則：debug 只輔助，不可阻斷 runtime；hydration 未完成時一律可安全 render。
+
+
+## NIGHT_01 (Enforced integration after full fix)
+| Order | flow.step | Gate / State Invariant | Notes |
+|---|---|---|---|
+| 1 | PREHEAT_CHAT | introGate.startedAt + scheduler.phase=preheat | 只允許暖場聊天，不出題 |
+| 2 | VIP_TAG_PLAYER | no auto-advance without emission | 由 flow controller 發出 VIP tag |
+| 3 | WAIT_WARMUP_REPLY | replyGate.armed=true, gateType=warmup_reply | 玩家未回覆不得前進 |
+| 4 | POST_REPLY_CHAT | lastReplyEval.consumed=true (warmup) | 暖場回覆後聊天室接話 |
+| 5 | REVEAL_1_START | currentPrompt prepared | 第一次 reveal 起始 |
+| 6 | REVEAL_1_RIOT | reveal visible + riot chat | 混亂猜測段 |
+| 7 | TAG_PLAYER_1 | question emitter emits | 正式點名進題 |
+| 8 | WAIT_REPLY_1 | replyGate.armed=true, gateType=consonant_answer + currentPrompt | 第一題等待回答 |
+| 9 | ANSWER_EVAL | lastReplyEval + judge | 評分 |
+| 10 | REVEAL_WORD | word.reveal + pronounce | 顯字/發音 |
+| 11 | POST_REVEAL_CHAT | post reveal chat | reveal 後聊天室 |
