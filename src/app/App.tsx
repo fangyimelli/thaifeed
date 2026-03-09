@@ -6454,161 +6454,87 @@ export default function App() {
                     <button type="button" onClick={handleDebugResetFear}>Reset Fear</button>
                   </div>
                   <div className="debug-route-meta">
-                    <div><strong>Night Timeline</strong></div>
-                    <div>sandbox.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.visible ?? false)}</div>
+                    <div><strong>CORE FLOW STATE – TRUSTED</strong></div>
+                    <div>flow.step: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.step ?? '-'}</div>
+                    <div>flow.questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionIndex ?? '-'}</div>
+                    <div>flow.stepStartedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.stepStartedAt ?? '-'}</div>
+                    <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
+                    <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
+                    <div>introGate.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.startedAt ?? 0}</div>
+                    <div>introGate.minDurationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.minDurationMs ?? 0}</div>
+                    <div>introGate.passed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.passed ?? false)}</div>
+                    <div>sandbox.replyGate.gateType/armed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
+                    <div>sandbox.replyGate.gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'}</div>
+                    <div>sandbox.replyGate.armed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
+                    <div>sandbox.replyGate.canReply: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.canReply ?? false)}</div>
+                    <div>sandbox.replyGate.targetPlayerId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetPlayerId ?? '-'}</div>
+                    <div>sandbox.replyGate.sourceMessageId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.consumed/reason: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.consumed ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.reason ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.raw/normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.rawInput ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.normalizedInput ?? '-'}</div>
+                    <div>sandbox.lastReplyEval.extractedAnswer: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.extractedAnswer ?? '-'}</div>
+                    <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
+                    <div>sandbox.prompt.current.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.id ?? '-'}</div>
+                    <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
+                    <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
+                    <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
+                    <div>sandbox.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.result ?? '-'}</div>
+                    <div>word.reveal.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.active ?? false)}</div>
+                    <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>FLOW / GATE DIAGNOSTICS</strong></div>
+                    <div>introGate.remainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.introGate?.remainingMs ?? '-'}</div>
+                    <div>sandboxFlow.replyGateActive/replyTarget: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.replyGateActive ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.replyTarget ?? '-'}</div>
+                    <div>sandboxFlow.gateType/canReply: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.canReply ?? false)}</div>
+                    <div>sandboxFlow.retryCount/retryLimit: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.retryCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.retryLimit ?? 0}</div>
+                    <div>sandboxFlow.lastPromptAt/nextRetryAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.lastPromptAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextRetryAt ?? 0}</div>
+                    <div>sandboxFlow.gateConsumed/replyGateActive: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.gateConsumed ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.replyGateActive ?? false)}</div>
+                    <div>sandboxFlow.promptFingerprint/normalizedPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.questionPromptFingerprint ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.normalizedPrompt ?? '-'}</div>
+                    <div>sandboxFlow.questionEmitter/retryEmitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.questionEmitterId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.retryEmitterId ?? '-'}</div>
+                    <div>sandboxFlow.activeSpeakerRoles: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.activeSpeakerRoles ?? [])}</div>
+                    <div>sandboxFlow.introElapsedMs/nextBeatAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.introElapsedMs ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextBeatAt ?? 0}</div>
+                    <div>sandboxFlow.backlogTechMessages.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.backlogTechMessagesLength ?? 0}</div>
+                    <div>audit.flow.step/stepEnteredAt/questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.step ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.stepEnteredAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.questionIndex ?? 0}</div>
+                    <div>audit.transitions (source: state.audit.transitions | fallback): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.transitions ?? [])}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>PROMPT / JUDGE / REVEAL</strong></div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
+                    <div>word.reveal.base/rest/restLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restLen ?? '-'}</div>
+                    <div>word.reveal.splitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.splitter ?? '-'}</div>
+                    <div>word.reveal.position.xPct/yPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.xPct ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.yPct ?? '-'}</div>
+                    <div>word.reveal.safeRect: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.safeRect ?? {})}</div>
+                    <div>word.reveal.consonantFromPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.consonantFromPrompt ?? '-'}</div>
+                    <div>word.reveal.durationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.durationMs ?? '-'}</div>
+                    <div>consonant.judge.lastInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastInput ?? '-'}</div>
+                    <div>consonant.judge.lastResult: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
+                    <div>sandbox.judge.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.blockedReason ?? '-'}</div>
+                    <div>sandbox.prompt.next.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.promptNext?.id ?? '-'}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>LEGACY COMPATIBILITY</strong></div>
+                    <div><strong>[LEGACY COMPATIBILITY – NON AUTHORITATIVE]</strong></div>
+                    <div>answerGate is legacy compatibility layer. replyGate is the authoritative gate.</div>
+                    <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
+                    <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
+                    <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>VISUAL STATE – NOT FLOW AUTHORITY</strong></div>
+                    <div>Visual UI state. Not authoritative for story flow.</div>
                     <div>ui.consonantBubble.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.consonantBubble?.visible ?? true)}</div>
                     <div>ui.promptGlyph.className: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.className ?? '-'}</div>
                     <div>ui.promptGlyph.colorResolved: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.colorResolved ?? '-'}</div>
                     <div>ui.promptGlyph.opacityResolved: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.opacityResolved ?? '-'}</div>
                     <div>ui.promptGlyph.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.source ?? '-'}</div>
                     <div>ui.promptGlyph.isBlueExpected: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.isBlueExpected ?? false)}</div>
-                    <div>word.reveal.base: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'}</div>
-                    <div>word.reveal.rest: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'}</div>
-                    <div>word.reveal.restLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restLen ?? '-'}</div>
-                    <div>word.reveal.splitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.splitter ?? '-'}</div>
-                    <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
-                    <div>word.reveal.position.xPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.xPct ?? '-'}</div>
-                    <div>word.reveal.position.yPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.yPct ?? '-'}</div>
-                    <div>word.reveal.safeRect: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.safeRect ?? {})}</div>
-                    <div>sandbox.consonant.currentIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentIndex ?? '-'}</div>
-                    <div>sandbox.consonant.currentConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentConsonant ?? '-'}</div>
-                    <div>sandbox.consonant.currentWordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.currentWordKey ?? '-'}</div>
-                    <div>consonant.prompt.current: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptCurrent ?? '-'}</div>
-                    <div>sandbox.consonant.promptText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.promptText ?? '-'}</div>
-                    <div>consonant.judge.lastInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastInput ?? '-'}</div>
-                    <div>consonant.judge.lastResult: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
-                    <div>sandbox.consonant.parse.ok: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.ok ?? false)}</div>
-                    <div>sandbox.consonant.parse.matchedChar: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedChar ?? '-'}</div>
-                    <div>sandbox.consonant.parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.kind ?? '-'}</div>
-                    <div>sandbox.consonant.parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matchedAlias ?? '-'}</div>
-                    <div>sandbox.consonant.parse.inputRaw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputRaw ?? '-'}</div>
-                    <div>sandbox.consonant.parse.inputNorm: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.inputNorm ?? '-'}</div>
-                    <div>sandbox.parser.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.result ?? '-'}</div>
-                    <div>sandbox.consonant.parse.allowedSetsHit: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.allowedSetsHit ?? null)}</div>
-                    <div>sandbox.parser.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
-                    <div>sandbox.parser.matched: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.parse?.matched ?? '-'}</div>
-                    <div>sandbox.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.blockedReason ?? '-'}</div>
+                    <div>sandbox.debug.isolatedTagLock: {String(debugIsolatedTagLock)}</div>
                     <div>freeze.active / pinned.text: {String((window.__CHAT_DEBUG__ as any)?.chat?.freeze?.isFrozen ?? false)} / {((window.__CHAT_DEBUG__ as any)?.ui?.pinned?.textPreview ?? '-')}</div>
-                    <div>audio.pronounce.lastKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.lastKey ?? '-'}</div>
-                    <div>audio.pronounce.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audio?.pronounce?.state ?? '-'}</div>
-                    <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
-                    <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
-                    <div>storyPhaseGate.phase: removed (flow SSOT)</div>
-                    <div>storyPhaseGate.introRemainingMs: removed (flow SSOT)</div>
-                    <div>introGate.remainingMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.introGate?.remainingMs ?? '-'}</div>
-                    <div>audit.introGate.startedAt/minDurationMs/passed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.startedAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.minDurationMs ?? 0} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.passed ?? false)}</div>
-                    <div>flow.questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionIndex ?? '-'}</div>
-                    <div>flow.step: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.step ?? '-'}</div>
-                    <div>flow.stepStartedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.stepStartedAt ?? '-'}</div>
-                    <div>sandboxFlow.replyGateActive/replyTarget: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyGateActive ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyTarget ?? '-'}</div>
-                    <div>sandboxFlow.gateType/canReply: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.canReply ?? false)}</div>
-                    <div>sandboxFlow.retryCount/retryLimit: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryLimit ?? 0}</div>
-                    <div>sandboxFlow.lastPromptAt/nextRetryAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.lastPromptAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.nextRetryAt ?? 0}</div>
-                    <div>sandboxFlow.gateConsumed/replyGateActive: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.gateConsumed ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.replyGateActive ?? false)}</div>
-                    <div>sandboxFlow.promptFingerprint/normalizedPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionPromptFingerprint ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.normalizedPrompt ?? '-'}</div>
-                    <div>sandboxFlow.questionEmitter/retryEmitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionEmitterId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.retryEmitterId ?? '-'}</div>
-                    <div>unresolvedAmbient.active/remaining/completed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.unresolvedAmbient?.active ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.unresolvedAmbient?.remaining ?? 0} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.unresolvedAmbient?.completed ?? false)}</div>
-                    <div>sandboxFlow.activeSpeakerRoles: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.activeSpeakerRoles ?? [])}</div>
-                    <div>sandboxFlow.introElapsedMs/nextBeatAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.introElapsedMs ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.nextBeatAt ?? 0}</div>
-                    <div>sandboxFlow.backlogTechMessages.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.backlogTechMessagesLength ?? 0}</div>
-                    <div>audit.flow.step/stepEnteredAt/questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.step ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.stepEnteredAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.questionIndex ?? 0}</div>
-                    <div>audit.freeze.frozen/reason/frozenAt: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.freeze?.frozen ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.freeze?.reason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.freeze?.frozenAt ?? 0}</div>
-                    <div>audit.glitchBurst.pending/remaining: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.glitchBurst?.pending ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.glitchBurst?.remaining ?? 0}</div>
-                    <div>audit.tagAskedThisStep/askedAt: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.tagAskedThisStep ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.flow?.askedAt ?? 0}</div>
-                    <div>audit.lastEmitKey/lastSpeaker: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.lastEmitKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.lastSpeaker ?? '-'}</div>
-                    <div>audit.recentEmitKeys(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.recentEmitKeys ?? [])}</div>
-                    <div>audit.transitions(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.transitions ?? [])}</div>
-                    <div>audit.spam.duplicate/speaker/freezeLeak: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.duplicateSpamCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.speakerSpamCount ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.emit?.freezeLeakCount ?? 0}</div>
-                    <div>audit.thaiViewer.lastUsedField/count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.thaiViewer?.lastUsedField ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.thaiViewer?.count ?? 0}</div>
-                    <div>sandbox.autoPinFreeze.lastMessageId/reason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastReason ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.freezeMs/remaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.freezeMs ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.freezeRemainingMs ?? 0}</div>
-                    <div>sandbox.autoPinFreeze.lastHintFollowUpEvent: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastHintFollowUpEvent ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.eval.direct_to_player/vip_direct/story_critical: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.directToPlayer ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.hitVipDirectMentionRule ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.hitStoryCriticalRule ?? false)}</div>
-                    <div>sandbox.autoPinFreeze.eval.shouldPin/failure: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.shouldPin ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.failureReason ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.eval.pinnedReason/freezeReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.pinnedReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.freezeReason ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.eval.highlightOnly: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.evaluation?.highlightOnly ?? false)}</div>
-                    <div>sandbox.autoPinFreeze.lastDirectMentionDetected(message/at): {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastDirectMentionDetected?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastDirectMentionDetected?.at ?? 0}</div>
-                    <div>sandbox.autoPinFreeze.lastPinnedCandidateMessageId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedCandidateMessageId ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.lastPinnedCreatedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedCreatedAt ?? 0}</div>
-                    <div>sandbox.autoPinFreeze.lastPinnedRenderVisible/componentMounted: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedRenderVisible ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedComponentMounted ?? false)}</div>
-                    <div>sandbox.autoPinFreeze.pinnedStateKey/stateSummary: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedStateKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedStateSummary ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.pinnedReason/expiresAt/remaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedSourceReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedExpiresAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedRemainingMs ?? 0}</div>
                     <div>sandbox.pinned.sourceType: {(window.__CHAT_DEBUG__ as any)?.ui?.sandboxPinned?.sourceType ?? '-'}</div>
-                    <div>sandbox.autoPinFreeze.lastPinnedDroppedReason/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedDroppedReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedDroppedAt ?? 0}</div>
-                    <div>sandbox.autoPinFreeze.highlightWithoutPinned/cleanupClearedPinned: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.highlightWithoutPinned ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.cleanupClearedPinned ?? false)}</div>
-                    <div>sandbox.autoPinFreeze.overwrittenBy/overwriteAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.pinnedOverwrittenByMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedOverwriteAt ?? 0}</div>
-                    <div>sandbox.autoPinFreeze.autoClearReason/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedAutoClearReason ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.autoPinFreeze?.lastPinnedAutoClearAt ?? 0}</div>
-                    <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
-                    <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
-                    <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>
-                    <div>sandbox.replyGate.gateType/armed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
-                    <div>sandbox.replyGate.sourceMessageId/targetPlayerId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetPlayerId ?? '-'}</div>
-                    <div>sandbox.replyGate.canReply/sourceType: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.canReply ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceType ?? '-'}</div>
-                    <div>sandbox.replyGate.consumePolicy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.consumePolicy ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.consumed/reason: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.consumed ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.reason ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.raw/normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.rawInput ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.normalizedInput ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.extractedAnswer: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.extractedAnswer ?? '-'}</div>
-                    <div>pendingQuestions.length: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.length ?? 0}</div>
-                    <div>pendingQuestions.revisiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingQuestions?.revisiting ?? false)}</div>
-                    <div>sandbox.lastCategory: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastCategory ?? '-'}</div>
-                    <div>pendingDisambiguation.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.pendingDisambiguation?.active ?? false)}</div>
-                    <div>pendingDisambiguation.attempts: {(window.__CHAT_DEBUG__ as any)?.sandbox?.pendingDisambiguation?.attempts ?? 0}</div>
-                    <div>q10Special.armed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.armed ?? false)}</div>
-                    <div>q10Special.revealed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.revealed ?? false)}</div>
-                    <div>q10Special.currentQuestion: {(window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.currentQuestion ?? '-'}</div>
-                    <div>q10Special.allowInject: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.q10Special?.allowInject ?? false)}</div>
-                    <div>blockedOptionsCount: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedOptionsCount ?? 0}</div>
-                    <div>sandbox.currentPrompt.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.id ?? '-'}</div>
-                    <div>sandbox.currentPrompt.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.consonant ?? '-'}</div>
-                    <div>sandbox.currentPrompt.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.wordKey ?? '-'}</div>
-                    <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
-                    <div>sandbox.prompt.current.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.id ?? '-'}</div>
-                    <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
-                    <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
-                    <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
-                    <div>sandbox.prompt.next.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.promptNext?.id ?? '-'}</div>
-                    <div>word.reveal.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.active ?? false)}</div>
-                    <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
-                    <div>word.reveal.consonantFromPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.consonantFromPrompt ?? '-'}</div>
-                    <div>word.reveal.durationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.durationMs ?? '-'}</div>
-                    <div>sandbox.advance.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastAt ?? 0}</div>
-                    <div>sandbox.advance.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastReason ?? '-'}</div>
-                    <div>sandbox.advance.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.blockedReason ?? '-'}</div>
-                    <div>sandbox.reveal.doneAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.doneAt ?? 0}</div>
-                    <div>debug.pass.clickedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.clickedAt ?? 0}</div>
-                    <div>debug.pass.action: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.action ?? 'none'}</div>
-                    <div>sandbox.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.result ?? '-'}</div>
-                    <div>classic.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.classicResult ?? '-'}</div>
-                    <div>sandboxClassicParity: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.sandboxClassicParity ?? true)}</div>
-                    <div>sandbox.judge.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.blockedReason ?? '-'}</div>
-                    <div>sandbox.judge.debugOverride.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.active ?? false)}</div>
-                    <div>sandbox.judge.debugOverride.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.source ?? '-'}</div>
-                    <div>sandbox.judge.debugOverride.consumedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.consumedAt ?? 0}</div>
-                    <div>sandbox.debug.isolatedTagLock: {String(debugIsolatedTagLock)} (purely visual / no formal impact)</div>
-                    <div>sandbox.debug.composingOverrideAffectsSubmit: false</div>
                     <div>pinned.lastWriter.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.source ?? '-'}</div>
                     <div>pinned.lastWriter.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.blockedReason ?? '-'}</div>
                     <div>pinned.lastWriter.writerBlocked: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.writerBlocked ?? false)}</div>
-                    <div>ghost.gate.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghost?.gate?.lastReason ?? '-'}</div>
-                    <div>footsteps.probability: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.probability ?? '-'}</div>
-                    <div>footsteps.cooldownRemaining: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.cooldownRemaining ?? '-'}</div>
-                    <div>footsteps.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.footsteps?.lastAt ?? '-'}</div>
-                    <div>sandbox.hint.lastText: {(window.__CHAT_DEBUG__ as any)?.sandbox?.hint?.lastText ?? '-'}</div>
-                    <div>sandbox.hint.count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.hint?.count ?? 0}</div>
-                    <div>lastWave.count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.count ?? 0}</div>
-                    <div>lastWave.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.kind ?? '-'}</div>
-                    <div>blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedReason ?? '-'}</div>
-                    <div>sandbox.techBacklog.queued/pending: {(window.__CHAT_DEBUG__ as any)?.sandbox?.techBacklog?.queued ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.techBacklog?.pending ?? 0}</div>
-                    <div>sandbox.techBacklog.lastDrainAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.techBacklog?.lastDrainAt ?? 0}</div>
-                    <div>sandbox.theory.active/nodeId: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.theory?.active ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.theory?.nodeId ?? '-'}</div>
-                    <div>sandbox.theory.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.theory?.promptId ?? '-'}</div>
-                    <div>sandbox.transitions(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.transitions ?? [])}</div>
-
-                    <div>sandbox.ghostMotion.lastId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.lastId ?? '-'}</div>
-                    <div>sandbox.ghostMotion.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.state ?? '-'}</div>
-                    <div>sandbox.ssot.version: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ssot?.version ?? '-'}</div>
                   </div>
                 </div>
               )}
