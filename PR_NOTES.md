@@ -1,3 +1,10 @@
+## This PR
+- 一次整體修復 sandbox_story bootstrap/flow/replyGate/prompt/judge/reveal/debug consistency，收斂到 mode state machine SSOT。
+- NIGHT_01 前段改為正式 step-driven flow：`PREHEAT_CHAT -> VIP_TAG_PLAYER -> WAIT_WARMUP_REPLY -> POST_REPLY_CHAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`。
+- replyGate 正式化：wait step 進入時由 controller 建立 `replyGate`，autoPinFreeze 僅 renderer，不再推導 gate。
+- 玩家輸入 routing 修復：每次 submit 都寫入正式 `lastReplyEval`，debug 不再讀到 `-`。
+- 第一題鏈路修復：`WAIT_REPLY_1 -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT`，對齊 currentPrompt/judge/reveal/pronounce。
+
 ## Summary
 - Align sandbox SSOT reply-gate schema to enforced integration contract: rename formal fields to `gateType` and `targetPlayerId`, while preserving backward-compatible hydration from legacy `type/targetActor`.
 - Ensure flow/state/debug share one authority by syncing derived gate state back into sandbox mode each tick (`gateType`, `replyGateActive`, `canReply`, `replySourceMessageId`, `replySourceType`, `consumePolicy`).

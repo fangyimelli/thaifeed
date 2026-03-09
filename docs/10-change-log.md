@@ -1,3 +1,9 @@
+- [sandbox][bootstrap/flow] NIGHT_01 前段流程整體修復：`PREHEAT_CHAT -> VIP_TAG_PLAYER -> WAIT_WARMUP_REPLY -> POST_REPLY_CHAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，禁止暖場前出題與未回覆自動跳段。
+- [sandbox][replyGate] 建立 single SSOT：autoPinFreeze 改讀正式 `replyGate`，不再由 mention detection 創造等待 gate。
+- [sandbox][input-eval] `writeSandboxLastReplyEval` 追加正式 `setLastReplyEval` 回寫，修正 evaluator 有跑但 debug 為 `-`。
+- [sandbox][prompt/reveal] 第一題評分鏈路收斂為 `ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT`，並在 reveal step 觸發 pronounce 狀態更新。
+- [guard] regression guard 新增 NIGHT_01 step 序列關鍵檢查（VIP_TAG_PLAYER/WAIT_WARMUP_REPLY/POST_REPLY_CHAT/ANSWER_EVAL/REVEAL_WORD/POST_REVEAL_CHAT）。
+
 - [sandbox][SSOT] replyGate schema 對齊整合模式要求：`type -> gateType`、`targetActor -> targetPlayerId`，並在 state shape 補 legacy fallback 映射避免舊資料斷裂。
 - [sandbox][flow/debug] 將 `deriveSandboxReplyGateState()` 每 tick 同步回寫至 mode state，統一 `flow.replyGate*` 與 `replyGate` 讀值來源。
 - [guard] `scripts/sandbox-v2-regression-guards.mjs` 新增 replyGate schema/debug 欄位檢查，避免回歸到 UI 看起來有 gate 但正式 state 缺欄位。

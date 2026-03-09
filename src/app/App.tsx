@@ -1147,7 +1147,7 @@ export default function App() {
     const sourceTag = options?.sourceTag ?? source;
     if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
       const sandboxFlow = sandboxModeRef.current.getState().sandboxFlow;
-      const isWaitReplyStep = sandboxFlow.step === 'WARMUP_WAIT_REPLY' || sandboxFlow.step === 'WAIT_REPLY_1' || sandboxFlow.step === 'WAIT_REPLY_2' || sandboxFlow.step === 'WAIT_REPLY_3';
+      const isWaitReplyStep = sandboxFlow.step === 'WAIT_WARMUP_REPLY' || sandboxFlow.step === 'WAIT_REPLY_1' || sandboxFlow.step === 'WAIT_REPLY_2' || sandboxFlow.step === 'WAIT_REPLY_3';
       if (isWaitReplyStep) {
         return { ok: false, blockedReason: 'sandbox_wait_reply_global_freeze' };
       }
@@ -1213,7 +1213,7 @@ export default function App() {
       const step = sandboxFlowState.step;
       const sender = normalizeHandle(message.username || '') || (message.username || '-');
       const normalizedSourceTag = (sourceTag || '').toLowerCase();
-      if ((step === 'PREHEAT' || step === 'REVEAL_1_START' || step === 'REVEAL_1_RIOT' || step === 'TAG_PLAYER_1') && sender === 'system' && (normalizedSourceTag.includes('tag_player_1') || normalizedSourceTag.includes('question'))) {
+      if ((step === 'PREHEAT_CHAT' || step === 'REVEAL_1_START' || step === 'REVEAL_1_RIOT' || step === 'TAG_PLAYER_1') && sender === 'system' && (normalizedSourceTag.includes('tag_player_1') || normalizedSourceTag.includes('question'))) {
         return { ok: false, blockedReason: 'sandbox_system_formal_question_blocked' };
       }
       if (step === 'WAIT_REPLY_1' && normalizedSourceTag.includes('glitch') && sandboxFlowState.questionEmitterId && sender === sandboxFlowState.questionEmitterId) {
@@ -1287,7 +1287,7 @@ export default function App() {
       const directToPlayer = isVipSpeaker && hasPlayerMention && message.type !== 'system';
       const hitVipDirectMentionRule = directToPlayer;
       const hitStoryCriticalRule = isStoryCriticalHintFollowUp;
-      const isPreheatFlow = sandboxModeRef.current.getState().flow.step === 'PREHEAT';
+      const isPreheatFlow = sandboxModeRef.current.getState().flow.step === 'PREHEAT_CHAT';
       const shouldPin = hitStoryCriticalRule || (hitVipDirectMentionRule && !isPreheatFlow);
       const failureReason = shouldPin
         ? '-'
@@ -1574,7 +1574,7 @@ export default function App() {
     sandboxModeRef.current.setSandboxFlow({ questionIndex: 0 });
 
     const preheatStartedAt = now;
-    sandboxModeRef.current.setFlowStep('PREHEAT', 'ENTER_PREHEAT_CHAT', preheatStartedAt);
+    sandboxModeRef.current.setFlowStep('PREHEAT_CHAT', 'ENTER_PREHEAT_CHAT', preheatStartedAt);
     sandboxModeRef.current.setSchedulerPhase?.('preheat', '', preheatStartedAt);
     sandboxModeRef.current.setIntroGate({ startedAt: preheatStartedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: sandboxState.preheat.lastJoinAt || preheatStartedAt });
@@ -1865,24 +1865,17 @@ export default function App() {
         canReply: false
       };
     }
-    const sandboxFlow = sandboxModeRef.current.getState().sandboxFlow;
-    const replyGateType = sandboxFlow.gateType !== 'none' ? sandboxFlow.gateType : null;
-    const replySourceMessageId = qnaStateRef.current.active.questionMessageId;
-    const replyTarget = sandboxFlow.replyTarget;
-    const replyGateArmed = sandboxFlow.replyGateActive && sandboxFlow.gateType !== 'none';
-    const replySourceType = sandboxPinnedEntry?.linkedToReplyGate && sandboxPinnedEntry?.messageId === replySourceMessageId
-      ? sandboxPinnedEntry.sourceType
-      : (replyGateType ? 'qna_reply' : null);
-    const canReply = Boolean(sandboxFlow.canReply && replyGateArmed && replyTarget && replySourceMessageId);
+    const sandboxState = sandboxModeRef.current.getState();
+    const gate = sandboxState.replyGate;
     return {
-      replyGateArmed,
-      replyGateType,
-      replyTarget,
-      replySourceMessageId,
-      replySourceType,
-      canReply
+      replyGateArmed: Boolean(gate?.armed),
+      replyGateType: gate?.gateType && gate.gateType !== 'none' ? gate.gateType : null,
+      replyTarget: gate?.targetPlayerId || null,
+      replySourceMessageId: gate?.sourceMessageId || null,
+      replySourceType: gate?.sourceType || null,
+      canReply: Boolean(gate?.canReply)
     };
-  }, [sandboxPinnedEntry]);
+  }, []);
 
   const writeSandboxLastReplyEval = useCallback((payload: {
     rawInput: string;
@@ -1895,7 +1888,7 @@ export default function App() {
     const gate = payload.gate ?? deriveSandboxReplyGateState();
     const now = Date.now();
     sandboxModeRef.current.setSandboxFlow({ playerLastReply: payload.normalizedInput ?? payload.rawInput.trim() });
-    sandboxLastReplyEvalRef.current = {
+    const evalState = {
       timestamp: now,
       messageId: `player:${now}`,
       rawInput: payload.rawInput,
@@ -1908,6 +1901,20 @@ export default function App() {
       sourceMessageId: gate.replySourceMessageId ?? '-',
       sourceType: gate.replySourceType ?? '-'
     };
+    sandboxLastReplyEvalRef.current = evalState;
+    sandboxModeRef.current.setLastReplyEval?.({
+      messageId: evalState.messageId,
+      gateType: evalState.gateType,
+      rawInput: evalState.rawInput,
+      normalizedInput: evalState.normalizedInput,
+      extractedAnswer: evalState.extractedAnswer,
+      consumed: evalState.consumed,
+      reason: evalState.reason,
+      raw: evalState.rawInput,
+      normalized: evalState.normalizedInput,
+      classifiedAs: evalState.consumed ? 'consumed' : 'rejected',
+      at: now
+    });
   }, [deriveSandboxReplyGateState]);
 
   const clearReplyUi = useCallback((reason: string) => {
@@ -1930,7 +1937,8 @@ export default function App() {
     setLastQuestionMessageId(null);
     setLastQuestionMessageHasTag(false);
     resetQnaUiState();
-    sandboxModeRef.current.setSandboxFlow({ replyGateActive: false, replyTarget: null });
+    sandboxModeRef.current.setSandboxFlow({ replyGateActive: false, replyTarget: null, canReply: false, gateType: 'none' });
+    sandboxModeRef.current.setReplyGate?.({ gateType: 'none', armed: false, canReply: false, gateConsumed: false, sourceMessageId: '', sourceType: '', targetPlayerId: '', consumePolicy: 'single' });
     sandboxQnaDebugRef.current.lastClearReplyUiAt = now;
     sandboxQnaDebugRef.current.lastClearReplyUiReason = reason;
   }, [resetQnaUiState]);
@@ -2001,10 +2009,10 @@ export default function App() {
       clearChatFreeze(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
       sandboxReplyGateDebugRef.current = { ...sandboxReplyGateDebugRef.current, armed: false };
 
-      if (sandboxState.flow.step === 'WARMUP_WAIT_REPLY') {
-        sandboxModeRef.current.setFlowStep('REVEAL_1_RIOT', 'player_reply_warmup_consumed');
+      if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY') {
+        sandboxModeRef.current.setFlowStep('POST_REPLY_CHAT', 'player_reply_warmup_consumed');
       } else if (sandboxState.flow.step === 'WAIT_REPLY_1') {
-        sandboxModeRef.current.setFlowStep('POST_ANSWER_GLITCH_1', 'player_reply_1_consumed');
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_1_consumed');
       } else if (sandboxState.flow.step === 'WAIT_REPLY_2') {
         sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'player_reply_2_consumed');
       } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
@@ -3380,7 +3388,7 @@ export default function App() {
         glitchBurst: sandboxState.glitchBurst
       });
       if (modeRef.current.id === 'sandbox_story') {
-        if (sandboxState.flow.step === 'PREHEAT') {
+        if (sandboxState.flow.step === 'PREHEAT_CHAT') {
           const preheatRuntime = sandboxPreheatOrchestrationRef.current;
           const elapsed = now - (sandboxState.introGate.startedAt || now);
           const joinCapReached = preheatRuntime.joinEmitted >= SANDBOX_PREHEAT_JOIN_CAP;
@@ -3428,6 +3436,9 @@ export default function App() {
           sandboxModeRef.current.setIntroGate({ remainingMs, passed });
           if (passed) {
             preheatRuntime.completed = true;
+            if (sandboxState.flow.step === 'PREHEAT_CHAT') {
+              sandboxModeRef.current.setFlowStep('VIP_TAG_PLAYER', 'preheat_duration_passed', now);
+            }
           }
         }
         const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);
@@ -4885,7 +4896,7 @@ export default function App() {
     sandboxModeRef.current.setPlayerIdentity({ handle: sanitizedName, id: playerId });
     ensureSandboxRuntimeStarted('sandbox_join_submitted', sanitizedName);
     sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt });
-    sandboxModeRef.current.setFlowStep('PREHEAT', 'sandbox_join_submitted', submittedAt);
+    sandboxModeRef.current.setFlowStep('PREHEAT_CHAT', 'sandbox_join_submitted', submittedAt);
     sandboxModeRef.current.setIntroGate({ startedAt: submittedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: submittedAt });
     sandboxPreheatOrchestrationRef.current = {
@@ -5486,12 +5497,15 @@ export default function App() {
 
 
 
-  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WARMUP_WAIT_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3') => {
+  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3') => {
     sandboxModeRef.current.setFlowStep(waitStep, `${waitStep.toLowerCase()}_entered`, askedAt);
     sandboxModeRef.current.markTagAskedThisStep(askedAt);
     sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
     sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
-    sandboxModeRef.current.setSandboxFlow({ replyGateActive: true, replyTarget: lockStateRef.current.target });
+    const gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_reply' : 'consonant_answer';
+    const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxModeRef.current.getState().player?.handle || 'player') || 'player';
+    sandboxModeRef.current.setSandboxFlow({ replyGateActive: true, replyTarget: targetPlayerId, canReply: true, gateType, gateConsumed: false });
+    sandboxModeRef.current.setReplyGate?.({ gateType, armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId: lockStateRef.current.replyingToMessageId || '', sourceType: 'flow_step_gate', consumePolicy: 'single', createdAt: askedAt });
     setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
     setPauseSetAt(askedAt);
     setPauseReason(reason);
@@ -5528,6 +5542,32 @@ export default function App() {
       return () => {
         clearSandboxRevealDoneTimer();
       };
+    }
+
+    if (sandboxState.flow.step === 'VIP_TAG_PLAYER') {
+      const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
+      const speaker = SANDBOX_VIP.handle;
+      const line = `@${taggedUser} 第一次來嗎？先打個招呼～`;
+      const askedAt = Date.now();
+      const sent = dispatchChatMessage({ id: crypto.randomUUID(), username: speaker, type: 'chat', text: line, language: 'zh', translation: line, role: 'vip', isVip: 'VIP_NORMAL', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_warmup_tag' });
+      if (sent.ok) {
+        lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: sent.messageId };
+        sandboxFreezeAndWaitForReply(askedAt, 'sandbox_warmup_tag', 'WAIT_WARMUP_REPLY');
+      }
+      setSandboxRevealTick(Date.now());
+    }
+    if (sandboxState.flow.step === 'POST_REPLY_CHAT' && !sandboxWaveRunningRef.current) {
+      sandboxWaveRunningRef.current = true;
+      const warmupFollow = [
+        { user: 'viewer_118', text: '歡迎歡迎～' },
+        { user: 'viewer_203', text: '新朋友一起看～' }
+      ];
+      warmupFollow.forEach((item) => {
+        dispatchChatMessage({ id: crypto.randomUUID(), username: item.user, type: 'chat', text: item.text, language: 'zh', translation: item.text }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_chat' });
+      });
+      sandboxWaveRunningRef.current = false;
+      sandboxModeRef.current.setFlowStep('REVEAL_1_START', 'warmup_post_reply_done', Date.now());
+      setSandboxRevealTick(Date.now());
     }
 
     if (sandboxState.flow.step === 'REVEAL_1_START') {
@@ -5649,7 +5689,7 @@ export default function App() {
       });
       setSandboxRevealTick(Date.now());
     }
-    if (sandboxState.flow.step === 'POST_ANSWER_GLITCH_1') {
+    if (sandboxState.flow.step === 'ANSWER_EVAL') {
       const glitchBurst = [
         { username: 'viewer_118', line: '我這邊送出一直失敗' },
         { username: 'viewer_203', line: '聊天室是不是延遲了' },
@@ -5658,11 +5698,23 @@ export default function App() {
       glitchBurst.forEach(({ username, line }) => {
         dispatchChatMessage({ id: crypto.randomUUID(), username, type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_post_answer_glitch_pool' });
       });
-      sandboxModeRef.current.setFlowStep('NETWORK_ANOMALY_1', 'post_answer_glitch_done');
+      sandboxModeRef.current.setJudgeResult?.('correct');
+      sandboxModeRef.current.setFlowStep('REVEAL_WORD', 'answer_eval_done');
       setSandboxRevealTick(Date.now());
     }
-    if (sandboxState.flow.step === 'NETWORK_ANOMALY_1') {
-      sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'network_anomaly_done');
+    if (sandboxState.flow.step === 'REVEAL_WORD') {
+      const node = sandboxModeRef.current.forceRevealCurrent?.();
+      if (node?.audioKey) {
+        void playPronounce(node.audioKey).then((result) => {
+          sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
+          setSandboxRevealTick(Date.now());
+        });
+      }
+      sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
+      setSandboxRevealTick(Date.now());
+    }
+    if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {
+      sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done');
       setSandboxRevealTick(Date.now());
     }
 
