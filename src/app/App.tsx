@@ -1531,17 +1531,29 @@ export default function App() {
     const sandboxState = sandboxModeRef.current.getState();
     const activeHandle = normalizeHandle(handleHint || activeUserInitialHandleRef.current || sandboxState.player?.handle || '000') || '000';
     sandboxModeRef.current.setPlayerIdentity({ handle: activeHandle, id: 'activeUser' });
+
     if (!sandboxState.joinGate.satisfied) {
       sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt: now });
     }
-    const refreshedState = sandboxModeRef.current.getState();
-    if (refreshedState.flow.step === 'PREJOIN') {
-      sandboxModeRef.current.setFlowStep('PREHEAT', reason, now);
+
+    if (!Array.isArray(sandboxState.transitions) || sandboxState.transitions.length === 0) {
+      sandboxModeRef.current.appendTransition?.('INIT_SANDBOX_V2', now, 'mode_entry');
     }
-    if (!refreshedState.introGate.startedAt) {
-      sandboxModeRef.current.setIntroGate({ startedAt: now, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
+
+    if (sandboxState.flow.step !== 'BOOT') {
+      sandboxModeRef.current.setFlowStep('BOOT', 'ENTER_BOOT', now);
+    } else {
+      sandboxModeRef.current.appendTransition?.('ENTER_BOOT', now, reason);
     }
-    sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: refreshedState.preheat.lastJoinAt || now });
+
+    sandboxModeRef.current.setSandboxFlow({ questionIndex: 0 });
+
+    const preheatStartedAt = now;
+    sandboxModeRef.current.setFlowStep('PREHEAT', 'ENTER_PREHEAT_CHAT', preheatStartedAt);
+    sandboxModeRef.current.setSchedulerPhase?.('preheat', '', preheatStartedAt);
+    sandboxModeRef.current.setIntroGate({ startedAt: preheatStartedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
+    sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: sandboxState.preheat.lastJoinAt || preheatStartedAt });
+
     sandboxRuntimeGuardRef.current.bootRecoveries += 1;
     sandboxRuntimeGuardRef.current.lastRecoveryReason = reason;
     sandboxRuntimeGuardRef.current.modeEnteredAt = sandboxRuntimeGuardRef.current.modeEnteredAt || now;
