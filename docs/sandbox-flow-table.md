@@ -1,3 +1,10 @@
+- PREHEAT contract（強制）：
+  - 啟動路徑：`BOOT -> PREHEAT_CHAT`（mode entry 即啟動，禁止停在 `-`）。
+  - `introGate.minDurationMs=30000`，未滿 30 秒不得出題 / 不得要求玩家回答泰文題。
+  - 輸出只可為：少量 join、熟客聊天、VIP 打招呼、真假質疑、上次鬼很多、VIP tag 玩家是否第一次看。
+  - join 類總量上限固定 4 則；不得由同一 sender 連續洗版；不得由 `mod_live` 代發 `viewer_xxx 進來了` 串。
+  - sandbox 預熱輸出必須由單一 v2 orchestration 決定，legacy/fallback join loop 在 sandbox mode 硬阻斷。
+
 - v2 runtime boot invariant：進入 `sandbox_story` 即需有 `flow.step=BOOT`、`scheduler.phase=BOOTSTRAP`、`ssot.version` 與完整 root objects；debug panel 僅可讀取 v2 root state，不可用 legacy fallback 偽裝初始化成功。
 
 # sandbox_story v2 flow table (NIGHT_01 MVP)

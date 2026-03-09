@@ -1,3 +1,7 @@
+- [sandbox] 修正 v2 啟動鏈：`sandbox_story` 進入時保證 `BOOT -> PREHEAT_CHAT`，同步初始化 `scheduler.phase=preheat`、`flow.questionIndex=0`、`introGate.startedAt/minDurationMs=30000` 與 transitions。
+- [sandbox] 新增 PREHEAT 單一 orchestration contract：預熱輸出改為受控自然聊天序列（含 VIP 問候 / 懷疑真假 / 上次鬼很多 / tag 玩家是否第一次看），30 秒內不出題。
+- [sandbox] 硬阻斷 legacy join spam：sandbox 模式不再執行舊 `system_ui` join loop，並移除 `mod_live` 代發 `viewer_xxx 進來了` 連刷；join 類訊息改為 system join line 且總量上限 4。
+
 - runtime flow 改為 `PREJOIN -> PREHEAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，先建 reveal/prompt 再進 riot/tag。
 - `REVEAL_1_RIOT` / `TAG_PLAYER_1` / `WAIT_REPLY_1` 全面加上 reveal+prompt prerequisite guard；未 reveal 或 prompt 空值時禁止 ask-player。
 - `WAIT_REPLY_1` 才允許 questionEmitter 發問；gate 未 armed 不得發問。

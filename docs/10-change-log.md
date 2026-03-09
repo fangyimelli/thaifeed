@@ -1,3 +1,8 @@
+- [sandbox] 修正 sandbox v2 主流程啟動：`ensureSandboxRuntimeStarted` 進 mode 即強制 `BOOT -> PREHEAT_CHAT`，`scheduler.phase` 進入 `preheat`，`questionIndex=0`，`introGate.startedAt/minDurationMs=30000`，並補齊 transitions 非空。
+- [sandbox] 預熱改為單一路徑 orchestrator：新增受控 `SANDBOX_PREHEAT_CHAT_SEQUENCE`，預熱 30 秒內只允許自然聊天 + 節制 join。
+- [sandbox] 阻斷 legacy join spam emitter：sandbox mode 下停用舊 `system_ui` join loop；移除 `mod_live` 代發 `viewer_xxx 進來了`，改為 `system` subtype=`join`，總量上限 4 且 sender anti-flood。
+- [guard] 擴充 `scripts/sandbox-v2-regression-guards.mjs`：加入 PREHEAT join cap、同 sender flood guard、legacy join emitter block、preheat natural chat contract 檢查。
+
 - [sandbox] 修正 sandbox_story v2 root runtime mount：補齊正式 initial state shape、mode 進入即掛載、debug hydration 直讀 v2 root state，避免 `sandbox.ssot.version/flow.step/scheduler.phase` 顯示 fallback `-`。
 - [guard] 擴充 `scripts/sandbox-v2-regression-guards.mjs`：initial shape、mode mount、debug hydration、ssot.version、flow.step/scheduler.phase 五項回歸檢查。
 

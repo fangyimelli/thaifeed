@@ -362,7 +362,9 @@ function nextLeaveDelayMs() {
 
 const DESKTOP_BREAKPOINT = 1024;
 
-function mapSandboxSchedulerPhase(phase: string): 'intro' | 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' | 'reasoningPhase' | 'tagPlayerPhase' {
+function mapSandboxSchedulerPhase(phase: string): 'boot' | 'preheat' | 'intro' | 'awaitingAnswer' | 'revealingWord' | 'awaitingTag' | 'chatRiot' | 'supernaturalEvent' | 'vipTranslate' | 'reasoningPhase' | 'tagPlayerPhase' {
+  if (phase === 'boot' || phase === 'BOOTSTRAP') return 'boot';
+  if (phase === 'preheat') return 'preheat';
   if (phase === 'intro') return 'intro';
   if (phase === 'awaitingAnswer') return 'awaitingAnswer';
   if (phase === 'revealingWord') return 'revealingWord';
@@ -377,6 +379,19 @@ function mapSandboxSchedulerPhase(phase: string): 'intro' | 'awaitingAnswer' | '
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
 }
+
+const SANDBOX_PREHEAT_JOIN_CAP = 4;
+const SANDBOX_PREHEAT_CHAT_SEQUENCE: Array<{ user: string; text: string; role?: 'viewer' | 'vip' | 'mod'; vip?: boolean; badge?: 'crown'; kind: 'chat' | 'join' }> = [
+  { user: 'viewer_118', text: '今天怎麼這麼多人一起在線？', role: 'viewer', kind: 'chat' },
+  { user: 'system', text: 'viewer_721 加入聊天室', kind: 'join' },
+  { user: 'viewer_203', text: '我有點懷疑這台是真的假的直播…', role: 'viewer', kind: 'chat' },
+  { user: SANDBOX_VIP.handle, text: '上次這間真的很多人說看到鬼影。', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
+  { user: 'system', text: 'viewer_823 加入聊天室', kind: 'join' },
+  { user: SANDBOX_VIP.handle, text: '@activeUser 你是第一次看這個台嗎？', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
+  { user: 'viewer_409', text: '剛剛鏡頭邊緣是不是有東西飄過去？', role: 'viewer', kind: 'chat' },
+  { user: 'system', text: 'viewer_477 加入聊天室', kind: 'join' },
+  { user: 'mod_live', text: '先暖場聊天，等等再看後面有沒有異常。', role: 'mod', kind: 'chat' }
+];
 
 function pickSafeFallbackText() {
   for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
@@ -790,6 +805,14 @@ export default function App() {
     lastHydratedAt: 0,
     classicTickBlockedCount: 0
   });
+  const sandboxPreheatOrchestrationRef = useRef<{ startedAt: number; lastEmitAt: number; cursor: number; joinEmitted: number; lastJoinSender: string; completed: boolean; }>({
+    startedAt: 0,
+    lastEmitAt: 0,
+    cursor: 0,
+    joinEmitted: 0,
+    lastJoinSender: '',
+    completed: false
+  });
 
   const sandboxReplyGateDebugRef = useRef<{
     type: 'none' | 'consonant_wait_reply';
@@ -1106,6 +1129,7 @@ export default function App() {
       || sourceTag === 'sandbox_possession_autosend'
       || sourceTag === 'sandbox_chat_engine'
       || sourceTag === 'sandbox_preheat_join'
+      || sourceTag === 'sandbox_preheat_chat'
       || sourceTag === 'sandbox_autoplay_mock_reply'
       || sourceTag === 'sandbox_warmup_tag'
       || sourceTag === 'sandbox_reveal_1_riot'
@@ -1529,6 +1553,7 @@ export default function App() {
     if (modeRef.current.id !== 'sandbox_story') return;
     const now = Date.now();
     const sandboxState = sandboxModeRef.current.getState();
+    const preheatRuntime = sandboxPreheatOrchestrationRef.current;
     const activeHandle = normalizeHandle(handleHint || activeUserInitialHandleRef.current || sandboxState.player?.handle || '000') || '000';
     sandboxModeRef.current.setPlayerIdentity({ handle: activeHandle, id: 'activeUser' });
 
@@ -1553,6 +1578,12 @@ export default function App() {
     sandboxModeRef.current.setSchedulerPhase?.('preheat', '', preheatStartedAt);
     sandboxModeRef.current.setIntroGate({ startedAt: preheatStartedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: sandboxState.preheat.lastJoinAt || preheatStartedAt });
+    preheatRuntime.startedAt = preheatStartedAt;
+    preheatRuntime.lastEmitAt = 0;
+    preheatRuntime.cursor = 0;
+    preheatRuntime.joinEmitted = 0;
+    preheatRuntime.lastJoinSender = '';
+    preheatRuntime.completed = false;
 
     sandboxRuntimeGuardRef.current.bootRecoveries += 1;
     sandboxRuntimeGuardRef.current.lastRecoveryReason = reason;
@@ -3341,11 +3372,53 @@ export default function App() {
       });
       if (modeRef.current.id === 'sandbox_story') {
         if (sandboxState.flow.step === 'PREHEAT') {
-          const preheatGap = now - (sandboxState.preheat.lastJoinAt || 0);
-          if (preheatGap >= randomInt(4000, 7000) && sandboxChatEngineRef.current?.shouldEmitJoin()) {
-            const joinName = `viewer_${Math.floor(Math.random() * 899 + 100)}`;
-            dispatchChatMessage({ id: crypto.randomUUID(), username: 'mod_live', type: 'chat', text: `${joinName} 進來了`, language: 'zh', translation: `${joinName} 進來了` }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_join' });
-            sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
+          const preheatRuntime = sandboxPreheatOrchestrationRef.current;
+          const elapsed = now - (sandboxState.introGate.startedAt || now);
+          const joinCapReached = preheatRuntime.joinEmitted >= SANDBOX_PREHEAT_JOIN_CAP;
+          const emitIntervalMs = randomInt(2800, 4500);
+          if (!preheatRuntime.completed && now - preheatRuntime.lastEmitAt >= emitIntervalMs) {
+            const actorState = separateChatActorState(state.messages, activeUserInitialHandleRef.current || 'player');
+            const next = SANDBOX_PREHEAT_CHAT_SEQUENCE[preheatRuntime.cursor % SANDBOX_PREHEAT_CHAT_SEQUENCE.length];
+            if (next.kind === 'join') {
+              if (!joinCapReached && preheatRuntime.lastJoinSender !== next.user) {
+                dispatchChatMessage({
+                  id: crypto.randomUUID(),
+                  username: next.user,
+                  type: 'system',
+                  subtype: 'join',
+                  text: next.text,
+                  language: 'zh',
+                  translation: next.text
+                }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_join' });
+                preheatRuntime.joinEmitted += 1;
+                preheatRuntime.lastJoinSender = next.user;
+                sandboxModeRef.current.setPreheatState({ lastJoinAt: now });
+                preheatRuntime.cursor += 1;
+              } else {
+                preheatRuntime.cursor += 1;
+              }
+            } else {
+              const resolvedText = next.text.replace('@activeUser', `@${actorState.activeUser || 'player'}`);
+              dispatchChatMessage({
+                id: crypto.randomUUID(),
+                username: next.user,
+                type: 'chat',
+                text: resolvedText,
+                language: 'zh',
+                translation: resolvedText,
+                role: next.role,
+                isVip: next.vip ? 'VIP_NORMAL' : undefined,
+                badge: next.badge
+              }, { source: 'sandbox_consonant', sourceTag: 'sandbox_preheat_chat' });
+              preheatRuntime.cursor += 1;
+            }
+            preheatRuntime.lastEmitAt = now;
+          }
+          const remainingMs = Math.max(0, 30_000 - elapsed);
+          const passed = elapsed >= 30_000;
+          sandboxModeRef.current.setIntroGate({ remainingMs, passed });
+          if (passed) {
+            preheatRuntime.completed = true;
           }
         }
         const footstepRoll = sandboxModeRef.current.registerFootstepsRoll(now);
@@ -3778,6 +3851,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isReady || !appStarted) return;
+    if (modeRef.current.id === 'sandbox_story') return;
 
     let timer = 0;
     const burstTimers: number[] = [];
@@ -4805,6 +4879,14 @@ export default function App() {
     sandboxModeRef.current.setFlowStep('PREHEAT', 'sandbox_join_submitted', submittedAt);
     sandboxModeRef.current.setIntroGate({ startedAt: submittedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
     sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: submittedAt });
+    sandboxPreheatOrchestrationRef.current = {
+      startedAt: submittedAt,
+      lastEmitAt: 0,
+      cursor: 0,
+      joinEmitted: 0,
+      lastJoinSender: '',
+      completed: false
+    };
     sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
     sandboxModeRef.current.setFreeze({ frozen: false, reason: 'NONE', frozenAt: 0 });
     clearReplyUi('sandbox_join_preheat_reset');
