@@ -1926,3 +1926,9 @@ Console（debug 模式）可觀察：
 ### Removed / Deprecated Log
 - 移除（不再接回）舊 sandbox 缺失模組：legacy emitter/retry/fake hydration 的檔案路徑已改為乾淨 v2 最小模組實作。
 - 停用舊 `src/data/night1_words.ts` 內錯誤題庫來源，改由 shared question bank 產生。
+
+## 2026-03-09 sandbox v2 初始化防呆補強
+
+- `sandbox_story v2` runtime state 新增正式 initial shape，補齊 `currentPrompt / reveal / replyGate / lastReplyEval / techBacklog / theory / blockedReason / transitions` 所需欄位，避免 hydration 前 nested undefined。
+- App 端 sandbox debug/hydration 讀值改為安全 fallback（optional chaining + 預設值），debug panel 欄位缺值時只顯示 `-`/`false`，不阻斷啟動。
+- legacy `promptVsReveal` debug 直讀路徑已從 UI/debug panel 清理，改成以 v2 `prompt.current.wordKey` 對 `reveal.wordKey` 的安全比對函式顯示 mismatch。

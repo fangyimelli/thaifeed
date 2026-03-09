@@ -813,3 +813,12 @@
 - 新增 `src/modes/sandbox_story/sandboxStoryMode.ts`、`src/modes/sandbox_story/classicConsonantAdapter.ts`，讓 sandbox mode 以乾淨 v2 runtime 最小可跑。
 - 新增 `src/sandbox/chat/*` 與 `src/ui/overlays/SandboxWordRevealText.tsx`，補齊 sandbox 專用依賴，避免雙軌遺留。
 - `src/data/night1_words.ts` 改為由 shared question bank 映射，移除舊錯誤 NIGHT1_WORDS 內容。
+
+## 2026-03-09（sandbox v2 初始化失敗修正）
+
+- 修正 sandbox v2 初始化時 `Cannot read properties of undefined (reading 'promptVsReveal')`：
+  - 來源為 App 在 hydration/debug 期間直讀 `sandboxState.mismatch.promptVsReveal`。
+- 新增 `createSandboxV2InitialState` 與 `ensureSandboxV2StateShape`，所有 `getState()` 回傳值都先補齊完整 v2 state shape，再提供給 UI/debug。
+- sandbox debug snapshot 新增/固定輸出：`replyGate / lastReplyEval / techBacklog / theory / transitions`，且全部提供 fallback。
+- 移除 debug panel 中舊命名 legacy 欄位（`mismatch.promptVsReveal`、`sandbox.prompt.overlay.*`、`sandbox.prompt.pinned.*`、`sandbox.prompt.mismatch`）避免殘留直讀鏈。
+- 新增 regression guard script：`scripts/sandbox-v2-regression-guards.mjs`（檢查必要 shape、safe access、legacy 字串直讀移除）。
