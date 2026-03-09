@@ -1,17 +1,18 @@
 ## Summary
-- Stop story feature expansion; fix sandbox_story v2 root runtime mount only.
-- Built formal sandbox v2 root initial state with guaranteed object presence for flow/scheduler/prompt/reply/theory/backlog/ambient/ghost/ssot.
-- Ensure mode entry mounts this root state and keeps it in the runtime path.
-- Debug hydration now maps directly from real v2 root state (not legacy assembled fallbacks).
-- Added regression guards for initial shape, runtime mount, hydration source, ssot version, and non-dash flow/scheduler values.
+- Fix sandbox v2 startup chain so entering `sandbox_story` always starts formal flow: `BOOT -> PREHEAT_CHAT`, with non-empty transitions and initialized `scheduler.phase/questionIndex/introGate`.
+- Remove legacy join spam path in sandbox mode by hard-blocking the old `system_ui` join loop and replacing preheat output with a controlled sandbox v2 preheat contract.
+- Implement controlled preheat sequence with natural chat-dominant lines and capped joins (`SANDBOX_PREHEAT_JOIN_CAP=4`), including anti-flood same-sender guard.
+- Extend sandbox regression guards with startup/phase invariants and preheat spam-block checks.
 
 ## Root cause
-- Debug path read mixed legacy/fallback fields before v2 root object existed, so UI looked like sandbox mode while core root state stayed effectively unmounted (`sandbox.ssot.version` became `-`).
+1. Sandbox v2 root state existed, but flow startup could appear stalled when runtime wasn’t consistently driven through explicit preheat orchestration.
+2. A legacy global join emitter effect kept running regardless of sandbox mode and produced parallel join noise.
+3. A separate preheat block emitted `viewer_xxx 進來了` as `mod_live` chat lines, causing join spam to dominate.
 
 ## Validation
 - npm run test:sandbox-guards
 - npm run build
 
 ## Scope guard
-- Only sandbox runtime mount + hydration paths were changed.
-- Classic mode behavior unchanged.
+- Only sandbox runtime / chat emitter / debug-hydration-adjacent behavior touched.
+- Classic mode pipeline remains isolated.

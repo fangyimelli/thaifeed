@@ -19,7 +19,7 @@ const checks = [
     }
   },
   {
-    name: 'flow.step initialized',
+    name: 'flow.step initialized after sandbox mode entry',
     run() {
       if (!mode.includes("flow: { step: 'BOOT'")) {
         throw new Error('flow.step is not initialized to BOOT in v2 root state');
@@ -30,7 +30,7 @@ const checks = [
     }
   },
   {
-    name: 'scheduler.phase initialized',
+    name: 'scheduler.phase initialized after sandbox mode entry',
     run() {
       if (!mode.includes("scheduler: { phase: 'BOOTSTRAP', blockedReason: '' }")) {
         throw new Error('scheduler.phase bootstrap default missing');
@@ -44,18 +44,54 @@ const checks = [
     }
   },
   {
-    name: 'introGate preheat initialization',
+    name: 'PREHEAT_CHAT join spam cap',
     run() {
-      if (!app.includes('setIntroGate({ startedAt: preheatStartedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 })')) {
-        throw new Error('introGate preheat initialization is missing or incomplete');
+      if (!app.includes('const SANDBOX_PREHEAT_JOIN_CAP = 4;')) {
+        throw new Error('preheat join cap is missing');
+      }
+      if (!app.includes('joinEmitted >= SANDBOX_PREHEAT_JOIN_CAP')) {
+        throw new Error('preheat join cap enforcement missing');
       }
     }
   },
   {
-    name: 'questionIndex initialized to 0',
+    name: 'same sender cannot emit repeated join-log flood',
     run() {
-      if (!app.includes('setSandboxFlow({ questionIndex: 0 })')) {
-        throw new Error('runtime starter does not normalize questionIndex=0');
+      if (!app.includes('lastJoinSender')) {
+        throw new Error('preheat join sender anti-flood tracker missing');
+      }
+      if (!app.includes('preheatRuntime.lastJoinSender !== next.user')) {
+        throw new Error('same sender join flood guard missing');
+      }
+    }
+  },
+  {
+    name: 'legacy fallback join emitter blocked in sandbox mode',
+    run() {
+      if (!app.includes("if (modeRef.current.id === 'sandbox_story') return;")) {
+        throw new Error('legacy join emitter is not blocked in sandbox mode');
+      }
+    }
+  },
+  {
+    name: 'PREHEAT_CHAT contains natural chat, not only join logs',
+    run() {
+      if (!app.includes('SANDBOX_PREHEAT_CHAT_SEQUENCE')) {
+        throw new Error('preheat orchestration sequence missing');
+      }
+      if (!app.includes("sourceTag: 'sandbox_preheat_chat'")) {
+        throw new Error('preheat chat sourceTag missing');
+      }
+      if (!app.includes("kind: 'chat'")) {
+        throw new Error('natural preheat chat entries missing');
+      }
+    }
+  },
+  {
+    name: 'introGate preheat initialization',
+    run() {
+      if (!app.includes('setIntroGate({ startedAt: preheatStartedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 })')) {
+        throw new Error('introGate preheat initialization is missing or incomplete');
       }
     }
   },
