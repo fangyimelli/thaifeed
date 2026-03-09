@@ -1,3 +1,8 @@
+- [sandbox][bootstrap SSOT] mode 進入 `sandbox_story` 後統一由 `sandboxStoryMode.bootstrapRuntime()` 建立正式 state（flow/introGate/scheduler/replyGate/currentPrompt/lastReplyEval/audit.transitions），移除 App 端雙軌 BOOT->PREHEAT 直接寫值。
+- [sandbox][reset guard] `clearReplyUi` 不再把 sandbox 留在已進 mode 但未初始化狀態；若偵測 flow/scheduler/introGate 缺失會立即 re-init（`clearReplyUi_reinit`）。
+- [sandbox][debug consistency] debug `audit.transitions` 改讀 mode 正式 `state.audit.transitions`（缺失時才由 transitions 衍生），避免 runtime 有值但 debug 顯示空。
+- [guard] 新增 bootstrap regression guard：mode entry 必須呼叫 `bootstrapRuntime`、audit 必須有 bootstrap transition、guard/clear path 不可留下空 flow.step/questionIndex/scheduler.phase。
+
 - [sandbox][night_01] 前段 flow 正式改為 `PREHEAT_CHAT -> VIP_TAG_PLAYER -> WAIT_WARMUP_REPLY -> POST_REPLY_CHAT -> REVEAL_1_START -> REVEAL_1_RIOT -> TAG_PLAYER_1 -> WAIT_REPLY_1`，暖場回覆未 consume 前不得前進。
 - [sandbox][replyGate SSOT] `deriveSandboxReplyGateState()` 改為直接讀正式 `state.replyGate`；warmup/題目 wait step 由 flow controller 寫入 `replyGate(gateType/armed/canReply/targetPlayerId/sourceMessageId/sourceType/consumePolicy/createdAt)`。
 - [sandbox][evaluator/debug] 每次玩家輸入一律以 `setLastReplyEval()` 寫回 mode 正式 state（含 `messageId/gateType/rawInput/normalizedInput/extractedAnswer/consumed/reason/at`），debug 與 evaluator 同源。

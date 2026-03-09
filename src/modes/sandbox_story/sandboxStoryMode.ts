@@ -74,7 +74,7 @@ export const createSandboxV2InitialState = () => {
   blocked: { reason: '' },
   mismatch: { promptVsReveal: false },
   ghostMotion: { lastId: '', state: 'idle' },
-  audit: { transitions: [] as Array<{ from: string; to: string; at: number; reason?: string }> },
+  audit: { transitions: [{ from: 'INIT', to: 'BOOT', at: bootAt, reason: 'mode_state_created' }] as Array<{ from: string; to: string; at: number; reason?: string }> },
   currentPrompt: null as null | { id: string; kind: string; consonant: string; wordKey: string; thaiWord: string; translationZh: string },
   replyGate: { gateType: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetPlayerId: '', sourceType: '', consumePolicy: 'single' },
   lastReplyEval: null as null | { messageId: string; gateType: string; consumed: boolean; reason: string; rawInput: string; normalizedInput: string; extractedAnswer: string; raw: string; normalized: string; classifiedAs: string; at: number },
@@ -154,6 +154,12 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     state.transitions = [...(state.transitions ?? []), { event, at, detail }].slice(-20);
     state.flow.transitions = state.transitions;
   };
+  const appendAuditTransition = (from: string, to: string, at: number, reason?: string) => {
+    state.audit = {
+      ...state.audit,
+      transitions: [...(state.audit?.transitions ?? []), { from, to, at, reason }].slice(-20)
+    };
+  };
 
   return {
     id: 'sandbox_story',
@@ -172,16 +178,55 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     setPlayerIdentity: (p: any) => { state.player = { ...state.player, ...p }; },
     setJoinGate: (v: any) => { state.joinGate = { ...state.joinGate, ...v }; },
     appendTransition,
+    bootstrapRuntime: (reason = 'mode_entry', at = Date.now(), minDurationMs = 30_000) => {
+      const prevStep = state.flow?.step || 'BOOT';
+      const bootAt = at;
+      state.flow = { ...state.flow, step: 'PREHEAT_CHAT', questionIndex: 0, stepStartedAt: bootAt, tagAskedThisStep: false };
+      state.sandboxFlow = {
+        ...state.sandboxFlow,
+        step: 'PREHEAT_CHAT',
+        stepStartedAt: bootAt,
+        questionIndex: 0,
+        gateType: 'none',
+        replyTarget: null,
+        replyGateActive: false,
+        canReply: false,
+        gateConsumed: false
+      };
+      state.scheduler = { ...state.scheduler, phase: 'preheat', blockedReason: '' };
+      state.introGate = { ...state.introGate, startedAt: bootAt, minDurationMs, passed: false, remainingMs: minDurationMs };
+      state.replyGate = {
+        ...state.replyGate,
+        gateType: 'none',
+        armed: false,
+        canReply: false,
+        gateConsumed: false,
+        sourceMessageId: '',
+        targetPlayerId: '',
+        sourceType: '',
+        consumePolicy: 'single'
+      };
+      state.currentPrompt = null;
+      state.lastReplyEval = null;
+      appendTransition('BOOTSTRAP_RUNTIME', bootAt, reason);
+      appendTransition('ENTER_PREHEAT_CHAT', bootAt, reason);
+      appendAuditTransition(prevStep, 'PREHEAT_CHAT', bootAt, reason);
+      appendAuditTransition('scheduler', 'preheat', bootAt, reason);
+    },
     setSchedulerPhase: (phase: string, blockedReason = '', at?: number) => {
+      const previous = state.scheduler?.phase ?? 'unknown';
       state.scheduler = { ...state.scheduler, phase, blockedReason };
       appendTransition(`SCHEDULER_${phase.toUpperCase()}`, at ?? Date.now(), blockedReason || phase);
+      appendAuditTransition(previous, phase, at ?? Date.now(), blockedReason || 'setSchedulerPhase');
     },
     setFlowStep: (step: string, reason?: string, at?: number) => {
       const transitionAt = at ?? Date.now();
+      const previousStep = state.flow?.step ?? 'unknown';
       const nextQuestionIndex = Number.isInteger(state.flow?.questionIndex) ? state.flow.questionIndex : 0;
       state.flow = { ...state.flow, step, questionIndex: nextQuestionIndex, stepStartedAt: transitionAt, tagAskedThisStep: false };
       state.sandboxFlow = { ...state.sandboxFlow, step, stepStartedAt: transitionAt, questionIndex: nextQuestionIndex };
       appendTransition(reason || 'setFlowStep', transitionAt, step);
+      appendAuditTransition(previousStep, step, transitionAt, reason || 'setFlowStep');
     },
     setIntroGate: (v: any) => { state.introGate = { ...state.introGate, ...v }; },
     setPreheatState: (v: any) => { state.preheat = { ...state.preheat, ...v }; },

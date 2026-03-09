@@ -10,11 +10,11 @@ const checks = [
       if (!app.includes("ensureSandboxRuntimeStarted('mode_switch_bootstrap')")) {
         throw new Error('sandbox_story mode entry does not call runtime starter');
       }
-      if (!app.includes("setFlowStep('BOOT', 'ENTER_BOOT'")) {
-        throw new Error('runtime starter does not enter BOOT explicitly');
+      if (!app.includes('bootstrapRuntime?.(reason, now, 30_000)')) {
+        throw new Error('runtime starter does not call mode bootstrapRuntime authority');
       }
-      if (!app.includes("setFlowStep('PREHEAT_CHAT', 'ENTER_PREHEAT_CHAT'")) {
-        throw new Error('runtime starter does not transition to PREHEAT_CHAT');
+      if (!mode.includes("bootstrapRuntime: (reason = 'mode_entry'")) {
+        throw new Error('sandbox mode missing bootstrapRuntime authority entry');
       }
     }
   },
@@ -38,8 +38,8 @@ const checks = [
       if (!mode.includes('setSchedulerPhase: (phase: string')) {
         throw new Error('scheduler phase setter missing');
       }
-      if (!app.includes("setSchedulerPhase?.('preheat'")) {
-        throw new Error('runtime starter does not enter preheat scheduler phase');
+      if (!mode.includes("state.scheduler = { ...state.scheduler, phase: 'preheat'")) {
+        throw new Error('bootstrapRuntime does not enter preheat scheduler phase');
       }
     }
   },
@@ -90,7 +90,7 @@ const checks = [
   {
     name: 'introGate preheat initialization',
     run() {
-      if (!app.includes('setIntroGate({ startedAt: preheatStartedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 })')) {
+      if (!mode.includes('state.introGate = { ...state.introGate, startedAt: bootAt, minDurationMs, passed: false, remainingMs: minDurationMs }')) {
         throw new Error('introGate preheat initialization is missing or incomplete');
       }
     }
@@ -118,7 +118,7 @@ const checks = [
       if (!mode.includes("{ event: 'ENTER_BOOT'")) {
         throw new Error('initial transition ENTER_BOOT missing');
       }
-      if (!app.includes("'ENTER_PREHEAT_CHAT'")) {
+      if (!mode.includes("appendTransition('ENTER_PREHEAT_CHAT'")) {
         throw new Error('ENTER_PREHEAT_CHAT transition is not emitted');
       }
     }
@@ -156,3 +156,20 @@ if (!app.includes("setFlowStep('ANSWER_EVAL'")) { throw new Error('ANSWER_EVAL t
 if (!app.includes("setFlowStep('REVEAL_WORD'")) { throw new Error('REVEAL_WORD transition missing'); }
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT'")) { throw new Error('POST_REVEAL_CHAT transition missing'); }
 console.log('sandbox v2 regression guards passed');
+
+
+if (!mode.includes("audit: { transitions: [{ from: 'INIT', to: 'BOOT'")) {
+  throw new Error('audit.transitions bootstrap record missing in initial state');
+}
+
+if (!mode.includes("appendAuditTransition(prevStep, 'PREHEAT_CHAT'")) {
+  throw new Error('audit.transitions missing PREHEAT_CHAT bootstrap transition');
+}
+
+if (!app.includes("!guardState.flow.step || !Number.isFinite(guardState.flow.questionIndex) || !guardState.scheduler.phase")) {
+  throw new Error('guard recovery missing flow/scheduler bootstrap checks');
+}
+
+if (!app.includes("clearReplyUi_reinit")) {
+  throw new Error('clearReplyUi re-init guard missing');
+}
