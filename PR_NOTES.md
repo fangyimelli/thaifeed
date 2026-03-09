@@ -1,3 +1,22 @@
+# PR Notes - Sandbox runtime boot chain reconnect (sandbox_story only)
+
+## 修改原因
+- `currentMode=sandbox_story` 雖然切換成功，但 runtime 曾停留在 PREJOIN 空殼，造成 scheduler/flow/prompt/debug 全部像未啟動。
+
+## 本次變更（sandbox only）
+- mode switch 進入 sandbox 時，直接執行 runtime bootstrap（joinGate fulfill、flow 進 PREHEAT、introGate.startedAt 初始化）。
+- 新增 boot recovery guard：sandbox mode 若出現 `joinGate 未滿足`、`flow.step=PREJOIN` 或 `introGate.startedAt=0`，自動重啟 sandbox runtime。
+- `__CHAT_DEBUG__.sandbox` 補齊 runtime/joinGate hydration，避免空值面板。
+- classic/sandbox 排他：sandbox mode 阻斷 classic idle tick emitter，避免雙軌暗跑。
+- 移除 `TAG_PLAYER_2_PRONOUNCE && false`，避免正式 prompt pipeline 被硬封死。
+
+## Regression guards
+1. sandbox mode 下 runtime 不得長期停在 PREJOIN 未啟動。
+2. sandbox mode 下 introGate 必須有有效 startedAt/minDuration。
+3. sandbox mode 下 debug 必須回填真實 runtime（含 joinGate/runtime guard）。
+4. sandbox mode 下 classic idle tick emitter 不得驅動聊天。
+5. `TAG_PLAYER_2_PRONOUNCE` 不得再被 hardcoded false 阻斷。
+
 # PR Notes - Sandbox NIGHT_01 single-orchestrator takeover
 
 ## 修改原因

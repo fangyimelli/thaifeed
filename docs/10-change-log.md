@@ -1,3 +1,11 @@
+
+## 2026-03-09（sandbox only：sandbox_story runtime boot chain 接通）
+- [sandbox/boot] `sandbox_story` mode switch 後，改為直接執行 runtime bootstrap：joinGate 自動滿足、flow 由 `PREJOIN` 進入 `PREHEAT`、introGate 立即初始化。
+- [sandbox/guard] 新增 boot recovery guard：sandbox mode 下若偵測 `joinGate` 未滿足 / `flow.step=PREJOIN` / `introGate.startedAt=0`，自動重啟 sandbox runtime 並記錄 guard 狀態。
+- [sandbox/debug] `__CHAT_DEBUG__.sandbox` 補上 `runtime` + `joinGate` 真實 hydration，避免空殼 fallback。
+- [runtime-exclusion] `currentMode=sandbox_story` 時阻斷 classic idle scheduler tick emitter，避免 classic 與 sandbox runtime 併跑。
+- [sandbox/pipeline] 移除 `TAG_PLAYER_2_PRONOUNCE` 的 `&& false` 硬封鎖，改回正式 state gating。
+
 ## 2026-03-08 Sandbox NIGHT_01 single-orchestrator takeover（sandbox only）
 
 ### Added

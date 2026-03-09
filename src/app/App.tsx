@@ -525,6 +525,14 @@ type LastModeSwitchStatus = {
   reason: string;
 };
 
+type SandboxRuntimeGuardState = {
+  modeEnteredAt: number;
+  bootRecoveries: number;
+  lastRecoveryReason: string;
+  lastHydratedAt: number;
+  classicTickBlockedCount: number;
+};
+
 function DebugModeSwitcher({ currentMode, onSwitch, switching, lastModeSwitch }: DebugModeSwitcherProps) {
   return (
     <div className="debug-event-tester" aria-label="Debug Mode Switcher">
@@ -774,6 +782,13 @@ export default function App() {
     lastClearReplyUiAt: 0,
     lastClearReplyUiReason: '-',
     lastAnomaly: '-'
+  });
+  const sandboxRuntimeGuardRef = useRef<SandboxRuntimeGuardState>({
+    modeEnteredAt: 0,
+    bootRecoveries: 0,
+    lastRecoveryReason: '-',
+    lastHydratedAt: 0,
+    classicTickBlockedCount: 0
   });
 
   const sandboxReplyGateDebugRef = useRef<{
@@ -1508,22 +1523,43 @@ export default function App() {
     };
   }, []);
 
+  const ensureSandboxRuntimeStarted = useCallback((reason: string, handleHint?: string) => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const now = Date.now();
+    const sandboxState = sandboxModeRef.current.getState();
+    const activeHandle = normalizeHandle(handleHint || activeUserInitialHandleRef.current || sandboxState.player?.handle || '000') || '000';
+    sandboxModeRef.current.setPlayerIdentity({ handle: activeHandle, id: 'activeUser' });
+    if (!sandboxState.joinGate.satisfied) {
+      sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt: now });
+    }
+    const refreshedState = sandboxModeRef.current.getState();
+    if (refreshedState.flow.step === 'PREJOIN') {
+      sandboxModeRef.current.setFlowStep('PREHEAT', reason, now);
+    }
+    if (!refreshedState.introGate.startedAt) {
+      sandboxModeRef.current.setIntroGate({ startedAt: now, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
+    }
+    sandboxModeRef.current.setPreheatState({ enabled: true, lastJoinAt: refreshedState.preheat.lastJoinAt || now });
+    sandboxRuntimeGuardRef.current.bootRecoveries += 1;
+    sandboxRuntimeGuardRef.current.lastRecoveryReason = reason;
+    sandboxRuntimeGuardRef.current.modeEnteredAt = sandboxRuntimeGuardRef.current.modeEnteredAt || now;
+  }, []);
+
   useEffect(() => {
     const selectedMode = modeIdRef.current;
     const mode = selectedMode === 'sandbox_story' ? sandboxModeRef.current : createClassicMode();
     modeRef.current = mode;
     mode.init();
     if (selectedMode === 'sandbox_story') {
-      sandboxModeRef.current.setPlayerIdentity(null);
-      sandboxModeRef.current.setJoinGate({ satisfied: false, submittedAt: undefined });
-      sandboxModeRef.current.setFlowStep('PREJOIN', 'init_prejoin');
+      sandboxRuntimeGuardRef.current.modeEnteredAt = Date.now();
+      ensureSandboxRuntimeStarted('mode_switch_bootstrap');
     } else {
       sandboxModeRef.current.setPlayerIdentity({ handle: normalizeHandle(activeUserInitialHandleRef.current || '000') || '000', id: 'activeUser' });
     }
     return () => {
       mode.dispose();
     };
-  }, []);
+  }, [ensureSandboxRuntimeStarted]);
 
 
   const convertSandboxChatMessage = useCallback((message: { user: string; text: string; thai?: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown'; chatType?: 'sandbox_story_critical_hint_followup'; hintEventName?: string }): ChatMessage => {
@@ -3159,7 +3195,11 @@ export default function App() {
         return;
       }
       const topicWeights = getCurrentTopicWeights(now);
-      const timedChats = chatAutoPaused ? [] : chatEngineRef.current.tick(now);
+      const isSandboxRuntime = modeRef.current.id === 'sandbox_story';
+      if (isSandboxRuntime) {
+        sandboxRuntimeGuardRef.current.classicTickBlockedCount += 1;
+      }
+      const timedChats = (chatAutoPaused || isSandboxRuntime) ? [] : chatEngineRef.current.tick(now);
       dispatchTimedChats(timedChats);
       syncChatEngineDebug();
       tryTriggerStoryEvent('', 'scheduler_tick');
@@ -3250,6 +3290,13 @@ export default function App() {
     const timer = window.setInterval(() => {
       const now = Date.now();
       modeRef.current.tick(now);
+      if (modeRef.current.id === 'sandbox_story') {
+        const guardState = sandboxModeRef.current.getState();
+        sandboxRuntimeGuardRef.current.modeEnteredAt = sandboxRuntimeGuardRef.current.modeEnteredAt || now;
+        if (!guardState.joinGate.satisfied || guardState.flow.step === 'PREJOIN' || !guardState.introGate.startedAt) {
+          ensureSandboxRuntimeStarted('guard_boot_recovery');
+        }
+      }
       const promptBeforeTick = sandboxModeRef.current.getCurrentPrompt();
       const sandboxState = sandboxModeRef.current.getState();
       const derivedReplyGate = deriveSandboxReplyGateState();
@@ -3504,6 +3551,13 @@ export default function App() {
             evaluation: sandboxAutoPinFreezeRef.current.lastEvaluation
           }
         },
+        runtime: {
+          mode: modeRef.current.id,
+          running: modeRef.current.id === 'sandbox_story',
+          hydratedAt: now,
+          guard: { ...sandboxRuntimeGuardRef.current }
+        },
+        joinGate: sandboxState.joinGate,
         pendingQuestions: {
           length: sandboxState.pendingQuestions.queue.length,
           revisiting: sandboxState.pendingQuestions.revisiting
@@ -3605,6 +3659,7 @@ export default function App() {
           promptVsReveal: sandboxState.mismatch.promptVsReveal
         }
       };
+      sandboxRuntimeGuardRef.current.lastHydratedAt = now;
       updateEventDebug({
         mode: {
           id: modeRef.current.id
@@ -4715,6 +4770,7 @@ export default function App() {
     if (!registered) return false;
     const submittedAt = Date.now();
     sandboxModeRef.current.setPlayerIdentity({ handle: sanitizedName, id: playerId });
+    ensureSandboxRuntimeStarted('sandbox_join_submitted', sanitizedName);
     sandboxModeRef.current.setJoinGate({ satisfied: true, submittedAt });
     sandboxModeRef.current.setFlowStep('PREHEAT', 'sandbox_join_submitted', submittedAt);
     sandboxModeRef.current.setIntroGate({ startedAt: submittedAt, minDurationMs: 30_000, passed: false, remainingMs: 30_000 });
@@ -4728,7 +4784,7 @@ export default function App() {
     setPendingForceScrollReason('sandbox_join_preheat_reset');
     await nextAnimationFrame();
     return true;
-  }, [clearChatFreeze, clearReplyUi, nextAnimationFrame, registerActiveUser, setScrollMode]);
+  }, [clearChatFreeze, clearReplyUi, ensureSandboxRuntimeStarted, nextAnimationFrame, registerActiveUser, setScrollMode]);
 
   const emitAudioEnabledSystemMessageOnce = useCallback(() => {
     if (audioEnabledSystemMessageSentRef.current) return;
@@ -5498,7 +5554,7 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
 
-    if (sandboxState.flow.step === 'TAG_PLAYER_2_PRONOUNCE' && false) {
+    if (sandboxState.flow.step === 'TAG_PLAYER_2_PRONOUNCE') {
       if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = 'mod_live';
