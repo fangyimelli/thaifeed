@@ -1,3 +1,7 @@
+- [sandbox][SSOT] replyGate 正式欄位改為 `gateType/armed/canReply/targetPlayerId/sourceMessageId/sourceType/consumePolicy`，移除 `type/targetActor` 作為權威來源；hydration 仍向下相容舊欄位。
+- [sandbox][flow/debug] 每個 tick 以 `deriveSandboxReplyGateState()` 回寫正式 `replyGate` state（含 gateType/sourceMessageId/targetPlayerId），確保 flow/state/debug 同源。
+- [guard] 新增 regression guard：replyGate schema 必須包含 `gateType + targetPlayerId`，且 debug panel 必須顯示 `sandbox.replyGate.gateType/armed`。
+
 - [sandbox] 修正 v2 啟動鏈：`sandbox_story` 進入時保證 `BOOT -> PREHEAT_CHAT`，同步初始化 `scheduler.phase=preheat`、`flow.questionIndex=0`、`introGate.startedAt/minDurationMs=30000` 與 transitions。
 - [sandbox] 新增 PREHEAT 單一 orchestration contract：預熱輸出改為受控自然聊天序列（含 VIP 問候 / 懷疑真假 / 上次鬼很多 / tag 玩家是否第一次看），30 秒內不出題。
 - [sandbox] 硬阻斷 legacy join spam：sandbox 模式不再執行舊 `system_ui` join loop，並移除 `mod_live` 代發 `viewer_xxx 進來了` 連刷；join 類訊息改為 system join line 且總量上限 4。

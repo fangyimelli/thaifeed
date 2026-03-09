@@ -1,3 +1,7 @@
+- [sandbox][SSOT] replyGate schema 對齊整合模式要求：`type -> gateType`、`targetActor -> targetPlayerId`，並在 state shape 補 legacy fallback 映射避免舊資料斷裂。
+- [sandbox][flow/debug] 將 `deriveSandboxReplyGateState()` 每 tick 同步回寫至 mode state，統一 `flow.replyGate*` 與 `replyGate` 讀值來源。
+- [guard] `scripts/sandbox-v2-regression-guards.mjs` 新增 replyGate schema/debug 欄位檢查，避免回歸到 UI 看起來有 gate 但正式 state 缺欄位。
+
 - [sandbox] 修正 sandbox v2 主流程啟動：`ensureSandboxRuntimeStarted` 進 mode 即強制 `BOOT -> PREHEAT_CHAT`，`scheduler.phase` 進入 `preheat`，`questionIndex=0`，`introGate.startedAt/minDurationMs=30000`，並補齊 transitions 非空。
 - [sandbox] 預熱改為單一路徑 orchestrator：新增受控 `SANDBOX_PREHEAT_CHAT_SEQUENCE`，預熱 30 秒內只允許自然聊天 + 節制 join。
 - [sandbox] 阻斷 legacy join spam emitter：sandbox mode 下停用舊 `system_ui` join loop；移除 `mod_live` 代發 `viewer_xxx 進來了`，改為 `system` subtype=`join`，總量上限 4 且 sender anti-flood。

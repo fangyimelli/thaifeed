@@ -76,7 +76,7 @@ export const createSandboxV2InitialState = () => {
   ghostMotion: { lastId: '', state: 'idle' },
   audit: { transitions: [] as Array<{ from: string; to: string; at: number; reason?: string }> },
   currentPrompt: { id: '', kind: 'none', consonant: '', wordKey: '', thaiWord: '', translationZh: '' },
-  replyGate: { type: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetActor: '', sourceType: '', consumePolicy: 'single' },
+  replyGate: { gateType: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetPlayerId: '', sourceType: '', consumePolicy: 'single' },
   lastReplyEval: { messageId: '', gateType: 'none', consumed: false, reason: '', rawInput: '', normalizedInput: '', extractedAnswer: '', raw: '', normalized: '', classifiedAs: 'none' },
   techBacklog: { queued: 0, pending: 0, lastDrainAt: 0 },
   theory: { active: false, nodeId: '', promptId: '', pendingQuestions: [] as string[] },
@@ -119,7 +119,13 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.ghostMotion = { ...base.ghostMotion, ...(raw?.ghostMotion ?? {}) };
   next.audit = { ...base.audit, ...(raw?.audit ?? {}) };
   next.audit.transitions = Array.isArray(raw?.audit?.transitions) ? raw.audit.transitions : [];
-  next.replyGate = { ...base.replyGate, ...(raw?.replyGate ?? {}) };
+  const legacyReplyGate = raw?.replyGate ?? {};
+  next.replyGate = {
+    ...base.replyGate,
+    ...legacyReplyGate,
+    gateType: legacyReplyGate.gateType ?? legacyReplyGate.type ?? base.replyGate.gateType,
+    targetPlayerId: legacyReplyGate.targetPlayerId ?? legacyReplyGate.targetActor ?? base.replyGate.targetPlayerId
+  };
   next.lastReplyEval = { ...base.lastReplyEval, ...(raw?.lastReplyEval ?? {}) };
   next.techBacklog = { ...base.techBacklog, ...(raw?.techBacklog ?? {}) };
   next.theory = { ...base.theory, ...(raw?.theory ?? {}) };
@@ -184,10 +190,17 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       state.sandboxFlow = { ...state.sandboxFlow, ...v };
       state.replyGate = {
         ...state.replyGate,
+        gateType: state.sandboxFlow.gateType,
+        armed: Boolean(state.sandboxFlow.replyGateActive && state.sandboxFlow.gateType !== 'none'),
         gateConsumed: state.sandboxFlow.gateConsumed,
         canReply: state.sandboxFlow.canReply,
         retryCount: state.sandboxFlow.retryCount,
-        retryLimit: state.sandboxFlow.retryLimit
+        retryLimit: state.sandboxFlow.retryLimit,
+        sourceMessageId: state.sandboxFlow.replySourceMessageId ?? state.replyGate.sourceMessageId,
+        sourceType: state.sandboxFlow.replySourceType ?? state.replyGate.sourceType,
+        consumePolicy: state.sandboxFlow.consumePolicy ?? state.replyGate.consumePolicy,
+        questionEmitter: state.sandboxFlow.questionEmitterId ?? state.replyGate.questionEmitter,
+        targetPlayerId: state.sandboxFlow.replyTarget ?? state.replyGate.targetPlayerId
       };
     },
     commitConsonantJudgeResult: () => undefined,

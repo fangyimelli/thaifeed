@@ -96,6 +96,20 @@ const checks = [
     }
   },
   {
+    name: 'replyGate schema uses gateType + targetPlayerId as formal keys',
+    run() {
+      if (!mode.includes("replyGate: { gateType:")) {
+        throw new Error('replyGate.gateType formal schema missing');
+      }
+      if (!mode.includes('targetPlayerId')) {
+        throw new Error('replyGate.targetPlayerId formal schema missing');
+      }
+      if (!app.includes('sandbox.replyGate.gateType/armed')) {
+        throw new Error('debug panel does not show replyGate.gateType');
+      }
+    }
+  },
+  {
     name: 'transition log not empty after sandbox mode entry',
     run() {
       if (!mode.includes("{ event: 'INIT_SANDBOX_V2'")) {

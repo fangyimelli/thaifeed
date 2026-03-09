@@ -815,16 +815,16 @@ export default function App() {
   });
 
   const sandboxReplyGateDebugRef = useRef<{
-    type: 'none' | 'consonant_wait_reply';
+    gateType: 'none' | 'consonant_wait_reply';
     armed: boolean;
     sourceMessageId: string;
-    targetActor: string;
+    targetPlayerId: string;
     consumePolicy: string;
   }>({
-    type: 'none',
+    gateType: 'none',
     armed: false,
     sourceMessageId: '-',
-    targetActor: '-',
+    targetPlayerId: '-',
     consumePolicy: '-'
   });
   const sandboxLastReplyEvalRef = useRef<{
@@ -3348,12 +3348,21 @@ export default function App() {
       const promptBeforeTick = sandboxModeRef.current.getCurrentPrompt();
       const sandboxState = sandboxModeRef.current.getState();
       const derivedReplyGate = deriveSandboxReplyGateState();
+      sandboxModeRef.current.setSandboxFlow({
+        gateType: derivedReplyGate.replyGateType ?? 'none',
+        replyTarget: derivedReplyGate.replyTarget,
+        replyGateActive: derivedReplyGate.replyGateArmed,
+        canReply: derivedReplyGate.canReply,
+        replySourceMessageId: derivedReplyGate.replySourceMessageId,
+        replySourceType: derivedReplyGate.replySourceType,
+        consumePolicy: 'single'
+      });
       sandboxReplyGateDebugRef.current = {
         ...sandboxReplyGateDebugRef.current,
-        type: (derivedReplyGate.replyGateType as 'none' | 'consonant_wait_reply' | null) ?? 'none',
+        gateType: (derivedReplyGate.replyGateType as 'none' | 'consonant_wait_reply' | null) ?? 'none',
         armed: derivedReplyGate.replyGateArmed,
         sourceMessageId: derivedReplyGate.replySourceMessageId ?? '-',
-        targetActor: derivedReplyGate.replyTarget ?? '-'
+        targetPlayerId: derivedReplyGate.replyTarget ?? '-'
       };
       const sandboxEngineAudit = sandboxChatEngineRef.current?.getAuditDebugState();
       const canShowConsonantOverlay = sandboxState.introGate.passed;
@@ -5314,10 +5323,10 @@ export default function App() {
       },
       setPinnedReply: ({ messageId: resolvedMessageId }) => {
         sandboxReplyGateDebugRef.current = {
-          type: 'consonant_wait_reply',
+          gateType: 'consonant_wait_reply',
           armed: true,
           sourceMessageId: resolvedMessageId,
-          targetActor: tagOwner,
+          targetPlayerId: tagOwner,
           consumePolicy: 'classic_parse_and_judge'
         };
         const now = Date.now();
@@ -6474,8 +6483,8 @@ export default function App() {
                     <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
                     <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
                     <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>
-                    <div>sandbox.replyGate.type/armed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.type ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
-                    <div>sandbox.replyGate.sourceMessageId/targetActor: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetActor ?? '-'}</div>
+                    <div>sandbox.replyGate.gateType/armed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
+                    <div>sandbox.replyGate.sourceMessageId/targetPlayerId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetPlayerId ?? '-'}</div>
                     <div>sandbox.replyGate.canReply/sourceType: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.canReply ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceType ?? '-'}</div>
                     <div>sandbox.replyGate.consumePolicy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.consumePolicy ?? '-'}</div>
                     <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>

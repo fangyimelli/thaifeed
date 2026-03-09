@@ -1,18 +1,17 @@
 ## Summary
-- Fix sandbox v2 startup chain so entering `sandbox_story` always starts formal flow: `BOOT -> PREHEAT_CHAT`, with non-empty transitions and initialized `scheduler.phase/questionIndex/introGate`.
-- Remove legacy join spam path in sandbox mode by hard-blocking the old `system_ui` join loop and replacing preheat output with a controlled sandbox v2 preheat contract.
-- Implement controlled preheat sequence with natural chat-dominant lines and capped joins (`SANDBOX_PREHEAT_JOIN_CAP=4`), including anti-flood same-sender guard.
-- Extend sandbox regression guards with startup/phase invariants and preheat spam-block checks.
+- Align sandbox SSOT reply-gate schema to enforced integration contract: rename formal fields to `gateType` and `targetPlayerId`, while preserving backward-compatible hydration from legacy `type/targetActor`.
+- Ensure flow/state/debug share one authority by syncing derived gate state back into sandbox mode each tick (`gateType`, `replyGateActive`, `canReply`, `replySourceMessageId`, `replySourceType`, `consumePolicy`).
+- Update debug panel labels to read the same formal replyGate keys (`gateType/armed`, `sourceMessageId/targetPlayerId`).
+- Add regression guard checks to prevent replyGate schema/debug drift.
 
 ## Root cause
-1. Sandbox v2 root state existed, but flow startup could appear stalled when runtime wasn’t consistently driven through explicit preheat orchestration.
-2. A legacy global join emitter effect kept running regardless of sandbox mode and produced parallel join noise.
-3. A separate preheat block emitted `viewer_xxx 進來了` as `mod_live` chat lines, causing join spam to dominate.
+1. Sandbox runtime still carried mixed reply-gate naming (`type/targetActor` vs `gateType/targetPlayerId`), creating schema ambiguity.
+2. Derived gate lived mostly in UI-side computed state; formal mode state could lag key fields used by debug and audits.
 
 ## Validation
 - npm run test:sandbox-guards
 - npm run build
 
 ## Scope guard
-- Only sandbox runtime / chat emitter / debug-hydration-adjacent behavior touched.
-- Classic mode pipeline remains isolated.
+- Only sandbox_story flow/state/debug integration path was changed.
+- Classic mode logic remains untouched.
