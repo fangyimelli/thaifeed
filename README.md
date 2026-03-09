@@ -1145,6 +1145,7 @@ npm run build
   - `lastModeSwitch.result`（`ok / blocked / error`）
   - `lastModeSwitch.reason`（若被 guard 擋住或例外）
 - 點擊 Mode Switch 按鈕後，UI 會先更新 `lastModeSwitch.*`，再執行生效動作；若可切換，debug-only 會顯示 `Switching…` 並以 `reload` 讓 mode 立即重啟套用。
+- `sandbox_story` 也可從 Debug Overlay 的 `Mode Switch` 進入（`Switch to sandbox`）。
 - 常見排障：若按鈕看起來沒反應，先看 `lastModeSwitch.result/reason`，例如 `debug_disabled`、`already_current_mode`、`invalid_mode`。
 - 啟動時 mode 決策：
   - `mode` query param（最高優先）
