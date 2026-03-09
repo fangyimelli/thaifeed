@@ -35,7 +35,7 @@
 
 - currentPrompt: `{ id:'-', consonant:'-', wordKey:'-' }`（由 prompt.current 安全投影）
 - reveal: `visible/phase/doneAt/wordKey/durationMs` 皆有預設值
-- replyGate: `type/armed/sourceMessageId/targetActor/canReply/sourceType/consumePolicy`
+- replyGate: `gateType/armed/sourceMessageId/targetPlayerId/canReply/sourceType/consumePolicy`
 - lastReplyEval: `messageId/gateType/consumed/reason/rawInput/normalizedInput/extractedAnswer`
 - techBacklog: `queued/pending/lastDrainAt`
 - theory: `active/nodeId/promptId`
