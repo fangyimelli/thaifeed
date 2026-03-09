@@ -2262,3 +2262,11 @@ Console（debug 模式）可觀察：
 - WAIT_REPLY 期間採硬 freeze（非玩家輸出=0），並累積 sanity/backlog；玩家回覆後一次 flush。
 - Auto Play Night 會在 WAIT_REPLY 自動注入 mock reply，完整推進至第 10 題。
 - Classic mode 路徑不變。
+
+
+## 2026-03-09 Sandbox Story Runtime Boot Fix（sandbox only）
+
+- `sandbox_story` mode 進入時改為直接啟動 runtime boot chain（自動 fulfill joinGate、初始化 PREHEAT 與 introGate）。
+- 新增 sandbox boot recovery guard：若 mode 已在 sandbox 但 runtime 回到 `PREJOIN` 或 `introGate.startedAt=0`，會自動重啟 sandbox runtime。
+- `__CHAT_DEBUG__.sandbox` 新增 runtime/joinGate guard 資訊，確保 debug 顯示的是活的 sandbox state。
+- `currentMode=sandbox_story` 時阻斷 classic idle tick emitter，避免 classic/sandbox 雙軌暗跑。

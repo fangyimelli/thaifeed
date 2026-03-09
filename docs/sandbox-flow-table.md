@@ -92,3 +92,38 @@ debug panel / `__CHAT_DEBUG__.sandbox` 必須對齊真實控制 state：
 4. `TAG_PLAYER_1` 首問在同 `step+questionIndex+speaker+normalizedText` 只能 append 一次。
 5. `canAskConsonantNow()` 不得為 hardcoded false。
 6. debug 欄位需與實際 `sandboxFlow` 控制一致。
+
+## Sandbox Story Boot / Runtime Start Contract（新增）
+
+### Boot Chain（mode switch 後必達）
+
+1. `currentMode=sandbox_story` 時，`createSandboxStoryMode` 實例必須已建立且 `init()` 已執行。
+2. `init()` 之後必須立刻做 runtime bootstrap（不可只停在 UI mode label）：
+   - `player` 已寫入
+   - `joinGate.satisfied=true`（採方案 A：進入 sandbox_story 自動滿足 joinGate）
+   - `flow.step/sandboxFlow.step` 至少進入 `PREHEAT`（不得長期停在 PREJOIN 空殼）
+   - `introGate.startedAt > 0` 且 `minDurationMs > 0`
+3. `tick` loop 在 sandbox mode 必須持續驅動上述 state，並能推進 `PREHEAT -> REVEAL_1_RIOT -> TAG_PLAYER_1`。
+
+### JoinGate Contract（統一方案 A）
+
+- `sandbox_story` 模式啟動即自動 fulfill joinGate（`satisfied=true` + `submittedAt`），避免 mode 已切換但 runtime 卡在 PREJOIN。
+- `onSandboxJoin()` 仍可覆寫玩家 handle，但不得把 runtime 重置回未啟動狀態。
+- debug 必須可見 `joinGate.satisfied/submittedAt` 與 transition。
+
+### Debug Hydration Contract（runtime SSOT）
+
+`__CHAT_DEBUG__.sandbox` 必須每個 sandbox tick 由「活的 runtime state」回填，且不可用 fallback `-`/`0` 長期覆蓋：
+
+- `flow.step/questionIndex/stepStartedAt`
+- `scheduler.phase/blockedReason`
+- `introGate.startedAt/minDurationMs/passed/remainingMs`
+- `sandboxFlow.gateType/canReply/replyGateActive/retryCount/retryLimit/activeSpeakerRoles`
+- `currentPrompt/prompt.current`
+- `lastReplyEval`
+
+### Classic / Sandbox Runtime Exclusion Contract（新增）
+
+- `currentMode=sandbox_story`：classic scheduler 只允許做通用 housekeeping，不得成為故事 runtime driver。
+- sandbox story progression（step / scheduler / prompt gate）唯一 driver 為 sandbox runtime。
+- 若偵測 sandbox mode 但 `flow.step=PREJOIN` 或 `introGate.startedAt=0` 超過 guard window，必須觸發 bootstrap recovery（並寫入 debug audit）。
