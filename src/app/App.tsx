@@ -1542,10 +1542,18 @@ export default function App() {
   };
 
   const updateEventDebug = useCallback((patch: Partial<NonNullable<Window['__CHAT_DEBUG__']>>) => {
+    const prev = window.__CHAT_DEBUG__ ?? {};
     window.__CHAT_DEBUG__ = {
-      ...(window.__CHAT_DEBUG__ ?? {}),
+      ...prev,
       ...patch,
-      ui: window.__CHAT_DEBUG__?.ui
+      sandbox: {
+        ...(prev as any).sandbox,
+        ...(patch as any).sandbox
+      },
+      ui: {
+        ...(prev as any).ui,
+        ...(patch as any).ui
+      }
     };
   }, []);
 
