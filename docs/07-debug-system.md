@@ -1,6 +1,3 @@
-
-## 2026-03-07（audit only）sandbox debug 判讀補充
-
 NIGHT_01 類型問題建議避免只看單欄位：
 - `consonant.promptText/promptCurrent` 有值 ≠ parser 已啟動。
 - 需同看 `prompt.current.id`、`flow.step`、`answerGate.waiting`、`consonant.judge.lastInput`。
@@ -63,15 +60,6 @@ NIGHT_01 類型問題建議避免只看單欄位：
 - `event.freezeGuard.hasRealTag/replyUIReady/freezeAllowed`：freeze 啟動 guard 判斷快照。
 - `chat.system.debugReset.count/reason/resetAt`：一鍵救援執行次數、原因與時間。
 
-## 2026-03-04（sandbox 輸入與樣式驗收欄位）
-
-sandbox_story 建議固定檢查以下欄位：
-- `sandbox.consonant.parse.inputRaw`
-- `sandbox.consonant.parse.inputNorm`
-- `sandbox.consonant.parse.allowedSetsHit`
-- `sandbox.parser.kind`
-- `sandbox.parser.matched`
-- `sandbox.blockedReason`
 - `ui.promptGlyph.className`
 - `ui.promptGlyph.colorResolved`
 - `ui.promptGlyph.opacityResolved`
@@ -80,10 +68,4 @@ sandbox_story 建議固定檢查以下欄位：
 
 補充規則：若某問題連續 3 次 PR 都未提及，才可自 debug 頁移除；後續再次出現則重新加回。
 
-
-## 2026-03-08 Sandbox warmup/pin debug 欄位補充
-
-- 新增 `sandbox.replyGate`：`type/armed/sourceMessageId/targetActor/consumePolicy`。
-- 新增 `sandbox.lastReplyEval`：`messageId/gateType/consumed/reason`。
-- 新增 `sandbox.pinned.sourceType`：至少區分 `warmup_gate`、`auto_pin_freeze`、`qna_reply`、`prompt_preview`。
 - 目的：快速判斷目前 UI pin 是否正式可 consume gate，或僅為 auto pin highlight。
