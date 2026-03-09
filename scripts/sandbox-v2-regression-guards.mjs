@@ -10,10 +10,10 @@ const checks = [
       if (!app.includes("ensureSandboxRuntimeStarted('mode_switch_bootstrap')")) {
         throw new Error('sandbox_story mode entry does not call runtime starter');
       }
-      if (!app.includes('bootstrapRuntime?.(reason, now, 30_000)')) {
-        throw new Error('runtime starter does not call mode bootstrapRuntime authority');
+      if (!app.includes('ensureBootstrapState?.(reason, now, 30_000')) {
+        throw new Error('runtime starter does not call mode ensureBootstrapState authority');
       }
-      if (!mode.includes("bootstrapRuntime: (reason = 'mode_entry'")) {
+      if (!mode.includes("const bootstrapRuntime = (reason = 'mode_entry'")) {
         throw new Error('sandbox mode missing bootstrapRuntime authority entry');
       }
     }
@@ -21,8 +21,8 @@ const checks = [
   {
     name: 'flow.step initialized after sandbox mode entry',
     run() {
-      if (!mode.includes("flow: { step: 'BOOT'")) {
-        throw new Error('flow.step is not initialized to BOOT in v2 root state');
+      if (!mode.includes("flow: { step: 'PREHEAT_CHAT'")) {
+        throw new Error('flow.step is not initialized to PREHEAT_CHAT in v2 root state');
       }
       if (!mode.includes("questionIndex: 0")) {
         throw new Error('flow.questionIndex=0 is missing from v2 initialization');
@@ -32,8 +32,8 @@ const checks = [
   {
     name: 'scheduler.phase initialized after sandbox mode entry',
     run() {
-      if (!mode.includes("scheduler: { phase: 'BOOTSTRAP', blockedReason: '' }")) {
-        throw new Error('scheduler.phase bootstrap default missing');
+      if (!mode.includes("scheduler: { phase: 'preheat', blockedReason: '' }")) {
+        throw new Error('scheduler.phase preheat default missing');
       }
       if (!mode.includes('setSchedulerPhase: (phase: string')) {
         throw new Error('scheduler phase setter missing');
@@ -158,7 +158,7 @@ if (!app.includes("setFlowStep('POST_REVEAL_CHAT'")) { throw new Error('POST_REV
 console.log('sandbox v2 regression guards passed');
 
 
-if (!mode.includes("audit: { transitions: [{ from: 'INIT', to: 'BOOT'")) {
+if (!mode.includes("audit: { transitions: [{ from: 'INIT', to: 'PREHEAT_CHAT'")) {
   throw new Error('audit.transitions bootstrap record missing in initial state');
 }
 
@@ -170,6 +170,10 @@ if (!app.includes("!guardState.flow.step || !Number.isFinite(guardState.flow.que
   throw new Error('guard recovery missing flow/scheduler bootstrap checks');
 }
 
-if (!app.includes("clearReplyUi_reinit")) {
+if (!app.includes("ensureBootstrapState?.('clearReplyUi_reinit'")) {
   throw new Error('clearReplyUi re-init guard missing');
+}
+
+if (!app.includes('visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)')) {
+  throw new Error('consonant bubble should not appear before core bootstrap state is ready');
 }

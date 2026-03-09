@@ -1,3 +1,8 @@
+- [sandbox][bootstrap authority] `sandbox_story` 正式 bootstrap 改為 `ensureBootstrapState() -> bootstrapRuntime()` 單一路徑：mode entry / guard recovery / clearReplyUi re-init 全部統一路徑，不再多點直接寫 flow/introGate。
+- [sandbox][state mount] v2 initial state 直接以 `PREHEAT_CHAT + scheduler.preheat + introGate.startedAt>0/minDurationMs>0` 建立可用 core state，避免 mode 已切入但 CORE FLOW STATE – TRUSTED 全空。
+- [sandbox][visual alignment] `ui.consonantBubble.visible` 增加 core bootstrap 前置條件（flow.step/scheduler.phase/introGate.startedAt），防止 visual state 先亮造成已啟動假象。
+- [sandbox][guard] 新增 `ensureBootstrapState` regression contract：`clearReplyUi` 與 interval guard reset 後不得留下未初始化 sandbox core state。
+
 - [sandbox][debug-panel cleanup] sandbox_story debug panel 重整為分區 SSOT 檢視：新增 `CORE FLOW STATE – TRUSTED`、`FLOW / GATE DIAGNOSTICS`、`PROMPT / JUDGE / REVEAL`、`LEGACY COMPATIBILITY`、`VISUAL STATE – NOT FLOW AUTHORITY`，並修正 `sandboxFlow.*` 讀取來源為 `sandbox.sandboxFlow.*`。
 - [sandbox][Removed/Deprecated Log] debug panel 移除 `storyPhaseGate.*` 佔位列、`sandbox.currentPrompt.*` 與 `sandbox.reveal.*` 重複欄位；`answerGate.*` 改標示為 legacy compatibility（non-authoritative）。
 - [sandbox][bootstrap SSOT] mode 進入 `sandbox_story` 後統一由 `sandboxStoryMode.bootstrapRuntime()` 建立正式 state（flow/introGate/scheduler/replyGate/currentPrompt/lastReplyEval/audit.transitions），移除 App 端雙軌 BOOT->PREHEAT 直接寫值。

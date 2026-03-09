@@ -1,3 +1,10 @@
+## This PR (sandbox_story bootstrap root-cause one-shot fix)
+- 單一路徑整併：新增 `ensureBootstrapState()`，mode switch、runtime guard、clearReplyUi re-init 全部改由 mode 正式 bootstrap authority 處理。
+- 修正 core state 空值根因：v2 initial state 改為直接掛載 PREHEAT bootstrap state，避免 `currentMode=sandbox_story` 但 flow/scheduler/introGate 全空。
+- 修正 reset/cleanup 洗掉初始化：guard 與 clear 路徑若檢測缺欄位，會強制完整 re-init，不再留殘缺 state。
+- 修正 visual/core 脫鉤：consonant bubble 需 core bootstrap 成立才可 visible。
+- Regression guard 同步更新：驗證 bootstrap authority、initial mount、re-init 與 visual/core 對齊。
+
 ## This PR (sandbox_story debug panel clean-up)
 - 只調整 sandbox_story debug panel（不改 classic mode / gameplay flow / replyGate-prompt-judge-reveal 行為）。
 - 修正 `sandboxFlow.*` debug rows 讀錯來源（`sandbox.flow.*` -> `sandbox.sandboxFlow.*`）。
