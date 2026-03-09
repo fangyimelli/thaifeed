@@ -21,3 +21,16 @@
 | FINAL_MESSAGE | 否 | อย่าหัน | 是 | system | 黑屏結束 |
 
 > 規則：未 reveal 不得 riot；未 currentPrompt 不得 ask-player；未 armed gate 不得要求玩家回答。
+
+## sandbox v2 debug/runtime initial shape（guard）
+
+- currentPrompt: `{ id:'-', consonant:'-', wordKey:'-' }`（由 prompt.current 安全投影）
+- reveal: `visible/phase/doneAt/wordKey/durationMs` 皆有預設值
+- replyGate: `type/armed/sourceMessageId/targetActor/canReply/sourceType/consumePolicy`
+- lastReplyEval: `messageId/gateType/consumed/reason/rawInput/normalizedInput/extractedAnswer`
+- techBacklog: `queued/pending/lastDrainAt`
+- theory: `active/nodeId/promptId`
+- blockedReason: 缺值回退 `'-'`
+- transitions: 永遠為 array（預設 `[]`，UI 顯示最近 20 筆）
+
+> 設計原則：debug 只輔助，不可阻斷 runtime；hydration 未完成時一律可安全 render。

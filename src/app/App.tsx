@@ -3622,7 +3622,7 @@ export default function App() {
               writerBlocked: sandboxState.prompt.pinned.lastWriter.writerBlocked
             }
           },
-          mismatch: sandboxState.prompt.mismatch
+          mismatch: sandboxState?.prompt?.mismatch ?? false
         },
         hint: {
           active: sandboxState.hint.active,
@@ -3638,7 +3638,18 @@ export default function App() {
           lastAt: sandboxState.fearSystem.footsteps.lastAt
         },
         lastWave: { count: sandboxState.wave.count, kind: sandboxState.wave.kind },
-        blockedReason: sandboxState.blocked.reason || '-',
+        blockedReason: sandboxState?.blocked?.reason || '-',
+        techBacklog: {
+          queued: sandboxState?.techBacklog?.queued ?? 0,
+          pending: sandboxState?.techBacklog?.pending ?? 0,
+          lastDrainAt: sandboxState?.techBacklog?.lastDrainAt ?? 0
+        },
+        theory: {
+          active: sandboxState?.theory?.active ?? false,
+          nodeId: sandboxState?.theory?.nodeId ?? '-',
+          promptId: sandboxState?.theory?.promptId ?? '-'
+        },
+        transitions: Array.isArray(sandboxState?.transitions) ? sandboxState.transitions.slice(-20) : [],
         reveal: {
           visible: sandboxState.reveal.visible,
           phase: sandboxState.reveal.phase,
@@ -3666,9 +3677,6 @@ export default function App() {
         promptNext: {
           id: (sandboxModeRef.current.getSSOT().nodes[sandboxState.nodeIndex + 1]?.id) ?? '-'
         },
-        mismatch: {
-          promptVsReveal: sandboxState.mismatch.promptVsReveal
-        }
       };
       sandboxRuntimeGuardRef.current.lastHydratedAt = now;
       updateEventDebug({
@@ -4388,10 +4396,17 @@ export default function App() {
     sandboxTagPhaseTimeoutFiredRef.current = false;
   }, []);
 
+  const isSandboxPromptRevealMismatch = useCallback((st: any) => {
+    const promptWordKey = st?.prompt?.current?.wordKey ?? '';
+    const revealWordKey = st?.reveal?.wordKey ?? '';
+    if (!promptWordKey || !revealWordKey) return false;
+    return promptWordKey !== revealWordKey;
+  }, []);
+
   const advanceSandboxPrompt = useCallback((reason: 'correct_done' | 'debug_pass') => {
     if (modeRef.current.id !== 'sandbox_story') return;
     const st = sandboxModeRef.current.getState();
-    if (st.prompt.mismatch || st.mismatch.promptVsReveal) {
+    if ((st?.prompt?.mismatch ?? false) || isSandboxPromptRevealMismatch(st)) {
       sandboxModeRef.current.commitAdvanceBlockedReason('mismatch');
       setSandboxRevealTick(Date.now());
       return;
@@ -4400,7 +4415,7 @@ export default function App() {
     sandboxConsonantPromptNodeIdRef.current = null;
     clearSandboxAdvanceRetry();
     setSandboxRevealTick(Date.now());
-  }, [clearSandboxAdvanceRetry]);
+  }, [clearSandboxAdvanceRetry, isSandboxPromptRevealMismatch]);
 
   const applySandboxCorrect = useCallback((payload?: { input?: string; matchedChar?: string; source?: string }) => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -5957,7 +5972,7 @@ export default function App() {
                   phase: st.reveal.phase,
                   wordKey: st.reveal.wordKey,
                   consonantFromPrompt: st.reveal.consonantFromPrompt,
-                  mismatch: st.mismatch.promptVsReveal,
+                  mismatch: isSandboxPromptRevealMismatch(st),
                   durationMs: st.reveal.durationMs,
                   wordText: st.reveal.text
                 };
@@ -6407,7 +6422,6 @@ export default function App() {
                     <div>sandbox.advance.lastAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastAt ?? 0}</div>
                     <div>sandbox.advance.lastReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.lastReason ?? '-'}</div>
                     <div>sandbox.advance.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.advance?.blockedReason ?? '-'}</div>
-                    <div>mismatch.promptVsReveal: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.mismatch?.promptVsReveal ?? false)}</div>
                     <div>sandbox.reveal.doneAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reveal?.doneAt ?? 0}</div>
                     <div>debug.pass.clickedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.clickedAt ?? 0}</div>
                     <div>debug.pass.action: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.pass?.action ?? 'none'}</div>
@@ -6420,9 +6434,6 @@ export default function App() {
                     <div>sandbox.judge.debugOverride.consumedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debug?.override?.consumedAt ?? 0}</div>
                     <div>sandbox.debug.isolatedTagLock: {String(debugIsolatedTagLock)} (purely visual / no formal impact)</div>
                     <div>sandbox.debug.composingOverrideAffectsSubmit: false</div>
-                    <div>sandbox.prompt.overlay.consonantShown: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.overlay?.consonantShown ?? '-'}</div>
-                    <div>sandbox.prompt.pinned.promptIdRendered: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.promptIdRendered ?? '-'}</div>
-                    <div>sandbox.prompt.mismatch: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.mismatch ?? false)}</div>
                     <div>pinned.lastWriter.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.source ?? '-'}</div>
                     <div>pinned.lastWriter.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.blockedReason ?? '-'}</div>
                     <div>pinned.lastWriter.writerBlocked: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.pinned?.lastWriter?.writerBlocked ?? false)}</div>
@@ -6435,6 +6446,11 @@ export default function App() {
                     <div>lastWave.count: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.count ?? 0}</div>
                     <div>lastWave.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastWave?.kind ?? '-'}</div>
                     <div>blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.blockedReason ?? '-'}</div>
+                    <div>sandbox.techBacklog.queued/pending: {(window.__CHAT_DEBUG__ as any)?.sandbox?.techBacklog?.queued ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.techBacklog?.pending ?? 0}</div>
+                    <div>sandbox.techBacklog.lastDrainAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.techBacklog?.lastDrainAt ?? 0}</div>
+                    <div>sandbox.theory.active/nodeId: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.theory?.active ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.theory?.nodeId ?? '-'}</div>
+                    <div>sandbox.theory.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.theory?.promptId ?? '-'}</div>
+                    <div>sandbox.transitions(20): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.transitions ?? [])}</div>
 
                     <div>sandbox.ghostMotion.lastId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.lastId ?? '-'}</div>
                     <div>sandbox.ghostMotion.state: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ghostMotion?.state ?? '-'}</div>
