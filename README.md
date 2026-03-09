@@ -1915,3 +1915,13 @@ Console（debug 模式）可觀察：
 - WAIT_REPLY 期間採硬 freeze（非玩家輸出=0），並累積 sanity/backlog；玩家回覆後一次 flush。
 - Auto Play Night 會在 WAIT_REPLY 自動注入 mock reply，完整推進至第 10 題。
 - Classic mode 路徑不變。
+
+## Sandbox Story V2 (NIGHT_01 MVP)
+
+- 新增 `sandbox_story v2` 最小 runtime 入口與 SSOT 資料，模式仍維持 `classic` / `sandbox_story` 分離。
+- classic / sandbox 現在共用同一份 `NIGHT_01` 子音題庫（10 題，順序固定）。
+- sandbox 專用流程資料與 debug hydration 改為讀取真實 state，不再依賴遺失的舊 sandbox 檔案。
+
+### Removed / Deprecated Log
+- 移除（不再接回）舊 sandbox 缺失模組：legacy emitter/retry/fake hydration 的檔案路徑已改為乾淨 v2 最小模組實作。
+- 停用舊 `src/data/night1_words.ts` 內錯誤題庫來源，改由 shared question bank 產生。

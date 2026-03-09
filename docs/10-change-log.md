@@ -805,3 +805,11 @@
 - 正式 tag emitter 統一為單一發問者，避免 VIP 與 mod 同步重複 tag。
 - 導入 autoplay mock reply 驅動 WAIT_REPLY，夜晚可自動推進完整回合。
 - 更新 Night1 題幹語義到「身份(1~4) / 動機(5~9) / 恐怖總結(10)」。
+
+## 2026-03-09
+
+- 建立 shared question bank：`src/shared/questionBank/night01QuestionBank.ts`，提供 NIGHT_01 正式 10 題（classic/sandbox 共用來源）。
+- 新增 `src/ssot/sandbox_story/night1.ts` 與 `src/ssot/sandbox_story/types.ts`，建立 NIGHT_01 SSOT 與節點定義。
+- 新增 `src/modes/sandbox_story/sandboxStoryMode.ts`、`src/modes/sandbox_story/classicConsonantAdapter.ts`，讓 sandbox mode 以乾淨 v2 runtime 最小可跑。
+- 新增 `src/sandbox/chat/*` 與 `src/ui/overlays/SandboxWordRevealText.tsx`，補齊 sandbox 專用依賴，避免雙軌遺留。
+- `src/data/night1_words.ts` 改為由 shared question bank 映射，移除舊錯誤 NIGHT1_WORDS 內容。
