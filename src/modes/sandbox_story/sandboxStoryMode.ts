@@ -21,18 +21,11 @@ export type SandboxFearDebugState = {
   footsteps: { probability: number; cooldownMs: number; cooldownRemaining: number; lastAt: number };
 };
 
-export const createSandboxV2InitialState = () => {
-  const bootAt = Date.now();
-  const initialTransitions = [
-    { event: 'INIT_SANDBOX_V2', at: bootAt, detail: NIGHT1.meta.version },
-    { event: 'ENTER_BOOT', at: bootAt, detail: 'BOOT' }
-  ] as Array<{ event: string; at: number; detail?: string }>;
-
-  return {
+export const createSandboxV2InitialState = () => ({
   ssot: { version: NIGHT1.meta.version },
   nightId: NIGHT1.meta.id,
-  flow: { step: 'BOOT', questionIndex: 0, stepStartedAt: bootAt, transitions: initialTransitions, tagAskedThisStep: false },
-  sandboxFlow: { step: 'BOOT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[] },
+  flow: { step: 'BOOT', questionIndex: 0, stepStartedAt: Date.now(), transitions: [] as Array<{ event: string; at: number; detail?: string }>, tagAskedThisStep: false },
+  sandboxFlow: { step: 'BOOT', stepStartedAt: Date.now(), questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[] },
   prompt: {
     current: null,
     overlay: { consonantShown: '' },
@@ -82,9 +75,8 @@ export const createSandboxV2InitialState = () => {
   theory: { active: false, nodeId: '', promptId: '', pendingQuestions: [] as string[] },
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
-  transitions: initialTransitions
-  };
-};
+  transitions: [] as Array<{ event: string; at: number; detail?: string }>
+});
 
 export function ensureSandboxV2StateShape(raw: any) {
   const base = createSandboxV2InitialState();
@@ -104,7 +96,7 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.pendingDisambiguation = { ...base.pendingDisambiguation, ...(raw?.pendingDisambiguation ?? {}) };
   next.q10Special = { ...base.q10Special, ...(raw?.q10Special ?? {}) };
   next.flow = { ...base.flow, ...(raw?.flow ?? {}) };
-  next.flow.transitions = Array.isArray(raw?.flow?.transitions) ? raw.flow.transitions : base.flow.transitions;
+  next.flow.transitions = Array.isArray(raw?.flow?.transitions) ? raw.flow.transitions : [];
   next.scheduler = { ...base.scheduler, ...(raw?.scheduler ?? {}) };
   next.ghostGate = { ...base.ghostGate, ...(raw?.ghostGate ?? {}) };
   next.advance = { ...base.advance, ...(raw?.advance ?? {}) };
@@ -133,7 +125,7 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.warmup = { ...base.warmup, ...(raw?.warmup ?? {}) };
   next.glitchBurst = { ...base.glitchBurst, ...(raw?.glitchBurst ?? {}) };
   next.audio = { ...base.audio, ...(raw?.audio ?? {}) };
-  next.transitions = Array.isArray(raw?.transitions) ? raw.transitions : base.transitions;
+  next.transitions = Array.isArray(raw?.transitions) ? raw.transitions : [];
   next.flow.transitions = Array.isArray(raw?.flow?.transitions) ? raw.flow.transitions : next.transitions;
   next.nightId = raw?.nightId ?? base.nightId;
   next.blockedReason = raw?.blockedReason ?? raw?.blocked?.reason ?? base.blockedReason;
@@ -144,10 +136,6 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
   let ssot: NightScript = NIGHT1;
   let state: any = createSandboxV2InitialState();
   const fear: SandboxFearDebugState = { fearLevel: 0, maxFear: 100, pressureLevel: 'low', ghostProbability: 0, triggers: { chatSpike: 0, storyEmotion: 0, darkFrame: 0, ghostNearby: 0 }, footsteps: { probability: 0, cooldownMs: 0, cooldownRemaining: 0, lastAt: 0 } };
-  const appendTransition = (event: string, at: number, detail?: string) => {
-    state.transitions = [...(state.transitions ?? []), { event, at, detail }].slice(-20);
-    state.flow.transitions = state.transitions;
-  };
 
   return {
     id: 'sandbox_story',
@@ -165,17 +153,11 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     importSSOT: (next: NightScript) => { ssot = next; state.ssot.version = next.meta.version; state.nightId = next.meta.id; return true; },
     setPlayerIdentity: (p: any) => { state.player = { ...state.player, ...p }; },
     setJoinGate: (v: any) => { state.joinGate = { ...state.joinGate, ...v }; },
-    appendTransition,
-    setSchedulerPhase: (phase: string, blockedReason = '', at?: number) => {
-      state.scheduler = { ...state.scheduler, phase, blockedReason };
-      appendTransition(`SCHEDULER_${phase.toUpperCase()}`, at ?? Date.now(), blockedReason || phase);
-    },
     setFlowStep: (step: string, reason?: string, at?: number) => {
-      const transitionAt = at ?? Date.now();
-      const nextQuestionIndex = Number.isInteger(state.flow?.questionIndex) ? state.flow.questionIndex : 0;
-      state.flow = { ...state.flow, step, questionIndex: nextQuestionIndex, stepStartedAt: transitionAt, tagAskedThisStep: false };
-      state.sandboxFlow = { ...state.sandboxFlow, step, stepStartedAt: transitionAt, questionIndex: nextQuestionIndex };
-      appendTransition(reason || 'setFlowStep', transitionAt, step);
+      state.flow = { ...state.flow, step, stepStartedAt: at ?? Date.now(), tagAskedThisStep: false };
+      state.sandboxFlow = { ...state.sandboxFlow, step, stepStartedAt: at ?? Date.now(), questionIndex: state.flow.questionIndex };
+      state.transitions = [...(state.transitions ?? []), { event: reason || 'setFlowStep', at: at ?? Date.now(), detail: step }].slice(-20);
+      state.flow.transitions = state.transitions;
     },
     setIntroGate: (v: any) => { state.introGate = { ...state.introGate, ...v }; },
     setPreheatState: (v: any) => { state.preheat = { ...state.preheat, ...v }; },
