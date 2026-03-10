@@ -1,3 +1,24 @@
+## 2026-03-10 sandbox q2 render commit fix
+
+### Scope
+- Sandbox mode only; classic mode unchanged.
+
+### Problem
+- Authoritative flow 已到 `WAIT_REPLY_2` 且 `currentPrompt=n01_q02_house`，但 scene/video/prompt visual layer 仍停留第一題。
+
+### This Change
+- 新增 authoritative `renderSync` state：`stateQuestionId`、`renderedQuestionId`、`renderBlockedReason`、`commitSource/committedAt`。
+- 將 `secondQuestionShown` 改為 render-committed 定義：`emit + prompt 對齊 + rendered 對齊`。
+- `ADVANCE_NEXT` 與 `Force Next Question` emit 下一題時，依 `flow.questionIndex` 強制發送 `REQUEST_VIDEO_SWITCH`（scene/video 同步切題）。
+- debug panel 新增 state/render mismatch 診斷欄位（含 expectedSceneKey / video.currentKey）。
+- `commitPromptPinnedRendered`、`commitPinnedWriter` 改為真正落 state，不再 noop。
+
+### Regression Guards
+- 第二題 emit 後 `renderedQuestionId` 必須可對齊 `currentPrompt.questionId`。
+- `secondQuestionShown=true` 必須代表 `renderedQuestionId` 已是第二題。
+- 若 render 被阻塞，必須有 `renderBlockedReason`。
+- emit 下一題必須觸發 scene/video switch authoritative path。
+
 ## 2026-03-10 Sandbox post-reveal SSOT + ADVANCE_NEXT emit fix
 
 ### This Change

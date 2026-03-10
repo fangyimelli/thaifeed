@@ -57,6 +57,7 @@ export const createSandboxV2InitialState = () => {
     pinned: { promptIdRendered: '', lastWriter: { source: 'init', blockedReason: '', writerBlocked: false } },
     mismatch: false
   },
+  renderSync: { stateQuestionId: '', renderedQuestionId: '', renderBlockedReason: 'state_question_missing', committedAt: 0, commitSource: 'init' },
   reveal: { visible: false, phase: 'idle', text: '', wordKey: '', consonantFromPrompt: '', durationMs: 0, doneAt: 0, baseGrapheme: '', restText: '', restLen: 0, splitter: '', position: { xPct: 0, yPct: 0 }, safeRect: { minX: 0, maxX: 0, minY: 0, maxY: 0 } },
   consonant: {
     nodeChar: '',
@@ -129,6 +130,7 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.prompt.overlay = { ...base.prompt.overlay, ...(raw?.prompt?.overlay ?? {}) };
   next.prompt.pinned = { ...base.prompt.pinned, ...(raw?.prompt?.pinned ?? {}) };
   next.prompt.pinned.lastWriter = { ...base.prompt.pinned.lastWriter, ...(raw?.prompt?.pinned?.lastWriter ?? {}) };
+  next.renderSync = { ...base.renderSync, ...(raw?.renderSync ?? {}) };
   next.reveal = { ...base.reveal, ...(raw?.reveal ?? {}) };
   next.consonant = { ...base.consonant, ...(raw?.consonant ?? {}) };
   next.consonant.parse = { ...base.consonant.parse, ...(raw?.consonant?.parse ?? {}) };
@@ -250,6 +252,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         consumePolicy: 'single'
       };
       state.prompt = { ...state.prompt, current: null };
+      state.renderSync = { ...state.renderSync, stateQuestionId: '', renderedQuestionId: '', renderBlockedReason: 'state_question_missing', committedAt: bootAt, commitSource: reason };
       state.currentPrompt = null;
       state.lastReplyEval = null;
       state.consonantJudgeAudit = { ...createSandboxV2InitialState().consonantJudgeAudit };
@@ -393,8 +396,28 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     setAnswerGate: (v: any) => {
       state.answerGate = mirrorAnswerGateFromReplyGate({ ...state.answerGate, ...(v ?? {}) }, state.replyGate, state.flow?.stepStartedAt ?? Date.now());
     },
-    commitPinnedWriter: () => undefined,
-    commitPromptPinnedRendered: () => undefined,
+    commitPinnedWriter: (payload: { source?: string; writerBlocked?: boolean; blockedReason?: string } = {}) => {
+      state.prompt = {
+        ...state.prompt,
+        pinned: {
+          ...state.prompt.pinned,
+          lastWriter: {
+            source: payload.source ?? state.prompt.pinned.lastWriter.source,
+            writerBlocked: Boolean(payload.writerBlocked),
+            blockedReason: payload.blockedReason ?? ''
+          }
+        }
+      };
+    },
+    commitPromptPinnedRendered: (messageId: string) => {
+      state.prompt = {
+        ...state.prompt,
+        pinned: {
+          ...state.prompt.pinned,
+          promptIdRendered: messageId || state.prompt.pinned.promptIdRendered
+        }
+      };
+    },
     canTriggerGhostMotion: () => ({ allowed: true, reason: 'ok' }),
     setPronounceState: (stateName: 'idle' | 'playing' | 'error', payload?: { key?: string; reason?: string }) => { state.audio = { ...state.audio, state: stateName, lastKey: payload?.key ?? state.audio.lastKey }; state.blocked = { ...state.blocked, reason: stateName === 'error' ? (payload?.reason ?? 'pronounce_failed') : '' }; },
     forceRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, visible: false }; },
@@ -411,11 +434,25 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         translationZh: node?.translationZh ?? ''
       };
       state.consonant.nodeChar = prompt.consonant;
+      state.renderSync = {
+        ...state.renderSync,
+        stateQuestionId: prompt.wordKey,
+        renderBlockedReason: state.renderSync.renderedQuestionId === prompt.wordKey ? 'committed' : 'awaiting_visual_commit',
+        commitSource: 'setCurrentPrompt'
+      };
     },
     forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey }; return node; },
     commitAdvanceBlockedReason: (reason: string) => { state.advance = { ...state.advance, blockedReason: reason, lastAt: Date.now(), inFlight: false }; },
     setConsonantPromptText: (text: string) => { state.consonant = { ...state.consonant, promptText: text, promptCurrent: text }; },
     commitPromptOverlay: (overlay: any) => { state.prompt = { ...state.prompt, overlay: { ...state.prompt.overlay, ...(overlay ?? {}) } }; },
+    commitRenderSync: (payload: { stateQuestionId?: string; renderedQuestionId?: string; renderBlockedReason?: string; committedAt?: number; commitSource?: string }) => {
+      state.renderSync = {
+        ...state.renderSync,
+        ...(payload ?? {}),
+        committedAt: payload?.committedAt ?? Date.now(),
+        commitSource: payload?.commitSource ?? state.renderSync.commitSource
+      };
+    },
     markTagAskedThisStep: () => { state.flow.tagAskedThisStep = true; },
     setLastTimestamps: (v: any) => { state.last = { ...state.last, ...v }; },
     setReveal: (v: any) => { state.reveal = { ...state.reveal, ...v }; },
