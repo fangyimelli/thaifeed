@@ -1,3 +1,16 @@
+## This Change (authoritative follow-up #2)
+- 修正 `Run Full Night Test` 第二題成功判定：以 authoritative `sandboxFlow.nextQuestionEmitted/toQuestionId` 為準。
+- 新增 fail 前 authoritative re-converge：timeout 後先再次收斂 `nextQuestion` emit，若已 emit 直接 `passed`，不可再寫 `failedStep=second_question`。
+- `secondQuestionShown`/`toQuestionId` 在 failed/passed 皆回填 authoritative 值，避免與 AUTHORITATIVE FLOW 區塊矛盾。
+- 修正 `consumePlayerReply` wait-reply gateType 來源：由 `flow.step` 決定 expected gateType，避免 stale gateType 使正常答題/Full Night Test 自動答題僅寫 parse 半段。
+- 確認 `Force Correct Now` 仍完整落 `consonantJudgeAudit`（parse+judge+source+consumedAt）。
+
+## Regression Guard Updates (follow-up #2)
+- 新增 guard：`nextQuestion.emitted=true` 時，Full Night Test 不可 `failed(second_question)`。
+- 新增 guard：Full Night Test fail/passed 都需回填 authoritative `secondQuestionShown/toQuestionId`。
+- 新增 guard：wait-reply gateType 必須由 `flow.step` authoritative 派生。
+- 新增 guard：正常答題/自動答題/force-correct 的 judge audit 關鍵欄位必須存在寫入語句。
+
 ## This Change
 - 重整 Sandbox Story Debug Panel 為兩區：`Flow Test`（Run Full Night Test / Pass Flow）與 `Force Debug`（Force Correct Now / Force Next Question / Force Ghost Event）。
 - `Run Full Night Test` 改成每次先 clean bootstrap/re-init，再走正式 authoritative 流程，避免從中途狀態接續導致假失敗。

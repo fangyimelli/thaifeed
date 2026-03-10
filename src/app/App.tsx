@@ -2027,13 +2027,16 @@ export default function App() {
       const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
       const derivedGate = deriveSandboxReplyGateState();
       const waitReplyStep = sandboxState.flow.step === 'WAIT_WARMUP_REPLY' || sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
-      const gate = (!derivedGate.replyGateType && waitReplyStep)
+      const expectedGateType = waitReplyStep
+        ? (sandboxState.flow.step === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer')
+        : null;
+      const gate = waitReplyStep
         ? {
             ...derivedGate,
-            replyGateType: sandboxState.flow.step === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer',
-            replyGateArmed: true,
-            canReply: true,
-            replySourceMessageId: sandboxState.replyGate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || null
+            replyGateType: expectedGateType,
+            replyGateArmed: Boolean(derivedGate.replyGateArmed || sandboxState.replyGate?.armed),
+            canReply: Boolean(derivedGate.canReply || sandboxState.replyGate?.canReply),
+            replySourceMessageId: derivedGate.replySourceMessageId || sandboxState.replyGate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || null
           }
         : derivedGate;
       if (!gate.replyGateType) {
@@ -5564,13 +5567,29 @@ export default function App() {
       if (sandboxFlowTestRunIdRef.current !== runId) return;
       setSandboxFlowTestResult((prev) => ({ ...prev, ...patch }));
     };
+    const readFullNightAuthoritativeState = () => {
+      const st = sandboxModeRef.current.getState();
+      const emitted = Boolean(st.sandboxFlow?.nextQuestionEmitted && st.sandboxFlow?.nextQuestionToQuestionId);
+      return {
+        emitted,
+        toQuestionId: st.sandboxFlow?.nextQuestionToQuestionId || '-',
+        blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted'
+      };
+    };
     const fail = (failedStep: string, failureReason: string) => {
+      const authoritative = readFullNightAuthoritativeState();
+      if (failedStep === 'second_question' && authoritative.emitted) {
+        pass('second_question', authoritative.toQuestionId);
+        return;
+      }
       setRunning({
         status: 'failed',
         finishedAt: Date.now(),
         currentStep: failedStep,
         failedStep,
-        failureReason
+        failureReason,
+        secondQuestionShown: authoritative.emitted,
+        toQuestionId: authoritative.toQuestionId
       });
       recordSandboxDebugAction('run_full_night_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
     };
@@ -5684,14 +5703,20 @@ export default function App() {
 
     const secondQuestionShown = await waitFor(() => {
       const st = sandboxModeRef.current.getState();
-      return st.flow.questionIndex >= 1 && st.sandboxFlow.nextQuestionEmitted && Boolean(st.sandboxFlow.nextQuestionToQuestionId);
+      return Boolean(st.sandboxFlow.nextQuestionEmitted && st.sandboxFlow.nextQuestionToQuestionId);
     }, 15_000);
     if (!secondQuestionShown) {
-      const blocked = sandboxModeRef.current.getState().sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted';
+      await waitFor(() => readFullNightAuthoritativeState().emitted, 1_500, 100);
+      const authoritative = readFullNightAuthoritativeState();
+      if (authoritative.emitted) {
+        pass('second_question', authoritative.toQuestionId);
+        return;
+      }
+      const blocked = authoritative.blockedReason;
       fail('second_question', blocked);
       return;
     }
-    const toQuestionId = sandboxModeRef.current.getState().sandboxFlow.nextQuestionToQuestionId || '-';
+    const toQuestionId = readFullNightAuthoritativeState().toQuestionId;
     pass('second_question', toQuestionId);
   }, [clearChatFreeze, clearReplyUi, recordSandboxDebugAction, submitChat]);
 

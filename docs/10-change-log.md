@@ -1,3 +1,9 @@
+## 2026-03-10 sandbox authoritative convergence + judge audit completion
+- `Run Full Night Test` 失敗判定改為 authoritative 收斂：第二題若 `nextQuestionEmitted=true`，不允許仍落 `failedStep=second_question`。
+- `secondQuestionShown` 與 `toQuestionId` 改由 `sandboxFlow.nextQuestion*` authoritative 欄位決定，避免 stale `questionIndex` 導致誤判。
+- `consumePlayerReply` 在 wait-reply 階段改以 `flow.step` 決定 gateType（`warmup_tag` / `consonant_answer`），避免舊 gateType 讓 judge pipeline 不完整。
+- 補強 regression guard：覆蓋 full-night authoritative emit 收斂與 judge audit 完整欄位寫入（正常答題 / 自動答題 / force-correct）。
+
 - [sandbox][debug-panel] Sandbox debug panel 改為 `Flow Test` + `Force Debug` 兩區，僅保留 `Run Full Night Test`、`Pass Flow`、`Force Correct Now`、`Force Next Question`、`Force Ghost Event`。
 - [sandbox][full-night-test] `Run Full Night Test` 每次先強制 bootstrap/re-init 乾淨起點，修正中途狀態導致 `vip_tag_not_emitted` 假失敗問題。
 - [sandbox][force-path] `Pass Flow`（正式 guard path）與 `Force Next Question`（force path）語義分離：前者走 `advancePrompt`，後者走 `forceAdvanceNode` + `nextQuestion*` authoritative audit。

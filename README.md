@@ -1,3 +1,5 @@
+- [sandbox][integration-followup][full-night-authoritative-convergence] 修正 `Run Full Night Test` 第二題判定：改由 authoritative `sandboxFlow.nextQuestionEmitted/toQuestionId` 收斂，若正式 flow 已 emit 不再回報 `failedStep=second_question`；`secondQuestionShown/failedStep/failureReason` 同步 authoritative 結果。
+- [sandbox][integration-followup][judge-audit-complete-write] 修正 `consumePlayerReply` wait-reply gate 以 `flow.step` 強制對齊 gateType（避免 stale gateType），確保正常答題與 Full Night Test 自動答題都完整寫入 `consonantJudgeAudit` judge 半段欄位；`Force Correct Now` 維持完整寫入。
 - [sandbox][debug-panel][flow-force-split] Sandbox Story Debug Tools 重整為兩區：`Flow Test`（`Run Full Night Test`、`Pass Flow`）與 `Force Debug`（`Force Correct Now`、`Force Next Question`、`Force Ghost Event`），移除混雜與重複語義按鈕，所有保留按鈕都寫入 audit。
 - [sandbox][full-night-test][clean-bootstrap] `Run Full Night Test` 改為每次先走 `ensureBootstrapState(..., force=true)` 建立乾淨起點，再走正式 submit/evaluator/flow 路徑驗證 VIP tag -> warmup reply -> Q1 -> correct -> reveal/post-reveal -> Q2。
 - [sandbox][force-next][authoritative] 新增 `Force Next Question`，走 authoritative `forceAdvanceNode` 並同步 `nextQuestion*` 稽核欄位；僅在 `story_completed/no_next_question` 等 truly impossible 情況 blocked。
