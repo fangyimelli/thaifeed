@@ -869,3 +869,11 @@
 - sandbox debug snapshot 新增/固定輸出：`replyGate / lastReplyEval / techBacklog / theory / transitions`，且全部提供 fallback。
 - 移除 debug panel 中舊命名 legacy 欄位（`mismatch.promptVsReveal`、`sandbox.prompt.overlay.*`、`sandbox.prompt.pinned.*`、`sandbox.prompt.mismatch`）避免殘留直讀鏈。
 - 新增 regression guard script：`scripts/sandbox-v2-regression-guards.mjs`（檢查必要 shape、safe access、legacy 字串直讀移除）。
+
+- [shared][consonant-engine] 抽出 `src/shared/consonant-engine`：集中 `questionBank + normalizeInput + parseConsonantAnswer + judgeConsonantAnswer`，judge 統一為 `correct/wrong_format/wrong_answer`，避免 classic/sandbox 各自維護 parser。
+- [classic] `src/modes/classic/consonantJudge.ts` 改成 shared engine wrapper，classic 子音判定規則以 shared 為單一來源。
+- [sandbox] `src/modes/sandbox_story/classicConsonantAdapter.ts` 透過 shared question bank 產生 prompt 並共用 parse/judge；sandbox 不再自行前置格式判斷。
+- [sandbox] 新增 `src/modes/sandbox_story/sandboxConsonantWordMap.ts`，將 `questionId -> wordKey/thaiWord/translation/audioKey` 留在 sandbox scope，shared 題庫不含單字資料。
+- [sandbox][gate fix] WAIT_REPLY_1 / WAIT_WARMUP_REPLY 進 gate 時會綁定 `replyGate.sourceMessageId`；缺值時由 lock/qna fallback repair 並回寫 `sandboxFlow.replySourceMessageId`。
+- [sandbox][legacy gate] `answerGate` 維持 compatibility mirror，debug 新增 mirror consistency 指標，避免與 replyGate 矛盾。
+- [Removed/Deprecated Log] deprecated `src/shared/questionBank/night01QuestionBank.ts` 舊的「題目+單字」混合資料責任，改為 compatibility re-export；sandbox 單字資料已拆到 sandbox scope。

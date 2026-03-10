@@ -318,7 +318,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
           matchedAlias: normalizedInput,
           matched: normalizedInput,
           ok: Boolean(normalizedInput),
-          blockedReason: payload?.judge === 'wrong_format' ? 'wrong_format' : ''
+          blockedReason: payload?.judge === 'wrong_format' || payload?.judge === 'wrong_answer' ? payload.judge : ''
         },
         judge: {
           ...state.consonant.judge,

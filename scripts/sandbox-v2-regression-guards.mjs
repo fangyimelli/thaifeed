@@ -3,6 +3,9 @@ import fs from 'node:fs';
 const app = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
 const mode = fs.readFileSync(new URL('../src/modes/sandbox_story/sandboxStoryMode.ts', import.meta.url), 'utf8');
 const adapter = fs.readFileSync(new URL('../src/modes/sandbox_story/classicConsonantAdapter.ts', import.meta.url), 'utf8');
+const sharedEngine = fs.readFileSync(new URL('../src/shared/consonant-engine/engine.ts', import.meta.url), 'utf8');
+const sharedQuestionBank = fs.readFileSync(new URL('../src/shared/consonant-engine/questionBank.ts', import.meta.url), 'utf8');
+const sandboxWordMap = fs.readFileSync(new URL('../src/modes/sandbox_story/sandboxConsonantWordMap.ts', import.meta.url), 'utf8');
 
 const checks = [
   {
@@ -169,6 +172,21 @@ if (!app.includes("const gate = (!derivedGate.replyGateType && waitReplyStep)"))
 }
 if (!adapter.includes('normalizeInput(raw)') || !adapter.includes('parseThaiConsonant(normalized, input)') || !adapter.includes('judgeConsonantAnswer(parsed, input)')) {
   throw new Error('sandbox consonant flow must use classic normalize/parse/judge pipeline');
+}
+if (!sharedEngine.includes('export function parseConsonantAnswer') || !sharedEngine.includes("type: 'wrong_answer'") || !sharedEngine.includes("type: 'wrong_format'") || !sharedEngine.includes("type: 'correct'")) {
+  throw new Error('shared consonant engine parse/judge contract is missing');
+}
+if (sharedQuestionBank.includes('wordKey') || sharedQuestionBank.includes('thaiWord') || sharedQuestionBank.includes('translationZh') || sharedQuestionBank.includes('story')) {
+  throw new Error('shared question bank must not contain sandbox word/story metadata');
+}
+if (!sandboxWordMap.includes('SANDBOX_CONSONANT_WORD_MAP') || !sandboxWordMap.includes('wordKey') || !sandboxWordMap.includes('questionId')) {
+  throw new Error('sandbox word mapping must stay in sandbox scope with questionId->wordKey mapping');
+}
+if (!app.includes("pipeline.result !== 'correct'")) {
+  throw new Error('sandbox submit path must consume shared wrong_answer/wrong_format from shared judge result');
+}
+if (!app.includes('sharedConsonantEngine.waitReply1SourceMessageBound')) {
+  throw new Error('debug must expose WAIT_REPLY_1 sourceMessageId binding invariant');
 }
 console.log('sandbox v2 regression guards passed');
 
