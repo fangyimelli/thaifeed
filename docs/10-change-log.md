@@ -1,3 +1,11 @@
+## 2026-03-10 sandbox q2 render sync authoritative commit
+
+- 修正第二題 state/render 斷裂：新增 `renderSync.stateQuestionId/renderedQuestionId/renderBlockedReason` authoritative 視覺提交狀態，避免 `flow/currentPrompt` 已切但畫面仍停留第一題。
+- `secondQuestionShown` 定義改為 `nextQuestion emitted + prompt 對齊 + rendered 對齊`，不再把「state ready」誤當成「已渲染成功」。
+- `ADVANCE_NEXT` 與 `Force Next Question` emit 下一題時，強制依 `flow.questionIndex` 發出 `REQUEST_VIDEO_SWITCH`，使 scene/video 與題目 prompt 同步切換。
+- Debug panel 新增 `render.stateQuestionId/renderedQuestionId/render.blockedReason` 與 `expectedSceneKey/video.currentKey`，可直接定位 overlay/freeze/scene 未提交原因。
+- 補 regression guards：第二題 shown 必須 rendered 對齊、render mismatch 必須可觀測 blocked reason、emit 下一題必須觸發 scene switch。
+
 ## 2026-03-10 sandbox post-reveal SSOT convergence + second question emit fix
 
 - 修正 `ADVANCE_NEXT` completion source 分裂：新增單一 helper 收斂 `postRevealChatState`、`audit.transitions(reason=post_reveal_chat_done)`、`backlogTechMessages.length===0`，避免已完成卻被判 `post_reveal_chat_not_done`。

@@ -244,6 +244,33 @@ if (!app.includes('secondPromptAligned')) {
 if (!app.includes("st.prompt.current?.wordKey === st.sandboxFlow?.nextQuestionToQuestionId")) {
   throw new Error('Full Night Test second question check must validate current prompt wordKey against emitted toQuestionId');
 }
+if (!app.includes('renderedAligned')) {
+  throw new Error('Full Night Test second question check must include authoritative rendered alignment');
+}
+if (!app.includes('st.renderSync?.renderedQuestionId === st.sandboxFlow?.nextQuestionToQuestionId')) {
+  throw new Error('rendered alignment must bind renderSync.renderedQuestionId to nextQuestionToQuestionId');
+}
+if (!app.includes('render.blockedReason')) {
+  throw new Error('debug panel must expose renderBlockedReason for state/render mismatch diagnosis');
+}
+if (!app.includes('render.stateQuestionId/renderedQuestionId')) {
+  throw new Error('debug panel must expose stateQuestionId and renderedQuestionId');
+}
+if (!app.includes('renderSync?.renderedQuestionId === st.prompt.current.wordKey')) {
+  throw new Error('second question shown predicate must require renderedQuestionId equals current prompt wordKey');
+}
+if (!app.includes('REQUEST_VIDEO_SWITCH') || !app.includes('resolveSandboxSceneKeyByQuestionIndex')) {
+  throw new Error('next question emit must trigger authoritative scene/video switch by questionIndex');
+}
+if (!mode.includes('renderSync: { stateQuestionId:')) {
+  throw new Error('sandbox mode must own authoritative renderSync state');
+}
+if (!mode.includes('commitRenderSync: (payload:')) {
+  throw new Error('sandbox mode must expose renderSync commit API');
+}
+if (!mode.includes('commitPromptPinnedRendered: (messageId: string) =>')) {
+  throw new Error('sandbox mode must persist prompt pinned render commit instead of noop');
+}
 if (!app.includes('rawInput: pipeline.audit.parse.raw') || !app.includes('consumedAt: consumeAt')) {
   throw new Error('normal answer judge audit persistence must include rawInput and consumedAt');
 }

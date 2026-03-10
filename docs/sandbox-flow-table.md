@@ -1,3 +1,7 @@
+| `secondQuestionShown` 判定 | `emit + prompt` 可能過早視為顯示成功 | `emit + prompt + renderSync.renderedQuestionId` 三者一致才為 true | 避免 `WAIT_REPLY_2` 已到但畫面仍停第一題。 |
+| state -> render commit 可觀測性 | 缺少 state/render 分離欄位 | 新增 `render.stateQuestionId/renderedQuestionId/renderBlockedReason` 與 `expectedSceneKey/videoCurrentKey` | 不一致時可直接看出阻塞原因，不再誤判已修復。 |
+| 第二題 emit 後 scene/video 同步 | 只切 `currentPrompt`，視覺層可能沿用舊 cache | `ADVANCE_NEXT`/`Force Next` emit 時強制 `REQUEST_VIDEO_SWITCH(resolveSandboxSceneKeyByQuestionIndex)` | 防止 prompt 已切但 scene/video 仍是第一題舊畫面。 |
+
 | `ADVANCE_NEXT` post-reveal completion source | `postRevealChatState === 'done'` 單值判斷，與 transitions/backlog 可能分裂 | `hasPostRevealCompletionEvidence`：`postRevealChatState==='done'` **或** (`backlogTechMessages.length===0` 且 transitions 含 `post_reveal_chat_done`) | 已進 `ADVANCE_NEXT` 且 postReveal idle 時，不可再誤判 `post_reveal_chat_not_done`。 |
 | `ADVANCE_NEXT` second-question shown 判定 | 可能只 emit `nextQuestion*`，未保證 prompt 切換 | emit 後同步 `setCurrentPrompt(nextQuestion)` + flow step 跳轉（Q1→`TAG_PLAYER_2_PRONOUNCE`） | 避免正式已切題但 UI/影片仍停留前一題來源。 |
 | `Run Full Night Test` `secondQuestionShown` source | 只看 `nextQuestionEmitted/toQuestionId` | `nextQuestionEmitted` + `nextQuestionToQuestionId` + `prompt.current.wordKey` 對齊 | 避免 authoritative emit 成功但 visual/stale state 誤判 failed。 |
