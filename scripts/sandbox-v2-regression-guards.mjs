@@ -289,6 +289,26 @@ if (!app.includes("secondQuestionShown: authoritative.emitted")) {
 if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted")) {
   throw new Error('Run Full Night Test must re-converge on authoritative emit before failing second_question');
 }
+
+if (!app.includes("const answerConsumed = await waitFor(() =>")) {
+  throw new Error('Run Full Night Test auto answer must wait for authoritative consume path');
+}
+if (!app.includes("return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed;")) {
+  throw new Error('Run Full Night Test auto answer must not stay at WAIT_REPLY_1 after submission');
+}
+if (!app.includes("const judgeTriggered = await waitFor(() =>")) {
+  throw new Error('Run Full Night Test auto answer must wait for authoritative parse/judge trigger');
+}
+if (!app.includes("authoritative.parseKind !== 'not_evaluated' && authoritative.parseRaw.length > 0")) {
+  throw new Error('Run Full Night Test must enforce parse.kind/raw completion after auto answer');
+}
+if (!app.includes("fail('auto_answer_q1', 'judge_not_triggered')") || !app.includes("'answer_not_consumed'") || !app.includes("'answer_not_submitted'")) {
+  throw new Error('Run Full Night Test failure reasons must reflect authoritative stop point');
+}
+if (!app.includes("if (authoritative.flowStep === 'WAIT_REPLY_1')")) {
+  throw new Error('Run Full Night Test must map reveal timeout failure to authoritative WAIT_REPLY_1 state');
+}
+
 if (!app.includes('const expectedGateType = waitReplyStep')) {
   throw new Error('consumePlayerReply must derive expected gate type from authoritative flow step');
 }

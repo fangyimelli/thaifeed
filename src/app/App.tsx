@@ -5570,10 +5570,18 @@ export default function App() {
     const readFullNightAuthoritativeState = () => {
       const st = sandboxModeRef.current.getState();
       const emitted = Boolean(st.sandboxFlow?.nextQuestionEmitted && st.sandboxFlow?.nextQuestionToQuestionId);
+      const judgeAudit = st.consonantJudgeAudit;
       return {
         emitted,
         toQuestionId: st.sandboxFlow?.nextQuestionToQuestionId || '-',
-        blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted'
+        blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted',
+        flowStep: st.flow.step,
+        canReply: Boolean(st.replyGate?.canReply),
+        gateConsumed: Boolean(st.replyGate?.gateConsumed || st.sandboxFlow?.gateConsumed),
+        parseRaw: judgeAudit?.rawInput ?? '',
+        parseKind: judgeAudit?.parseKind ?? 'not_evaluated',
+        parseOk: Boolean(judgeAudit?.parseOk),
+        judgeResult: judgeAudit?.judgeResult ?? ''
       };
     };
     const fail = (failedStep: string, failureReason: string) => {
@@ -5691,11 +5699,47 @@ export default function App() {
     }
     setRunning({ autoAnswerUsed: answer });
 
+    const answerConsumed = await waitFor(() => {
+      const authoritative = readFullNightAuthoritativeState();
+      return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed;
+    }, 6_000);
+    if (!answerConsumed) {
+      const authoritative = readFullNightAuthoritativeState();
+      const failureReason = authoritative.parseRaw
+        ? 'judge_not_triggered'
+        : (authoritative.canReply ? 'answer_not_consumed' : 'answer_not_submitted');
+      fail('auto_answer_q1', failureReason);
+      return;
+    }
+
+    const judgeTriggered = await waitFor(() => {
+      const authoritative = readFullNightAuthoritativeState();
+      return authoritative.parseKind !== 'not_evaluated' && authoritative.parseRaw.length > 0;
+    }, 6_000);
+    if (!judgeTriggered) {
+      fail('auto_answer_q1', 'judge_not_triggered');
+      return;
+    }
+
+    const judgeSnapshot = readFullNightAuthoritativeState();
+    if (!judgeSnapshot.parseOk) {
+      fail('auto_answer_q1', `judge_parse_failed:${judgeSnapshot.parseKind}`);
+      return;
+    }
+
     const revealDone = await waitFor(() => {
       const st = sandboxModeRef.current.getState();
       return st.flow.step === 'ADVANCE_NEXT' || st.sandboxFlow.postRevealChatState === 'done';
     }, 15_000);
     if (!revealDone) {
+      const authoritative = readFullNightAuthoritativeState();
+      if (authoritative.flowStep === 'WAIT_REPLY_1') {
+        const failureReason = authoritative.parseRaw
+          ? (authoritative.parseKind === 'not_evaluated' ? 'judge_not_triggered' : 'answer_not_consumed')
+          : (authoritative.canReply ? 'answer_not_consumed' : 'answer_not_submitted');
+        fail('auto_answer_q1', failureReason);
+        return;
+      }
       fail('reveal_post_reveal', 'post_reveal_not_done');
       return;
     }

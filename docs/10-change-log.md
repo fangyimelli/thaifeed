@@ -1,3 +1,9 @@
+## 2026-03-10 sandbox full-night-test authoritative submit/consume fix
+
+- `Run Full Night Test` 第一題自動答題改為強制收斂至 authoritative reply consume/judge path：提交後必須觀察 `WAIT_REPLY_1` 退出或 gate consumed，再確認 `parse.raw` 已寫入且 `parse.kind != not_evaluated`。
+- 若仍停在 `WAIT_REPLY_1`，失敗改為精準回報 `answer_not_submitted` / `answer_not_consumed` / `judge_not_triggered`；不再把前段停滯誤判成 `reveal_post_reveal/post_reveal_not_done`。
+- 維持 judge audit SSOT 要求：Full Night Test 自動答題與正常答題共享同一 authoritative consume/judge 寫入路徑。
+
 ## 2026-03-10 sandbox authoritative convergence + judge audit completion
 - `Run Full Night Test` 失敗判定改為 authoritative 收斂：第二題若 `nextQuestionEmitted=true`，不允許仍落 `failedStep=second_question`。
 - `secondQuestionShown` 與 `toQuestionId` 改由 `sandboxFlow.nextQuestion*` authoritative 欄位決定，避免 stale `questionIndex` 導致誤判。
