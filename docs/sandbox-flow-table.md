@@ -82,3 +82,11 @@
   - `currentPrompt`（可 null）
   - `lastReplyEval`（可 null）
   - `audit.transitions`（至少 bootstrap transition）
+
+## Integration update: shared consonant engine + sandbox word mapping split
+
+- `TAG_PLAYER_1 -> WAIT_REPLY_1` 進入時，正式 gate 由 flow controller 建立，且必須攜帶 `replyGate.sourceMessageId`（來源為 tag 問題訊息 messageId；必要時 fallback lock/qna 並 repair）。
+- `WAIT_REPLY_1` 的玩家輸入路徑固定為：`shared normalizeInput -> shared parseConsonantAnswer -> shared judgeConsonantAnswer`，結果寫回 `lastReplyEval` 與 `consonant.judge`。
+- `correct` 後續仍走 sandbox 分流：`ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT`（聊天室反應/單字 reveal/故事節點保留）。
+- `wrong_format` 與 `wrong_answer` 皆由 shared judge 回傳，sandbox 不再用平行 parser 前置擋格式。
+- `answerGate` 為 legacy mirror（non-authoritative），只投影 `replyGate`，不推動 flow step。

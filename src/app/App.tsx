@@ -1997,7 +1997,7 @@ export default function App() {
           });
           consonantParsed = pipeline.parsed;
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
-          if (pipeline.result === 'wrong_format' || pipeline.result === 'unknown') {
+          if (pipeline.result !== 'correct') {
             writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate });
             setSandboxRevealTick(Date.now());
             return false;
@@ -3612,6 +3612,20 @@ export default function App() {
           currentConsonant: sandboxState.consonant.nodeChar ?? '-',
           currentWordKey: sandboxState.reveal.wordKey || sandboxNode?.id || '-',
           judge: sandboxState.consonant.judge
+        },
+        sharedConsonantEngine: {
+          parserJudgeSSOT: 'src/shared/consonant-engine',
+          classicUsesShared: true,
+          sandboxUsesShared: true,
+          waitReply1GateArmed: sandboxState.flow.step === 'WAIT_REPLY_1'
+            ? (sandboxState.prompt.current?.kind === 'consonant'
+              ? (sandboxState.replyGate.gateType === 'consonant_answer' && sandboxState.replyGate.armed)
+              : true)
+            : true,
+          waitReply1SourceMessageBound: sandboxState.flow.step === 'WAIT_REPLY_1'
+            ? Boolean(sandboxState.replyGate.sourceMessageId)
+            : true,
+          answerGateMirrorConsistent: sandboxState.answerGate.waiting === Boolean(sandboxState.replyGate.armed && sandboxState.replyGate.gateType !== 'none')
         },
         answer: {
           submitInFlight: sandboxState.answer.submitInFlight,
@@ -5534,8 +5548,9 @@ export default function App() {
     sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
     const gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer';
     const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxModeRef.current.getState().player?.handle || 'player') || 'player';
-    sandboxModeRef.current.setSandboxFlow({ replyGateActive: true, replyTarget: targetPlayerId, canReply: true, gateType, gateConsumed: false });
-    sandboxModeRef.current.setReplyGate?.({ gateType, armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId: lockStateRef.current.replyingToMessageId || '', sourceType: 'flow_step_gate', consumePolicy: 'single', createdAt: askedAt });
+    const boundSourceMessageId = lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+    sandboxModeRef.current.setSandboxFlow({ replyGateActive: true, replyTarget: targetPlayerId, canReply: true, gateType, gateConsumed: false, replySourceMessageId: boundSourceMessageId, replySourceType: 'flow_step_gate', consumePolicy: 'single' });
+    sandboxModeRef.current.setReplyGate?.({ gateType, armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId: boundSourceMessageId, sourceType: 'flow_step_gate', consumePolicy: 'single', createdAt: askedAt });
     setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
     setPauseSetAt(askedAt);
     setPauseReason(reason);
@@ -6549,6 +6564,11 @@ export default function App() {
                     <div>sandbox.replyGate.canReply: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.canReply ?? false)}</div>
                     <div>sandbox.replyGate.targetPlayerId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetPlayerId ?? '-'}</div>
                     <div>sandbox.replyGate.sourceMessageId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'}</div>
+                    <div>sharedConsonantEngine.parserJudgeSSOT: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.parserJudgeSSOT ?? '-'}</div>
+                    <div>sharedConsonantEngine.classic/sandbox: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.classicUsesShared ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.sandboxUsesShared ?? false)}</div>
+                    <div>sharedConsonantEngine.waitReply1GateArmed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.waitReply1GateArmed ?? false)}</div>
+                    <div>sharedConsonantEngine.waitReply1SourceMessageBound: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.waitReply1SourceMessageBound ?? false)}</div>
+                    <div>answerGate(replyGate mirror consistent): {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.answerGateMirrorConsistent ?? false)}</div>
                     <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>
                     <div>sandbox.lastReplyEval.consumed/reason: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.consumed ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.reason ?? '-'}</div>
                     <div>sandbox.lastReplyEval.raw/normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.rawInput ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.normalizedInput ?? '-'}</div>

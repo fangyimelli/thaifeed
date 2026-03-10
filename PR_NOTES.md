@@ -58,3 +58,12 @@
 ## Scope guard
 - Only sandbox_story flow/state/debug integration path was changed.
 - Classic mode logic remains untouched.
+
+## This PR (shared consonant engine integration: classic + sandbox)
+- 抽出 shared consonant engine：`src/shared/consonant-engine/{questionBank,engine,types}`，統一題目/alias/normalize/parse/judge（`correct/wrong_format/wrong_answer`）。
+- classic 子音判定模組 `src/modes/classic/consonantJudge.ts` 改為 shared wrapper，避免 classic 維護平行 parser/judge。
+- sandbox 子音判定沿用 `classicConsonantAdapter` 但底層改走 shared；classic 可接受的英文/注音/alias 在 sandbox 得到同源解析。
+- 建立 sandbox 專屬 `src/modes/sandbox_story/sandboxConsonantWordMap.ts`（`questionId -> wordKey/thaiWord/translation/audioKey`），並由 `src/ssot/sandbox_story/night1.ts` 組裝 NIGHT1 nodes。
+- 修復 WAIT_REPLY_1 gate 綁定：進 gate 與 repair 皆保證 `replyGate.sourceMessageId`/`sandboxFlow.replySourceMessageId` 綁定題目 messageId。
+- answerGate 保留為 legacy compatibility mirror（non-authoritative），並在 debug 暴露 mirror consistency。
+- 回歸防護更新：`scripts/sandbox-v2-regression-guards.mjs` 新增 shared engine、sandbox mapping 邊界與 WAIT_REPLY_1 sourceMessageId/debug invariant 檢查。

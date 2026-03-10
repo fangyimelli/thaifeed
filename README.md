@@ -1970,3 +1970,9 @@ Console（debug 模式）可觀察：
 - legacy `promptVsReveal` debug 直讀路徑已從 UI/debug panel 清理，改成以 v2 `prompt.current.wordKey` 對 `reveal.wordKey` 的安全比對函式顯示 mismatch。
 
 - sandbox_story v2 root runtime mount 修正：進入 sandbox_story 後即建立完整 root state（含 ssot.version / flow / scheduler / currentPrompt / replyGate / lastReplyEval / techBacklog / theory / unresolvedAmbient / ghostMotion），並由 debug hydration 直接映射真實 state。
+- [shared][consonant-engine SSOT] 新增 `src/shared/consonant-engine/*`，統一管理題目定義（`questionId/consonant/promptText/hint/acceptedAnswers/aliases`）與 `normalizeInput -> parseConsonantAnswer -> judgeConsonantAnswer`，並明確輸出 `correct/wrong_format/wrong_answer`。
+- [classic][shared adoption] `src/modes/classic/consonantJudge.ts` 改為 shared engine wrapper，不再維護獨立 alias/parser/judge 資料表。
+- [sandbox][shared adoption + split mapping] sandbox 子音判定改為 shared judge（透過 classic adapter），並新增 `src/modes/sandbox_story/sandboxConsonantWordMap.ts` 保存 `questionId -> wordKey/reveal/story word` 專屬映射。
+- [sandbox][WAIT_REPLY_1 source binding] `sandboxFreezeAndWaitForReply` 與 WAIT_REPLY_1 repair path 皆會同步綁定 `replyGate.sourceMessageId` / `sandboxFlow.replySourceMessageId`，避免 sourceMessageId 空值。
+- [sandbox][legacy mirror alignment] `answerGate` 保留為 non-authoritative mirror（由 `replyGate` 投影 waiting/paused），並在 debug 顯示 mirror consistency。
+- [Removed/Deprecated Log] `src/shared/questionBank/night01QuestionBank.ts` 不再承載 sandbox 單字/劇情 metadata，改為 compatibility re-export 到 shared consonant engine（舊資料結構 deprecated）。
