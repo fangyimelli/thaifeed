@@ -38,3 +38,25 @@
 - Debug fields checked: authoritative flow/judge/display/legacy/scheduler sections now separated.
 - Desktop check: not run (logic/debug contract change).
 - Mobile check: not run.
+
+## 2026-03-10 sandbox debug panel audit + fixes
+
+### Scope
+- Sandbox mode only. No classic mode changes.
+
+### What was fixed
+- Reconnected sandbox debug buttons to authoritative runtime state updates by implementing previously noop mode APIs:
+  - `advancePrompt`, `applyCorrect`, `setPronounceState`, `forceWave`, `commitAdvanceBlockedReason`, `commitHintText`.
+- Standardized debug node advance behavior to SSOT path (`advancePrompt`) and explicit end-of-flow block (`end_of_nodes`).
+- Added per-button debug action audit records with required observability fields:
+  - `lastClickedAt`, `handlerInvoked`, `effectApplied`, `blockedReason`, `targetState`, `lastResult`.
+- Added in-panel audit render block so testers can immediately see invoked/blocked/applied state.
+
+### Why buttons looked like “no-op” before
+- Several mode APIs were stubbed with `() => undefined`, so button handlers ran but did not mutate authoritative state.
+- Some handlers returned early due to mode/prompt/event readiness guards without surfacing blocked reason in UI.
+
+### Outcome
+- Every audited button now leaves an action record.
+- Blocked actions always include an explicit blocked reason.
+- Successful actions always mutate at least one authoritative state field.
