@@ -815,7 +815,7 @@ export default function App() {
   });
 
   const sandboxReplyGateDebugRef = useRef<{
-    gateType: 'none' | 'consonant_wait_reply';
+    gateType: string;
     armed: boolean;
     sourceMessageId: string;
     targetPlayerId: string;
@@ -2048,6 +2048,10 @@ export default function App() {
     writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: true, reason: 'consume_success' });
     return true;
   }, [clearChatFreeze, clearReplyUi, deriveSandboxReplyGateState, resolveQna, writeSandboxLastReplyEval]);
+
+  const isSandboxWaitReplyStep = useCallback((step: string | undefined) => {
+    return step === 'WAIT_WARMUP_REPLY' || step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3';
+  }, []);
 
   const setPinnedQuestionMessage = useCallback((payload: {
     source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'autoPinFreeze' | 'unknown';
@@ -3460,7 +3464,7 @@ export default function App() {
       if (modeRef.current.id === 'sandbox_story' && sandboxState.sandboxFlow.autoplayNightEnabled && sandboxState.sandboxFlow.replyGateActive) {
         const waitElapsed = now - sandboxState.flow.stepStartedAt;
         if (waitElapsed >= 1800 && sandboxState.sandboxFlow.waitingForMockReply) {
-          const mock = sandboxState.sandboxFlow.gateType === 'warmup_chat_reply'
+          const mock = sandboxState.sandboxFlow.gateType === 'warmup_tag'
             ? '哈我也有看到，先繼續看'
             : (sandboxState.sandboxFlow.gateType === 'consonant_guess'
               ? '應該唸 ga'
@@ -4725,6 +4729,13 @@ export default function App() {
         modeRef.current.onPlayerReply(outgoingText);
       }
       if (modeRef.current.id === 'sandbox_story' && !sandboxQnaConsumed) {
+        const sandboxState = sandboxModeRef.current.getState();
+        if (isSandboxWaitReplyStep(sandboxState.flow.step)) {
+          setInput('');
+          sendCooldownUntil.current = Date.now() + 350;
+          tagSlowActiveRef.current = false;
+          return markSent('sandbox_wait_reply_rejected');
+        }
         writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: false, reason: 'consume_fallback_to_free_chat' });
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
@@ -4854,7 +4865,7 @@ export default function App() {
       }
       setIsSending(false);
     }
-  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, consumePlayerReply, debugComposingOverride, isComposing, isReady, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, showHintForCurrentPrompt, state, tryTriggerStoryEvent, updateChatDebug, writeSandboxLastReplyEval]);
+  }, [appStarted, applySandboxCorrect, chatAutoPaused, chatAutoScrollMode, consumePlayerReply, debugComposingOverride, isComposing, isReady, isSandboxWaitReplyStep, isSending, logSendDebug, mentionTarget, replyTarget, resetChatAutoScrollFollow, sendDebug, showHintForCurrentPrompt, state, tryTriggerStoryEvent, updateChatDebug, writeSandboxLastReplyEval]);
 
   const handleSandboxAutoSend = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -5514,7 +5525,7 @@ export default function App() {
     sandboxModeRef.current.markTagAskedThisStep(askedAt);
     sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
     sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
-    const gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_reply' : 'consonant_answer';
+    const gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer';
     const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxModeRef.current.getState().player?.handle || 'player') || 'player';
     sandboxModeRef.current.setSandboxFlow({ replyGateActive: true, replyTarget: targetPlayerId, canReply: true, gateType, gateConsumed: false });
     sandboxModeRef.current.setReplyGate?.({ gateType, armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId: lockStateRef.current.replyingToMessageId || '', sourceType: 'flow_step_gate', consumePolicy: 'single', createdAt: askedAt });
@@ -5554,6 +5565,19 @@ export default function App() {
       return () => {
         clearSandboxRevealDoneTimer();
       };
+    }
+
+    if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY') {
+      const gate = sandboxState.replyGate;
+      const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxState.player?.handle || 'player') || 'player';
+      const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+      const needsWarmupGateRepair = gate?.gateType !== 'warmup_tag' || !gate?.armed || !gate?.canReply || !gate?.targetPlayerId || !sourceMessageId;
+      if (needsWarmupGateRepair) {
+        const askedAt = sandboxState.flow.stepStartedAt || Date.now();
+        sandboxModeRef.current.setReplyGate?.({ gateType: 'warmup_tag', armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId, sourceType: gate?.sourceType || 'chat', consumePolicy: 'once', createdAt: askedAt });
+        sandboxModeRef.current.setSandboxFlow({ gateType: 'warmup_tag', replyGateActive: true, canReply: true, replyTarget: targetPlayerId, gateConsumed: false, replySourceMessageId: sourceMessageId, replySourceType: 'chat', consumePolicy: 'once' });
+      }
+      return () => { clearSandboxRevealDoneTimer(); };
     }
 
     if (sandboxState.flow.step === 'VIP_TAG_PLAYER') {

@@ -151,6 +151,10 @@ if (!app.includes('step: sandboxState.flow.step') || !app.includes('phase: sandb
 
 if (!app.includes("setFlowStep('VIP_TAG_PLAYER'")) { throw new Error('VIP_TAG_PLAYER transition missing'); }
 if (!app.includes("'WAIT_WARMUP_REPLY'")) { throw new Error('WAIT_WARMUP_REPLY step missing'); }
+if (!app.includes("gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_tag'")) { throw new Error('WAIT_WARMUP_REPLY must arm warmup_tag replyGate'); }
+if (!app.includes("if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY')")) { throw new Error('WAIT_WARMUP_REPLY gate repair guard missing'); }
+if (!app.includes("needsWarmupGateRepair")) { throw new Error('WAIT_WARMUP_REPLY replyGate invariant repair missing'); }
+if (!app.includes("if (isSandboxWaitReplyStep(sandboxState.flow.step))")) { throw new Error('wait-reply step should not fallback to free chat'); }
 if (!app.includes("setFlowStep('POST_REPLY_CHAT'")) { throw new Error('POST_REPLY_CHAT transition missing'); }
 if (!app.includes("setFlowStep('ANSWER_EVAL'")) { throw new Error('ANSWER_EVAL transition missing'); }
 if (!app.includes("setFlowStep('REVEAL_WORD'")) { throw new Error('REVEAL_WORD transition missing'); }

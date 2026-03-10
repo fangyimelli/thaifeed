@@ -1,3 +1,8 @@
+- [sandbox][WAIT_WARMUP_REPLY] 修復 flow 已進 `WAIT_WARMUP_REPLY` 但 `replyGate` 未 armed 的缺陷；進入 wait step 時強制建/補 `warmup_tag` gate（含 `targetPlayerId/sourceMessageId/sourceType/consumePolicy`）。
+- [sandbox][routing] wait-reply step 玩家輸入改為只能走 evaluator consume，不再 fallback 成 free chat（移除該步驟 `consume_fallback_to_free_chat` 覆寫路徑）。
+- [sandbox][legacy compatibility] `answerGate` 只保留 mirror，狀態由正式 `replyGate` 同步，避免 authority 分裂。
+- [guard] 新增 warmup gate regression guards：`WAIT_WARMUP_REPLY` 必須 `gateType=warmup_tag + armed + canReply`，且 wait-step submit 不可走 free-chat fallback。
+
 ## 2026-03-09（sandbox_story bootstrap single-entry + state-mount integrity）
 - [sandbox][bootstrap authority] 新增 `ensureBootstrapState(reason, at, minDurationMs, force)`，統一 mode entry / guard recovery / clearReplyUi re-init 的 bootstrap 入口，避免 App 與 mode 雙軌初始化。
 - [sandbox][state mount] `createSandboxV2InitialState()` 改為直接產出可用核心狀態：`flow.step=PREHEAT_CHAT`、`questionIndex=0`、`stepStartedAt>0`、`scheduler.phase=preheat`、`introGate.startedAt>0`、`introGate.minDurationMs=30000`。
