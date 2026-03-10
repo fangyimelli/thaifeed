@@ -1,3 +1,6 @@
+| `Run Night Smoke Test` naming | `Run Full Night Test` | `Run Night Smoke Test`（button / debug action key `run_night_smoke_test` / panel title） | 測試實際只驗證 warmup->Q1->Q2，改為 smoke 命名避免誤導。 |
+| Question transition render commit | flow/index 可先進，render 可能落後導致 hidden prompt | 題目轉場必須同步 `currentPrompt` + `renderSync.stateQuestionId/renderedQuestionId`；可作答步驟 scene 未同步時記 `scene_not_synced_warning` 但不隱藏題目 | 避免 `WAIT_REPLY_2` 已到位但 prompt/question 未可見。 |
+| `Force Next Question` prompt validity | 可能只前進 index，留下 `missing_current_prompt/state_question_missing` | force-next 成功時必須 setCurrentPrompt + commitRenderSync(`force_next_prompt_activated`)，失敗時 `missing_next_node` blocked | 強制路徑與正式路徑維持同一可見題目不變式。 |
 | Full Night Q1 auto answer submit path | 可能僅注入聊天室訊息（render 可見但 authority 未 consume） | 強制走 `submitChat -> createPlayerMessage -> consumePlayerReply(payload)` 同一路徑，附帶 message/source/gate metadata | Auto answer 與真人送出一致；不再因 UI 可見造成假成功。 |
 | Full Night Q1 fail reason granularity | `answer_not_consumed` 易混淆 submit/gate/parse/judge 停點 | 細分 `message_injected_but_not_consumed` / `message_rejected_by_gate` / `parse_failed:*` / `judge_failed` | 失敗定位可直接對應 authoritative 停點。 |
 | Full Night Q1 pass criteria | 可被 UI message 可見誤導 | 需同時滿足 parse evaluated + judge audit written + `consumedAt>0` + flow advance | 成功標準改為 authoritative state-driven。 |

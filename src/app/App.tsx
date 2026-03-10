@@ -505,7 +505,7 @@ type GhostEventManagerDebugState = {
 };
 
 type SandboxDebugActionName =
-  | 'run_full_night_test'
+  | 'run_night_smoke_test'
   | 'pass_flow'
   | 'force_correct_now'
   | 'force_next_question'
@@ -812,7 +812,7 @@ export default function App() {
   const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxDebugActionAuditRef = useRef<Record<SandboxDebugActionName, SandboxDebugActionRecord>>({
-    run_full_night_test: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.bootstrap + sandbox.flow + sandbox.sandboxFlow.nextQuestion*', lastResult: '-' },
+    run_night_smoke_test: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.bootstrap + sandbox.flow + sandbox.sandboxFlow.nextQuestion* + sandbox.renderSync', lastResult: '-' },
     pass_flow: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex', lastResult: '-' },
     force_correct_now: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.consonantJudgeAudit + sandbox.replyGate + sandbox.reveal', lastResult: '-' },
     force_next_question: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex + sandbox.sandboxFlow.nextQuestion*', lastResult: '-' },
@@ -3678,23 +3678,29 @@ export default function App() {
       const stateQuestionId = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.wordKey : '';
       const promptConsonant = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '';
       const overlayConsonant = sandboxState.prompt.overlay.consonantShown || '';
+      const sceneSynced = videoCurrentKey === expectedSceneKey;
+      const isAnswerablePromptStep = sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
       const renderBlockedReason = !stateQuestionId
         ? 'state_question_missing'
         : (!promptConsonant ? 'prompt_missing'
           : (overlayConsonant !== promptConsonant ? 'overlay_not_committed'
-            : (videoCurrentKey !== expectedSceneKey ? 'scene_not_synced' : 'none')));
+            : (sceneSynced ? 'none' : 'scene_not_synced')));
       const authoritativeQ2Advanced = sandboxState.sandboxFlow.nextQuestionEmitted
         && sandboxState.sandboxFlow.nextQuestionToQuestionId
         && (sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'TAG_PLAYER_3_MEANING' || sandboxState.flow.step === 'WAIT_REPLY_3' || sandboxState.flow.step === 'END_NIGHT')
         && sandboxState.prompt.current?.kind === 'consonant'
         && sandboxState.prompt.current.wordKey === sandboxState.sandboxFlow.nextQuestionToQuestionId;
-      const renderedQuestionId = renderBlockedReason === 'none' || authoritativeQ2Advanced ? stateQuestionId : '';
-      const renderBlockedReasonEffective = renderBlockedReason === 'none' || authoritativeQ2Advanced ? 'none' : renderBlockedReason;
+      const promptVisuallyReady = Boolean(stateQuestionId && promptConsonant && overlayConsonant === promptConsonant);
+      const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced);
+      const renderedQuestionId = renderBlockedReason === 'none' || forceVisiblePrompt ? stateQuestionId : '';
+      const renderBlockedReasonEffective = renderBlockedReason === 'none'
+        ? 'none'
+        : (forceVisiblePrompt && renderBlockedReason === 'scene_not_synced' ? 'scene_not_synced_warning' : renderBlockedReason);
       sandboxModeRef.current.commitRenderSync?.({
         stateQuestionId,
         renderedQuestionId,
         renderBlockedReason: renderBlockedReasonEffective,
-        commitSource: authoritativeQ2Advanced ? 'authoritative_flow_override' : 'app_tick_render_sync'
+        commitSource: forceVisiblePrompt && renderBlockedReason !== 'none' ? 'authoritative_prompt_visibility_override' : (authoritativeQ2Advanced ? 'authoritative_flow_override' : 'app_tick_render_sync')
       });
       const judgeAudit = sandboxState.consonantJudgeAudit;
       setSandboxRevealTick(now);
@@ -5644,7 +5650,26 @@ export default function App() {
     }
     const stateAfter = sandboxModeRef.current.getState();
     const afterNode = sandboxModeRef.current.getCurrentNode();
+    if (!afterNode) {
+      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'missing_next_node', lastResult: 'blocked' });
+      return;
+    }
+    sandboxModeRef.current.setCurrentPrompt({
+      kind: 'consonant',
+      promptId: crypto.randomUUID(),
+      consonant: afterNode.char,
+      wordKey: afterNode.id,
+      pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
+      correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
+      unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
+    });
     requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(stateAfter.flow.questionIndex), reason: `force_next_q${stateAfter.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
+    sandboxModeRef.current.commitRenderSync?.({
+      stateQuestionId: afterNode.id,
+      renderedQuestionId: afterNode.id,
+      renderBlockedReason: 'force_next_prompt_activated',
+      commitSource: 'force_next_question_debug'
+    });
     sandboxModeRef.current.setSandboxFlow({
       postRevealChatState: 'idle',
       nextQuestionReady: true,
@@ -5652,17 +5677,17 @@ export default function App() {
       nextQuestionFromIndex: beforeIndex,
       nextQuestionToIndex: stateAfter.flow.questionIndex,
       nextQuestionFromQuestionId: fromNode?.id ?? '',
-      nextQuestionToQuestionId: afterNode?.id ?? '',
+      nextQuestionToQuestionId: afterNode.id,
       nextQuestionBlockedReason: 'emitted',
       nextQuestionDecidedAt: clickedAt,
       nextQuestionEmittedAt: Date.now(),
       nextQuestionConsumer: 'force_next_question_debug'
     });
     setSandboxRevealTick(Date.now());
-    recordSandboxDebugAction('force_next_question', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${stateAfter.flow.questionIndex}` });
+    recordSandboxDebugAction('force_next_question', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${stateAfter.flow.questionIndex}:${afterNode.id}` });
   }, [clearChatFreeze, clearReplyUi, recordSandboxDebugAction, resolveSandboxSceneKeyByQuestionIndex]);
 
-  const runFullNightTest = useCallback(async () => {
+  const runNightSmokeTest = useCallback(async () => {
     const startedAt = Date.now();
     sandboxFlowTestRunIdRef.current += 1;
     const runId = sandboxFlowTestRunIdRef.current;
@@ -5740,7 +5765,7 @@ export default function App() {
         secondQuestionShown: authoritative.secondQuestionAuthoritative,
         toQuestionId: authoritative.toQuestionId
       });
-      recordSandboxDebugAction('run_full_night_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
+      recordSandboxDebugAction('run_night_smoke_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
     };
     const pass = (lastPassedStep: string, toQuestionId: string) => {
       setRunning({
@@ -5753,7 +5778,7 @@ export default function App() {
         toQuestionId,
         secondQuestionShown: readFullNightAuthoritativeState().secondQuestionAuthoritative
       });
-      recordSandboxDebugAction('run_full_night_test', { effectApplied: true, blockedReason: '-', lastResult: `passed:${toQuestionId}` });
+      recordSandboxDebugAction('run_night_smoke_test', { effectApplied: true, blockedReason: '-', lastResult: `passed:${toQuestionId}` });
     };
     const waitFor = async (predicate: () => boolean, timeoutMs = 12_000, intervalMs = 120) => {
       const deadline = Date.now() + timeoutMs;
@@ -5765,18 +5790,18 @@ export default function App() {
       return false;
     };
 
-    recordSandboxDebugAction('run_full_night_test', { lastClickedAt: startedAt, handlerInvoked: true, blockedReason: '-', lastResult: 'running' });
+    recordSandboxDebugAction('run_night_smoke_test', { lastClickedAt: startedAt, handlerInvoked: true, blockedReason: '-', lastResult: 'running' });
     if (modeRef.current.id !== 'sandbox_story') {
       fail('enter_sandbox_story', 'not_in_sandbox_story');
       return;
     }
 
     const resetAt = Date.now();
-    clearReplyUi('run_full_night_test_reset');
-    clearChatFreeze('run_full_night_test_reset');
-    sandboxModeRef.current.ensureBootstrapState?.('run_full_night_test_reset', resetAt, 30_000, true);
+    clearReplyUi('run_night_smoke_test_reset');
+    clearChatFreeze('run_night_smoke_test_reset');
+    sandboxModeRef.current.ensureBootstrapState?.('run_night_smoke_test_reset', resetAt, 30_000, true);
     sandboxModeRef.current.setIntroGate({ passed: true, remainingMs: 0, startedAt: resetAt, minDurationMs: 30_000 });
-    sandboxModeRef.current.setFlowStep('VIP_TAG_PLAYER', 'run_full_night_test_start_clean', resetAt);
+    sandboxModeRef.current.setFlowStep('VIP_TAG_PLAYER', 'run_night_smoke_test_start_clean', resetAt);
     sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'idle', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'not_armed', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '' });
     sandboxPreheatOrchestrationRef.current.startedAt = resetAt;
     sandboxPreheatOrchestrationRef.current.lastEmitAt = 0;
@@ -6991,7 +7016,7 @@ export default function App() {
                   <h4>Sandbox Story Debug Tools</h4>
                   <div><strong>Flow Test</strong></div>
                   <div className="debug-route-controls">
-                    <button type="button" onClick={() => { void runFullNightTest(); }}>Run Full Night Test</button>
+                    <button type="button" onClick={() => { void runNightSmokeTest(); }}>Run Night Smoke Test</button>
                     <button type="button" onClick={handleSandboxDebugPassFlow}>Pass Flow</button>
                   </div>
                   <div style={{ marginTop: 8 }}><strong>Force Debug</strong></div>
@@ -7015,7 +7040,7 @@ export default function App() {
                     ))}
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
-                    <div><strong>Sandbox Flow Test</strong></div>
+                    <div><strong>Night Smoke Test</strong></div>
                     <div>status: {sandboxFlowTestResult.status}</div>
                     <div>startedAt: {sandboxFlowTestResult.startedAt || 0}</div>
                     <div>finishedAt: {sandboxFlowTestResult.finishedAt || 0}</div>

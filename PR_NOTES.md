@@ -1,3 +1,6 @@
+- 將 debug flow 測試從 `Run Full Night Test` 正名為 `Run Night Smoke Test`，同步更新按鈕文案、Flow Test 面板標題與 debug action audit key（`run_night_smoke_test`）。
+- 修正題目切換可見性：在可作答步驟，authoritative prompt 一旦成立就強制同步 `renderSync.stateQuestionId/renderedQuestionId`，scene 未同步僅記 `scene_not_synced_warning`，不再出現 flow 已前進但畫面無題目。
+- 修正 `Force Next Question`：成功時必須建立下一題 `currentPrompt` 並提交 `renderSync`（`force_next_prompt_activated`），缺少 next node 直接 blocked，避免產生 `missing_current_prompt/state_question_missing`。
 ## This Change (2026-03-10 full-night auto-answer same submit/consume path)
 - `Run Full Night Test` Q1 自動答題改為與真人相同送出路徑：`submitChat` 建立 player message 後，將 `messageId/sourceType/playerId/targetPlayerId/sourceMessageId` 一併送入 `consumePlayerReply(payload)`。
 - `consumePlayerReply` 接受 authoritative metadata payload，`writeSandboxLastReplyEval` 也改為可保存真實 `messageId`，避免 debug trace 用合成 id 誤導。

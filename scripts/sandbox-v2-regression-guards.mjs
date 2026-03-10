@@ -308,17 +308,17 @@ if (!app.includes('visible: Boolean(sandboxState.flow.step && sandboxState.sched
 if (!app.includes('<strong>Flow Test</strong>') || !app.includes('<strong>Force Debug</strong>')) {
   throw new Error('sandbox debug panel must separate Flow Test and Force Debug sections');
 }
-if (!app.includes('Run Full Night Test') || !app.includes('Pass Flow') || !app.includes('Force Correct Now') || !app.includes('Force Next Question') || !app.includes('Force Ghost Event')) {
+if (!app.includes('Run Night Smoke Test') || !app.includes('Pass Flow') || !app.includes('Force Correct Now') || !app.includes('Force Next Question') || !app.includes('Force Ghost Event')) {
   throw new Error('sandbox debug panel retained buttons are incomplete');
 }
 if (app.includes('Run Sandbox Flow Test') || app.includes('Trigger Random Ghost</button>') || app.includes('Force Correct</button>')) {
   throw new Error('sandbox debug panel still contains legacy button labels');
 }
-if (!app.includes("recordSandboxDebugAction('run_full_night_test'")) {
-  throw new Error('Run Full Night Test must write debug action audit');
+if (!app.includes("recordSandboxDebugAction('run_night_smoke_test'")) {
+  throw new Error('Run Night Smoke Test must write debug action audit');
 }
-if (!app.includes("ensureBootstrapState?.('run_full_night_test_reset'") || !app.includes("setFlowStep('VIP_TAG_PLAYER', 'run_full_night_test_start_clean'")) {
-  throw new Error('Run Full Night Test must bootstrap from a clean start');
+if (!app.includes("ensureBootstrapState?.('run_night_smoke_test_reset'") || !app.includes("setFlowStep('VIP_TAG_PLAYER', 'run_night_smoke_test_start_clean'")) {
+  throw new Error('Run Night Smoke Test must bootstrap from a clean start');
 }
 if (!app.includes("recordSandboxDebugAction('force_next_question'")) {
   throw new Error('Force Next Question must write debug action audit');
@@ -394,4 +394,33 @@ if (!app.includes("expectedConsonant: pipeline.audit.judge.expectedConsonant") |
 }
 if (!app.includes("rawInput: '[debug-force-correct]'") || !app.includes("compareMode: 'debug_override_exact'") || !app.includes("resultReason: 'debug_override_forced_correct'") || !app.includes("consumedAt: now")) {
   throw new Error('Force Correct Now must persist complete authoritative judge audit fields');
+}
+
+
+if (!app.includes("run_night_smoke_test")) {
+  throw new Error('debug action audit key must use run_night_smoke_test');
+}
+if (!app.includes('Run Night Smoke Test')) {
+  throw new Error('flow test button label must be Run Night Smoke Test');
+}
+if (!app.includes('<div><strong>Night Smoke Test</strong></div>')) {
+  throw new Error('flow test panel title must be Night Smoke Test');
+}
+if (app.includes('Run Full Night Test')) {
+  throw new Error('legacy Run Full Night Test label should not remain in app debug panel');
+}
+if (!app.includes("renderBlockedReason: 'force_next_prompt_activated'") || !app.includes("commitSource: 'force_next_question_debug'")) {
+  throw new Error('Force Next Question must commit prompt-visible renderSync state');
+}
+if (!app.includes("blockedReason: 'missing_next_node'")) {
+  throw new Error('Force Next Question must block when next node is missing instead of emitting invalid state');
+}
+if (!mode.includes("commitSource: 'forceAdvanceNode_reset'")) {
+  throw new Error('forceAdvanceNode must reset stale prompt/render state before next prompt activation');
+}
+if (!app.includes('const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced);')) {
+  throw new Error('renderSync must enforce visible prompt on authoritative answerable question transitions');
+}
+if (!app.includes("scene_not_synced_warning")) {
+  throw new Error('renderSync scene_not_synced should be warning when authoritative prompt is already visible');
 }

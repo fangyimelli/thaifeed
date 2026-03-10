@@ -1,3 +1,6 @@
+- [sandbox][night-smoke-test] `Run Full Night Test` 更名為 `Run Night Smoke Test`，同步更新 debug action audit key 為 `run_night_smoke_test` 與 Flow Test 面板文案。
+- [sandbox][prompt-visibility] 修正題目切換 hidden prompt：可作答題目轉場時強制對齊 `currentPrompt` + `renderSync.stateQuestionId/renderedQuestionId`；`scene_not_synced` 降級為 `scene_not_synced_warning` 並維持題目可見。
+- [sandbox][force-next] `Force Next Question` 現在會建立下一題 prompt 並提交 renderSync（`force_next_prompt_activated`），缺少 next node 時直接 blocked，避免產生 `missing_current_prompt/state_question_missing` 壞狀態。
 ## 2026-03-10 sandbox full-night auto-answer authoritative submit path unification
 
 - `Run Full Night Test` Q1 auto answer 不再只靠 UI 注入訊息；改為重用正式 `submitChat` -> `createPlayerMessage` -> `consumePlayerReply(payload)` 路徑。
