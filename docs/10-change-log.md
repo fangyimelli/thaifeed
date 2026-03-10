@@ -1,3 +1,11 @@
+## 2026-03-10 sandbox full-night auto-answer authoritative submit path unification
+
+- `Run Full Night Test` Q1 auto answer 不再只靠 UI 注入訊息；改為重用正式 `submitChat` -> `createPlayerMessage` -> `consumePlayerReply(payload)` 路徑。
+- `consumePlayerReply` payload 新增 authoritative metadata（`messageId/sourceType/playerId/targetPlayerId/sourceMessageId`），讓 auto answer 與真人送出共用相同 consume/matching gate。
+- `lastReplyEval.messageId` 支援沿用真實 message id，避免 debug 觀測混淆。
+- Full Night Test 成功條件強化：必須看到 parse 已評估、judge audit 寫入、`consumedAt>0`、flow 脫離 `WAIT_REPLY_1`。
+- 失敗分類細分為 `message_injected_but_not_consumed`、`message_rejected_by_gate`、`parse_failed:*`、`judge_failed`，替代舊的籠統 `answer_not_consumed`。
+
 - [sandbox][integration-fix][full-night-false-failure-authoritative-judge-audit] 修正 Full Night Test 以 render/post-reveal observer 誤判失敗：改由 authoritative flow 判定 second question 成功，並將 render desync 降級為 warning；同時統一 judge audit 寫入 helper，避免 parse 有值但 judge 欄位空白（涵蓋 normal answer / auto test / Force Correct Now）。
 ## 2026-03-10 sandbox q2 render sync authoritative commit
 

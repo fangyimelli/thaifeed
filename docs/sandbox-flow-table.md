@@ -1,3 +1,7 @@
+| Full Night Q1 auto answer submit path | 可能僅注入聊天室訊息（render 可見但 authority 未 consume） | 強制走 `submitChat -> createPlayerMessage -> consumePlayerReply(payload)` 同一路徑，附帶 message/source/gate metadata | Auto answer 與真人送出一致；不再因 UI 可見造成假成功。 |
+| Full Night Q1 fail reason granularity | `answer_not_consumed` 易混淆 submit/gate/parse/judge 停點 | 細分 `message_injected_but_not_consumed` / `message_rejected_by_gate` / `parse_failed:*` / `judge_failed` | 失敗定位可直接對應 authoritative 停點。 |
+| Full Night Q1 pass criteria | 可被 UI message 可見誤導 | 需同時滿足 parse evaluated + judge audit written + `consumedAt>0` + flow advance | 成功標準改為 authoritative state-driven。 |
+
 | `secondQuestionShown` 判定 | `emit + prompt` 可能過早視為顯示成功 | `emit + prompt + renderSync.renderedQuestionId` 三者一致才為 true | 避免 `WAIT_REPLY_2` 已到但畫面仍停第一題。 |
 | state -> render commit 可觀測性 | 缺少 state/render 分離欄位 | 新增 `render.stateQuestionId/renderedQuestionId/renderBlockedReason` 與 `expectedSceneKey/videoCurrentKey` | 不一致時可直接看出阻塞原因，不再誤判已修復。 |
 - Full Night Test 第二題成功採 authoritative 多條件：`flow.step>=WAIT_REPLY_2` 或 `currentPrompt.questionId==secondQuestionId` 或 `replyGate(consonant_answer+armed)` 或 `nextQuestion.emitted+toQuestionId==secondQuestionId`。
