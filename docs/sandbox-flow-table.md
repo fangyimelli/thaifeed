@@ -1,5 +1,8 @@
 | `secondQuestionShown` 判定 | `emit + prompt` 可能過早視為顯示成功 | `emit + prompt + renderSync.renderedQuestionId` 三者一致才為 true | 避免 `WAIT_REPLY_2` 已到但畫面仍停第一題。 |
 | state -> render commit 可觀測性 | 缺少 state/render 分離欄位 | 新增 `render.stateQuestionId/renderedQuestionId/renderBlockedReason` 與 `expectedSceneKey/videoCurrentKey` | 不一致時可直接看出阻塞原因，不再誤判已修復。 |
+- Full Night Test 第二題成功採 authoritative 多條件：`flow.step>=WAIT_REPLY_2` 或 `currentPrompt.questionId==secondQuestionId` 或 `replyGate(consonant_answer+armed)` 或 `nextQuestion.emitted+toQuestionId==secondQuestionId`。
+- `render.stateQuestionId != renderedQuestionId` 不再直接導致失敗；若 authoritative 已成功則標為 render warning。
+
 | 第二題 emit 後 scene/video 同步 | 只切 `currentPrompt`，視覺層可能沿用舊 cache | `ADVANCE_NEXT`/`Force Next` emit 時強制 `REQUEST_VIDEO_SWITCH(resolveSandboxSceneKeyByQuestionIndex)` | 防止 prompt 已切但 scene/video 仍是第一題舊畫面。 |
 
 | `ADVANCE_NEXT` post-reveal completion source | `postRevealChatState === 'done'` 單值判斷，與 transitions/backlog 可能分裂 | `hasPostRevealCompletionEvidence`：`postRevealChatState==='done'` **或** (`backlogTechMessages.length===0` 且 transitions 含 `post_reveal_chat_done`) | 已進 `ADVANCE_NEXT` 且 postReveal idle 時，不可再誤判 `post_reveal_chat_not_done`。 |

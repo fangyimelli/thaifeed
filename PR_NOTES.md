@@ -155,3 +155,15 @@
 - Every audited button now leaves an action record.
 - Blocked actions always include an explicit blocked reason.
 - Successful actions always mutate at least one authoritative state field.
+
+## This Change (authoritative judge audit + false-failure fix)
+- Run Full Night Test 第二題成功判定改為 authoritative OR 條件：`flow.step>=WAIT_REPLY_2`、`currentPrompt.wordKey===secondQuestionId`、`replyGate=consonant_answer+armed`、或 `nextQuestion emitted+toQuestionId`。
+- reveal/post-reveal observer 不再是硬失敗 gate；若 authoritative 已到第二題則直接 pass。
+- render observer desync（如 `scene_not_synced`）不再覆蓋流程成功；加入 `authoritative_flow_override` 讓 `renderedQuestionId` 與 state 收斂，並保留 blockedReason 可觀測。
+- 以統一 helper 補齊 `consonantJudgeAudit` 寫入預設與覆蓋，保證 normal answer、Run Full Night auto answer、Force Correct Now 都寫滿 parse+judge+source+consumedAt。
+
+## Regression Guard Updates (authoritative judge audit + false-failure fix)
+- 新增 guard：Full Night Test 必須使用 `secondQuestionAuthoritative`（非 render-only）判定 secondQuestionShown。
+- 新增 guard：第二題判定必須包含 `flow.step>=WAIT_REPLY_2` 與 `replyGate consonant_answer+armed` 條件。
+- 新增 guard：render sync 需支援 `authoritative_flow_override`，避免 render observer 反向覆蓋 authoritative 成功。
+- 新增 guard：failed/passed `secondQuestionShown` 必須回填 authoritative 布林值。

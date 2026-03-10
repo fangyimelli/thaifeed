@@ -1,3 +1,4 @@
+- [sandbox][integration-fix][full-night-false-failure-authoritative-judge-audit] 修正 Full Night Test 以 render/post-reveal observer 誤判失敗：改由 authoritative flow 判定 second question 成功，並將 render desync 降級為 warning；同時統一 judge audit 寫入 helper，避免 parse 有值但 judge 欄位空白（涵蓋 normal answer / auto test / Force Correct Now）。
 ## 2026-03-10 sandbox q2 render sync authoritative commit
 
 - 修正第二題 state/render 斷裂：新增 `renderSync.stateQuestionId/renderedQuestionId/renderBlockedReason` authoritative 視覺提交狀態，避免 `flow/currentPrompt` 已切但畫面仍停留第一題。
