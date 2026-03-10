@@ -217,3 +217,9 @@
 - `reveal_word_done` gate：必須 `reveal.phase=done` 且 `reveal.rendered=true`，否則禁止前進（例外：`blockedReason=missing_word_text`）。
 - `POST_REVEAL_CHAT` 只可在 reveal done+render evidence 後啟動，防止 flow 與畫面脫鉤。
 - 可見時長下限：`SANDBOX_REVEAL_VISIBLE_MIN_MS=2500`。
+
+## 2026-03-10 reveal audit observability update
+
+- Debug mirror now includes `sandbox.reveal.text` alongside `visible/phase/wordKey/startedAt/finishedAt/rendered/blockedReason`.
+- Purpose: keep reveal payload inspection in a single authoritative block (`sandbox.reveal`) during REVEAL_WORD audits.
+- No flow transition rule/timer changed in this update.

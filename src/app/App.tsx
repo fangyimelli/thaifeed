@@ -4045,6 +4045,7 @@ export default function App() {
           blockedReason: sandboxState.reveal.blockedReason || '-',
           active: sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done',
           wordKey: sandboxState.reveal.wordKey || '-',
+          text: sandboxState.reveal.text || '-',
           durationMs: sandboxState.reveal.durationMs
         },
         debug: {

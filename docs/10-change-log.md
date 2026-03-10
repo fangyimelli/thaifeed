@@ -1,3 +1,9 @@
+## 2026-03-10 reveal pipeline audit (no behavior change)
+
+- Scope: sandbox story reveal observability only; no flow gating or timing logic changed.
+- Added `sandbox.reveal.text` to debug mirror payload so reveal text is directly visible from authoritative reveal block.
+- Audit confirms reveal render path is `sandboxState.reveal -> SceneView.wordReveal -> SandboxWordRevealText` and render evidence returns via `onRenderStateChange`.
+
 - [sandbox][night-smoke-test] `Run Full Night Test` 更名為 `Run Night Smoke Test`，同步更新 debug action audit key 為 `run_night_smoke_test` 與 Flow Test 面板文案。
 - [sandbox][prompt-visibility] 修正題目切換 hidden prompt：可作答題目轉場時強制對齊 `currentPrompt` + `renderSync.stateQuestionId/renderedQuestionId`；`scene_not_synced` 降級為 `scene_not_synced_warning` 並維持題目可見。
 - [sandbox][force-next] `Force Next Question` 現在會建立下一題 prompt 並提交 renderSync（`force_next_prompt_activated`），缺少 next node 時直接 blocked，避免產生 `missing_current_prompt/state_question_missing` 壞狀態。

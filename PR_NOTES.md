@@ -1,3 +1,11 @@
+## This Change (reveal audit observability, no behavior change)
+- Audited sandbox reveal pipeline end-to-end (`REVEAL_WORD -> render -> POST_REVEAL_CHAT`).
+- Added `sandbox.reveal.text` to debug mirror payload in `window.__CHAT_DEBUG__`, complementing existing reveal fields (`visible/phase/wordKey/startedAt/finishedAt/rendered/blockedReason`).
+- Confirmed no reveal timing/flow gate logic changed in this patch.
+
+## Regression Guard Updates (reveal audit)
+- Updated docs-only guard notes for reveal observability; no runtime behavior guard added because this is audit-only (non-fix) change.
+
 - 將 debug flow 測試從 `Run Full Night Test` 正名為 `Run Night Smoke Test`，同步更新按鈕文案、Flow Test 面板標題與 debug action audit key（`run_night_smoke_test`）。
 - 修正題目切換可見性：在可作答步驟，authoritative prompt 一旦成立就強制同步 `renderSync.stateQuestionId/renderedQuestionId`，scene 未同步僅記 `scene_not_synced_warning`，不再出現 flow 已前進但畫面無題目。
 - 修正 `Force Next Question`：成功時必須建立下一題 `currentPrompt` 並提交 `renderSync`（`force_next_prompt_activated`），缺少 next node 直接 blocked，避免產生 `missing_current_prompt/state_question_missing`。
