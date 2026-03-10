@@ -894,3 +894,8 @@
 - 注音 alias 輸入（例如 `ㄖ`，應與 classic 一致）。
 - sandbox 與 classic 同題一致判定。
 - `wrong_format` 與 `wrong_answer` 不得混淆。
+# 2026-03-10 (audit-only)
+
+- [sandbox][audit-only] 完成「bopomofo alias / debug state / scheduler phase 不一致」全鏈路盤點，輸出 authoritative state、實際資料流、debug mapping 差異、legacy compatibility 角色分層與修補路線圖。詳見 `docs/sandbox-audit-bopomofo-debug-scheduler.md`。
+- [sandbox][audit-only] 確認 `ㄖ` 可答對屬 shared consonant engine alias 展開（非 sandbox 本地補丁），`acceptedAnswers`（display）與 runtime accepted candidates（judge）不是同一來源。
+- [sandbox][audit-only] 確認 `scheduler.phase` 在現行 sandbox flow 無 active writer，停留 `preheat` 屬 debug 誤導風險，主流程仍由 `flow.step` 驅動。

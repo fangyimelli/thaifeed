@@ -1,11 +1,9 @@
 ## Summary
-- Audit-only: traced sandbox/classic consonant_answer parse/judge chain and added debug observability fields (no functional fix yet).
+- Audit-only: completed cross-layer investigation for sandbox story `bopomofo alias / debug state / scheduler phase` mismatch; no production logic changes.
 
 ## Changed
-- Added shared-engine helper exports for accepted alias candidate introspection.
-- Added sandbox audit debug payload in App debug state and debug panel.
-- Added parser/judge audit snapshot into `lastReplyEval.audit` for per-input trace.
-- Updated docs with audit state table and regression checklist.
+- Added `docs/sandbox-audit-bopomofo-debug-scheduler.md` with authoritative flow, mismatch findings, fix plan, and regression guards.
+- Updated README / changelog / flow table to reference this audit-only investigation.
 
 ## Removed
 - Item: None (audit-only)
@@ -17,12 +15,13 @@
 - [x] README.md updated
 - [x] docs/10-change-log.md updated
 - [x] PR_NOTES.md updated
+- [x] docs/sandbox-flow-table.md updated
 
 ## SSOT
 - [x] No SSOT changes
 - [ ] SSOT changed (list files + reasons below)
 
 ## Acceptance
-- Debug fields checked: yes (build + screenshot artifact)
-- Desktop check: basic
+- Debug fields checked: code-path audit only (no runtime behavior changes)
+- Desktop check: not applicable (no visual change)
 - Mobile check: not run
