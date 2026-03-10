@@ -23,6 +23,8 @@
 
 # sandbox_story v2 flow table (NIGHT_01 MVP)
 
+- 2026-03-10 audit-only：`scheduler.phase` 現況不再代表 sandbox 實際流程 authority（現行 flow 主要由 `flow.step` 驅動）；debug 研判需分離 display fields（`acceptedAnswers`）與 runtime judge fields（`acceptedCandidates`）。詳見 `docs/sandbox-audit-bopomofo-debug-scheduler.md`。
+
 - 2026-03-09 integration update：`ensureBootstrapState()` 為 sandbox_story 唯一 bootstrap authority wrapper；mode entry、guard recovery、clearReplyUi reset 一律走同一路徑。
 - core mount invariant（進入 sandbox_story 當下）：`flow.step=PREHEAT_CHAT`、`flow.questionIndex=0`、`flow.stepStartedAt>0`、`scheduler.phase=preheat`、`introGate.startedAt>0`、`introGate.minDurationMs=30000`。
 - visual alignment invariant：任何 `ui.*.visible`（含 consonant bubble）不得在 core bootstrap invariant 未成立時單獨呈現為啟動中。

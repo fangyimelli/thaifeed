@@ -1,3 +1,4 @@
+- [sandbox][audit-only][bopomofo-alias-debug-scheduler] 新增跨層 audit 文件：釐清 authoritative judge path、debug mapping 混源、`flow.step` 與 `scheduler.phase` 不同步根因；本次不改正式流程邏輯，僅整理修補計畫與 regression guard（`docs/sandbox-audit-bopomofo-debug-scheduler.md`）。
 - [sandbox][audit-only][consonant_answer] 追蹤判題鏈路：`consumePlayerReply -> parseAndJudgeUsingClassic -> parseThaiConsonant/judgeConsonantAnswer -> shared/consonant-engine`，本次僅新增 audit/debug 可觀測欄位，不修功能。
 - [sandbox][debug audit fields] 新增 `currentPrompt.answerSource/classicQuestionId/sharedFromClassic/acceptedAnswers/aliases`、`parse.*`、`judge.*` 與 `lastReplyEval.audit`，用於定位 `wrong_format` vs `wrong_answer` 根因。
 - [sandbox][SSOT/Removed/Deprecated Log] 本次 audit-only，無 SSOT schema 變更；無移除/廢棄正式邏輯。
