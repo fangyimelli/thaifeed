@@ -5541,14 +5541,18 @@ export default function App() {
 
 
 
-  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3') => {
+  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3', sourceMessageId?: string) => {
     sandboxModeRef.current.setFlowStep(waitStep, `${waitStep.toLowerCase()}_entered`, askedAt);
     sandboxModeRef.current.markTagAskedThisStep(askedAt);
     sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
     sandboxModeRef.current.setAnswerGate({ waiting: true, askedAt, pausedChat: true });
     const gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer';
     const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxModeRef.current.getState().player?.handle || 'player') || 'player';
-    const boundSourceMessageId = lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+    const boundSourceMessageId = sourceMessageId
+      || lockStateRef.current.replyingToMessageId
+      || qnaStateRef.current.active.questionMessageId
+      || lastQuestionMessageId
+      || '';
     sandboxModeRef.current.setSandboxFlow({ replyGateActive: true, replyTarget: targetPlayerId, canReply: true, gateType, gateConsumed: false, replySourceMessageId: boundSourceMessageId, replySourceType: 'flow_step_gate', consumePolicy: 'single' });
     sandboxModeRef.current.setReplyGate?.({ gateType, armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId: boundSourceMessageId, sourceType: 'flow_step_gate', consumePolicy: 'single', createdAt: askedAt });
     setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt: askedAt });
@@ -5556,7 +5560,7 @@ export default function App() {
     setPauseReason(reason);
     setScrollMode('FROZEN', reason);
     setChatAutoPaused(true);
-  }, []);
+  }, [lastQuestionMessageId]);
 
 
   useEffect(() => {
@@ -5592,7 +5596,7 @@ export default function App() {
     if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY') {
       const gate = sandboxState.replyGate;
       const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxState.player?.handle || 'player') || 'player';
-      const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+      const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || lastQuestionMessageId || '';
       const needsWarmupGateRepair = gate?.gateType !== 'warmup_tag' || !gate?.armed || !gate?.canReply || !gate?.targetPlayerId || !sourceMessageId;
       if (needsWarmupGateRepair) {
         const askedAt = sandboxState.flow.stepStartedAt || Date.now();
@@ -5683,7 +5687,7 @@ export default function App() {
     if (sandboxState.flow.step === 'WAIT_REPLY_1') {
       const currentPrompt = sandboxState.prompt.current;
       const gate = sandboxState.replyGate;
-      const fallbackSourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+      const fallbackSourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || lastQuestionMessageId || '';
       if (!gate?.gateType || gate.gateType === 'none') {
         sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceMessageId: fallbackSourceMessageId });
         sandboxModeRef.current.setSandboxFlow({ gateType: 'consonant_answer', replyGateActive: true, canReply: true, gateConsumed: false, replySourceMessageId: fallbackSourceMessageId });
@@ -5693,7 +5697,7 @@ export default function App() {
       }
       if (currentPrompt?.kind === 'consonant') {
         const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxState.player?.handle || 'player') || 'player';
-        const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+        const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || lastQuestionMessageId || '';
         const sourceType = gate?.sourceType || 'chat';
         const consumePolicy = gate?.consumePolicy || 'single';
         const needsConsonantGateRepair = gate?.gateType !== 'consonant_answer' || !gate?.armed || !gate?.canReply || !gate?.targetPlayerId || !sourceMessageId || !gate?.sourceType || !gate?.consumePolicy;
@@ -5786,7 +5790,8 @@ export default function App() {
           if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
         },
         freezeChat: ({ reason }) => {
-          sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_1');
+          const questionMessageId = lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || lastQuestionMessageId || '';
+          sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_1', questionMessageId);
         }
       });
       setSandboxRevealTick(Date.now());

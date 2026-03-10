@@ -4,7 +4,7 @@ const DEFAULT_WRONG_FORMAT_HINT = '可用泰文字母、英文或注音作答。
 const DEFAULT_WRONG_ANSWER_HINT = '格式正確，但不是這一題的子音。';
 
 export const SHARED_CONSONANT_QUESTION_BANK: SharedConsonantQuestion[] = [
-  { questionId: 'n01_q01_wait', consonant: 'ร', promptText: '子音題：ร', hint: '這題是捲舌音。', wrongFormatHint: DEFAULT_WRONG_FORMAT_HINT, wrongAnswerHint: DEFAULT_WRONG_ANSWER_HINT },
+  { questionId: 'n01_q01_wait', consonant: 'ร', promptText: '子音題：ร', hint: '這題是捲舌音。', acceptedAnswers: ['ro'], aliases: ['rorua', 'ro rua'], wrongFormatHint: DEFAULT_WRONG_FORMAT_HINT, wrongAnswerHint: DEFAULT_WRONG_ANSWER_HINT },
   { questionId: 'n01_q02_house', consonant: 'บ', promptText: '子音題：บ', hint: '這題是雙唇塞音。', wrongFormatHint: DEFAULT_WRONG_FORMAT_HINT, wrongAnswerHint: DEFAULT_WRONG_ANSWER_HINT },
   { questionId: 'n01_q03_child', consonant: 'ด', promptText: '子音題：ด', hint: '這題接近 d 音。', wrongFormatHint: DEFAULT_WRONG_FORMAT_HINT, wrongAnswerHint: DEFAULT_WRONG_ANSWER_HINT },
   { questionId: 'n01_q04_night', consonant: 'ก', promptText: '子音題：ก', hint: '這題接近 g/k 音。', wrongFormatHint: DEFAULT_WRONG_FORMAT_HINT, wrongAnswerHint: DEFAULT_WRONG_ANSWER_HINT },
