@@ -352,8 +352,11 @@ if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted
 if (!app.includes("const answerConsumed = await waitFor(() =>")) {
   throw new Error('Run Full Night Test auto answer must wait for authoritative consume path');
 }
-if (!app.includes("return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0;")) {
+if (!app.includes("(authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0)")) {
   throw new Error('Run Full Night Test auto answer must not stay at WAIT_REPLY_1 after submission');
+}
+if (!app.includes('st.lastReplyEval?.messageId === answerMessageId')) {
+  throw new Error('Run Full Night Test auto answer must validate consumed messageId through authoritative lastReplyEval');
 }
 if (!app.includes("const judgeTriggered = await waitFor(() =>")) {
   throw new Error('Run Full Night Test auto answer must wait for authoritative parse/judge trigger');
@@ -418,8 +421,11 @@ if (!app.includes("blockedReason: 'missing_next_node'")) {
 if (!mode.includes("commitSource: 'forceAdvanceNode_reset'")) {
   throw new Error('forceAdvanceNode must reset stale prompt/render state before next prompt activation');
 }
-if (!app.includes('const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced);')) {
-  throw new Error('renderSync must enforce visible prompt on authoritative answerable question transitions');
+if (!app.includes('const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === \'consonant_answer\');')) {
+  throw new Error('renderSync must expose authoritative gate readiness for scene desync recovery');
+}
+if (!app.includes('const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);')) {
+  throw new Error('renderSync must enforce visible prompt on authoritative answerable question transitions and gate-ready recovery');
 }
 if (!app.includes("scene_not_synced_warning")) {
   throw new Error('renderSync scene_not_synced should be warning when authoritative prompt is already visible');

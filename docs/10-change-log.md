@@ -992,3 +992,31 @@
 - [guards] regression guards added for normal prompt activation visibility, normal reveal visibility initialization, and reveal done timing gate.
 - 2026-03-10 sandbox_story integration fix: normal `REVEAL_WORD` 新增 `ensureRevealActivatedForNormalFlow()`，在 reveal 為 `idle/hidden/not-visible/not-rendered/blockedReason=hidden/wordKey缺失` 時用 SSOT payload 重建 reveal (`visible/rendered/text/wordKey/startedAt`)；`reveal_word_done` 改為必須 `phase=done + visible + rendered + startedAt/finishedAt`，避免 flow 已轉場但 reveal 層仍 hidden。
 - 2026-03-10 sandbox_story integration fix: force-path reveal 對齊 normal flow（`forceRevealCurrent` 補齊 `wordKey/rendered/blockedReason`、`forceRevealDone` 保持 `visible=true` 直到 post-reveal 消費），移除 reveal lifecycle 的 stale/partial state。
+## 2026-03-10 sandbox videoA/render recovery + night smoke authoritative consume
+
+### Scope
+- Sandbox mode only; classic mode unchanged.
+
+### Root Cause
+- `videoA element error` 只顯示 generic 字串，缺少 active slot / src / readyState / error code 與 swap outcome，導致 render 卡在 `scene_not_synced` 時無法判斷是 source 問題、swap 失敗或 slot 壞軌。
+- render 可見性 override 僅依 `isAnswerablePromptStep || authoritativeQ2Advanced`，當 gate 已 authoritative armed 但 scene key 還沒收斂時，可能持續 hidden。
+- Night Smoke Test auto-answer 雖走 submit path，但 smoke 判定未強制比對該次訊息 `messageId` 是否真的進入 consume/eval，仍可能出現 injected 與 consumed 混淆。
+
+### This Change
+- SceneView `VideoDebugState` 新增 authoritative 診斷欄位：
+  - `slotSource(videoA/videoB)`
+  - `slotReadyState(videoA/videoB)`
+  - `slotErrorCode(videoA/videoB)`
+  - `lastSwapResult(ok/from/to/activeSlot/reason/at)`
+- `videoA/videoB onError` 與 switch success/failure 都落 `lastSwapResult` + slot 診斷；fallback 回到 main loop 失敗也寫明 `fallback_switch_rejected`。
+- debug overlay 新增顯示 `slotSource/slotReadyState/slotErrorCode/activeVideoSlot/lastSwapResult`。
+- App render sync 新增 `gateAuthoritativeReady`（replyGate consonant_answer+armed+canReply）；scene 未同步但 gate 已 ready 時仍可強制 prompt 可見並標記 `scene_not_synced_warning`，避免 state/render 永久失聯。
+- `submitChat` 現在回傳 authoritative `messageId`；Night Smoke Test 會拿 `answerMessageId` 驗證：
+  - consume wait 條件必須同時滿足 authoritative consume signal + `lastReplyEval.messageId === answerMessageId`（或 audit 已 consumed）
+  - parse/judge 後再次驗證 `lastReplyEval` consumed 與 messageId 對齊
+- judge audit 寫入路徑維持 SSOT `setConsonantJudgeAudit`，欄位完整覆蓋 parse/judge/source/gate/consumedAt。
+
+### Regression Guards
+- 更新 regression guard：
+  - render recovery 必須包含 `gateAuthoritativeReady` 與 extended `forceVisiblePrompt`。
+  - smoke test 必須驗證 `st.lastReplyEval?.messageId === answerMessageId`。

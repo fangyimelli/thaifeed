@@ -156,6 +156,17 @@ type VideoDebugState = {
   bufferActive: boolean;
   currentReadyState: number | null;
   currentPaused: boolean | null;
+  slotReadyState: { videoA: number | null; videoB: number | null };
+  slotErrorCode: { videoA: number | null; videoB: number | null };
+  slotSource: { videoA: string | null; videoB: string | null };
+  lastSwapResult: {
+    ok: boolean;
+    fromKey: OldhouseLoopKey | null;
+    toKey: OldhouseLoopKey | null;
+    activeSlot: 'A' | 'B' | null;
+    reason: string;
+    at: number;
+  } | null;
   jumpCandidates: OldhouseLoopKey[];
   plannedJump: PlannedJumpState | null;
   nowMs: number;
@@ -662,6 +673,10 @@ export default function SceneView({
       bufferActive: false,
       currentReadyState: null,
       currentPaused: null,
+      slotReadyState: { videoA: null, videoB: null },
+      slotErrorCode: { videoA: null, videoB: null },
+      slotSource: { videoA: null, videoB: null },
+      lastSwapResult: null,
       jumpCandidates: [],
       plannedJump: null,
       nowMs: Date.now(),
@@ -1097,6 +1112,27 @@ export default function SceneView({
         bufferActive: getBufferVideoEl()?.classList.contains('is-active') ?? false,
         currentReadyState: getCurrentVideoEl()?.readyState ?? null,
         currentPaused: getCurrentVideoEl()?.paused ?? null
+        ,
+        slotReadyState: {
+          videoA: videoARef.current?.readyState ?? null,
+          videoB: videoBRef.current?.readyState ?? null
+        },
+        slotErrorCode: {
+          videoA: videoARef.current?.error?.code ?? null,
+          videoB: videoBRef.current?.error?.code ?? null
+        },
+        slotSource: {
+          videoA: videoARef.current?.currentSrc ?? videoARef.current?.src ?? null,
+          videoB: videoBRef.current?.currentSrc ?? videoBRef.current?.src ?? null
+        },
+        lastSwapResult: {
+          ok: true,
+          fromKey,
+          toKey: nextKey,
+          activeSlot: currentVideoRef.current,
+          reason: 'switch_ok',
+          at: Date.now()
+        }
       });
 
       updateAudioDebug({
@@ -1128,14 +1164,48 @@ export default function SceneView({
         void preloadIntoBuffer(warmupKey);
       }
     } catch (error) {
-      updateVideoDebug({ lastError: String(error instanceof Error ? error.message : error) });
+      updateVideoDebug({
+        lastError: String(error instanceof Error ? error.message : error),
+        slotReadyState: {
+          videoA: videoARef.current?.readyState ?? null,
+          videoB: videoBRef.current?.readyState ?? null
+        },
+        slotErrorCode: {
+          videoA: videoARef.current?.error?.code ?? null,
+          videoB: videoBRef.current?.error?.code ?? null
+        },
+        slotSource: {
+          videoA: videoARef.current?.currentSrc ?? videoARef.current?.src ?? null,
+          videoB: videoBRef.current?.currentSrc ?? videoBRef.current?.src ?? null
+        },
+        lastSwapResult: {
+          ok: false,
+          fromKey,
+          toKey: nextKey,
+          activeSlot: currentVideoRef.current,
+          reason: error instanceof Error ? error.message : String(error),
+          at: Date.now()
+        }
+      });
       console.error('[VIDEO]', 'switchTo failed', error);
       if (nextKey !== MAIN_LOOP) {
         const reason = `switch-failed:${error instanceof Error ? error.message : String(error)}`;
         updateVideoDebug({ lastFallback: { fromKey: nextKey, toKey: MAIN_LOOP, reason } });
         isInJumpRef.current = false;
         updateVideoDebug({ isInJump: false });
-        await requestVideoSwitch({ key: 'loop3', reason, sourceEventKey: 'SYSTEM_RETURN' });
+        const recovered = await requestVideoSwitch({ key: 'loop3', reason, sourceEventKey: 'SYSTEM_RETURN' });
+        if (!recovered) {
+          updateVideoDebug({
+            lastSwapResult: {
+              ok: false,
+              fromKey: nextKey,
+              toKey: MAIN_LOOP,
+              activeSlot: currentVideoRef.current,
+              reason: 'fallback_switch_rejected',
+              at: Date.now()
+            }
+          });
+        }
       } else {
         setAssets((prev) => ({ ...prev, videoOk: false }));
         onSceneError?.({
@@ -1655,6 +1725,10 @@ export default function SceneView({
       bufferActive: false,
       currentReadyState: null,
       currentPaused: null,
+      slotReadyState: { videoA: null, videoB: null },
+      slotErrorCode: { videoA: null, videoB: null },
+      slotSource: { videoA: null, videoB: null },
+      lastSwapResult: null,
       jumpCandidates: [],
       plannedJump: null,
       nowMs: Date.now(),
@@ -1781,6 +1855,18 @@ export default function SceneView({
         bufferActive: bufferEl?.classList.contains('is-active') ?? false,
         currentReadyState: currentEl?.readyState ?? null,
         currentPaused: currentEl?.paused ?? null,
+        slotReadyState: {
+          videoA: videoARef.current?.readyState ?? null,
+          videoB: videoBRef.current?.readyState ?? null
+        },
+        slotErrorCode: {
+          videoA: videoARef.current?.error?.code ?? null,
+          videoB: videoBRef.current?.error?.code ?? null
+        },
+        slotSource: {
+          videoA: videoARef.current?.currentSrc ?? videoARef.current?.src ?? null,
+          videoB: videoBRef.current?.currentSrc ?? videoBRef.current?.src ?? null
+        },
         sceneMapDigest: SCENE_MAP_DIGEST
       });
       if (Date.now() % 2000 < 220) {
@@ -1888,7 +1974,30 @@ export default function SceneView({
             autoPlay
             onError={() => {
               setAssets((prev) => ({ ...prev, videoOk: false }));
-              setVideoErrorDetail('videoA element error');
+              updateVideoDebug({
+                lastError: 'videoA element error',
+                slotReadyState: {
+                  videoA: videoARef.current?.readyState ?? null,
+                  videoB: videoBRef.current?.readyState ?? null
+                },
+                slotErrorCode: {
+                  videoA: videoARef.current?.error?.code ?? null,
+                  videoB: videoBRef.current?.error?.code ?? null
+                },
+                slotSource: {
+                  videoA: videoARef.current?.currentSrc ?? videoARef.current?.src ?? null,
+                  videoB: videoBRef.current?.currentSrc ?? videoBRef.current?.src ?? null
+                },
+                lastSwapResult: {
+                  ok: false,
+                  fromKey: currentLoopKeyRef.current,
+                  toKey: currentLoopKeyRef.current,
+                  activeSlot: currentVideoRef.current,
+                  reason: 'videoA_element_error',
+                  at: Date.now()
+                }
+              });
+              setVideoErrorDetail(`videoA element error (code=${videoARef.current?.error?.code ?? '-'})`);
             }}
           />
 
@@ -1901,7 +2010,30 @@ export default function SceneView({
             autoPlay
             onError={() => {
               setAssets((prev) => ({ ...prev, videoOk: false }));
-              setVideoErrorDetail('videoB element error');
+              updateVideoDebug({
+                lastError: 'videoB element error',
+                slotReadyState: {
+                  videoA: videoARef.current?.readyState ?? null,
+                  videoB: videoBRef.current?.readyState ?? null
+                },
+                slotErrorCode: {
+                  videoA: videoARef.current?.error?.code ?? null,
+                  videoB: videoBRef.current?.error?.code ?? null
+                },
+                slotSource: {
+                  videoA: videoARef.current?.currentSrc ?? videoARef.current?.src ?? null,
+                  videoB: videoBRef.current?.currentSrc ?? videoBRef.current?.src ?? null
+                },
+                lastSwapResult: {
+                  ok: false,
+                  fromKey: currentLoopKeyRef.current,
+                  toKey: currentLoopKeyRef.current,
+                  activeSlot: currentVideoRef.current,
+                  reason: 'videoB_element_error',
+                  at: Date.now()
+                }
+              });
+              setVideoErrorDetail(`videoB element error (code=${videoBRef.current?.error?.code ?? '-'})`);
             }}
           />
 
@@ -1992,6 +2124,11 @@ export default function SceneView({
           <div>video.lastDenied.denyReason: {videoDebug?.lastDenied?.denyReason ?? '-'}</div>
           <div>currentEl: {videoDebug?.activeVideoId ?? '-'} | src: {trimSrc(videoDebug?.activeVideoSrc)}</div>
           <div>bufferEl: {videoDebug?.bufferVideoId ?? '-'} | src: {trimSrc(videoDebug?.bufferVideoSrc)}</div>
+          <div>slotSource.videoA/videoB: {trimSrc(videoDebug?.slotSource?.videoA)} / {trimSrc(videoDebug?.slotSource?.videoB)}</div>
+          <div>slotReadyState.videoA/videoB: {videoDebug?.slotReadyState?.videoA ?? '-'} / {videoDebug?.slotReadyState?.videoB ?? '-'}</div>
+          <div>slotErrorCode.videoA/videoB: {videoDebug?.slotErrorCode?.videoA ?? '-'} / {videoDebug?.slotErrorCode?.videoB ?? '-'}</div>
+          <div>activeVideoSlot: {videoDebug?.lastSwapResult?.activeSlot ?? currentVideoRef.current}</div>
+          <div>lastSwapResult: {videoDebug?.lastSwapResult ? `${videoDebug.lastSwapResult.ok ? 'ok' : 'fail'} ${videoDebug.lastSwapResult.fromKey ?? '-'} -> ${videoDebug.lastSwapResult.toKey ?? '-'} (${videoDebug.lastSwapResult.reason})` : '-'}</div>
           <div>currentActive/bufferActive: {String(videoDebug?.currentActive ?? false)} / {String(videoDebug?.bufferActive ?? false)}</div>
           <div>isSwitching / isInJump: {String(videoDebug?.isSwitching ?? false)} / {String(videoDebug?.isInJump ?? false)}</div>
           <div>nextJumpDueIn: {nextJumpDueInSec}s</div>
