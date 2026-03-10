@@ -2014,3 +2014,10 @@ Console（debug 模式）可觀察：
 - sandbox mode runtime (`sandboxStoryMode`) 補回遺漏的 debug/action 實作（`advancePrompt`、`applyCorrect`、`forceWave`、`setPronounceState` 等），確保 debug action 可作用於正式 state。
 - debug panel 新增 action audit 可觀測欄位：`lastClickedAt`、`handlerInvoked`、`effectApplied`、`blockedReason`、`targetState`、`lastResult`。
 - classic mode 無修改。
+
+
+## 2026-03-10 Sandbox visibility integration update
+
+- Normal authoritative question activation now hard-syncs prompt visibility (current prompt + renderSync + overlay) without requiring debug force actions.
+- Normal `REVEAL_WORD` now initializes visible + rendered reveal state with explicit timestamps and blocks `POST_REVEAL_CHAT` if reveal timing observability is missing.
+- Debug observability now reports reply-gate-driven prompt glyph visibility source and reveal timing evidence consistently.
