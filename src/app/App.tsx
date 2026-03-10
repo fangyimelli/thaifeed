@@ -6262,15 +6262,12 @@ export default function App() {
     }
     if (sandboxState.flow.step === 'REVEAL_WORD') {
       const revealHasObservableTiming = sandboxState.reveal.startedAt > 0 && sandboxState.reveal.finishedAt > 0 && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
-      if (sandboxState.reveal.phase === 'done' && revealHasObservableTiming && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text')) {
-        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
-        setSandboxRevealTick(Date.now());
-      } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
-        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_done_missing_timing_observability' });
-      } else if (sandboxState.reveal.phase === 'idle') {
-        const revealStartedAt = Date.now();
+      const promptWordKey = sandboxState.prompt.current?.wordKey ?? '';
+      const ensureRevealActivatedForNormalFlow = () => {
+        const revealStartedAt = sandboxState.reveal.startedAt > 0 ? sandboxState.reveal.startedAt : Date.now();
         const node = sandboxModeRef.current.forceRevealCurrent?.();
-        const revealText = node?.wordText ?? '';
+        const revealText = node?.wordText ?? sandboxState.reveal.text ?? '';
+        const resolvedWordKey = node?.id ?? sandboxState.reveal.wordKey ?? promptWordKey;
         const graphemes = revealText ? Array.from(revealText) : [];
         const baseGrapheme = graphemes[0] ?? '';
         const restText = graphemes.slice(1).join('');
@@ -6279,12 +6276,12 @@ export default function App() {
           phase: revealText ? 'word' : 'hidden',
           mode: revealText ? 'correct' : 'idle',
           text: revealText,
-          wordKey: node?.id ?? sandboxState.prompt.current?.wordKey ?? '',
-          consonantFromPrompt: sandboxState.prompt.current?.consonant ?? '',
+          wordKey: resolvedWordKey,
+          consonantFromPrompt: sandboxState.prompt.current?.consonant ?? sandboxState.reveal.consonantFromPrompt ?? '',
           durationMs: SANDBOX_REVEAL_VISIBLE_MIN_MS,
           startedAt: revealStartedAt,
-          finishedAt: 0,
-          doneAt: 0,
+          finishedAt: sandboxState.reveal.phase === 'done' ? (sandboxState.reveal.finishedAt || Date.now()) : 0,
+          doneAt: sandboxState.reveal.phase === 'done' ? (sandboxState.reveal.doneAt || Date.now()) : 0,
           rendered: Boolean(revealText),
           blockedReason: revealText ? '' : 'missing_word_text',
           baseGrapheme,
@@ -6302,6 +6299,18 @@ export default function App() {
           sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_text_missing' });
         }
         setSandboxRevealTick(Date.now());
+      };
+      const revealDoneReady = sandboxState.reveal.phase === 'done'
+        && sandboxState.reveal.visible
+        && sandboxState.reveal.rendered
+        && sandboxState.reveal.blockedReason !== 'hidden';
+      if (revealDoneReady && revealHasObservableTiming) {
+        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
+        setSandboxRevealTick(Date.now());
+      } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_done_missing_timing_observability' });
+      } else if (sandboxState.reveal.phase === 'idle' || sandboxState.reveal.phase === 'hidden' || !sandboxState.reveal.visible || !sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'hidden' || (!sandboxState.reveal.wordKey && Boolean(sandboxState.reveal.text))) {
+        ensureRevealActivatedForNormalFlow();
       }
     }
     const hasReplyGateArmed = (state: any) => Boolean(state.replyGate?.armed && state.replyGate?.gateType !== 'none');

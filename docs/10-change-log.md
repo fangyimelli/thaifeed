@@ -990,3 +990,5 @@
 - [sandbox][reveal] `REVEAL_WORD` normal path now sets `visible/rendered/startedAt` at activation and blocks completion when reveal timing observability (`startedAt/finishedAt`) is missing.
 - [sandbox][debug] reveal render callback now backfills `startedAt` when rendered evidence arrives; debug glyph source can explicitly report reply-gate authoritative sync.
 - [guards] regression guards added for normal prompt activation visibility, normal reveal visibility initialization, and reveal done timing gate.
+- 2026-03-10 sandbox_story integration fix: normal `REVEAL_WORD` 新增 `ensureRevealActivatedForNormalFlow()`，在 reveal 為 `idle/hidden/not-visible/not-rendered/blockedReason=hidden/wordKey缺失` 時用 SSOT payload 重建 reveal (`visible/rendered/text/wordKey/startedAt`)；`reveal_word_done` 改為必須 `phase=done + visible + rendered + startedAt/finishedAt`，避免 flow 已轉場但 reveal 層仍 hidden。
+- 2026-03-10 sandbox_story integration fix: force-path reveal 對齊 normal flow（`forceRevealCurrent` 補齊 `wordKey/rendered/blockedReason`、`forceRevealDone` 保持 `visible=true` 直到 post-reveal 消費），移除 reveal lifecycle 的 stale/partial state。

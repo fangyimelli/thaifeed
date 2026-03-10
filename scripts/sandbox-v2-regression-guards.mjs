@@ -429,8 +429,8 @@ if (!app.includes("scene_not_synced_warning")) {
 if (!app.includes('const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
   throw new Error('reveal duration guard missing minimum visible duration constant');
 }
-if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes("sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text')")) {
-  throw new Error('REVEAL_WORD must gate reveal_word_done on authoritative rendered evidence');
+if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes('const revealDoneReady = sandboxState.reveal.phase === \'done\'')) {
+  throw new Error('REVEAL_WORD must derive revealDoneReady from authoritative reveal state');
 }
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done')")) {
   throw new Error('reveal_word_done transition missing');
@@ -449,9 +449,15 @@ if (!app.includes("commitSource: 'wait_reply_1_gate_armed'") || !app.includes("r
 if (!app.includes("source: (sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar'")) {
   throw new Error('debug ui.promptGlyph visibility source must show authoritative reply-gate sync');
 }
-if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_done_missing_timing_observability")) {
-  throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and block silent completion');
+if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_done_missing_timing_observability") || !app.includes("sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
+  throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and self-repair hidden/non-rendered reveal state');
 }
 if (!app.includes("startedAt: nextStartedAt")) {
   throw new Error('reveal render-state callback must backfill startedAt when rendered evidence arrives');
+}
+if (!mode.includes("forceRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, finishedAt: now, visible: true, mode: 'idle' }; }")) {
+  throw new Error('forceRevealDone must preserve visible done-state for REVEAL_WORD completion evidence');
+}
+if (!mode.includes("forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); const now = Date.now(); const revealText = node?.wordText ?? ''; state.reveal = { ...state.reveal, visible: Boolean(revealText), phase: revealText ? 'word' : 'hidden', text: revealText, wordKey: node?.id ?? prompt.wordKey, rendered: Boolean(revealText), blockedReason: revealText ? '' : 'missing_word_text', startedAt: state.reveal.startedAt || now, finishedAt: 0 }; return node; }")) {
+  throw new Error('forceRevealCurrent must populate wordKey + rendered/blockedReason from authoritative reveal payload');
 }

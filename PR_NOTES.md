@@ -215,3 +215,21 @@
   - reply-gate-driven prompt glyph visibility source,
   - reveal visible/rendered/timing initialization,
   - REVEAL_WORD done blocking when timing observability is missing.
+
+## 2026-03-10 sandbox normal reveal visibility fix (integration mode)
+
+### Scope
+- Sandbox flow only; no classic mode changes.
+
+### Fix summary
+- `REVEAL_WORD` normal path now performs authoritative self-repair via `ensureRevealActivatedForNormalFlow()` whenever reveal enters stale/hidden/partial states (`idle|hidden|!visible|!rendered|blockedReason=hidden|missing wordKey with existing text`).
+- Repaired reveal activation always writes complete reveal lifecycle payload in one place: `visible/rendered/text/wordKey/base/rest/startedAt/finishedAt/durationMs/blockedReason`.
+- `REVEAL_WORD -> POST_REVEAL_CHAT` gate tightened: done transition requires `phase=done` plus `visible=true`, `rendered=true`, `blockedReason!=hidden`, and valid timing observability (`startedAt>0 && finishedAt>=startedAt`).
+- Force-path parity fix: `forceRevealCurrent` now writes authoritative `wordKey/rendered/blockedReason`; `forceRevealDone` keeps `visible=true` at done boundary so normal-flow completion guards and debug observability remain truthful.
+
+### Regression guards
+- Added/updated guards to require:
+  - normal-flow reveal self-repair path exists,
+  - hidden blockedReason cannot remain terminal in REVEAL_WORD,
+  - reveal completion requires non-empty lifecycle/timing evidence,
+  - force-path reveal state carries same observability fields as normal flow.
