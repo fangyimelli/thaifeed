@@ -1,3 +1,8 @@
+- [sandbox][debug-panel][flow-force-split] Sandbox Story Debug Tools 重整為兩區：`Flow Test`（`Run Full Night Test`、`Pass Flow`）與 `Force Debug`（`Force Correct Now`、`Force Next Question`、`Force Ghost Event`），移除混雜與重複語義按鈕，所有保留按鈕都寫入 audit。
+- [sandbox][full-night-test][clean-bootstrap] `Run Full Night Test` 改為每次先走 `ensureBootstrapState(..., force=true)` 建立乾淨起點，再走正式 submit/evaluator/flow 路徑驗證 VIP tag -> warmup reply -> Q1 -> correct -> reveal/post-reveal -> Q2。
+- [sandbox][force-next][authoritative] 新增 `Force Next Question`，走 authoritative `forceAdvanceNode` 並同步 `nextQuestion*` 稽核欄位；僅在 `story_completed/no_next_question` 等 truly impossible 情況 blocked。
+- [sandbox][judge-audit][force-correct-now] `Force Correct Now` blocked 條件收斂為 `missing_current_prompt`/`prompt_not_force_correct_capable`，成功時完整寫入 authoritative `consonantJudgeAudit`。
+
 - [sandbox][debug-panel][button-prune] sandbox_story debug panel 只保留必要按鈕：`Pass Flow`、`Force Correct`、`Trigger Random Ghost`、`Run Sandbox Flow Test`；移除重疊/碎片/無權威用途按鈕（ForceResolveQna/ClearReplyUi/Force Next Node/Force Reveal/ForcePlayPronounce/ForceWave*）。
 - [sandbox][auto-test-flow] 新增「Run Sandbox Flow Test」：走正式 authoritative path（VIP tag -> warmup reply -> Q1 -> correct answer -> reveal/post-reveal -> ADVANCE_NEXT -> Q2 出現），並將結果寫入 `Sandbox Flow Test`（status/currentStep/failedStep/failureReason/fromQuestionId/toQuestionId/secondQuestionShown）。
 - [sandbox][advance-next] 修正 `ADVANCE_NEXT` 卡 `post_reveal_chat_not_done`：若 reveal 已完成且 gate 已釋放，會補寫 `postRevealChatState=done` 後繼續 emit 下一題。

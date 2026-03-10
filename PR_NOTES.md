@@ -1,3 +1,16 @@
+## This Change
+- 重整 Sandbox Story Debug Panel 為兩區：`Flow Test`（Run Full Night Test / Pass Flow）與 `Force Debug`（Force Correct Now / Force Next Question / Force Ghost Event）。
+- `Run Full Night Test` 改成每次先 clean bootstrap/re-init，再走正式 authoritative 流程，避免從中途狀態接續導致假失敗。
+- `Pass Flow` 與 `Force Next Question` 分流：前者驗證正式 guard path，後者忽略多數一般 guard 直接 force 下一題，並且完整落 `nextQuestion*` audit。
+- `Force Correct Now` 收斂 blocked 條件並保持完整 `consonantJudgeAudit` 落盤；`Force Ghost Event` 名稱與區域語義同步。
+
+## Regression Guard Updates
+- 新增/更新字串級 regression guards：
+  - panel 只呈現五顆保留按鈕與兩區標題；
+  - `run_full_night_test` 先做 `ensureBootstrapState(..., force=true)`；
+  - `force_next_question` 成功時必須寫入 authoritative `nextQuestion*` 狀態；
+  - force/debug actions 皆需 `recordSandboxDebugAction(...)`。
+
 ## 2026-03-10 Sandbox debug panel integration refactor
 
 ### Scope

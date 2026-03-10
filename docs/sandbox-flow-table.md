@@ -1,3 +1,15 @@
+## 2026-03 Debug Panel Restructure (Flow Test / Force Debug)
+
+| Button | 區域 | Status | Authority Path | Blocked Reason（主要） |
+| --- | --- | --- | --- | --- |
+| Run Full Night Test | Flow Test | 保留/改名 | `ensureBootstrapState(force=true)` -> `setFlowStep(VIP_TAG_PLAYER)` -> `submitChat`(warmup) -> `submitChat`(Q1 correct) -> `ADVANCE_NEXT` -> Q2 | `not_in_sandbox_story`, `vip_tag_not_emitted`, `post_reveal_not_done`, `second_question_not_emitted` |
+| Pass Flow | Flow Test | 保留 | `advancePrompt('debug_pass')`（正式 guard path） | `not_in_sandbox_story`, `end_of_nodes` |
+| Force Correct Now | Force Debug | 保留/改名 | `setConsonantJudgeAudit` + `applySandboxCorrect` | `not_in_sandbox_story`, `missing_current_prompt`, `prompt_not_force_correct_capable` |
+| Force Next Question | Force Debug | 新增（合併 next 類） | `forceAdvanceNode()` + `setSandboxFlow(nextQuestion*)` | `not_in_sandbox_story`, `story_completed`, `no_next_question`, `force_advance_failed` |
+| Force Ghost Event | Force Debug | 保留/改名 | `triggerEventFromTester(pickedReadyEvent)` | `not_in_sandbox_story`, `no_ready_ghost_event` |
+
+刪除：`ForceResolveQna`、`ClearReplyUi`、`Force Reveal Word`、`ForcePlayPronounce`、`ForceWave(related/surprise/guess)`、舊 next 類重複按鈕。
+
 ## Sandbox Debug Panel（精簡後）
 
 | Debug Action | 保留/刪除 | Authoritative Effect / Blocked Reason |

@@ -244,3 +244,35 @@ if (!app.includes("ensureBootstrapState?.('clearReplyUi_reinit'")) {
 if (!app.includes('visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)')) {
   throw new Error('consonant bubble should not appear before core bootstrap state is ready');
 }
+
+
+if (!app.includes('<strong>Flow Test</strong>') || !app.includes('<strong>Force Debug</strong>')) {
+  throw new Error('sandbox debug panel must separate Flow Test and Force Debug sections');
+}
+if (!app.includes('Run Full Night Test') || !app.includes('Pass Flow') || !app.includes('Force Correct Now') || !app.includes('Force Next Question') || !app.includes('Force Ghost Event')) {
+  throw new Error('sandbox debug panel retained buttons are incomplete');
+}
+if (app.includes('Run Sandbox Flow Test') || app.includes('Trigger Random Ghost</button>') || app.includes('Force Correct</button>')) {
+  throw new Error('sandbox debug panel still contains legacy button labels');
+}
+if (!app.includes("recordSandboxDebugAction('run_full_night_test'")) {
+  throw new Error('Run Full Night Test must write debug action audit');
+}
+if (!app.includes("ensureBootstrapState?.('run_full_night_test_reset'") || !app.includes("setFlowStep('VIP_TAG_PLAYER', 'run_full_night_test_start_clean'")) {
+  throw new Error('Run Full Night Test must bootstrap from a clean start');
+}
+if (!app.includes("recordSandboxDebugAction('force_next_question'")) {
+  throw new Error('Force Next Question must write debug action audit');
+}
+if (!app.includes("forceAdvanceNode()") || !app.includes("nextQuestionConsumer: 'force_next_question_debug'")) {
+  throw new Error('Force Next Question must use authoritative force-advance + nextQuestion audit');
+}
+if (!app.includes("recordSandboxDebugAction('force_correct_now'")) {
+  throw new Error('Force Correct Now must write debug action audit');
+}
+if (!app.includes("blockedReason: 'missing_current_prompt'") || !app.includes("blockedReason: 'prompt_not_force_correct_capable'")) {
+  throw new Error('Force Correct Now must expose clear blocked reasons');
+}
+if (!app.includes("recordSandboxDebugAction('force_ghost_event'")) {
+  throw new Error('Force Ghost Event must write debug action audit');
+}
