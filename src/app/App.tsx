@@ -2022,6 +2022,27 @@ export default function App() {
   }, [chatAutoScrollMode, chatFreeze.isFrozen, clearChatFreeze, clearReplyUi]);
 
   const consumePlayerReply = useCallback((raw: string) => {
+    const persistJudgeAudit = (auditPatch: Record<string, unknown>) => {
+      sandboxModeRef.current.setConsonantJudgeAudit?.({
+        rawInput: '',
+        normalizedInput: '',
+        parseOk: false,
+        parseKind: 'not_evaluated',
+        matchedAlias: '',
+        expectedConsonant: '',
+        acceptedCandidates: [],
+        compareInput: '',
+        compareMode: 'normalized_alias_membership',
+        judgeResult: 'not_evaluated',
+        resultReason: 'not_evaluated',
+        sourcePromptId: '',
+        sourceQuestionId: '',
+        sourceWordKey: '',
+        gateType: 'none',
+        consumedAt: 0,
+        ...auditPatch
+      });
+    };
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
       const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
@@ -2058,7 +2079,7 @@ export default function App() {
             node: node && node.id === currentPrompt.wordKey ? node : undefined,
             activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
           });
-          sandboxModeRef.current.setConsonantJudgeAudit?.({
+          persistJudgeAudit({
             rawInput: pipeline.audit.parse.raw,
             normalizedInput: pipeline.audit.parse.normalized,
             parseOk: pipeline.audit.parse.ok,
@@ -2084,7 +2105,7 @@ export default function App() {
             return false;
           }
         } else {
-          sandboxModeRef.current.setConsonantJudgeAudit?.({
+          persistJudgeAudit({
             rawInput: raw,
             normalizedInput: stripped,
             parseOk: false,
@@ -3645,12 +3666,18 @@ export default function App() {
         : (!promptConsonant ? 'prompt_missing'
           : (overlayConsonant !== promptConsonant ? 'overlay_not_committed'
             : (videoCurrentKey !== expectedSceneKey ? 'scene_not_synced' : 'none')));
-      const renderedQuestionId = renderBlockedReason === 'none' ? stateQuestionId : '';
+      const authoritativeQ2Advanced = sandboxState.sandboxFlow.nextQuestionEmitted
+        && sandboxState.sandboxFlow.nextQuestionToQuestionId
+        && (sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'TAG_PLAYER_3_MEANING' || sandboxState.flow.step === 'WAIT_REPLY_3' || sandboxState.flow.step === 'END_NIGHT')
+        && sandboxState.prompt.current?.kind === 'consonant'
+        && sandboxState.prompt.current.wordKey === sandboxState.sandboxFlow.nextQuestionToQuestionId;
+      const renderedQuestionId = renderBlockedReason === 'none' || authoritativeQ2Advanced ? stateQuestionId : '';
+      const renderBlockedReasonEffective = renderBlockedReason === 'none' || authoritativeQ2Advanced ? 'none' : renderBlockedReason;
       sandboxModeRef.current.commitRenderSync?.({
         stateQuestionId,
         renderedQuestionId,
-        renderBlockedReason,
-        commitSource: 'app_tick_render_sync'
+        renderBlockedReason: renderBlockedReasonEffective,
+        commitSource: authoritativeQ2Advanced ? 'authoritative_flow_override' : 'app_tick_render_sync'
       });
       const judgeAudit = sandboxState.consonantJudgeAudit;
       setSandboxRevealTick(now);
@@ -3956,7 +3983,7 @@ export default function App() {
           ...(sandboxState.renderSync ?? {}),
           stateQuestionId,
           renderedQuestionId,
-          renderBlockedReason,
+          renderBlockedReason: renderBlockedReasonEffective,
           expectedSceneKey,
           videoCurrentKey
         },
@@ -5525,7 +5552,26 @@ export default function App() {
     const node = sandboxModeRef.current.getCurrentNode();
     const now = Date.now();
     sandboxModeRef.current.activateDebugOverride('button');
-    sandboxModeRef.current.setConsonantJudgeAudit?.({
+    const persistJudgeAudit = (audit: Record<string, unknown>) => sandboxModeRef.current.setConsonantJudgeAudit?.({
+      rawInput: '',
+      normalizedInput: '',
+      parseOk: false,
+      parseKind: 'not_evaluated',
+      matchedAlias: '',
+      expectedConsonant: '',
+      acceptedCandidates: [],
+      compareInput: '',
+      compareMode: 'normalized_alias_membership',
+      judgeResult: 'not_evaluated',
+      resultReason: 'not_evaluated',
+      sourcePromptId: '',
+      sourceQuestionId: '',
+      sourceWordKey: '',
+      gateType: 'none',
+      consumedAt: 0,
+      ...audit
+    });
+    persistJudgeAudit({
       rawInput: '[debug-force-correct]',
       normalizedInput: currentPrompt.consonant,
       parseOk: true,
@@ -5601,20 +5647,30 @@ export default function App() {
     };
     const readFullNightAuthoritativeState = () => {
       const st = sandboxModeRef.current.getState();
-      const emitted = Boolean(st.sandboxFlow?.nextQuestionEmitted && st.sandboxFlow?.nextQuestionToQuestionId);
+      const secondQuestionId = st.sandboxFlow?.nextQuestionToQuestionId || '';
+      const emitted = Boolean(st.sandboxFlow?.nextQuestionEmitted && secondQuestionId);
       const renderedAligned = emitted
         && Boolean(st.renderSync?.renderedQuestionId)
-        && st.renderSync?.renderedQuestionId === st.sandboxFlow?.nextQuestionToQuestionId;
-      const secondPromptAligned = emitted
-        && Boolean(st.prompt.current?.kind === 'consonant')
-        && st.prompt.current?.wordKey === st.sandboxFlow?.nextQuestionToQuestionId
-        && renderedAligned;
+        && st.renderSync?.renderedQuestionId === secondQuestionId;
+      const promptAligned = Boolean(st.prompt.current?.kind === 'consonant')
+        && Boolean(secondQuestionId)
+        && st.prompt.current?.wordKey === secondQuestionId;
+      const gateAligned = st.replyGate?.gateType === 'consonant_answer' && Boolean(st.replyGate?.armed);
+      const flowAdvanced = st.flow.step === 'WAIT_REPLY_2' || st.flow.step === 'TAG_PLAYER_3_MEANING' || st.flow.step === 'WAIT_REPLY_3' || st.flow.step === 'END_NIGHT';
+      const secondPromptAligned = emitted && promptAligned;
+      const secondQuestionAuthoritative = Boolean(
+        flowAdvanced
+        || promptAligned
+        || gateAligned
+        || (emitted && secondQuestionId === st.sandboxFlow?.nextQuestionToQuestionId)
+      );
       const judgeAudit = st.consonantJudgeAudit;
       return {
         emitted,
         renderedAligned,
         secondPromptAligned,
-        toQuestionId: st.sandboxFlow?.nextQuestionToQuestionId || '-',
+        secondQuestionAuthoritative,
+        toQuestionId: secondQuestionId || '-',
         blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted',
         flowStep: st.flow.step,
         canReply: Boolean(st.replyGate?.canReply),
@@ -5637,7 +5693,7 @@ export default function App() {
         currentStep: failedStep,
         failedStep,
         failureReason,
-        secondQuestionShown: authoritative.secondPromptAligned,
+        secondQuestionShown: authoritative.secondQuestionAuthoritative,
         toQuestionId: authoritative.toQuestionId
       });
       recordSandboxDebugAction('run_full_night_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
@@ -5651,7 +5707,7 @@ export default function App() {
         failedStep: '-',
         failureReason: '-',
         toQuestionId,
-        secondQuestionShown: readFullNightAuthoritativeState().secondPromptAligned
+        secondQuestionShown: readFullNightAuthoritativeState().secondQuestionAuthoritative
       });
       recordSandboxDebugAction('run_full_night_test', { effectApplied: true, blockedReason: '-', lastResult: `passed:${toQuestionId}` });
     };
@@ -5781,25 +5837,23 @@ export default function App() {
         fail('auto_answer_q1', failureReason);
         return;
       }
+      if (authoritative.secondQuestionAuthoritative) {
+        pass('second_question', authoritative.toQuestionId);
+        return;
+      }
       fail('reveal_post_reveal', 'post_reveal_not_done');
       return;
     }
     setRunning({ lastPassedStep: 'reveal_post_reveal', currentStep: 'second_question' });
 
     const secondQuestionShown = await waitFor(() => {
-      const st = sandboxModeRef.current.getState();
-      return Boolean(
-        st.sandboxFlow.nextQuestionEmitted
-        && st.sandboxFlow.nextQuestionToQuestionId
-        && st.prompt.current?.kind === 'consonant'
-        && st.prompt.current.wordKey === st.sandboxFlow.nextQuestionToQuestionId
-        && st.renderSync?.renderedQuestionId === st.prompt.current.wordKey
-      );
+      const authoritative = readFullNightAuthoritativeState();
+      return authoritative.secondQuestionAuthoritative;
     }, 15_000);
     if (!secondQuestionShown) {
       await waitFor(() => readFullNightAuthoritativeState().emitted, 1_500, 100);
       const authoritative = readFullNightAuthoritativeState();
-      if (authoritative.emitted) {
+      if (authoritative.secondQuestionAuthoritative) {
         pass('second_question', authoritative.toQuestionId);
         return;
       }

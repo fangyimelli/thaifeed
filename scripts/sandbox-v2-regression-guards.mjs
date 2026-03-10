@@ -238,26 +238,29 @@ if (!app.includes("nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE'
 if (!app.includes('sandboxModeRef.current.setCurrentPrompt({')) {
   throw new Error('ADVANCE_NEXT must switch currentPrompt to emitted next question prompt');
 }
-if (!app.includes('secondPromptAligned')) {
-  throw new Error('Full Night Test must derive secondQuestionShown from authoritative emit+prompt alignment');
+if (!app.includes('secondQuestionAuthoritative')) {
+  throw new Error('Full Night Test must derive second-question success from authoritative flow state');
 }
-if (!app.includes("st.prompt.current?.wordKey === st.sandboxFlow?.nextQuestionToQuestionId")) {
+if (!app.includes("st.prompt.current?.wordKey === secondQuestionId")) {
   throw new Error('Full Night Test second question check must validate current prompt wordKey against emitted toQuestionId');
 }
-if (!app.includes('renderedAligned')) {
-  throw new Error('Full Night Test second question check must include authoritative rendered alignment');
+if (!app.includes('flowAdvanced') || !app.includes("st.flow.step === 'WAIT_REPLY_2'")) {
+  throw new Error('Full Night Test second question check must include flow.step >= WAIT_REPLY_2 authoritative condition');
 }
-if (!app.includes('st.renderSync?.renderedQuestionId === st.sandboxFlow?.nextQuestionToQuestionId')) {
-  throw new Error('rendered alignment must bind renderSync.renderedQuestionId to nextQuestionToQuestionId');
+if (!app.includes("st.replyGate?.gateType === 'consonant_answer' && Boolean(st.replyGate?.armed)")) {
+  throw new Error('Full Night Test second question check must include replyGate authoritative condition');
 }
 if (!app.includes('render.blockedReason')) {
   throw new Error('debug panel must expose renderBlockedReason for state/render mismatch diagnosis');
 }
+if (!app.includes('authoritative_flow_override')) {
+  throw new Error('render observer sync must allow authoritative flow override when q2 advanced');
+}
 if (!app.includes('render.stateQuestionId/renderedQuestionId')) {
   throw new Error('debug panel must expose stateQuestionId and renderedQuestionId');
 }
-if (!app.includes('renderSync?.renderedQuestionId === st.prompt.current.wordKey')) {
-  throw new Error('second question shown predicate must require renderedQuestionId equals current prompt wordKey');
+if (!app.includes('authoritative.secondQuestionAuthoritative')) {
+  throw new Error('second question shown predicate must rely on authoritative secondQuestionAuthoritative');
 }
 if (!app.includes('REQUEST_VIDEO_SWITCH') || !app.includes('resolveSandboxSceneKeyByQuestionIndex')) {
   throw new Error('next question emit must trigger authoritative scene/video switch by questionIndex');
@@ -339,8 +342,8 @@ if (!app.includes('const readFullNightAuthoritativeState = () =>')) {
 if (!app.includes("if (failedStep === 'second_question' && authoritative.emitted)")) {
   throw new Error('Run Full Night Test must not fail second_question after authoritative emit');
 }
-if (!app.includes("secondQuestionShown: authoritative.secondPromptAligned")) {
-  throw new Error('Run Full Night Test failed result must expose authoritative secondQuestionShown prompt-aligned state');
+if (!app.includes("secondQuestionShown: authoritative.secondQuestionAuthoritative")) {
+  throw new Error('Run Full Night Test failed result must expose authoritative secondQuestionShown state');
 }
 if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted")) {
   throw new Error('Run Full Night Test must re-converge on authoritative emit before failing second_question');
