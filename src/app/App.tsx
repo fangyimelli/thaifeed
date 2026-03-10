@@ -853,42 +853,6 @@ export default function App() {
     sourceMessageId: '-',
     sourceType: '-'
   });
-  const sandboxConsonantAuditRef = useRef<{
-    parse: {
-      raw: string;
-      normalized: string;
-      kind: string;
-      ok: boolean;
-      blockReason: string;
-      allowedKinds: string[];
-      matchedAlias: string;
-    };
-    judge: {
-      expectedConsonant: string;
-      acceptedCandidates: string[];
-      compareInput: string;
-      compareMode: string;
-      resultReason: string;
-    };
-  }>({
-    parse: {
-      raw: '',
-      normalized: '',
-      kind: 'none',
-      ok: false,
-      blockReason: 'not_evaluated',
-      allowedKinds: ['thai_char', 'roman_alias', 'bopomofo_alias', 'question_alias'],
-      matchedAlias: ''
-    },
-    judge: {
-      expectedConsonant: '',
-      acceptedCandidates: [],
-      compareInput: '',
-      compareMode: 'normalized_alias_membership',
-      resultReason: 'not_evaluated'
-    }
-  });
-
   const qnaStateRef = useRef(createInitialQnaState());
   const messageSeqRef = useRef(0);
   const eventQueueRef = useRef<{ key: StoryEventKey; source: 'qna' }[]>([]);
@@ -1949,7 +1913,7 @@ export default function App() {
       normalized: evalState.normalizedInput,
       classifiedAs: evalState.consumed ? 'consumed' : 'rejected',
       at: now,
-      audit: sandboxConsonantAuditRef.current
+      audit: sandboxModeRef.current.getState().consonantJudgeAudit
     });
   }, [deriveSandboxReplyGateState]);
 
@@ -2023,6 +1987,7 @@ export default function App() {
         return false;
       }
       let consonantParsed = stripped;
+      const consumeAt = Date.now();
       if (gate.replyGateType === 'consonant_guess' || gate.replyGateType === 'consonant_answer') {
         const currentPrompt = sandboxState.prompt.current;
         const node = sandboxModeRef.current.getCurrentNode();
@@ -2032,7 +1997,24 @@ export default function App() {
             node: node && node.id === currentPrompt.wordKey ? node : undefined,
             activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
           });
-          sandboxConsonantAuditRef.current = pipeline.audit;
+          sandboxModeRef.current.setConsonantJudgeAudit?.({
+            rawInput: pipeline.audit.parse.raw,
+            normalizedInput: pipeline.audit.parse.normalized,
+            parseOk: pipeline.audit.parse.ok,
+            parseKind: pipeline.audit.parse.kind,
+            matchedAlias: pipeline.audit.parse.matchedAlias,
+            expectedConsonant: pipeline.audit.judge.expectedConsonant,
+            acceptedCandidates: pipeline.audit.judge.acceptedCandidates,
+            compareInput: pipeline.audit.judge.compareInput,
+            compareMode: pipeline.audit.judge.compareMode,
+            judgeResult: pipeline.result,
+            resultReason: pipeline.audit.judge.resultReason,
+            sourcePromptId: currentPrompt.promptId,
+            sourceQuestionId: node?.id ?? currentPrompt.wordKey,
+            sourceWordKey: currentPrompt.wordKey,
+            gateType: gate.replyGateType,
+            consumedAt: consumeAt
+          });
           consonantParsed = pipeline.parsed;
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result !== 'correct') {
@@ -2041,24 +2023,24 @@ export default function App() {
             return false;
           }
         } else {
-          sandboxConsonantAuditRef.current = {
-            parse: {
-              raw,
-              normalized: stripped,
-              kind: 'no_prompt',
-              ok: false,
-              blockReason: 'missing_consonant_prompt',
-              allowedKinds: ['thai_char', 'roman_alias', 'bopomofo_alias', 'question_alias'],
-              matchedAlias: ''
-            },
-            judge: {
-              expectedConsonant: '',
-              acceptedCandidates: [],
-              compareInput: stripped,
-              compareMode: 'normalized_alias_membership',
-              resultReason: 'missing_consonant_prompt'
-            }
-          };
+          sandboxModeRef.current.setConsonantJudgeAudit?.({
+            rawInput: raw,
+            normalizedInput: stripped,
+            parseOk: false,
+            parseKind: 'no_prompt',
+            matchedAlias: '',
+            expectedConsonant: '',
+            acceptedCandidates: [],
+            compareInput: stripped,
+            compareMode: 'normalized_alias_membership',
+            judgeResult: 'wrong_format',
+            resultReason: 'missing_consonant_prompt',
+            sourcePromptId: '',
+            sourceQuestionId: node?.id ?? '',
+            sourceWordKey: '',
+            gateType: gate.replyGateType,
+            consumedAt: consumeAt
+          });
         }
       } else if (!stripped) {
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate });
@@ -2137,7 +2119,7 @@ export default function App() {
 
     if (!(payload.source === 'sandboxPromptCoordinator' || payload.source === 'autoPinFreeze')) {
       const sandboxState = sandboxModeRef.current.getState();
-      const blockedReason = sandboxState.scheduler.phase === 'awaitingAnswer' ? 'phaseBusy' : 'writerNotAllowed';
+      const blockedReason = sandboxState.replyGate?.armed ? 'replyGateBusy' : 'writerNotAllowed';
       sandboxModeRef.current.commitPinnedWriter({ source: payload.source, writerBlocked: true, blockedReason });
       return false;
     }
@@ -3588,6 +3570,7 @@ export default function App() {
         questionId: promptQuestionId || undefined,
         consonant: sandboxState.prompt.current?.consonant
       });
+      const judgeAudit = sandboxState.consonantJudgeAudit;
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
@@ -3688,7 +3671,16 @@ export default function App() {
           waitReply1SourceMessageBound: sandboxState.flow.step === 'WAIT_REPLY_1'
             ? Boolean(sandboxState.replyGate.sourceMessageId)
             : true,
-          answerGateMirrorConsistent: sandboxState.answerGate.waiting === Boolean(sandboxState.replyGate.armed && sandboxState.replyGate.gateType !== 'none')
+          answerGateMirrorConsistent: sandboxState.answerGate.waiting === Boolean(sandboxState.replyGate.armed && sandboxState.replyGate.gateType !== 'none'),
+          judgeCandidatesPresentWhenCorrect: sandboxState.consonantJudgeAudit?.judgeResult !== 'correct'
+            || (sandboxState.consonantJudgeAudit?.acceptedCandidates?.length ?? 0) > 0,
+          parseJudgeShapeConsistentWhenParseOk: !sandboxState.consonantJudgeAudit?.parseOk
+            || Boolean(
+              sandboxState.consonantJudgeAudit?.parseKind
+              && sandboxState.consonantJudgeAudit?.normalizedInput
+              && sandboxState.consonantJudgeAudit?.compareInput
+              && sandboxState.consonantJudgeAudit?.expectedConsonant
+            )
         },
         answer: {
           submitInFlight: sandboxState.answer.submitInFlight,
@@ -3710,6 +3702,7 @@ export default function App() {
         schedulerPhase: mapSandboxSchedulerPhase(sandboxState.scheduler.phase),
         scheduler: {
           phase: sandboxState.scheduler.phase,
+          authority: 'non_authoritative_debug_only',
           flowStep: sandboxState.sandboxFlow.step,
           stepStartedAt: sandboxState.sandboxFlow.stepStartedAt,
           blockedReason: sandboxState.scheduler.blockedReason || '-'
@@ -3802,20 +3795,26 @@ export default function App() {
         judge: {
           lastInput: sandboxState.consonant.judge.lastInput || '-',
           lastResult: sandboxState.consonant.judge.lastResult,
-          expectedConsonant: sandboxConsonantAuditRef.current.judge.expectedConsonant,
-          acceptedCandidates: sandboxConsonantAuditRef.current.judge.acceptedCandidates,
-          compareInput: sandboxConsonantAuditRef.current.judge.compareInput,
-          compareMode: sandboxConsonantAuditRef.current.judge.compareMode,
-          resultReason: sandboxConsonantAuditRef.current.judge.resultReason
+          expectedConsonant: judgeAudit.expectedConsonant,
+          acceptedCandidates: judgeAudit.acceptedCandidates,
+          compareInput: judgeAudit.compareInput,
+          compareMode: judgeAudit.compareMode,
+          resultReason: judgeAudit.resultReason,
+          judgeResult: judgeAudit.judgeResult,
+          consumedAt: judgeAudit.consumedAt,
+          sourcePromptId: judgeAudit.sourcePromptId,
+          sourceQuestionId: judgeAudit.sourceQuestionId,
+          sourceWordKey: judgeAudit.sourceWordKey,
+          gateType: judgeAudit.gateType
         },
         parse: {
-          raw: sandboxConsonantAuditRef.current.parse.raw,
-          normalized: sandboxConsonantAuditRef.current.parse.normalized,
-          kind: sandboxConsonantAuditRef.current.parse.kind,
-          ok: sandboxConsonantAuditRef.current.parse.ok,
-          blockReason: sandboxConsonantAuditRef.current.parse.blockReason,
-          allowedKinds: sandboxConsonantAuditRef.current.parse.allowedKinds,
-          matchedAlias: sandboxConsonantAuditRef.current.parse.matchedAlias
+          raw: judgeAudit.rawInput,
+          normalized: judgeAudit.normalizedInput,
+          kind: judgeAudit.parseKind,
+          ok: judgeAudit.parseOk,
+          blockReason: judgeAudit.resultReason,
+          allowedKinds: ['thai_char', 'roman_alias', 'bopomofo_alias', 'question_alias'],
+          matchedAlias: judgeAudit.matchedAlias
         },
         ghost: { gate: { lastReason: sandboxState.ghostGate?.lastReason ?? '-' } },
         advance: {
@@ -3829,8 +3828,9 @@ export default function App() {
           answerSource: promptQuestion ? 'shared_consonant_question_bank' : 'runtime_prompt_only',
           classicQuestionId: promptQuestion?.questionId ?? '-',
           sharedFromClassic: Boolean(promptQuestion),
-          acceptedAnswers: promptQuestion?.acceptedAnswers ?? [],
-          aliases: promptQuestion?.aliases ?? []
+          displayAcceptedAnswers: promptQuestion?.acceptedAnswers ?? [],
+          displayAliases: promptQuestion?.aliases ?? [],
+          runtimeAcceptedCandidates: promptAcceptedCandidates
         },
         answerAudit: {
           source: promptQuestion ? 'shared_consonant_question_bank' : 'runtime_prompt_only',
@@ -5910,8 +5910,16 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {
-      sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done');
-      setSandboxRevealTick(Date.now());
+      const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
+      const postRevealChatState = sandboxState.sandboxFlow?.postRevealChatState ?? 'idle';
+      if (postRevealChatState !== 'started') {
+        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'started', nextQuestionReady: false, nextQuestionEmitted: false });
+        setSandboxRevealTick(Date.now());
+      } else if (!hasReplyGate) {
+        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', nextQuestionReady: true, nextQuestionEmitted: false });
+        sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done');
+        setSandboxRevealTick(Date.now());
+      }
     }
 
     if (sandboxState.flow.step === 'POSSESSION_AUTOFILL') {
@@ -6085,9 +6093,24 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'ADVANCE_NEXT') {
+      const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
+      if (hasReplyGate) {
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'reply_gate_still_armed' });
+        return () => {
+          clearSandboxRevealDoneTimer();
+        };
+      }
       sandboxWaveRunningRef.current = false;
       const beforeAdvance = sandboxModeRef.current.getState().flow.questionIndex;
       sandboxModeRef.current.forceAdvanceNode();
+      sandboxModeRef.current.setSandboxFlow({
+        postRevealChatState: 'idle',
+        nextQuestionReady: false,
+        nextQuestionEmitted: true,
+        nextQuestionFromIndex: beforeAdvance,
+        nextQuestionToIndex: beforeAdvance + 1,
+        nextQuestionBlockedReason: ''
+      });
       if (beforeAdvance >= 10) {
         sandboxModeRef.current.setSandboxFlow({ autoplayNightStatus: 'completed' });
       }
@@ -6643,43 +6666,19 @@ export default function App() {
                     <button type="button" onClick={handleDebugResetFear}>Reset Fear</button>
                   </div>
                   <div className="debug-route-meta">
-                    <div><strong>CORE FLOW STATE – TRUSTED</strong></div>
+                    <div><strong>AUTHORITATIVE FLOW</strong></div>
                     <div>flow.step: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.step ?? '-'}</div>
                     <div>flow.questionIndex: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.questionIndex ?? '-'}</div>
                     <div>flow.stepStartedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.flow?.stepStartedAt ?? '-'}</div>
-                    <div>scheduler.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
-                    <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
+                    <div>currentPrompt.id / questionId / wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.id ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.classicQuestionId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
+                    <div>replyGate.gateType/armed/canReply: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.canReply ?? false)}</div>
+                    <div>postRevealChat.status: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealChatState ?? '-'}</div>
+                    <div>nextQuestion.ready/emitted: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionReady ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionEmitted ?? false)}</div>
+                    <div>nextQuestion.from-&gt;to: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionFromIndex ?? '-'} {'->'} {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionToIndex ?? '-'}</div>
+                    <div>nextQuestion.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionBlockedReason ?? '-'}</div>
                     <div>introGate.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.startedAt ?? 0}</div>
                     <div>introGate.minDurationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.minDurationMs ?? 0}</div>
                     <div>introGate.passed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.passed ?? false)}</div>
-                    <div>sandbox.replyGate.gateType/armed: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
-                    <div>sandbox.replyGate.gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.gateType ?? '-'}</div>
-                    <div>sandbox.replyGate.armed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.armed ?? false)}</div>
-                    <div>sandbox.replyGate.canReply: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.canReply ?? false)}</div>
-                    <div>sandbox.replyGate.targetPlayerId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.targetPlayerId ?? '-'}</div>
-                    <div>sandbox.replyGate.sourceMessageId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.replyGate?.sourceMessageId ?? '-'}</div>
-                    <div>sharedConsonantEngine.parserJudgeSSOT: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.parserJudgeSSOT ?? '-'}</div>
-                    <div>sharedConsonantEngine.classic/sandbox: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.classicUsesShared ?? false)} / {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.sandboxUsesShared ?? false)}</div>
-                    <div>sharedConsonantEngine.waitReply1GateArmed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.waitReply1GateArmed ?? false)}</div>
-                    <div>sharedConsonantEngine.waitReply1SourceMessageBound: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.waitReply1SourceMessageBound ?? false)}</div>
-                    <div>answerGate(replyGate mirror consistent): {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sharedConsonantEngine?.answerGateMirrorConsistent ?? false)}</div>
-                    <div>sandbox.lastReplyEval.messageId/gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.messageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.gateType ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.consumed/reason: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.consumed ?? false)} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.reason ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.raw/normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.rawInput ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.normalizedInput ?? '-'}</div>
-                    <div>sandbox.lastReplyEval.extractedAnswer: {(window.__CHAT_DEBUG__ as any)?.sandbox?.lastReplyEval?.extractedAnswer ?? '-'}</div>
-                    <div>sandbox.prompt.current.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.kind ?? '-'}</div>
-                    <div>sandbox.prompt.current.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.id ?? '-'}</div>
-                    <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
-                    <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
-                    <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
-                    <div>currentPrompt.answerSource: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.answerSource ?? '-'}</div>
-                    <div>currentPrompt.classicQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.classicQuestionId ?? '-'}</div>
-                    <div>currentPrompt.sharedFromClassic: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.sharedFromClassic ?? false)}</div>
-                    <div>currentPrompt.acceptedAnswers: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.acceptedAnswers ?? [])}</div>
-                    <div>currentPrompt.aliases: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.aliases ?? [])}</div>
-                    <div>sandbox.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.result ?? '-'}</div>
-                    <div>word.reveal.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.active ?? false)}</div>
-                    <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>FLOW / GATE DIAGNOSTICS</strong></div>
@@ -6698,30 +6697,30 @@ export default function App() {
                     <div>audit.transitions (source: state.audit.transitions | fallback): {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.transitions ?? [])}</div>
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
-                    <div><strong>PROMPT / JUDGE / REVEAL</strong></div>
+                    <div><strong>AUTHORITATIVE JUDGE AUDIT</strong></div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
-                    <div>word.reveal.base/rest/restLen: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.restLen ?? '-'}</div>
-                    <div>word.reveal.splitter: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.splitter ?? '-'}</div>
-                    <div>word.reveal.position.xPct/yPct: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.xPct ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.position?.yPct ?? '-'}</div>
-                    <div>word.reveal.safeRect: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.safeRect ?? {})}</div>
-                    <div>word.reveal.consonantFromPrompt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.consonantFromPrompt ?? '-'}</div>
-                    <div>word.reveal.durationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.durationMs ?? '-'}</div>
-                    <div>consonant.judge.lastInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastInput ?? '-'}</div>
-                    <div>consonant.judge.lastResult: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
                     <div>parse.raw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.raw ?? '-'}</div>
                     <div>parse.normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.normalized ?? '-'}</div>
                     <div>parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.kind ?? '-'}</div>
                     <div>parse.ok: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.ok ?? false)}</div>
-                    <div>parse.blockReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.blockReason ?? '-'}</div>
-                    <div>parse.allowedKinds: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.allowedKinds ?? [])}</div>
                     <div>parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.matchedAlias ?? '-'}</div>
                     <div>judge.expectedConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.expectedConsonant ?? '-'}</div>
                     <div>judge.acceptedCandidates: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.acceptedCandidates ?? [])}</div>
                     <div>judge.compareInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.compareInput ?? '-'}</div>
                     <div>judge.compareMode: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.compareMode ?? '-'}</div>
+                    <div>judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.judgeResult ?? '-'}</div>
                     <div>judge.resultReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.resultReason ?? '-'}</div>
-                    <div>sandbox.judge.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.blockedReason ?? '-'}</div>
-                    <div>sandbox.prompt.next.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.promptNext?.id ?? '-'}</div>
+                    <div>judge.gateType: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.gateType ?? '-'}</div>
+                    <div>judge.sourcePromptId/questionId/wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.sourcePromptId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.sourceQuestionId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.sourceWordKey ?? '-'}</div>
+                    <div>judge.consumedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.consumedAt ?? 0}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>DISPLAY METADATA (PROMPT ONLY, NOT AUTHORITATIVE)</strong></div>
+                    <div>currentPrompt.answerSource: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.answerSource ?? '-'}</div>
+                    <div>currentPrompt.classicQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.classicQuestionId ?? '-'}</div>
+                    <div>currentPrompt.displayAcceptedAnswers: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.displayAcceptedAnswers ?? [])}</div>
+                    <div>currentPrompt.displayAliases: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.displayAliases ?? [])}</div>
+                    <div>currentPrompt.runtimeAcceptedCandidates: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.runtimeAcceptedCandidates ?? [])}</div>
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>LEGACY COMPATIBILITY</strong></div>
@@ -6730,6 +6729,12 @@ export default function App() {
                     <div>answerGate.waiting: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateWaiting ?? false)}</div>
                     <div>answerGate.askedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gateAskedAt ?? '-'}</div>
                     <div>answerGate.pausedChat: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.answer?.gatePausedChat ?? false)}</div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>SCHEDULER / AUXILIARY</strong></div>
+                    <div>scheduler.phase (non-authoritative): {(window.__CHAT_DEBUG__ as any)?.sandbox?.schedulerPhase ?? '-'}</div>
+                    <div>scheduler.authority: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.authority ?? '-'}</div>
+                    <div>scheduler.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.scheduler?.blockedReason ?? '-'}</div>
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>VISUAL STATE – NOT FLOW AUTHORITY</strong></div>

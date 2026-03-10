@@ -899,3 +899,7 @@
 - [sandbox][audit-only] 完成「bopomofo alias / debug state / scheduler phase 不一致」全鏈路盤點，輸出 authoritative state、實際資料流、debug mapping 差異、legacy compatibility 角色分層與修補路線圖。詳見 `docs/sandbox-audit-bopomofo-debug-scheduler.md`。
 - [sandbox][audit-only] 確認 `ㄖ` 可答對屬 shared consonant engine alias 展開（非 sandbox 本地補丁），`acceptedAnswers`（display）與 runtime accepted candidates（judge）不是同一來源。
 - [sandbox][audit-only] 確認 `scheduler.phase` 在現行 sandbox flow 無 active writer，停留 `preheat` 屬 debug 誤導風險，主流程仍由 `flow.step` 驅動。
+- 2026-03-10 sandbox_story integration fix: 建立 authoritative `consonantJudgeAudit` state（SSOT）取代 debug ref 混源；`consumePlayerReply` consonant gate 立即寫入 parse/judge/source/gate/timestamp。
+- 2026-03-10 sandbox_story integration fix: debug panel 拆分 Display metadata 與 runtime accepted candidates；`displayAcceptedAnswers/displayAliases` 明確標示 presentation only。
+- 2026-03-10 sandbox_story integration fix: `POST_REVEAL_CHAT -> ADVANCE_NEXT` 收斂為單一路徑，新增 `postRevealChatState`、`nextQuestionReady/nextQuestionEmitted/nextQuestionBlockedReason`，避免第一題後 ADVANCE_NEXT 無人消費或被殘留 gate 阻塞。
+- 2026-03-10 sandbox_story integration fix: `scheduler.phase` 明確標示 non-authoritative debug 欄位，不參與正式 next-question emit 判斷。
