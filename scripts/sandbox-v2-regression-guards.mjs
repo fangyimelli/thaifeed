@@ -169,8 +169,8 @@ if (!app.includes("setFlowStep('REVEAL_WORD'")) { throw new Error('REVEAL_WORD t
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT'")) { throw new Error('POST_REVEAL_CHAT transition missing'); }
 if (!app.includes("postRevealChatState: 'started'")) { throw new Error('POST_REVEAL_CHAT should write started boundary'); }
 if (!app.includes("postRevealChatState: 'done'")) { throw new Error('POST_REVEAL_CHAT should write done boundary before advance'); }
-if (!app.includes("const gate = (!derivedGate.replyGateType && waitReplyStep)")) {
-  throw new Error('player input eval must not keep lastReplyEval.gateType as none during wait-reply');
+if (!app.includes('const expectedGateType = waitReplyStep') || !app.includes('const gate = waitReplyStep')) {
+  throw new Error('player input eval must derive gate from authoritative wait-reply flow step');
 }
 if (!adapter.includes('normalizeInput(raw)') || !adapter.includes('parseThaiConsonant(normalized, input)') || !adapter.includes('judgeConsonantAnswer(parsed, input)')) {
   throw new Error('sandbox consonant flow must use classic normalize/parse/judge pipeline');
@@ -275,4 +275,29 @@ if (!app.includes("blockedReason: 'missing_current_prompt'") || !app.includes("b
 }
 if (!app.includes("recordSandboxDebugAction('force_ghost_event'")) {
   throw new Error('Force Ghost Event must write debug action audit');
+}
+
+if (!app.includes('const readFullNightAuthoritativeState = () =>')) {
+  throw new Error('Run Full Night Test must resolve second-question result from authoritative nextQuestion state');
+}
+if (!app.includes("if (failedStep === 'second_question' && authoritative.emitted)")) {
+  throw new Error('Run Full Night Test must not fail second_question after authoritative emit');
+}
+if (!app.includes("secondQuestionShown: authoritative.emitted")) {
+  throw new Error('Run Full Night Test failed result must expose authoritative secondQuestionShown state');
+}
+if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted")) {
+  throw new Error('Run Full Night Test must re-converge on authoritative emit before failing second_question');
+}
+if (!app.includes('const expectedGateType = waitReplyStep')) {
+  throw new Error('consumePlayerReply must derive expected gate type from authoritative flow step');
+}
+if (!app.includes('replyGateType: expectedGateType')) {
+  throw new Error('consumePlayerReply must override stale gateType during wait-reply steps');
+}
+if (!app.includes("expectedConsonant: pipeline.audit.judge.expectedConsonant") || !app.includes("acceptedCandidates: pipeline.audit.judge.acceptedCandidates") || !app.includes("compareMode: pipeline.audit.judge.compareMode") || !app.includes("resultReason: pipeline.audit.judge.resultReason") || !app.includes("sourcePromptId: currentPrompt.promptId") || !app.includes("sourceQuestionId: node?.id ?? currentPrompt.wordKey") || !app.includes("sourceWordKey: currentPrompt.wordKey") || !app.includes("consumedAt: consumeAt")) {
+  throw new Error('consumePlayerReply must persist full authoritative judge audit fields for normal/auto answers');
+}
+if (!app.includes("rawInput: '[debug-force-correct]'") || !app.includes("compareMode: 'debug_override_exact'") || !app.includes("resultReason: 'debug_override_forced_correct'") || !app.includes("consumedAt: now")) {
+  throw new Error('Force Correct Now must persist complete authoritative judge audit fields');
 }
