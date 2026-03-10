@@ -1,3 +1,10 @@
+## 2026-03-10 sandbox post-reveal SSOT convergence + second question emit fix
+
+- 修正 `ADVANCE_NEXT` completion source 分裂：新增單一 helper 收斂 `postRevealChatState`、`audit.transitions(reason=post_reveal_chat_done)`、`backlogTechMessages.length===0`，避免已完成卻被判 `post_reveal_chat_not_done`。
+- `ADVANCE_NEXT` emit 下一題後，正式同步切換 `currentPrompt` 與 flow step（Q1->`TAG_PLAYER_2_PRONOUNCE`，Q2->`TAG_PLAYER_3_MEANING`），防止已 emit 但畫面/題目仍停留上一題。
+- `Run Full Night Test` 第二題成功改為 authoritative emit + prompt 對齊（`prompt.current.wordKey === nextQuestionToQuestionId`），不再僅依 stale visual state。
+- 補 regression guards：post-reveal 完成 SSOT、第二題 emit 後 prompt 切換、Full Night Test second-question authoritative 判定、judge audit 完整寫入（正常/自動/force）。
+
 ## 2026-03-10 sandbox full-night-test authoritative submit/consume fix
 
 - `Run Full Night Test` 第一題自動答題改為強制收斂至 authoritative reply consume/judge path：提交後必須觀察 `WAIT_REPLY_1` 退出或 gate consumed，再確認 `parse.raw` 已寫入且 `parse.kind != not_evaluated`。

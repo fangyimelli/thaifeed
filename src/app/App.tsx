@@ -5570,9 +5570,13 @@ export default function App() {
     const readFullNightAuthoritativeState = () => {
       const st = sandboxModeRef.current.getState();
       const emitted = Boolean(st.sandboxFlow?.nextQuestionEmitted && st.sandboxFlow?.nextQuestionToQuestionId);
+      const secondPromptAligned = emitted
+        && Boolean(st.prompt.current?.kind === 'consonant')
+        && st.prompt.current?.wordKey === st.sandboxFlow?.nextQuestionToQuestionId;
       const judgeAudit = st.consonantJudgeAudit;
       return {
         emitted,
+        secondPromptAligned,
         toQuestionId: st.sandboxFlow?.nextQuestionToQuestionId || '-',
         blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted',
         flowStep: st.flow.step,
@@ -5596,7 +5600,7 @@ export default function App() {
         currentStep: failedStep,
         failedStep,
         failureReason,
-        secondQuestionShown: authoritative.emitted,
+        secondQuestionShown: authoritative.secondPromptAligned,
         toQuestionId: authoritative.toQuestionId
       });
       recordSandboxDebugAction('run_full_night_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
@@ -5747,7 +5751,12 @@ export default function App() {
 
     const secondQuestionShown = await waitFor(() => {
       const st = sandboxModeRef.current.getState();
-      return Boolean(st.sandboxFlow.nextQuestionEmitted && st.sandboxFlow.nextQuestionToQuestionId);
+      return Boolean(
+        st.sandboxFlow.nextQuestionEmitted
+        && st.sandboxFlow.nextQuestionToQuestionId
+        && st.prompt.current?.kind === 'consonant'
+        && st.prompt.current.wordKey === st.sandboxFlow.nextQuestionToQuestionId
+      );
     }, 15_000);
     if (!secondQuestionShown) {
       await waitFor(() => readFullNightAuthoritativeState().emitted, 1_500, 100);
@@ -6070,10 +6079,19 @@ export default function App() {
       sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
       setSandboxRevealTick(Date.now());
     }
+    const hasReplyGateArmed = (state: any) => Boolean(state.replyGate?.armed && state.replyGate?.gateType !== 'none');
+    const hasPostRevealCompletionEvidence = (state: any) => {
+      const postRevealChatState = state.sandboxFlow?.postRevealChatState ?? 'idle';
+      if (postRevealChatState === 'done') return true;
+      const backlogCleared = (state.sandboxFlow?.backlogTechMessages?.length ?? 0) === 0;
+      const advancedByPostReveal = Boolean((state.audit?.transitions ?? []).some((item: any) => item?.to === 'ADVANCE_NEXT' && item?.reason === 'post_reveal_chat_done'));
+      return backlogCleared && advancedByPostReveal;
+    };
+
     if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {
-      const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
-      const postRevealChatState = sandboxState.sandboxFlow?.postRevealChatState ?? 'idle';
-      if (postRevealChatState !== 'started') {
+      const hasReplyGate = hasReplyGateArmed(sandboxState);
+      const postRevealDone = hasPostRevealCompletionEvidence(sandboxState);
+      if (!postRevealDone && (sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') !== 'started') {
         sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'started', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'post_reveal_chat_in_progress', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
         setSandboxRevealTick(Date.now());
       } else if (!hasReplyGate) {
@@ -6254,8 +6272,8 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'ADVANCE_NEXT') {
-      const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
-      const postRevealDone = sandboxState.sandboxFlow?.postRevealChatState === 'done';
+      const hasReplyGate = hasReplyGateArmed(sandboxState);
+      const postRevealDone = hasPostRevealCompletionEvidence(sandboxState);
       if (!postRevealDone && !hasReplyGate && (sandboxState.reveal.phase === 'done' || !sandboxState.reveal.visible)) {
         sandboxModeRef.current.setSandboxFlow({
           postRevealChatState: 'done',
@@ -6268,7 +6286,7 @@ export default function App() {
         });
       }
       const refreshedState = sandboxModeRef.current.getState();
-      const refreshedPostRevealDone = refreshedState.sandboxFlow?.postRevealChatState === 'done';
+      const refreshedPostRevealDone = hasPostRevealCompletionEvidence(refreshedState);
       const beforeAdvance = refreshedState.flow.questionIndex;
       const fromNode = sandboxModeRef.current.getCurrentNode();
       const fromQuestionId = fromNode?.id ?? '';
@@ -6308,14 +6326,47 @@ export default function App() {
         };
       }
       sandboxWaveRunningRef.current = false;
-      sandboxModeRef.current.forceAdvanceNode();
+      const advanced = sandboxModeRef.current.forceAdvanceNode();
+      if (!advanced) {
+        sandboxModeRef.current.setSandboxFlow({
+          nextQuestionReady: false,
+          nextQuestionEmitted: false,
+          nextQuestionFromIndex: beforeAdvance,
+          nextQuestionToIndex: -1,
+          nextQuestionFromQuestionId: fromQuestionId,
+          nextQuestionToQuestionId: '',
+          nextQuestionBlockedReason: 'end_of_nodes',
+          nextQuestionDecidedAt: decidedAt,
+          nextQuestionEmittedAt: 0,
+          nextQuestionConsumer: 'advance_next_effect'
+        });
+        return () => {
+          clearSandboxRevealDoneTimer();
+        };
+      }
+      const afterState = sandboxModeRef.current.getState();
       const afterNode = sandboxModeRef.current.getCurrentNode();
+      if (afterNode) {
+        sandboxModeRef.current.setCurrentPrompt({
+          kind: 'consonant',
+          promptId: crypto.randomUUID(),
+          consonant: afterNode.char,
+          wordKey: afterNode.id,
+          pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
+          correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
+          unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
+        });
+      }
+      const nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE' : (beforeAdvance === 1 ? 'TAG_PLAYER_3_MEANING' : afterState.flow.step);
+      if (nextFlowStep !== afterState.flow.step) {
+        sandboxModeRef.current.setFlowStep(nextFlowStep, 'next_question_emitted');
+      }
       sandboxModeRef.current.setSandboxFlow({
         postRevealChatState: 'idle',
         nextQuestionReady: true,
         nextQuestionEmitted: true,
         nextQuestionFromIndex: beforeAdvance,
-        nextQuestionToIndex: beforeAdvance + 1,
+        nextQuestionToIndex: afterState.flow.questionIndex,
         nextQuestionFromQuestionId: fromQuestionId,
         nextQuestionToQuestionId: afterNode?.id ?? '',
         nextQuestionBlockedReason: 'emitted',

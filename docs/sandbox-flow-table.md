@@ -1,3 +1,7 @@
+| `ADVANCE_NEXT` post-reveal completion source | `postRevealChatState === 'done'` 單值判斷，與 transitions/backlog 可能分裂 | `hasPostRevealCompletionEvidence`：`postRevealChatState==='done'` **或** (`backlogTechMessages.length===0` 且 transitions 含 `post_reveal_chat_done`) | 已進 `ADVANCE_NEXT` 且 postReveal idle 時，不可再誤判 `post_reveal_chat_not_done`。 |
+| `ADVANCE_NEXT` second-question shown 判定 | 可能只 emit `nextQuestion*`，未保證 prompt 切換 | emit 後同步 `setCurrentPrompt(nextQuestion)` + flow step 跳轉（Q1→`TAG_PLAYER_2_PRONOUNCE`） | 避免正式已切題但 UI/影片仍停留前一題來源。 |
+| `Run Full Night Test` `secondQuestionShown` source | 只看 `nextQuestionEmitted/toQuestionId` | `nextQuestionEmitted` + `nextQuestionToQuestionId` + `prompt.current.wordKey` 對齊 | 避免 authoritative emit 成功但 visual/stale state 誤判 failed。 |
+
 | `Run Full Night Test` second question assert | `flow.questionIndex >= 1 && nextQuestionEmitted && toQuestionId` | `nextQuestionEmitted && toQuestionId`（authoritative） | `questionIndex` 可能暫時未收斂，曾造成 emitted=true 仍誤判失敗。 |
 | `Run Full Night Test` auto-answer consume/judge convergence | autoAnswer 送出後直接等 reveal/post-reveal | 先等 authoritative consume（離開 `WAIT_REPLY_1` 或 gateConsumed）+ parse/judge 完整（`parse.raw`、`parse.kind!=not_evaluated`、`parse.ok=true`）再進 reveal 檢查 | 避免只顯示答案未正式提交/consume 就誤判後段失敗。 |
 | `Run Full Night Test` fail write timing | timeout 立即寫 `failedStep=second_question` | fail 前二次收斂 authoritative emit；若已 emit 直接 pass | 避免 stale timeout 與正式 emit 競態。 |
