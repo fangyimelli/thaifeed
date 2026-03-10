@@ -59,6 +59,7 @@ type Props = {
     mismatch: boolean;
     durationMs: number;
     wordText: string;
+    onRenderStateChange?: (state: { rendered: boolean; blockedReason: string }) => void;
   };
 };
 
@@ -1960,6 +1961,7 @@ export default function SceneView({
             mismatch={wordReveal?.mismatch}
             durationMs={wordReveal?.durationMs}
             wordText={wordReveal?.wordText}
+            onRenderStateChange={wordReveal?.onRenderStateChange}
           />
           <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
         </div>

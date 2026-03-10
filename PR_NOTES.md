@@ -176,3 +176,13 @@
 - 新增 guard：第二題判定必須包含 `flow.step>=WAIT_REPLY_2` 與 `replyGate consonant_answer+armed` 條件。
 - 新增 guard：render sync 需支援 `authoritative_flow_override`，避免 render observer 反向覆蓋 authoritative 成功。
 - 新增 guard：failed/passed `secondQuestionShown` 必須回填 authoritative 布林值。
+
+
+## 2026-03-10 sandbox reveal visible render guard
+
+- 修正 `ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT` 只看 flow transition 的假完成：`reveal_word_done` 現在必須有 reveal 真實渲染證據。
+- sandbox reveal SSOT 補齊欄位：`visible/wordKey/text/base/rest/startedAt/finishedAt/rendered/blockedReason/mode/durationMs`。
+- `REVEAL_WORD` 初始化 reveal 後不再立即視為完成；需等 `reveal.phase=done` 且 `rendered=true` 才可轉 `POST_REVEAL_CHAT`。
+- 新增最短可見時間常數：`SANDBOX_REVEAL_VISIBLE_MIN_MS=2500`。
+- debug panel 與 `window.__CHAT_DEBUG__.sandbox.word.reveal` 新增 reveal 可見性稽核欄位。
+- regression guard 新增 reveal 可見性與 done gate 檢查，避免 Q1/Q2 只過 flow 不過畫面。

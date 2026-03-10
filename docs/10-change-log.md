@@ -968,3 +968,11 @@
 - [sandbox] `ForceCorrect / ForceResolveQna / ClearReplyUi / ForceReveal / ForcePlayPronounce / ForceWave / Trigger Random Ghost` 全數補齊 click 結果追蹤紀錄。
 - [debug] 新增 sandbox debug action audit 欄位（lastClickedAt/handlerInvoked/effectApplied/blockedReason/targetState/lastResult），避免「按了沒用但無原因」黑盒狀態。
 - [classic] 無改動。
+
+## 2026-03-10 sandbox reveal visible render fix
+
+- [sandbox] `REVEAL_WORD` 改為 authoritative reveal pipeline：建立 `reveal.startedAt/finishedAt/rendered/blockedReason/text/base/rest`，並以 state 驅動是否可進入 `POST_REVEAL_CHAT`。
+- [sandbox] 新增可視時長下限 `SANDBOX_REVEAL_VISIBLE_MIN_MS=2500`，避免 reveal 被瞬間覆蓋看不到。
+- [sandbox] guard：`reveal_word_done` 只允許在 `reveal.phase=done` 且 `reveal.rendered=true`（或 `missing_word_text` 明確阻塞原因）時觸發。
+- [sandbox][debug] 新增 reveal observability：`visible/wordKey/text/base/rest/startedAt/finishedAt/rendered/blockedReason`。
+- [classic] 無變更。

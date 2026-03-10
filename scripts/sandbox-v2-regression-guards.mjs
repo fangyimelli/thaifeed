@@ -424,3 +424,20 @@ if (!app.includes('const forceVisiblePrompt = promptVisuallyReady && (isAnswerab
 if (!app.includes("scene_not_synced_warning")) {
   throw new Error('renderSync scene_not_synced should be warning when authoritative prompt is already visible');
 }
+
+
+if (!app.includes('const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
+  throw new Error('reveal duration guard missing minimum visible duration constant');
+}
+if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes("sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text')")) {
+  throw new Error('REVEAL_WORD must gate reveal_word_done on authoritative rendered evidence');
+}
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done')")) {
+  throw new Error('reveal_word_done transition missing');
+}
+if (!app.includes("word.reveal.rendered") || !app.includes("word.reveal.blockedReason") || !app.includes("word.reveal.startedAt") || !app.includes("word.reveal.finishedAt")) {
+  throw new Error('debug observability for reveal.rendered/blockedReason/startedAt/finishedAt is incomplete');
+}
+if (!mode.includes("rendered: false") || !mode.includes("startedAt: 0") || !mode.includes("finishedAt: 0") || !mode.includes("blockedReason: ''")) {
+  throw new Error('sandbox reveal state schema must include rendered/start/finish/blockedReason fields');
+}
