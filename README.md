@@ -1,3 +1,9 @@
+- [sandbox][warmup gate authority] `WAIT_WARMUP_REPLY` 進入時強制建立正式 `replyGate`（`gateType=warmup_tag`, `armed=true`, `canReply=true`, `targetPlayerId/sourceMessageId/sourceType/consumePolicy`），並加入 step guard 自動修復缺欄位 gate。
+- [sandbox][input routing] wait-reply step 期間玩家輸入不再 fallback 到 free chat；submit 失敗仍保留在正式 evaluator 路徑，`lastReplyEval` 不再被覆寫成 `consume_fallback_to_free_chat`。
+- [sandbox][legacy mirror] `answerGate` 改由 `replyGate` 同步鏡像（compatibility only），避免 `answerGate.waiting=true` 但 `replyGate` 空殼的雙軌矛盾。
+
+- [sandbox][Removed/Deprecated Log] 移除 `WAIT_WARMUP_REPLY` 期間 free-chat fallback 兼容路徑，並淘汰 warmup gate 舊命名 `warmup_reply/warmup_chat_reply`（正式名稱統一 `warmup_tag`）。
+
 - [sandbox][bootstrap authority] `sandbox_story` 正式 bootstrap 改為 `ensureBootstrapState() -> bootstrapRuntime()` 單一路徑：mode entry / guard recovery / clearReplyUi re-init 全部統一路徑，不再多點直接寫 flow/introGate。
 - [sandbox][state mount] v2 initial state 直接以 `PREHEAT_CHAT + scheduler.preheat + introGate.startedAt>0/minDurationMs>0` 建立可用 core state，避免 mode 已切入但 CORE FLOW STATE – TRUSTED 全空。
 - [sandbox][visual alignment] `ui.consonantBubble.visible` 增加 core bootstrap 前置條件（flow.step/scheduler.phase/introGate.startedAt），防止 visual state 先亮造成已啟動假象。

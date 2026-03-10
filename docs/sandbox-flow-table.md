@@ -54,7 +54,7 @@
 |---|---|---|---|
 | 1 | PREHEAT_CHAT | introGate.startedAt + scheduler.phase=preheat | 只允許暖場聊天，不出題 |
 | 2 | VIP_TAG_PLAYER | no auto-advance without emission | 由 flow controller 發出 VIP tag |
-| 3 | WAIT_WARMUP_REPLY | replyGate.armed=true, gateType=warmup_reply | 玩家未回覆不得前進 |
+| 3 | WAIT_WARMUP_REPLY | replyGate.armed=true, gateType=warmup_tag | 玩家未回覆不得前進 |
 | 4 | POST_REPLY_CHAT | lastReplyEval.consumed=true (warmup) | 暖場回覆後聊天室接話 |
 | 5 | REVEAL_1_START | currentPrompt prepared | 第一次 reveal 起始 |
 | 6 | REVEAL_1_RIOT | reveal visible + riot chat | 混亂猜測段 |
@@ -76,4 +76,3 @@
   - `currentPrompt`（可 null）
   - `lastReplyEval`（可 null）
   - `audit.transitions`（至少 bootstrap transition）
-

@@ -266,6 +266,12 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         questionEmitter: state.sandboxFlow.questionEmitterId ?? state.replyGate.questionEmitter,
         targetPlayerId: state.sandboxFlow.replyTarget ?? state.replyGate.targetPlayerId
       };
+      state.answerGate = {
+        ...state.answerGate,
+        waiting: Boolean(state.replyGate.armed && state.replyGate.gateType !== 'none'),
+        pausedChat: Boolean(state.replyGate.armed && state.replyGate.canReply),
+        askedAt: state.answerGate?.askedAt ?? state.flow?.stepStartedAt ?? Date.now()
+      };
     },
     setReplyGate: (v: any) => {
       state.replyGate = { ...state.replyGate, ...v };
@@ -279,6 +285,12 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         replySourceMessageId: state.replyGate.sourceMessageId,
         replySourceType: state.replyGate.sourceType,
         consumePolicy: state.replyGate.consumePolicy,
+      };
+      state.answerGate = {
+        ...state.answerGate,
+        waiting: Boolean(state.replyGate.armed && state.replyGate.gateType !== 'none'),
+        pausedChat: Boolean(state.replyGate.armed && state.replyGate.canReply),
+        askedAt: state.answerGate?.askedAt ?? state.flow?.stepStartedAt ?? Date.now()
       };
     },
     setLastReplyEval: (evalPatch: any) => {
