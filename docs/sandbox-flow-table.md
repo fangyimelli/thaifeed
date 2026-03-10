@@ -100,3 +100,14 @@
 - `correct` 後續仍走 sandbox 分流：`ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT`（聊天室反應/單字 reveal/故事節點保留）。
 - `wrong_format` 與 `wrong_answer` 皆由 shared judge 回傳，sandbox 不再用平行 parser 前置擋格式。
 - `answerGate` 為 legacy mirror（non-authoritative），只投影 `replyGate`，不推動 flow step。
+## 2026-03-10 integration fix（authoritative judge audit + advance-next single path）
+
+- authoritative judge audit（SSOT）改為 `consonantJudgeAudit`（mode state 可序列化），來源固定為 `consumePlayerReply(consonant gate) -> parseAndJudgeUsingClassic -> shared consonant engine`。
+- debug 呈現拆分：
+  - Display metadata：`currentPrompt.displayAcceptedAnswers / currentPrompt.displayAliases`（presentation only）
+  - Runtime judge candidates：`currentPrompt.runtimeAcceptedCandidates` 與 `consonantJudgeAudit.acceptedCandidates`（authoritative judge inputs）
+- `scheduler.phase` 降級為 auxiliary debug（non-authoritative）；正式 emit/consume 判斷以 `flow.step + replyGate + sandboxFlow boundary state` 為主。
+- `POST_REVEAL_CHAT -> ADVANCE_NEXT` 收斂：
+  - `postRevealChatState: started -> done`
+  - `nextQuestionReady/nextQuestionEmitted/nextQuestionBlockedReason`
+  - `ADVANCE_NEXT` consumer 僅在 `replyGate` 已釋放時前進，避免第一題後卡住。

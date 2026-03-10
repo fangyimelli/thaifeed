@@ -1981,3 +1981,7 @@ Console（debug 模式）可觀察：
 - [sandbox][WAIT_REPLY_1 source binding] `sandboxFreezeAndWaitForReply` 與 WAIT_REPLY_1 repair path 皆會同步綁定 `replyGate.sourceMessageId` / `sandboxFlow.replySourceMessageId`，避免 sourceMessageId 空值。
 - [sandbox][legacy mirror alignment] `answerGate` 保留為 non-authoritative mirror（由 `replyGate` 投影 waiting/paused），並在 debug 顯示 mirror consistency。
 - [Removed/Deprecated Log] `src/shared/questionBank/night01QuestionBank.ts` 不再承載 sandbox 單字/劇情 metadata，改為 compatibility re-export 到 shared consonant engine（舊資料結構 deprecated）。
+- [sandbox][judge-audit-ssot] 新增 `consonantJudgeAudit`（mode state 可序列化）作為 sandbox authoritative judge audit；`consumePlayerReply` 在 consonant gate authoritative 路徑即時寫入 raw/normalized/parse/judge/source/gate/timestamp，debug 不再依賴 runtime ref 混源。
+- [sandbox][debug-clarity] debug panel 明確拆分 `Display Metadata`（`displayAcceptedAnswers/displayAliases`）與 `runtimeAcceptedCandidates`，避免 display 欄位冒充正式判題候選集合。
+- [sandbox][advance-next-single-path] `POST_REVEAL_CHAT -> ADVANCE_NEXT` 收斂為單一路徑，新增 `postRevealChatState` 與 `nextQuestionReady/Emitted/BlockedReason` 邊界 state；`ADVANCE_NEXT` 僅在 `replyGate` 已釋放時消費，避免第一題後卡住。
+- [sandbox][scheduler-authority] 明確將 `scheduler.phase` 降級為 `non-authoritative debug only`，正式 emit/consume gate 判斷只看 `flow.step + replyGate + sandboxFlow boundary state`。

@@ -50,7 +50,7 @@ export const createSandboxV2InitialState = () => {
   ssot: { version: NIGHT1.meta.version },
   nightId: NIGHT1.meta.id,
   flow: { step: 'PREHEAT_CHAT', questionIndex: 0, stepStartedAt: bootAt, transitions: initialTransitions, tagAskedThisStep: false },
-  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[] },
+  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[], postRevealChatState: 'idle', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionFromIndex: -1, nextQuestionToIndex: -1, nextQuestionBlockedReason: '' },
   prompt: {
     current: null,
     overlay: { consonantShown: '' },
@@ -94,6 +94,24 @@ export const createSandboxV2InitialState = () => {
   ghostMotion: { lastId: '', state: 'idle' },
   audit: { transitions: [{ from: 'INIT', to: 'PREHEAT_CHAT', at: bootAt, reason: 'mode_state_created' }] as Array<{ from: string; to: string; at: number; reason?: string }> },
   currentPrompt: null as null | { id: string; kind: string; consonant: string; wordKey: string; thaiWord: string; translationZh: string },
+  consonantJudgeAudit: {
+    rawInput: '',
+    normalizedInput: '',
+    parseOk: false,
+    parseKind: 'not_evaluated',
+    matchedAlias: '',
+    expectedConsonant: '',
+    acceptedCandidates: [] as string[],
+    compareInput: '',
+    compareMode: 'normalized_alias_membership',
+    judgeResult: 'idle',
+    resultReason: 'not_evaluated',
+    sourcePromptId: '',
+    sourceQuestionId: '',
+    sourceWordKey: '',
+    gateType: 'none',
+    consumedAt: 0
+  },
   replyGate: { gateType: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetPlayerId: '', sourceType: '', consumePolicy: 'single' },
   lastReplyEval: null as null | { messageId: string; gateType: string; consumed: boolean; reason: string; rawInput: string; normalizedInput: string; extractedAnswer: string; raw: string; normalized: string; classifiedAs: string; at: number },
   techBacklog: { queued: 0, pending: 0, lastDrainAt: 0 },
@@ -150,6 +168,10 @@ export function ensureSandboxV2StateShape(raw: any) {
   next.theory = { ...base.theory, ...(raw?.theory ?? {}) };
   next.theory.pendingQuestions = Array.isArray(raw?.theory?.pendingQuestions) ? raw.theory.pendingQuestions : [];
   next.currentPrompt = raw?.currentPrompt ? { ...(base.currentPrompt ?? {}), ...(raw?.currentPrompt ?? {}) } : null;
+  next.consonantJudgeAudit = { ...base.consonantJudgeAudit, ...(raw?.consonantJudgeAudit ?? {}) };
+  next.consonantJudgeAudit.acceptedCandidates = Array.isArray(raw?.consonantJudgeAudit?.acceptedCandidates)
+    ? raw.consonantJudgeAudit.acceptedCandidates
+    : base.consonantJudgeAudit.acceptedCandidates;
   next.unresolvedAmbient = { ...base.unresolvedAmbient, ...(raw?.unresolvedAmbient ?? {}) };
   next.ssot = { ...base.ssot, ...(raw?.ssot ?? {}) };
   next.reveal.position = { ...base.reveal.position, ...(raw?.reveal?.position ?? {}) };
@@ -201,7 +223,13 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         replyTarget: null,
         replyGateActive: false,
         canReply: false,
-        gateConsumed: false
+        gateConsumed: false,
+        postRevealChatState: 'idle',
+        nextQuestionReady: false,
+        nextQuestionEmitted: false,
+        nextQuestionFromIndex: -1,
+        nextQuestionToIndex: -1,
+        nextQuestionBlockedReason: ''
       };
       state.scheduler = { ...state.scheduler, phase: 'preheat', blockedReason: '' };
       state.introGate = { ...state.introGate, startedAt: bootAt, minDurationMs, passed: false, remainingMs: minDurationMs };
@@ -219,6 +247,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       state.prompt = { ...state.prompt, current: null };
       state.currentPrompt = null;
       state.lastReplyEval = null;
+      state.consonantJudgeAudit = { ...createSandboxV2InitialState().consonantJudgeAudit };
       appendTransition('BOOTSTRAP_RUNTIME', bootAt, reason);
       appendTransition('ENTER_PREHEAT_CHAT', bootAt, reason);
       appendAuditTransition(prevStep, 'PREHEAT_CHAT', bootAt, reason);
@@ -316,6 +345,15 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
           lastResult: result,
           ...(detail ?? {})
         }
+      };
+    },
+    setConsonantJudgeAudit: (audit: any) => {
+      state.consonantJudgeAudit = {
+        ...state.consonantJudgeAudit,
+        ...(audit ?? {}),
+        acceptedCandidates: Array.isArray(audit?.acceptedCandidates)
+          ? audit.acceptedCandidates
+          : state.consonantJudgeAudit.acceptedCandidates
       };
     },
     commitConsonantJudgeResult: (payload: { input?: string; parsed?: string; judge?: string; classicJudgeResult?: string }) => {

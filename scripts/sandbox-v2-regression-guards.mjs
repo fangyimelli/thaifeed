@@ -108,8 +108,8 @@ const checks = [
       if (!mode.includes('targetPlayerId')) {
         throw new Error('replyGate.targetPlayerId formal schema missing');
       }
-      if (!app.includes('sandbox.replyGate.gateType/armed')) {
-        throw new Error('debug panel does not show replyGate.gateType');
+      if (!app.includes('replyGate.gateType/armed/canReply')) {
+        throw new Error('debug panel does not show authoritative replyGate.gateType/armed/canReply');
       }
     }
   },
@@ -167,6 +167,8 @@ if (!app.includes("setFlowStep('POST_REPLY_CHAT'")) { throw new Error('POST_REPL
 if (!app.includes("setFlowStep('ANSWER_EVAL'")) { throw new Error('ANSWER_EVAL transition missing'); }
 if (!app.includes("setFlowStep('REVEAL_WORD'")) { throw new Error('REVEAL_WORD transition missing'); }
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT'")) { throw new Error('POST_REVEAL_CHAT transition missing'); }
+if (!app.includes("postRevealChatState: 'started'")) { throw new Error('POST_REVEAL_CHAT should write started boundary'); }
+if (!app.includes("postRevealChatState: 'done'")) { throw new Error('POST_REVEAL_CHAT should write done boundary before advance'); }
 if (!app.includes("const gate = (!derivedGate.replyGateType && waitReplyStep)")) {
   throw new Error('player input eval must not keep lastReplyEval.gateType as none during wait-reply');
 }
@@ -185,8 +187,23 @@ if (!sandboxWordMap.includes('SANDBOX_CONSONANT_WORD_MAP') || !sandboxWordMap.in
 if (!app.includes("pipeline.result !== 'correct'")) {
   throw new Error('sandbox submit path must consume shared wrong_answer/wrong_format from shared judge result');
 }
-if (!app.includes('sharedConsonantEngine.waitReply1SourceMessageBound')) {
+if (!app.includes('waitReply1SourceMessageBound:')) {
   throw new Error('debug must expose WAIT_REPLY_1 sourceMessageId binding invariant');
+}
+if (!mode.includes('consonantJudgeAudit')) {
+  throw new Error('sandbox mode must own authoritative consonantJudgeAudit state');
+}
+if (!app.includes('setConsonantJudgeAudit?.({')) {
+  throw new Error('consumePlayerReply must write authoritative judge audit state');
+}
+if (!app.includes('displayAcceptedAnswers') || !app.includes('runtimeAcceptedCandidates')) {
+  throw new Error('debug must separate display metadata from runtime accepted candidates');
+}
+if (!app.includes('scheduler.phase (non-authoritative)')) {
+  throw new Error('debug must mark scheduler.phase as non-authoritative');
+}
+if (!app.includes("nextQuestionBlockedReason: 'reply_gate_still_armed'")) {
+  throw new Error('ADVANCE_NEXT should have single-path guard against armed replyGate');
 }
 console.log('sandbox v2 regression guards passed');
 
