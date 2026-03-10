@@ -504,6 +504,28 @@ type GhostEventManagerDebugState = {
   };
 };
 
+type SandboxDebugActionName =
+  | 'pass_advance_prompt'
+  | 'force_correct'
+  | 'force_resolve_qna'
+  | 'clear_reply_ui'
+  | 'force_next_node'
+  | 'force_reveal_word'
+  | 'force_play_pronounce'
+  | 'force_wave_related'
+  | 'force_wave_surprise'
+  | 'force_wave_guess'
+  | 'trigger_random_ghost';
+
+type SandboxDebugActionRecord = {
+  lastClickedAt: number;
+  handlerInvoked: boolean;
+  effectApplied: boolean;
+  blockedReason: string;
+  targetState: string;
+  lastResult: string;
+};
+
 const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
   fearLevel: 0,
   maxFear: 100,
@@ -782,6 +804,19 @@ export default function App() {
   const sandboxWaitReplyRuntimeRef = useRef<{ lastGlitchAt: number; lastGlitchSender: string; glitchCount: number; burstStarted: boolean; completed: boolean; }>({ lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0, burstStarted: false, completed: false });
   const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
+  const sandboxDebugActionAuditRef = useRef<Record<SandboxDebugActionName, SandboxDebugActionRecord>>({
+    pass_advance_prompt: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex', lastResult: '-' },
+    force_correct: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.consonant.judge + sandbox.replyGate', lastResult: '-' },
+    force_resolve_qna: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'qna.active + sandbox.replyGate', lastResult: '-' },
+    clear_reply_ui: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.replyGate + lockState + pinned UI', lastResult: '-' },
+    force_next_node: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.nodeIndex + flow.questionIndex', lastResult: '-' },
+    force_reveal_word: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.reveal', lastResult: '-' },
+    force_play_pronounce: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.audio', lastResult: '-' },
+    force_wave_related: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.wave', lastResult: '-' },
+    force_wave_surprise: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.wave', lastResult: '-' },
+    force_wave_guess: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.wave', lastResult: '-' },
+    trigger_random_ghost: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'event.queue/startEvent', lastResult: '-' }
+  });
   const sandboxTechBacklogRef = useRef<string[]>([]);
   const sandboxTechBacklogLastAtRef = useRef(0);
   const sandboxTechBacklogTotalWaitMsRef = useRef(0);
@@ -3919,6 +3954,7 @@ export default function App() {
             source: sandboxState.debugOverride.source || '-',
             consumedAt: sandboxState.debugOverride.consumedAt || 0
           },
+          actionAudit: { ...sandboxDebugActionAuditRef.current },
           parity: {
             sandboxJudgeResult: sandboxState.parity.sandboxJudgeResult,
             classicJudgeResult: sandboxState.parity.classicJudgeResult,
@@ -5535,61 +5571,86 @@ export default function App() {
     sandboxPromptIssuedAtRef.current = askedAt;
   }
 
-  const forceRevealCurrent = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const node = sandboxModeRef.current.forceRevealCurrent();
-    if (!node) return;
-    void playPronounce(node.audioKey);
-    setSandboxRevealTick(Date.now());
+  const recordSandboxDebugAction = useCallback((action: SandboxDebugActionName, payload: Partial<SandboxDebugActionRecord>) => {
+    const prev = sandboxDebugActionAuditRef.current[action];
+    sandboxDebugActionAuditRef.current[action] = { ...prev, ...payload, blockedReason: payload.blockedReason ?? prev.blockedReason ?? '-', lastResult: payload.lastResult ?? prev.lastResult ?? '-' };
   }, []);
+
+  const forceRevealCurrent = useCallback(() => {
+    const now = Date.now();
+    recordSandboxDebugAction('force_reveal_word', { lastClickedAt: now, handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_reveal_word', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
+    const node = sandboxModeRef.current.forceRevealCurrent();
+    if (!node) { recordSandboxDebugAction('force_reveal_word', { effectApplied: false, blockedReason: 'no_current_prompt', lastResult: 'blocked' }); return; }
+    void playPronounce(node.audioKey);
+    recordSandboxDebugAction('force_reveal_word', { effectApplied: true, blockedReason: '-', lastResult: `revealed:${node.id}` });
+    setSandboxRevealTick(Date.now());
+  }, [recordSandboxDebugAction]);
 
   const forcePlayPronounce = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
+    const now = Date.now();
+    recordSandboxDebugAction('force_play_pronounce', { lastClickedAt: now, handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_play_pronounce', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     const node = sandboxModeRef.current.getCurrentNode();
-    if (!node?.audioKey) return;
+    if (!node?.audioKey) { recordSandboxDebugAction('force_play_pronounce', { effectApplied: false, blockedReason: 'missing_audio_key', lastResult: 'blocked' }); return; }
     void playPronounce(node.audioKey).then((result) => {
       sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
+      recordSandboxDebugAction('force_play_pronounce', { effectApplied: result === 'played', blockedReason: result === 'played' ? '-' : result, lastResult: result });
       setSandboxRevealTick(Date.now());
     });
-  }, []);
+  }, [recordSandboxDebugAction]);
 
   const forceWave = useCallback((kind: 'related' | 'surprise' | 'guess') => {
-    if (modeRef.current.id !== 'sandbox_story') return;
+    const actionName = kind === 'related' ? 'force_wave_related' : kind === 'surprise' ? 'force_wave_surprise' : 'force_wave_guess';
+    recordSandboxDebugAction(actionName, { lastClickedAt: Date.now(), handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction(actionName, { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     sandboxModeRef.current.forceWave(kind);
+    recordSandboxDebugAction(actionName, { effectApplied: true, blockedReason: '-', lastResult: `wave:${kind}` });
     setSandboxRevealTick(Date.now());
-  }, []);
+  }, [recordSandboxDebugAction]);
 
   const handleSandboxDebugPass = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    sandboxDebugPassRef.current = { clickedAt: Date.now(), action: 'called_advance_prompt' };
+    const now = Date.now();
+    recordSandboxDebugAction('pass_advance_prompt', { lastClickedAt: now, handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('pass_advance_prompt', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
+    const beforeIndex = sandboxModeRef.current.getState().nodeIndex;
+    sandboxDebugPassRef.current = { clickedAt: now, action: 'called_advance_prompt' };
     clearSandboxRevealDoneTimer();
-    sandboxModeRef.current.advancePrompt('debug_pass');
+    const advanced = sandboxModeRef.current.advancePrompt('debug_pass');
     sandboxConsonantPromptNodeIdRef.current = null;
     clearReplyUi('sandbox_debug_pass');
     clearChatFreeze('sandbox_debug_pass');
     setChatAutoPaused(false);
     setInput('');
+    const afterIndex = sandboxModeRef.current.getState().nodeIndex;
+    recordSandboxDebugAction('pass_advance_prompt', { effectApplied: Boolean(advanced && afterIndex !== beforeIndex), blockedReason: advanced ? '-' : 'end_of_nodes', lastResult: advanced ? `advanced_to:${afterIndex}` : 'blocked' });
     setSandboxRevealTick(Date.now());
-  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze]);
+  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze, recordSandboxDebugAction]);
 
 
   const handleSandboxDebugForceCorrect = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
+    recordSandboxDebugAction('force_correct', { lastClickedAt: Date.now(), handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_correct', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
-    if (currentPrompt?.kind !== 'consonant') return;
+    if (currentPrompt?.kind !== 'consonant') { recordSandboxDebugAction('force_correct', { effectApplied: false, blockedReason: 'current_prompt_not_consonant', lastResult: 'blocked' }); return; }
     sandboxModeRef.current.activateDebugOverride('button');
     applySandboxCorrect({ input: '[debug-force-correct]', matchedChar: currentPrompt.consonant, source: 'debug_button' });
-  }, [applySandboxCorrect]);
+    recordSandboxDebugAction('force_correct', { effectApplied: true, blockedReason: '-', lastResult: `correct:${currentPrompt.consonant}` });
+  }, [applySandboxCorrect, recordSandboxDebugAction]);
 
   const forceResolveQna = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
+    recordSandboxDebugAction('force_resolve_qna', { lastClickedAt: Date.now(), handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_resolve_qna', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     resolveQna('debug_force_resolve');
-  }, [resolveQna]);
+    recordSandboxDebugAction('force_resolve_qna', { effectApplied: true, blockedReason: '-', lastResult: 'resolved' });
+  }, [recordSandboxDebugAction, resolveQna]);
 
   const handleClearReplyUi = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
+    recordSandboxDebugAction('clear_reply_ui', { lastClickedAt: Date.now(), handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('clear_reply_ui', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     clearReplyUi('debug_button_clear_reply_ui');
-  }, [clearReplyUi]);
+    recordSandboxDebugAction('clear_reply_ui', { effectApplied: true, blockedReason: '-', lastResult: 'cleared' });
+  }, [clearReplyUi, recordSandboxDebugAction]);
 
   const forceAskConsonantNow = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -5626,10 +5687,14 @@ export default function App() {
   }, []);
 
   const forceAdvanceSandboxNode = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    sandboxModeRef.current.forceAdvanceNode();
+    recordSandboxDebugAction('force_next_node', { lastClickedAt: Date.now(), handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_next_node', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
+    const before = sandboxModeRef.current.getState().nodeIndex;
+    const advanced = sandboxModeRef.current.advancePrompt('debug_force_next_node');
+    const after = sandboxModeRef.current.getState().nodeIndex;
+    recordSandboxDebugAction('force_next_node', { effectApplied: Boolean(advanced && before !== after), blockedReason: advanced ? '-' : 'end_of_nodes', lastResult: advanced ? `advanced_to:${after}` : 'blocked' });
     setSandboxRevealTick(Date.now());
-  }, []);
+  }, [recordSandboxDebugAction]);
 
   const exportSandboxSSOT = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -6345,14 +6410,16 @@ export default function App() {
   }, [getGhostEventManagerDebugState, mode]);
 
   const triggerRandomGhostEvent = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
+    recordSandboxDebugAction('trigger_random_ghost', { lastClickedAt: Date.now(), handlerInvoked: true });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('trigger_random_ghost', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     const state = getGhostEventManagerDebugState();
     const readyEvents = state.events.filter((entry) => entry.status === 'ready').map((entry) => entry.eventName);
-    if (readyEvents.length <= 0) return;
+    if (readyEvents.length <= 0) { recordSandboxDebugAction('trigger_random_ghost', { effectApplied: false, blockedReason: 'no_ready_ghost_event', lastResult: 'blocked' }); return; }
     const picked = pickOne(readyEvents);
     triggerEventFromTester(picked);
+    recordSandboxDebugAction('trigger_random_ghost', { effectApplied: true, blockedReason: '-', lastResult: `triggered:${picked}` });
     setGhostEventDebugState(getGhostEventManagerDebugState());
-  }, [getGhostEventManagerDebugState, triggerEventFromTester]);
+  }, [getGhostEventManagerDebugState, recordSandboxDebugAction, triggerEventFromTester]);
 
   const handleDebugAddFear = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -6668,6 +6735,20 @@ export default function App() {
                     <button type="button" onClick={() => forceWave('surprise')}>ForceWave(surprise)</button>
                     <button type="button" onClick={() => forceWave('guess')}>ForceWave(guess)</button>
                     <button type="button" onClick={triggerRandomGhostEvent}>Trigger Random Ghost</button>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Debug Action Audit</strong></div>
+                    {Object.entries(sandboxDebugActionAuditRef.current).map(([actionName, audit]) => (
+                      <div key={actionName} style={{ marginBottom: 6 }}>
+                        <div><strong>{actionName}</strong></div>
+                        <div>lastClickedAt: {audit.lastClickedAt || 0}</div>
+                        <div>handlerInvoked: {String(audit.handlerInvoked)}</div>
+                        <div>effectApplied: {String(audit.effectApplied)}</div>
+                        <div>blockedReason: {audit.blockedReason || '-'}</div>
+                        <div>targetState: {audit.targetState || '-'}</div>
+                        <div>lastResult: {audit.lastResult || '-'}</div>
+                      </div>
+                    ))}
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>Ghost Event Monitor</strong></div>

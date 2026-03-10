@@ -909,3 +909,11 @@
 - 2026-03-10 sandbox_story integration fix: debug panel 拆分 Display metadata 與 runtime accepted candidates；`displayAcceptedAnswers/displayAliases` 明確標示 presentation only。
 - 2026-03-10 sandbox_story integration fix: `POST_REVEAL_CHAT -> ADVANCE_NEXT` 收斂為單一路徑，新增 `postRevealChatState`、`nextQuestionReady/nextQuestionEmitted/nextQuestionBlockedReason`，避免第一題後 ADVANCE_NEXT 無人消費或被殘留 gate 阻塞。
 - 2026-03-10 sandbox_story integration fix: `scheduler.phase` 明確標示 non-authoritative debug 欄位，不參與正式 next-question emit 判斷。
+
+## 2026-03-10 sandbox debug action authoritative repair
+
+- [sandbox] 修補 `sandboxStoryMode` 中多個 noop debug/action API，改為實際更新 authoritative state（flow/questionIndex/replyGate/reveal/audio/wave/hint/debugOverride）。
+- [sandbox] `PASS (advancePrompt)` 與 `Force Next Node` 改為單一路徑呼叫 `advancePrompt`，並在末節點時回報 `end_of_nodes` blocked reason。
+- [sandbox] `ForceCorrect / ForceResolveQna / ClearReplyUi / ForceReveal / ForcePlayPronounce / ForceWave / Trigger Random Ghost` 全數補齊 click 結果追蹤紀錄。
+- [debug] 新增 sandbox debug action audit 欄位（lastClickedAt/handlerInvoked/effectApplied/blockedReason/targetState/lastResult），避免「按了沒用但無原因」黑盒狀態。
+- [classic] 無改動。

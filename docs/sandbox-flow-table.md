@@ -127,3 +127,32 @@
   - `nextQuestionConsumer`
 - 規則：若 `nextQuestionEmitted=false`，`nextQuestionBlockedReason` 不可為空。
 - 規則：同輪 preheat/warmup 注入不得重播同 fingerprint 句。
+
+## 2026-03-10 debug button authoritative action table update
+
+- Debug actions must be state/gate-driven and observable.
+- `PASS (advancePrompt)` / `Force Next Node`:
+  - authoritative target: `nodeIndex`, `flow.questionIndex`, `sandboxFlow.nextQuestion*`, `advance.*`
+  - blocked reason when end reached: `end_of_nodes`
+- `ForceCorrect`:
+  - authoritative target: `consonant.parse/judge`, `replyGate`, `sandboxFlow.replyGateActive/canReply/gateConsumed`, `answerGate`, `reveal`, `debugOverride`
+- `ForceResolveQna` / `ClearReplyUi`:
+  - authoritative target: `replyGate`, `sandboxFlow gate fields`, lock/QnA bridge state
+- `Force Reveal Word`:
+  - authoritative target: `reveal.*` (blocked if no current prompt)
+- `ForcePlayPronounce`:
+  - authoritative target: `audio.state/lastKey`, blocked reason mirrors play result when failed
+- `ForceWave(*)`:
+  - authoritative target: `wave.count`, `wave.kind`
+- `Trigger Random Ghost`:
+  - authoritative target: event start path (`startEvent`), blocked if no ready event (`no_ready_ghost_event`)
+
+### Debug panel observability requirement (enforced)
+- Every debug action writes:
+  - `lastClickedAt`
+  - `handlerInvoked`
+  - `effectApplied`
+  - `blockedReason`
+  - `targetState`
+  - `lastResult`
+- UI must not present legacy/unavailable action as silently clickable without result.

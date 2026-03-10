@@ -1988,3 +1988,10 @@ Console（debug 模式）可觀察：
 - [sandbox][debug-clarity] debug panel 明確拆分 `Display Metadata`（`displayAcceptedAnswers/displayAliases`）與 `runtimeAcceptedCandidates`，避免 display 欄位冒充正式判題候選集合。
 - [sandbox][advance-next-single-path] `POST_REVEAL_CHAT -> ADVANCE_NEXT` 收斂為單一路徑，新增 `postRevealChatState` 與 `nextQuestionReady/Emitted/BlockedReason` 邊界 state；`ADVANCE_NEXT` 僅在 `replyGate` 已釋放時消費，避免第一題後卡住。
 - [sandbox][scheduler-authority] 明確將 `scheduler.phase` 降級為 `non-authoritative debug only`，正式 emit/consume gate 判斷只看 `flow.step + replyGate + sandboxFlow boundary state`。
+
+## 2026-03-10 Sandbox Debug Panel Audit + Repair
+
+- 針對 sandbox story debug panel 的 11 顆按鈕完成逐一稽核與修補，移除「看似可按但不改 authoritative state」的假動作。
+- sandbox mode runtime (`sandboxStoryMode`) 補回遺漏的 debug/action 實作（`advancePrompt`、`applyCorrect`、`forceWave`、`setPronounceState` 等），確保 debug action 可作用於正式 state。
+- debug panel 新增 action audit 可觀測欄位：`lastClickedAt`、`handlerInvoked`、`effectApplied`、`blockedReason`、`targetState`、`lastResult`。
+- classic mode 無修改。

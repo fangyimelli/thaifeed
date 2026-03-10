@@ -396,9 +396,9 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     commitPinnedWriter: () => undefined,
     commitPromptPinnedRendered: () => undefined,
     canTriggerGhostMotion: () => ({ allowed: true, reason: 'ok' }),
-    setPronounceState: () => undefined,
-    forceRevealDone: () => undefined,
-    markRevealDone: () => undefined,
+    setPronounceState: (stateName: 'idle' | 'playing' | 'error', payload?: { key?: string; reason?: string }) => { state.audio = { ...state.audio, state: stateName, lastKey: payload?.key ?? state.audio.lastKey }; state.blocked = { ...state.blocked, reason: stateName === 'error' ? (payload?.reason ?? 'pronounce_failed') : '' }; },
+    forceRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, visible: false }; },
+    markRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, visible: false }; },
     setCurrentPrompt: (prompt: SandboxPrompt) => {
       const node = ssot.nodes.find((n) => n.id === prompt.wordKey);
       state.prompt.current = prompt;
@@ -413,27 +413,22 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       state.consonant.nodeChar = prompt.consonant;
     },
     forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey }; return node; },
-    commitAdvanceBlockedReason: () => undefined,
-    setConsonantPromptText: () => undefined,
-    commitPromptOverlay: () => undefined,
+    commitAdvanceBlockedReason: (reason: string) => { state.advance = { ...state.advance, blockedReason: reason, lastAt: Date.now(), inFlight: false }; },
+    setConsonantPromptText: (text: string) => { state.consonant = { ...state.consonant, promptText: text, promptCurrent: text }; },
+    commitPromptOverlay: (overlay: any) => { state.prompt = { ...state.prompt, overlay: { ...state.prompt.overlay, ...(overlay ?? {}) } }; },
     markTagAskedThisStep: () => { state.flow.tagAskedThisStep = true; },
     setLastTimestamps: (v: any) => { state.last = { ...state.last, ...v }; },
     setReveal: (v: any) => { state.reveal = { ...state.reveal, ...v }; },
-    forceAdvanceNode: () => {
-      state.nodeIndex += 1;
-      state.flow.questionIndex = state.nodeIndex;
-      state.sandboxFlow = { ...state.sandboxFlow, questionIndex: state.nodeIndex };
-      state.unresolvedAmbient = { ...state.unresolvedAmbient, remaining: 0 };
-    },
-    commitHintText: () => undefined,
-    activateDebugOverride: () => undefined,
-    advancePrompt: () => undefined,
-    applyCorrect: () => undefined,
+    forceAdvanceNode: () => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, blockedReason: 'end_of_nodes', lastAt: now, inFlight: false }; return false; } state.nodeIndex += 1; state.flow = { ...state.flow, questionIndex: state.nodeIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: state.nodeIndex, stepStartedAt: now, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now }; state.unresolvedAmbient = { ...state.unresolvedAmbient, remaining: 0 }; state.advance = { ...state.advance, blockedReason: '', lastAt: now, inFlight: false, lastReason: 'force_advance_node' }; return true; },
+    commitHintText: (text: string, source = 'unknown') => { state.hint = { ...state.hint, active: Boolean(text), lastText: text, count: (state.hint.count ?? 0) + 1, lastShownAt: Date.now(), source }; },
+    activateDebugOverride: (source = 'debug') => { state.debugOverride = { ...state.debugOverride, active: true, source, consumedAt: 0 }; },
+    advancePrompt: (reason = 'advance') => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: 'end_of_nodes' }; return false; } const previousIndex = state.nodeIndex; const nextIndex = Math.min(ssot.nodes.length - 1, previousIndex + 1); state.nodeIndex = nextIndex; state.flow = { ...state.flow, questionIndex: nextIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: nextIndex, stepStartedAt: now, nextQuestionFromIndex: previousIndex, nextQuestionToIndex: nextIndex, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now }; state.prompt = { ...state.prompt, current: null }; state.currentPrompt = null; state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0 }; state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: '' }; return true; },
+    applyCorrect: (payload?: { input?: string; matchedChar?: string }) => { const now = Date.now(); const prompt = state.prompt.current; state.consonant = { ...state.consonant, parse: { ...state.consonant.parse, ok: true, inputRaw: payload?.input ?? state.consonant.parse.inputRaw, inputNorm: payload?.matchedChar ?? state.consonant.parse.inputNorm, matchedChar: payload?.matchedChar ?? state.consonant.parse.matchedChar, matchedAlias: payload?.matchedChar ?? state.consonant.parse.matchedAlias, blockedReason: '' }, judge: { ...state.consonant.judge, lastInput: payload?.matchedChar ?? state.consonant.judge.lastInput, lastResult: 'correct' } }; if (prompt) { const node = ssot.nodes.find((n) => n.id === prompt.wordKey); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey, consonantFromPrompt: prompt.consonant, doneAt: 0 }; } state.replyGate = { ...state.replyGate, armed: false, canReply: false, gateConsumed: true }; state.sandboxFlow = { ...state.sandboxFlow, replyGateActive: false, canReply: false, gateConsumed: true }; state.answerGate = { ...state.answerGate, waiting: false, pausedChat: false, askedAt: 0 }; if (state.debugOverride.active) state.debugOverride = { ...state.debugOverride, active: false, consumedAt: now }; },
     debugAddFear: (n: number) => { fear.fearLevel = Math.min(fear.maxFear, fear.fearLevel + n); fear.pressureLevel = fear.fearLevel > 80 ? 'panic' : fear.fearLevel > 66 ? 'high' : fear.fearLevel > 33 ? 'medium' : 'low'; },
     debugResetFear: () => { fear.fearLevel = 0; fear.pressureLevel = 'low'; },
     forceAskComprehensionNow: () => undefined,
     forceAskConsonantNow: () => undefined,
-    forceWave: () => undefined,
+    forceWave: (kind: 'related' | 'surprise' | 'guess') => { state.wave = { ...state.wave, count: (state.wave.count ?? 0) + 1, kind }; },
     registerFootstepsRoll: () => ({ chance: 0 }),
     setSubmitInFlight: () => undefined
   };
