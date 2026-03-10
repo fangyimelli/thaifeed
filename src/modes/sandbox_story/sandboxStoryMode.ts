@@ -335,6 +335,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     commitPromptOverlay: () => undefined,
     markTagAskedThisStep: () => { state.flow.tagAskedThisStep = true; },
     setLastTimestamps: (v: any) => { state.last = { ...state.last, ...v }; },
+    setReveal: (v: any) => { state.reveal = { ...state.reveal, ...v }; },
     forceAdvanceNode: () => {
       state.nodeIndex += 1;
       state.flow.questionIndex = state.nodeIndex;
