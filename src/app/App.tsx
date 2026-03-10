@@ -56,8 +56,8 @@ import {
   updateLastAskedPreview
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
-import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
-import { getClassicConsonantPrompt, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
+import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
+import { parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { getAcceptedAliasCandidates, getSharedConsonantQuestionById } from '../shared/consonant-engine';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
@@ -507,15 +507,8 @@ type GhostEventManagerDebugState = {
 type SandboxDebugActionName =
   | 'pass_advance_prompt'
   | 'force_correct'
-  | 'force_resolve_qna'
-  | 'clear_reply_ui'
-  | 'force_next_node'
-  | 'force_reveal_word'
-  | 'force_play_pronounce'
-  | 'force_wave_related'
-  | 'force_wave_surprise'
-  | 'force_wave_guess'
-  | 'trigger_random_ghost';
+  | 'trigger_random_ghost'
+  | 'auto_test_flow';
 
 type SandboxDebugActionRecord = {
   lastClickedAt: number;
@@ -524,6 +517,20 @@ type SandboxDebugActionRecord = {
   blockedReason: string;
   targetState: string;
   lastResult: string;
+};
+
+type SandboxFlowTestResult = {
+  status: 'idle' | 'running' | 'passed' | 'failed';
+  startedAt: number;
+  finishedAt: number;
+  currentStep: string;
+  lastPassedStep: string;
+  failedStep: string;
+  failureReason: string;
+  fromQuestionId: string;
+  toQuestionId: string;
+  autoAnswerUsed: string;
+  secondQuestionShown: boolean;
 };
 
 const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
@@ -789,7 +796,6 @@ export default function App() {
   const sandboxModeRef = useRef(createSandboxStoryMode());
   const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveInitialMode(debugEnabled));
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
-  const sandboxPromptIssuedAtRef = useRef<number>(0);
   const sandboxConsonantTagOwnerRef = useRef<string>('mod_live');
   const sandboxWaveRunningRef = useRef(false);
   const sandboxSupernaturalTimerRef = useRef<number | null>(null);
@@ -807,16 +813,23 @@ export default function App() {
   const sandboxDebugActionAuditRef = useRef<Record<SandboxDebugActionName, SandboxDebugActionRecord>>({
     pass_advance_prompt: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex', lastResult: '-' },
     force_correct: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.consonant.judge + sandbox.replyGate', lastResult: '-' },
-    force_resolve_qna: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'qna.active + sandbox.replyGate', lastResult: '-' },
-    clear_reply_ui: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.replyGate + lockState + pinned UI', lastResult: '-' },
-    force_next_node: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.nodeIndex + flow.questionIndex', lastResult: '-' },
-    force_reveal_word: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.reveal', lastResult: '-' },
-    force_play_pronounce: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.audio', lastResult: '-' },
-    force_wave_related: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.wave', lastResult: '-' },
-    force_wave_surprise: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.wave', lastResult: '-' },
-    force_wave_guess: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.wave', lastResult: '-' },
-    trigger_random_ghost: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'event.queue/startEvent', lastResult: '-' }
+    trigger_random_ghost: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'event.queue/startEvent', lastResult: '-' },
+    auto_test_flow: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow + sandbox.consonantJudgeAudit + sandbox.sandboxFlow.nextQuestion*', lastResult: '-' }
   });
+  const [sandboxFlowTestResult, setSandboxFlowTestResult] = useState<SandboxFlowTestResult>({
+    status: 'idle',
+    startedAt: 0,
+    finishedAt: 0,
+    currentStep: '-',
+    lastPassedStep: '-',
+    failedStep: '-',
+    failureReason: '-',
+    fromQuestionId: '-',
+    toQuestionId: '-',
+    autoAnswerUsed: '-',
+    secondQuestionShown: false
+  });
+  const sandboxFlowTestRunIdRef = useRef(0);
   const sandboxTechBacklogRef = useRef<string[]>([]);
   const sandboxTechBacklogLastAtRef = useRef(0);
   const sandboxTechBacklogTotalWaitMsRef = useRef(0);
@@ -3955,6 +3968,7 @@ export default function App() {
             consumedAt: sandboxState.debugOverride.consumedAt || 0
           },
           actionAudit: { ...sandboxDebugActionAuditRef.current },
+          flowTest: { ...sandboxFlowTestResult },
           parity: {
             sandboxJudgeResult: sandboxState.parity.sandboxJudgeResult,
             classicJudgeResult: sandboxState.parity.classicJudgeResult,
@@ -4690,20 +4704,6 @@ export default function App() {
     if (!promptWordKey || !revealWordKey) return false;
     return promptWordKey !== revealWordKey;
   }, []);
-
-  const advanceSandboxPrompt = useCallback((reason: 'correct_done' | 'debug_pass') => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const st = sandboxModeRef.current.getState();
-    if ((st?.prompt?.mismatch ?? false) || isSandboxPromptRevealMismatch(st)) {
-      sandboxModeRef.current.commitAdvanceBlockedReason('mismatch');
-      setSandboxRevealTick(Date.now());
-      return;
-    }
-    sandboxModeRef.current.advancePrompt(reason);
-    sandboxConsonantPromptNodeIdRef.current = null;
-    clearSandboxAdvanceRetry();
-    setSandboxRevealTick(Date.now());
-  }, [clearSandboxAdvanceRetry, isSandboxPromptRevealMismatch]);
 
   const applySandboxCorrect = useCallback((payload?: { input?: string; matchedChar?: string; source?: string }) => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -5457,157 +5457,10 @@ export default function App() {
     );
   }, []);
 
-  const canAskConsonantNow = useCallback((sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
-    if (modeRef.current.id !== 'sandbox_story') return false;
-    if (!sandboxState.joinGate.satisfied) return false;
-    if (!(sandboxState.flow.step === 'TAG_PLAYER_1' || sandboxState.flow.step === 'REVEAL_1_START')) return false;
-    if (!sandboxState.introGate.passed) return false;
-    if (sandboxState.sandboxFlow.gateType !== 'none') return false;
-    if (sandboxState.sandboxFlow.replyGateActive || sandboxState.sandboxFlow.canReply) return false;
-    return true;
-  }, []);
-
-  async function askSandboxConsonantNow() {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const sandboxState = sandboxModeRef.current.getState();
-    const node = sandboxModeRef.current.getCurrentNode();
-    if (!node) return;
-    if (!canAskConsonantNow(sandboxState)) return;
-    if (sandboxState.flow.tagAskedThisStep) return;
-    if (sandboxState.last.lastAskAt && sandboxState.last.lastAskAt >= sandboxState.flow.stepStartedAt) return;
-
-    const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
-    if (sandboxConsonantPromptNodeIdRef.current === node.id && currentPrompt?.kind === 'consonant' && currentPrompt.wordKey === node.id) {
-      if (Date.now() - sandboxPromptIssuedAtRef.current < 3000) return;
-      sandboxConsonantPromptNodeIdRef.current = null;
-    }
-
-    const activeUser = normalizeHandle(activeUserInitialHandleRef.current || '');
-    const tagOwner = 'mod_live';
-    sandboxConsonantTagOwnerRef.current = tagOwner;
-
-    const prompt = getClassicConsonantPrompt({ nodeChar: node.char, node, activeUser: activeUser || 'you' });
-    sandboxModeRef.current.setConsonantPromptText(prompt.promptText);
-    const promptId = crypto.randomUUID();
-    const sandboxPrompt: SandboxPrompt = {
-      kind: 'consonant',
-      promptId,
-      consonant: node.char,
-      wordKey: node.id,
-      pinnedText: prompt.promptText,
-      correctKeywords: node.correctKeywords ?? [node.char],
-      unknownKeywords: node.unknownKeywords ?? ['不知道']
-    };
-    sandboxModeRef.current.setCurrentPrompt(sandboxPrompt);
-    sandboxModeRef.current.commitPromptOverlay(sandboxPrompt.consonant);
-
-    const line = prompt.promptText;
-    const messageId = promptId;
-    const tagFlowResult = await runTagStartFlow({
-      tagMessage: {
-        id: messageId,
-        username: tagOwner,
-        type: 'chat',
-        text: line,
-        language: 'zh',
-        translation: line,
-        tagTarget: tagOwner
-      },
-      pinnedText: prompt.promptText,
-      shouldFreeze: true,
-      appendMessage: (message) => {
-        const sent = dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag: 'sandbox_consonant_prompt' });
-        if (!sent.ok) return sent;
-        return { ok: true as const, messageId: sent.messageId };
-      },
-      forceScrollToBottom: async ({ reason }) => {
-        setScrollMode('FOLLOW', `sandbox_consonant_${reason}`);
-        setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
-        setPendingForceScrollReason(`sandbox_consonant_${reason}`);
-        await nextAnimationFrame();
-      },
-      setPinnedReply: ({ messageId: resolvedMessageId }) => {
-        sandboxReplyGateDebugRef.current = {
-          gateType: 'consonant_wait_reply',
-          armed: true,
-          sourceMessageId: resolvedMessageId,
-          targetPlayerId: tagOwner,
-          consumePolicy: 'classic_parse_and_judge'
-        };
-        const now = Date.now();
-        markQnaQuestionCommitted(qnaStateRef.current, { messageId: resolvedMessageId, askedAt: now });
-        lockStateRef.current = { isLocked: true, target: tagOwner, startedAt: now, replyingToMessageId: resolvedMessageId };
-        const pinnedOk = setPinnedQuestionMessage({
-          source: 'sandboxPromptCoordinator',
-          messageId: resolvedMessageId,
-          hasTagToActiveUser: true
-        });
-        if (!pinnedOk) {
-          setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
-        }
-      },
-      freezeChat: ({ reason }) => {
-        const startedAt = Date.now();
-        setChatFreeze({ isFrozen: true, reason: 'tagged_question', startedAt });
-        setPauseSetAt(startedAt);
-        setPauseReason(reason);
-        setScrollMode('FROZEN', reason);
-        setChatAutoPaused(true);
-      }
-    });
-    if (!tagFlowResult.ok) {
-      setLastBlockedReason(tagFlowResult.blockedReason);
-      return;
-    }
-    const askedAt = Date.now();
-    modeRef.current.onIncomingTag(line);
-    sandboxModeRef.current.markTagAskedThisStep(askedAt);
-    sandboxModeRef.current.setLastTimestamps({ lastAskAt: askedAt });
-    sandboxTechBacklogRef.current = [];
-    sandboxTechBacklogLastAtRef.current = 0;
-    sandboxTechBacklogTotalWaitMsRef.current = 0;
-    sandboxFreezeAndWaitForReply(askedAt, 'sandbox_tag_player_1', 'WAIT_REPLY_1');
-    sandboxConsonantPromptNodeIdRef.current = node.id;
-    sandboxPromptIssuedAtRef.current = askedAt;
-  }
-
   const recordSandboxDebugAction = useCallback((action: SandboxDebugActionName, payload: Partial<SandboxDebugActionRecord>) => {
     const prev = sandboxDebugActionAuditRef.current[action];
     sandboxDebugActionAuditRef.current[action] = { ...prev, ...payload, blockedReason: payload.blockedReason ?? prev.blockedReason ?? '-', lastResult: payload.lastResult ?? prev.lastResult ?? '-' };
   }, []);
-
-  const forceRevealCurrent = useCallback(() => {
-    const now = Date.now();
-    recordSandboxDebugAction('force_reveal_word', { lastClickedAt: now, handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_reveal_word', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    const node = sandboxModeRef.current.forceRevealCurrent();
-    if (!node) { recordSandboxDebugAction('force_reveal_word', { effectApplied: false, blockedReason: 'no_current_prompt', lastResult: 'blocked' }); return; }
-    void playPronounce(node.audioKey);
-    recordSandboxDebugAction('force_reveal_word', { effectApplied: true, blockedReason: '-', lastResult: `revealed:${node.id}` });
-    setSandboxRevealTick(Date.now());
-  }, [recordSandboxDebugAction]);
-
-  const forcePlayPronounce = useCallback(() => {
-    const now = Date.now();
-    recordSandboxDebugAction('force_play_pronounce', { lastClickedAt: now, handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_play_pronounce', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    const node = sandboxModeRef.current.getCurrentNode();
-    if (!node?.audioKey) { recordSandboxDebugAction('force_play_pronounce', { effectApplied: false, blockedReason: 'missing_audio_key', lastResult: 'blocked' }); return; }
-    void playPronounce(node.audioKey).then((result) => {
-      sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
-      recordSandboxDebugAction('force_play_pronounce', { effectApplied: result === 'played', blockedReason: result === 'played' ? '-' : result, lastResult: result });
-      setSandboxRevealTick(Date.now());
-    });
-  }, [recordSandboxDebugAction]);
-
-  const forceWave = useCallback((kind: 'related' | 'surprise' | 'guess') => {
-    const actionName = kind === 'related' ? 'force_wave_related' : kind === 'surprise' ? 'force_wave_surprise' : 'force_wave_guess';
-    recordSandboxDebugAction(actionName, { lastClickedAt: Date.now(), handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction(actionName, { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    sandboxModeRef.current.forceWave(kind);
-    recordSandboxDebugAction(actionName, { effectApplied: true, blockedReason: '-', lastResult: `wave:${kind}` });
-    setSandboxRevealTick(Date.now());
-  }, [recordSandboxDebugAction]);
 
   const handleSandboxDebugPass = useCallback(() => {
     const now = Date.now();
@@ -5633,68 +5486,160 @@ export default function App() {
     if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_correct', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
     const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
     if (currentPrompt?.kind !== 'consonant') { recordSandboxDebugAction('force_correct', { effectApplied: false, blockedReason: 'current_prompt_not_consonant', lastResult: 'blocked' }); return; }
+    const node = sandboxModeRef.current.getCurrentNode();
+    const now = Date.now();
     sandboxModeRef.current.activateDebugOverride('button');
+    sandboxModeRef.current.setConsonantJudgeAudit?.({
+      rawInput: '[debug-force-correct]',
+      normalizedInput: currentPrompt.consonant,
+      parseOk: true,
+      parseKind: 'debug_override',
+      matchedAlias: currentPrompt.consonant,
+      expectedConsonant: currentPrompt.consonant,
+      acceptedCandidates: [currentPrompt.consonant],
+      compareInput: currentPrompt.consonant,
+      compareMode: 'debug_override_exact',
+      judgeResult: 'correct',
+      resultReason: 'debug_override_forced_correct',
+      sourcePromptId: currentPrompt.promptId,
+      sourceQuestionId: node?.id ?? currentPrompt.wordKey,
+      sourceWordKey: currentPrompt.wordKey,
+      gateType: 'consonant_answer',
+      consumedAt: now
+    });
     applySandboxCorrect({ input: '[debug-force-correct]', matchedChar: currentPrompt.consonant, source: 'debug_button' });
     recordSandboxDebugAction('force_correct', { effectApplied: true, blockedReason: '-', lastResult: `correct:${currentPrompt.consonant}` });
   }, [applySandboxCorrect, recordSandboxDebugAction]);
 
-  const forceResolveQna = useCallback(() => {
-    recordSandboxDebugAction('force_resolve_qna', { lastClickedAt: Date.now(), handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_resolve_qna', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    resolveQna('debug_force_resolve');
-    recordSandboxDebugAction('force_resolve_qna', { effectApplied: true, blockedReason: '-', lastResult: 'resolved' });
-  }, [recordSandboxDebugAction, resolveQna]);
+  const runSandboxFlowTest = useCallback(async () => {
+    const startedAt = Date.now();
+    sandboxFlowTestRunIdRef.current += 1;
+    const runId = sandboxFlowTestRunIdRef.current;
+    const setRunning = (patch: Partial<SandboxFlowTestResult>) => {
+      if (sandboxFlowTestRunIdRef.current !== runId) return;
+      setSandboxFlowTestResult((prev) => ({ ...prev, ...patch }));
+    };
+    const fail = (failedStep: string, failureReason: string) => {
+      setRunning({
+        status: 'failed',
+        finishedAt: Date.now(),
+        currentStep: failedStep,
+        failedStep,
+        failureReason
+      });
+      recordSandboxDebugAction('auto_test_flow', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
+    };
+    const pass = (lastPassedStep: string, toQuestionId: string) => {
+      setRunning({
+        status: 'passed',
+        finishedAt: Date.now(),
+        currentStep: 'done',
+        lastPassedStep,
+        failedStep: '-',
+        failureReason: '-',
+        toQuestionId,
+        secondQuestionShown: true
+      });
+      recordSandboxDebugAction('auto_test_flow', { effectApplied: true, blockedReason: '-', lastResult: `passed:${toQuestionId}` });
+    };
+    const waitFor = async (predicate: () => boolean, timeoutMs = 12_000, intervalMs = 120) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() <= deadline) {
+        if (sandboxFlowTestRunIdRef.current !== runId) return false;
+        if (predicate()) return true;
+        await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
+      }
+      return false;
+    };
 
-  const handleClearReplyUi = useCallback(() => {
-    recordSandboxDebugAction('clear_reply_ui', { lastClickedAt: Date.now(), handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('clear_reply_ui', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    clearReplyUi('debug_button_clear_reply_ui');
-    recordSandboxDebugAction('clear_reply_ui', { effectApplied: true, blockedReason: '-', lastResult: 'cleared' });
-  }, [clearReplyUi, recordSandboxDebugAction]);
+    recordSandboxDebugAction('auto_test_flow', { lastClickedAt: startedAt, handlerInvoked: true, blockedReason: '-', lastResult: 'running' });
+    if (modeRef.current.id !== 'sandbox_story') {
+      fail('enter_sandbox_story', 'not_in_sandbox_story');
+      return;
+    }
 
-  const forceAskConsonantNow = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const sandboxState = sandboxModeRef.current.getState();
-    if (!canAskConsonantNow(sandboxState)) return;
-    sandboxConsonantPromptNodeIdRef.current = null;
-    sandboxModeRef.current.forceAskConsonantNow();
-    void askSandboxConsonantNow();
-  }, []);
-
-  const simulateConsonantAnswer = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const node = sandboxModeRef.current.getCurrentNode();
-    const text = input.trim() || node?.correctKeywords?.[0] || 'บ';
-    setInput(text);
-    void submitChat(text, 'debug_simulate');
-  }, [input, submitChat]);
-
-  const forceAskComprehensionNow = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const sandboxState = sandboxModeRef.current.getState();
-    if (!canAskConsonantNow(sandboxState)) return;
-    sandboxModeRef.current.forceAskComprehensionNow();
-  }, []);
-
-  const forceGhostMotionNow = useCallback(() => {
-    if (modeRef.current.id !== 'sandbox_story') return;
-    const currentNode = sandboxModeRef.current.getCurrentNode();
-    if (!currentNode?.audioKey) return;
-    void playPronounce(currentNode.audioKey).then((result) => {
-      sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: currentNode.audioKey, reason: result });
-      setSandboxRevealTick(Date.now());
+    const initial = sandboxModeRef.current.getState();
+    const fromQuestionId = sandboxModeRef.current.getCurrentNode()?.id ?? '-';
+    setSandboxFlowTestResult({
+      status: 'running',
+      startedAt,
+      finishedAt: 0,
+      currentStep: 'enter_sandbox_story',
+      lastPassedStep: '-',
+      failedStep: '-',
+      failureReason: '-',
+      fromQuestionId,
+      toQuestionId: '-',
+      autoAnswerUsed: '-',
+      secondQuestionShown: false
     });
-  }, []);
 
-  const forceAdvanceSandboxNode = useCallback(() => {
-    recordSandboxDebugAction('force_next_node', { lastClickedAt: Date.now(), handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_next_node', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    const before = sandboxModeRef.current.getState().nodeIndex;
-    const advanced = sandboxModeRef.current.advancePrompt('debug_force_next_node');
-    const after = sandboxModeRef.current.getState().nodeIndex;
-    recordSandboxDebugAction('force_next_node', { effectApplied: Boolean(advanced && before !== after), blockedReason: advanced ? '-' : 'end_of_nodes', lastResult: advanced ? `advanced_to:${after}` : 'blocked' });
-    setSandboxRevealTick(Date.now());
-  }, [recordSandboxDebugAction]);
+    sandboxModeRef.current.setIntroGate({ passed: true, remainingMs: 0 });
+    if (initial.flow.step === 'PREHEAT_CHAT') {
+      sandboxModeRef.current.setFlowStep('VIP_TAG_PLAYER', 'debug_auto_flow_test_skip_preheat');
+    }
+    setRunning({ currentStep: 'vip_tag_player' });
+    const vipReady = await waitFor(() => {
+      const st = sandboxModeRef.current.getState();
+      return st.flow.step === 'WAIT_WARMUP_REPLY' || st.flow.step === 'POST_REPLY_CHAT' || st.flow.step === 'TAG_PLAYER_1' || st.flow.step === 'WAIT_REPLY_1';
+    });
+    if (!vipReady) {
+      fail('vip_tag_player', 'vip_tag_not_emitted');
+      return;
+    }
+    setRunning({ lastPassedStep: 'vip_tag_player' });
+
+    setRunning({ currentStep: 'warmup_reply' });
+    const warmupReply = await submitChat('暖場測試回覆', 'debug_simulate');
+    if (!warmupReply.ok) {
+      fail('warmup_reply', `send_failed:${warmupReply.reason ?? 'unknown'}`);
+      return;
+    }
+    const firstQuestionReady = await waitFor(() => {
+      const st = sandboxModeRef.current.getState();
+      return st.flow.step === 'WAIT_REPLY_1' && st.prompt.current?.kind === 'consonant' && Boolean(st.replyGate?.armed);
+    });
+    if (!firstQuestionReady) {
+      fail('first_question', 'wait_reply_1_or_prompt_not_ready');
+      return;
+    }
+    const firstPrompt = sandboxModeRef.current.getCurrentPrompt();
+    if (!firstPrompt || firstPrompt.kind !== 'consonant') {
+      fail('first_question', 'first_prompt_missing');
+      return;
+    }
+    setRunning({ lastPassedStep: 'first_question', fromQuestionId: firstPrompt.wordKey, currentStep: 'auto_answer_q1' });
+
+    const answer = firstPrompt.consonant;
+    const answerResult = await submitChat(answer, 'debug_simulate');
+    if (!answerResult.ok) {
+      fail('auto_answer_q1', `send_failed:${answerResult.reason ?? 'unknown'}`);
+      return;
+    }
+    setRunning({ autoAnswerUsed: answer });
+
+    const revealDone = await waitFor(() => {
+      const st = sandboxModeRef.current.getState();
+      return st.flow.step === 'ADVANCE_NEXT' || st.sandboxFlow.postRevealChatState === 'done';
+    }, 15_000);
+    if (!revealDone) {
+      fail('reveal_post_reveal', 'post_reveal_not_done');
+      return;
+    }
+    setRunning({ lastPassedStep: 'reveal_post_reveal', currentStep: 'second_question' });
+
+    const secondQuestionShown = await waitFor(() => {
+      const st = sandboxModeRef.current.getState();
+      return st.flow.questionIndex >= 1 && st.sandboxFlow.nextQuestionEmitted && Boolean(st.sandboxFlow.nextQuestionToQuestionId);
+    }, 15_000);
+    if (!secondQuestionShown) {
+      const blocked = sandboxModeRef.current.getState().sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted';
+      fail('second_question', blocked);
+      return;
+    }
+    const toQuestionId = sandboxModeRef.current.getState().sandboxFlow.nextQuestionToQuestionId || '-';
+    pass('second_question', toQuestionId);
+  }, [recordSandboxDebugAction, submitChat]);
 
   const exportSandboxSSOT = useCallback(() => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -6188,11 +6133,24 @@ export default function App() {
     if (sandboxState.flow.step === 'ADVANCE_NEXT') {
       const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
       const postRevealDone = sandboxState.sandboxFlow?.postRevealChatState === 'done';
-      const beforeAdvance = sandboxModeRef.current.getState().flow.questionIndex;
+      if (!postRevealDone && !hasReplyGate && (sandboxState.reveal.phase === 'done' || !sandboxState.reveal.visible)) {
+        sandboxModeRef.current.setSandboxFlow({
+          postRevealChatState: 'done',
+          nextQuestionReady: true,
+          nextQuestionEmitted: false,
+          nextQuestionBlockedReason: 'advance_next_pending',
+          nextQuestionDecidedAt: Date.now(),
+          nextQuestionEmittedAt: 0,
+          nextQuestionConsumer: 'advance_next_effect'
+        });
+      }
+      const refreshedState = sandboxModeRef.current.getState();
+      const refreshedPostRevealDone = refreshedState.sandboxFlow?.postRevealChatState === 'done';
+      const beforeAdvance = refreshedState.flow.questionIndex;
       const fromNode = sandboxModeRef.current.getCurrentNode();
       const fromQuestionId = fromNode?.id ?? '';
       const decidedAt = Date.now();
-      if (!postRevealDone) {
+      if (!refreshedPostRevealDone) {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionReady: false,
           nextQuestionEmitted: false,
@@ -6209,7 +6167,7 @@ export default function App() {
           clearSandboxRevealDoneTimer();
         };
       }
-      if (hasReplyGate) {
+      if (Boolean(refreshedState.replyGate?.armed && refreshedState.replyGate?.gateType !== 'none')) {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionReady: false,
           nextQuestionEmitted: false,
@@ -6253,7 +6211,7 @@ export default function App() {
     return () => {
       clearSandboxRevealDoneTimer();
     };
-  }, [advanceSandboxPrompt, clearSandboxRevealDoneTimer, convertSandboxChatMessage, hasSandboxQuestionPrerequisites, sandboxRevealTick]);
+  }, [clearSandboxRevealDoneTimer, convertSandboxChatMessage, hasSandboxQuestionPrerequisites, sandboxRevealTick]);
 
 
   const handleTagHighlightEvaluated = useCallback((payload: { messageId: string; reason: 'mentions_activeUser' | 'none'; applied: boolean }) => {
@@ -6581,12 +6539,6 @@ export default function App() {
                   <button type="button" onClick={resetEventTestState}>Reset Test State</button>
                   <button type="button" onClick={forceUnlockDebug}>Reset Stuck State</button>
                   <button type="button" onClick={forceShowLoop4Debug}>Force Show loop4 (3s)</button>
-                  <button type="button" onClick={forceRevealCurrent}>ForceRevealCurrent</button>
-                  <button type="button" onClick={forceAskConsonantNow}>ForceAskConsonantNow</button>
-                  <button type="button" onClick={simulateConsonantAnswer}>SimulateConsonantAnswer(text)</button>
-                  <button type="button" onClick={forceAskComprehensionNow}>ForceAskComprehensionNow</button>
-                  <button type="button" onClick={forceGhostMotionNow}>ForceGhostMotion</button>
-                  <button type="button" onClick={forceAdvanceSandboxNode}>ForceAdvanceNode</button>
                   <button type="button" onClick={exportSandboxSSOT}>ExportSSOT</button>
                   <button type="button" onClick={importSandboxSSOT}>ImportSSOT</button>
                 </div>
@@ -6724,17 +6676,10 @@ export default function App() {
                     <button type="button" onClick={() => setSandboxAutoPlayNight((prev) => !prev)}>
                       Auto Play Night: {sandboxAutoPlayNight ? 'ON' : 'OFF'}
                     </button>
-                    <button type="button" onClick={handleSandboxDebugPass}>PASS (advancePrompt)</button>
-                    <button type="button" onClick={handleSandboxDebugForceCorrect}>ForceCorrect (debug override)</button>
-                    <button type="button" onClick={forceResolveQna}>ForceResolveQna</button>
-                    <button type="button" onClick={handleClearReplyUi}>ClearReplyUi</button>
-                    <button type="button" onClick={forceAdvanceSandboxNode}>Force Next Node</button>
-                    <button type="button" onClick={forceRevealCurrent}>Force Reveal Word</button>
-                    <button type="button" onClick={forcePlayPronounce}>ForcePlayPronounce</button>
-                    <button type="button" onClick={() => forceWave('related')}>ForceWave(related)</button>
-                    <button type="button" onClick={() => forceWave('surprise')}>ForceWave(surprise)</button>
-                    <button type="button" onClick={() => forceWave('guess')}>ForceWave(guess)</button>
+                    <button type="button" onClick={handleSandboxDebugPass}>Pass Flow</button>
+                    <button type="button" onClick={handleSandboxDebugForceCorrect}>Force Correct</button>
                     <button type="button" onClick={triggerRandomGhostEvent}>Trigger Random Ghost</button>
+                    <button type="button" onClick={() => { void runSandboxFlowTest(); }}>Run Sandbox Flow Test</button>
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>Debug Action Audit</strong></div>
@@ -6749,6 +6694,20 @@ export default function App() {
                         <div>lastResult: {audit.lastResult || '-'}</div>
                       </div>
                     ))}
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Sandbox Flow Test</strong></div>
+                    <div>status: {sandboxFlowTestResult.status}</div>
+                    <div>startedAt: {sandboxFlowTestResult.startedAt || 0}</div>
+                    <div>finishedAt: {sandboxFlowTestResult.finishedAt || 0}</div>
+                    <div>currentStep: {sandboxFlowTestResult.currentStep}</div>
+                    <div>lastPassedStep: {sandboxFlowTestResult.lastPassedStep}</div>
+                    <div>failedStep: {sandboxFlowTestResult.failedStep}</div>
+                    <div>failureReason: {sandboxFlowTestResult.failureReason}</div>
+                    <div>fromQuestionId: {sandboxFlowTestResult.fromQuestionId}</div>
+                    <div>toQuestionId: {sandboxFlowTestResult.toQuestionId}</div>
+                    <div>autoAnswerUsed: {sandboxFlowTestResult.autoAnswerUsed}</div>
+                    <div>secondQuestionShown: {String(sandboxFlowTestResult.secondQuestionShown)}</div>
                   </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>Ghost Event Monitor</strong></div>

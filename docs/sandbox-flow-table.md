@@ -1,3 +1,21 @@
+## Sandbox Debug Panel（精簡後）
+
+| Debug Action | 保留/刪除 | Authoritative Effect / Blocked Reason |
+|---|---|---|
+| Pass Flow | 保留 | `advancePrompt` 推進 `flow.questionIndex`；若到尾端則 `blockedReason=end_of_nodes` |
+| Force Correct | 保留 | `applyCorrect` + `consonantJudgeAudit` 完整寫入；非 consonant prompt 時 blocked |
+| Trigger Random Ghost | 保留 | 走 `startEvent` 正式事件管線；若無 ready event 回報 blocked |
+| Run Sandbox Flow Test | 保留（新增） | 透過正式 submit/evaluator/flow 驗證 Q1->Q2；失敗落 `failedStep/failureReason` |
+| ForceResolveQna / ClearReplyUi / Force Next Node / Force Reveal / ForcePlayPronounce / ForceWave* | 刪除 | 重疊、碎片、非日常正式 flow 驗證必要 |
+
+### Sandbox Flow Test Result fields
+- `status: idle/running/passed/failed`
+- `startedAt/finishedAt`
+- `currentStep/lastPassedStep/failedStep/failureReason`
+- `fromQuestionId/toQuestionId`
+- `autoAnswerUsed`
+- `secondQuestionShown`
+
 ### Integration guards (WAIT_REPLY_1 consonant authority)
 - Audit-first state table（debug-only, no behavior change）
 
