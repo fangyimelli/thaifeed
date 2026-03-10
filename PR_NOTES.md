@@ -9,6 +9,16 @@
 - 將 debug flow 測試從 `Run Full Night Test` 正名為 `Run Night Smoke Test`，同步更新按鈕文案、Flow Test 面板標題與 debug action audit key（`run_night_smoke_test`）。
 - 修正題目切換可見性：在可作答步驟，authoritative prompt 一旦成立就強制同步 `renderSync.stateQuestionId/renderedQuestionId`，scene 未同步僅記 `scene_not_synced_warning`，不再出現 flow 已前進但畫面無題目。
 - 修正 `Force Next Question`：成功時必須建立下一題 `currentPrompt` 並提交 `renderSync`（`force_next_prompt_activated`），缺少 next node 直接 blocked，避免產生 `missing_current_prompt/state_question_missing`。
+## This Change (2026-03-10 sandbox videoA/render recovery + smoke consume + judge audit completeness)
+- 修正 sandbox video/render failure 可觀測性不足：`SceneView` 的 `VideoDebugState` 新增 `slotSource/slotReadyState/slotErrorCode/lastSwapResult`，並在 `videoA/videoB onError`、switch success/failure、fallback failure 全部落盤，明確顯示 active slot 與 swap 結果。
+- 修正 scene sync recovery：render sync 新增 `gateAuthoritativeReady`（replyGate consonant_answer+armed+canReply），`forceVisiblePrompt` 在 scene 未同步時可進入 `scene_not_synced_warning`，不再讓 `render.stateQuestionId` 與 `renderedQuestionId` 長期脫鉤。
+- 修正 Night Smoke Test auto answer consume 驗證：`submitChat` 回傳 authoritative `messageId`，smoke test 強制比對 `lastReplyEval.messageId === answerMessageId` 且 consumed，避免僅訊息注入即誤判成功。
+- judge audit 欄位寫入維持 authoritative SSOT `setConsonantJudgeAudit`，consume path 持續寫滿 `expectedConsonant/acceptedCandidates/compareInput/compareMode/judgeResult/resultReason/gateType/sourcePromptId/sourceQuestionId/sourceWordKey/consumedAt`。
+
+## Regression Guard Updates (2026-03-10)
+- 更新 guard：render recovery 必須有 `gateAuthoritativeReady` 與新 `forceVisiblePrompt`。
+- 更新 guard：Night Smoke Test 必須驗證 consumed messageId (`st.lastReplyEval?.messageId === answerMessageId`)。
+
 ## This Change (2026-03-10 full-night auto-answer same submit/consume path)
 - `Run Full Night Test` Q1 自動答題改為與真人相同送出路徑：`submitChat` 建立 player message 後，將 `messageId/sourceType/playerId/targetPlayerId/sourceMessageId` 一併送入 `consumePlayerReply(payload)`。
 - `consumePlayerReply` 接受 authoritative metadata payload，`writeSandboxLastReplyEval` 也改為可保存真實 `messageId`，避免 debug trace 用合成 id 誤導。

@@ -190,6 +190,7 @@ export type SendResult = {
   status: 'sent' | 'blocked' | 'error';
   reason?: string;
   errorMessage?: string;
+  messageId?: string;
 };
 
 type LegacyRenameBlocker = (nextHandle: string) => false;
@@ -3681,6 +3682,7 @@ export default function App() {
       const overlayConsonant = sandboxState.prompt.overlay.consonantShown || '';
       const sceneSynced = videoCurrentKey === expectedSceneKey;
       const isAnswerablePromptStep = sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
+      const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === 'consonant_answer');
       const renderBlockedReason = !stateQuestionId
         ? 'state_question_missing'
         : (!promptConsonant ? 'prompt_missing'
@@ -3692,7 +3694,7 @@ export default function App() {
         && sandboxState.prompt.current?.kind === 'consonant'
         && sandboxState.prompt.current.wordKey === sandboxState.sandboxFlow.nextQuestionToQuestionId;
       const promptVisuallyReady = Boolean(stateQuestionId && promptConsonant && overlayConsonant === promptConsonant);
-      const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced);
+      const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);
       const renderedQuestionId = renderBlockedReason === 'none' || forceVisiblePrompt ? stateQuestionId : '';
       const renderBlockedReasonEffective = renderBlockedReason === 'none'
         ? 'none'
@@ -4942,7 +4944,7 @@ export default function App() {
       blockedReason: '',
       errorMessage: ''
     };
-    const markSent = (mode: string): SendResult => {
+    const markSent = (mode: string, messageId?: string): SendResult => {
       if (!appStarted) {
         return markBlocked('app_not_started');
       }
@@ -4953,7 +4955,7 @@ export default function App() {
       const next = { ...attemptDebug, lastResult: 'sent' as const };
       setSendDebug(next);
       logSendDebug('sent', { source, mode, autoResumed: chatAutoPaused, autoScrollMode: chatAutoScrollMode });
-      return { ok: true, status: 'sent' };
+      return { ok: true, status: 'sent', messageId };
     };
     setSendDebug(attemptDebug);
     logSendDebug('attempt', { source, inputLen: raw.length, submitDelayMs });
@@ -5008,20 +5010,20 @@ export default function App() {
           setInput('');
           sendCooldownUntil.current = Date.now() + 350;
           tagSlowActiveRef.current = false;
-          return markSent('sandbox_wait_reply_rejected');
+          return markSent('sandbox_wait_reply_rejected', playerMessage.id);
         }
         writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: false, reason: 'consume_fallback_to_free_chat' });
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        return markSent('sandbox_free_chat_sent');
+        return markSent('sandbox_free_chat_sent', playerMessage.id);
       }
       if (modeRef.current.id === 'sandbox_story' && sandboxQnaConsumed) {
         writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: true, reason: 'submit_accepted' });
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        return markSent('sandbox_qna_consumed');
+        return markSent('sandbox_qna_consumed', playerMessage.id);
       }
 
       if (!sandboxQnaConsumed && qnaStateRef.current.active.status === 'AWAITING_REPLY') {
@@ -5047,7 +5049,7 @@ export default function App() {
         handlePass();
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        return markSent('pass');
+        return markSent('pass', playerMessage.id);
       }
 
       const isHintInput = isVipHintCommand(raw);
@@ -5070,7 +5072,7 @@ export default function App() {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        return markSent('hint');
+        return markSent('hint', playerMessage.id);
       }
 
       if (isAnswerCorrect(raw, playableConsonant)) {
@@ -5096,7 +5098,7 @@ export default function App() {
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
-        return markSent('answer_correct');
+        return markSent('answer_correct', playerMessage.id);
       }
 
       const speechHit = parsePlayerSpeech(raw);
@@ -5122,7 +5124,7 @@ export default function App() {
       setInput('');
       sendCooldownUntil.current = Date.now() + 350;
       tagSlowActiveRef.current = false;
-      return markSent('answer_wrong');
+      return markSent('answer_wrong', playerMessage.id);
     } catch (error) {
       const errorMessage = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
       const next = {
@@ -5878,11 +5880,18 @@ export default function App() {
       fail('auto_answer_q1', `send_failed:${answerResult.reason ?? 'unknown'}`);
       return;
     }
+    const answerMessageId = answerResult.messageId;
+    if (!answerMessageId) {
+      fail('auto_answer_q1', 'message_injected_but_not_consumed');
+      return;
+    }
     setRunning({ autoAnswerUsed: answer });
 
     const answerConsumed = await waitFor(() => {
       const authoritative = readFullNightAuthoritativeState();
-      return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0;
+      const st = sandboxModeRef.current.getState();
+      return (authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0)
+        && (st.lastReplyEval?.messageId === answerMessageId || st.consonantJudgeAudit?.consumedAt > 0);
     }, 6_000);
     if (!answerConsumed) {
       const authoritative = readFullNightAuthoritativeState();
@@ -5902,6 +5911,11 @@ export default function App() {
     const judgeSnapshot = readFullNightAuthoritativeState();
     if (judgeSnapshot.parseRaw !== answer) {
       fail('auto_answer_q1', `parse_failed:raw_mismatch:${judgeSnapshot.parseRaw || '-'}`);
+      return;
+    }
+    const consumedEval = sandboxModeRef.current.getState().lastReplyEval;
+    if (consumedEval?.messageId !== answerMessageId || !consumedEval.consumed) {
+      fail('auto_answer_q1', 'message_injected_but_not_consumed');
       return;
     }
     if (!judgeSnapshot.parseOk) {

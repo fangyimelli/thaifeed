@@ -7,6 +7,9 @@
 
 | `secondQuestionShown` 判定 | `emit + prompt` 可能過早視為顯示成功 | `emit + prompt + renderSync.renderedQuestionId` 三者一致才為 true | 避免 `WAIT_REPLY_2` 已到但畫面仍停第一題。 |
 | state -> render commit 可觀測性 | 缺少 state/render 分離欄位 | 新增 `render.stateQuestionId/renderedQuestionId/renderBlockedReason` 與 `expectedSceneKey/videoCurrentKey` | 不一致時可直接看出阻塞原因，不再誤判已修復。 |
+| videoA/videoB swap failure diagnosis | 只有 `videoA element error` 字串，無法判斷 slot/source/swap 停點 | 新增 `slotSource/slotReadyState/slotErrorCode/activeVideoSlot/lastSwapResult`，switch success/fail 與 onError 都寫入 | 可直接定位「哪個 slot、哪個 source、哪次 swap」失敗，避免 scene_not_synced 長期誤判。 |
+| scene not synced prompt visibility recovery | gate 已 ready 但 scene key 未收斂時，prompt 可能持續 hidden | render sync 新增 `gateAuthoritativeReady`，`forceVisiblePrompt` 包含 gate-ready，並降級成 `scene_not_synced_warning` | 保持 authoritative 可答題狀態可見，不讓 render/state 永久失聯。 |
+| Night Smoke auto-answer authoritative consume | 只看 parse/flow，未綁定該次 submit message | `submitChat` 回傳 `messageId`；smoke test 驗證 `lastReplyEval.messageId === answerMessageId` 且 `consumed=true` | 避免「注入了訊息但不是這次 auto-answer 被 consume」的假通過。 |
 - Full Night Test 第二題成功採 authoritative 多條件：`flow.step>=WAIT_REPLY_2` 或 `currentPrompt.questionId==secondQuestionId` 或 `replyGate(consonant_answer+armed)` 或 `nextQuestion.emitted+toQuestionId==secondQuestionId`。
 - `render.stateQuestionId != renderedQuestionId` 不再直接導致失敗；若 authoritative 已成功則標為 render warning。
 
