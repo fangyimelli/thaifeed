@@ -1,3 +1,9 @@
+## Follow-up fix scope
+
+- Complete authoritative judge audit persistence to sandbox SSOT (`consonantJudgeAudit`) for consonant consume path.
+- Converged next-question handoff to single `ADVANCE_NEXT` consumer (`advance_next_effect`) with explicit blocked reasons and emission timestamps.
+- Added same-round preheat chat dedupe guard to prevent bootstrap/warmup replay duplicates.
+
 ## Summary
 - Implemented sandbox-only integration fix for authoritative judge observability and next-question emit stability.
 

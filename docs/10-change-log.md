@@ -1,3 +1,9 @@
+## 2026-03-10 follow-up fix（judge audit completeness + advance-next emit + preheat dedupe）
+
+- 補齊 authoritative judge audit 寫入完整度：parse 與 judge 欄位同筆落盤，不再出現 parse 有值但 judge 全空。
+- `ADVANCE_NEXT` 建立單一 consumer（`advance_next_effect`），並擴充 next-question 可觀測欄位：`ready/emitted/blockedReason/fromQuestionId/toQuestionId/decidedAt/emittedAt/consumer`。
+- 當無法 emit 下一題時，`nextQuestionBlockedReason` 保證非空。
+- preheat/ambient chat 注入改為單一責任 + fingerprint 去重，避免同輪重播暖場句。
 - 2026-03-10 sandbox_story integration fix: `WAIT_REPLY_1` 正式 gate 新增 source message binding，`replyGate.sourceMessageId` 不可為空（發問 message commit 當下即回填）。
 - 2026-03-10 sandbox_story integration fix: `answerGate` 降級為 debug compatibility mirror，不再獨立驅動流程。
 - 2026-03-10 sandbox_story integration fix: consonant evaluator 對齊 classic SSOT，改用 `normalizeInput/parseThaiConsonant/judgeConsonantAnswer`，並新增 guard 防止回退到 sandbox 自有 parser。

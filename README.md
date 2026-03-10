@@ -1,3 +1,6 @@
+- [sandbox][integration-followup][authoritative-judge-audit] 修正 `consumePlayerReply -> parseAndJudgeUsingClassic` SSOT 落盤：`consonantJudgeAudit` 現在一次性寫入 parse+judge 全欄位（含 judge.result/source ids/consumedAt），`AUTHORITATIVE JUDGE AUDIT` 僅讀這份 state。
+- [sandbox][integration-followup][advance-next-single-consumer] `ADVANCE_NEXT` 現在由 `advance_next_effect` 單一 consumer 消費；第一題 reveal 後會明確進入 `nextQuestionReady=true` 並 emit 第二題，未 emit 時一定有 `nextQuestionBlockedReason`。
+- [sandbox][integration-followup][preheat-dedupe] 新增 preheat 單一注入去重（fingerprint set），避免 warmup/ambient 於同一輪 bootstrap/sound-enabled 後重播相同暖場句。
 - [sandbox][audit-only][bopomofo-alias-debug-scheduler] 新增跨層 audit 文件：釐清 authoritative judge path、debug mapping 混源、`flow.step` 與 `scheduler.phase` 不同步根因；本次不改正式流程邏輯，僅整理修補計畫與 regression guard（`docs/sandbox-audit-bopomofo-debug-scheduler.md`）。
 - [sandbox][audit-only][consonant_answer] 追蹤判題鏈路：`consumePlayerReply -> parseAndJudgeUsingClassic -> parseThaiConsonant/judgeConsonantAnswer -> shared/consonant-engine`，本次僅新增 audit/debug 可觀測欄位，不修功能。
 - [sandbox][debug audit fields] 新增 `currentPrompt.answerSource/classicQuestionId/sharedFromClassic/acceptedAnswers/aliases`、`parse.*`、`judge.*` 與 `lastReplyEval.audit`，用於定位 `wrong_format` vs `wrong_answer` 根因。
