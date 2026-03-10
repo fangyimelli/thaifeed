@@ -1,3 +1,32 @@
+## 2026-03-10 Sandbox debug panel integration refactor
+
+### Scope
+- 僅修改 sandbox 路徑（`src/app/App.tsx`）；classic mode 未動。
+
+### Button inventory decision
+- 保留：
+  - `Pass Flow`（主流程前進）
+  - `Force Correct`（必要 override，且寫入 authoritative judge audit）
+  - `Trigger Random Ghost`（事件流測試）
+  - `Run Sandbox Flow Test`（一鍵自動驗證）
+- 刪除：`ForceResolveQna`、`ClearReplyUi`、`Force Next Node`、`Force Reveal Word`、`ForcePlayPronounce`、`ForceWave(related/surprise/guess)`。
+- 合併：`PASS (advancePrompt)` + `Force Next Node` 收斂為單一 `Pass Flow` 概念，不再雙軌。
+
+### Auto test flow
+- 新增 `runSandboxFlowTest()`：
+  1) skip preheat gate（仍走正式 flow step）
+  2) 等待 VIP tag/warmup gate
+  3) 自動送 warmup reply（正式 submit）
+  4) 等待第一題 prompt + consonant replyGate armed
+  5) 送正確答案（prompt.consonant）
+  6) 等 reveal/post-reveal done
+  7) 驗證 nextQuestionEmitted + toQuestionId（第二題確實出現）
+- 任一步失敗會記錄 failedStep/failureReason。
+
+### Formal issue fixes
+- 修正 auto-advance 在 reveal 後可能卡 `post_reveal_chat_not_done`。
+- 修正 debug override judge audit 不完整。
+
 ## Follow-up fix scope
 
 - Complete authoritative judge audit persistence to sandbox SSOT (`consonantJudgeAudit`) for consonant consume path.

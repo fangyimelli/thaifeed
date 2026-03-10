@@ -1,3 +1,10 @@
+## 2026-03-10 sandbox debug panel 收斂 + auto flow test（integration enforced）
+
+- [sandbox][debug buttons] 依 SSOT/authority 收斂 debug buttons：保留 `Pass Flow`、`Force Correct`、`Trigger Random Ghost`、`Run Sandbox Flow Test`；刪除重疊與非必要按鈕（ForceResolveQna、ClearReplyUi、Force Next Node、Force Reveal Word、ForcePlayPronounce、ForceWave*）。
+- [sandbox][auto flow test] 新增一鍵自動流程測試：透過正式 submit/evaluator/flow gate 驅動從第一題到第二題，並輸出結構化結果（running/passed/failed 與 failureReason）。
+- [sandbox][advance-next] 修正 reveal 後偶發 `post_reveal_chat_not_done` 阻塞：`ADVANCE_NEXT` 在 reveal done + gate released 時自動補完 postReveal done gate，確保可穩定進到第二題。
+- [sandbox][judge audit] `Force Correct` 改為同步完整落盤 authoritative judge audit（parse/judge/sourcePromptId/sourceQuestionId/sourceWordKey/gateType/consumedAt）。
+
 ## 2026-03-10 follow-up fix（judge audit completeness + advance-next emit + preheat dedupe）
 
 - 補齊 authoritative judge audit 寫入完整度：parse 與 judge 欄位同筆落盤，不再出現 parse 有值但 judge 全空。

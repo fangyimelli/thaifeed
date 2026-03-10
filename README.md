@@ -1,3 +1,7 @@
+- [sandbox][debug-panel][button-prune] sandbox_story debug panel 只保留必要按鈕：`Pass Flow`、`Force Correct`、`Trigger Random Ghost`、`Run Sandbox Flow Test`；移除重疊/碎片/無權威用途按鈕（ForceResolveQna/ClearReplyUi/Force Next Node/Force Reveal/ForcePlayPronounce/ForceWave*）。
+- [sandbox][auto-test-flow] 新增「Run Sandbox Flow Test」：走正式 authoritative path（VIP tag -> warmup reply -> Q1 -> correct answer -> reveal/post-reveal -> ADVANCE_NEXT -> Q2 出現），並將結果寫入 `Sandbox Flow Test`（status/currentStep/failedStep/failureReason/fromQuestionId/toQuestionId/secondQuestionShown）。
+- [sandbox][advance-next] 修正 `ADVANCE_NEXT` 卡 `post_reveal_chat_not_done`：若 reveal 已完成且 gate 已釋放，會補寫 `postRevealChatState=done` 後繼續 emit 下一題。
+- [sandbox][judge-audit] 修正 debug override judge audit：`Force Correct` 現在同步完整寫入 authoritative `consonantJudgeAudit`（parse+judge+source ids+consumedAt），避免 parse 有值但 judge 空白。
 - [sandbox][integration-followup][authoritative-judge-audit] 修正 `consumePlayerReply -> parseAndJudgeUsingClassic` SSOT 落盤：`consonantJudgeAudit` 現在一次性寫入 parse+judge 全欄位（含 judge.result/source ids/consumedAt），`AUTHORITATIVE JUDGE AUDIT` 僅讀這份 state。
 - [sandbox][integration-followup][advance-next-single-consumer] `ADVANCE_NEXT` 現在由 `advance_next_effect` 單一 consumer 消費；第一題 reveal 後會明確進入 `nextQuestionReady=true` 並 emit 第二題，未 emit 時一定有 `nextQuestionBlockedReason`。
 - [sandbox][integration-followup][preheat-dedupe] 新增 preheat 單一注入去重（fingerprint set），避免 warmup/ambient 於同一輪 bootstrap/sound-enabled 後重播相同暖場句。
