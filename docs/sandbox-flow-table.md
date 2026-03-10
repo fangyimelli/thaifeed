@@ -233,3 +233,11 @@
 | `REVEAL_WORD` enter (normal) | reveal payload initialized from current node | `word.reveal.visible=true`, `word.reveal.rendered=true`, `word.reveal.startedAt>0` | reveal init cannot skip visible/rendered/timestamp |
 | `REVEAL_WORD` done gate | reveal phase reaches `done` | reveal must have timing evidence (`startedAt>0 && finishedAt>=startedAt`) and rendered evidence (or explicit missing text block) | cannot transition to `POST_REVEAL_CHAT` when timing observability is missing |
 | Force actions | override allowed | should not be the only path that produces visible prompt/reveal | normal and force visibility behavior converged |
+
+### 2026-03-10 REVEAL_WORD normal-flow visibility hardening
+
+| Gate | Authoritative input | Required output | Guard |
+| --- | --- | --- | --- |
+| `REVEAL_WORD` activation self-repair | `flow.step=REVEAL_WORD` and reveal is `idle/hidden/not-visible/not-rendered/blockedReason=hidden/wordKey missing` | `word.reveal.visible=true`, `word.reveal.rendered=true`, `word.reveal.wordKey!=empty` when text exists, `startedAt>0` | Normal path must call `ensureRevealActivatedForNormalFlow()` instead of waiting for force-path side effects |
+| `REVEAL_WORD` done gate | `reveal.phase=done` | Require `visible=true && rendered=true && blockedReason!=hidden && startedAt>0 && finishedAt>=startedAt` before `POST_REVEAL_CHAT` | REVEAL_WORD cannot complete on hidden/partial reveal lifecycle |
+| force-path parity | `forceRevealCurrent/forceRevealDone` | Same reveal observability fields as normal flow (`wordKey/rendered/blockedReason/timestamps`) | prevent debug force path from masking normal-flow reveal activation gaps |

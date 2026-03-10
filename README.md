@@ -2021,3 +2021,4 @@ Console（debug 模式）可觀察：
 - Normal authoritative question activation now hard-syncs prompt visibility (current prompt + renderSync + overlay) without requiring debug force actions.
 - Normal `REVEAL_WORD` now initializes visible + rendered reveal state with explicit timestamps and blocks `POST_REVEAL_CHAT` if reveal timing observability is missing.
 - Debug observability now reports reply-gate-driven prompt glyph visibility source and reveal timing evidence consistently.
+- [sandbox][integration-fix][normal-reveal-activation] 修正 normal flow 在 `REVEAL_WORD` 未切換到 reveal mode 導致 `word.reveal.visible/rendered=false` 的隱藏狀態：新增 `ensureRevealActivatedForNormalFlow()` 在 `idle/hidden/not-visible/not-rendered/blockedReason=hidden/wordKey遺失` 時強制以 authoritative reveal payload 重新啟動，並要求 `reveal_word_done` 必須同時滿足 `phase=done + visible + rendered + timing(startedAt/finishedAt)`，避免 `POST_REVEAL_CHAT` 吃到假完成。

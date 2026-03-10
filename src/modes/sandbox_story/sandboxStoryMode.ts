@@ -420,7 +420,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     },
     canTriggerGhostMotion: () => ({ allowed: true, reason: 'ok' }),
     setPronounceState: (stateName: 'idle' | 'playing' | 'error', payload?: { key?: string; reason?: string }) => { state.audio = { ...state.audio, state: stateName, lastKey: payload?.key ?? state.audio.lastKey }; state.blocked = { ...state.blocked, reason: stateName === 'error' ? (payload?.reason ?? 'pronounce_failed') : '' }; },
-    forceRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, finishedAt: now, visible: false, mode: 'idle' }; },
+    forceRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, finishedAt: now, visible: true, mode: 'idle' }; },
     markRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, finishedAt: now, visible: false, mode: 'idle' }; },
     setCurrentPrompt: (prompt: SandboxPrompt) => {
       const node = ssot.nodes.find((n) => n.id === prompt.wordKey);
@@ -441,7 +441,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         commitSource: 'setCurrentPrompt'
       };
     },
-    forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); const now = Date.now(); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey, rendered: false, blockedReason: '', startedAt: state.reveal.startedAt || now, finishedAt: 0 }; return node; },
+    forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); const now = Date.now(); const revealText = node?.wordText ?? ''; state.reveal = { ...state.reveal, visible: Boolean(revealText), phase: revealText ? 'word' : 'hidden', text: revealText, wordKey: node?.id ?? prompt.wordKey, rendered: Boolean(revealText), blockedReason: revealText ? '' : 'missing_word_text', startedAt: state.reveal.startedAt || now, finishedAt: 0 }; return node; },
     commitAdvanceBlockedReason: (reason: string) => { state.advance = { ...state.advance, blockedReason: reason, lastAt: Date.now(), inFlight: false }; },
     setConsonantPromptText: (text: string) => { state.consonant = { ...state.consonant, promptText: text, promptCurrent: text }; },
     commitPromptOverlay: (overlay: any) => { state.prompt = { ...state.prompt, overlay: { ...state.prompt.overlay, ...(overlay ?? {}) } }; },
