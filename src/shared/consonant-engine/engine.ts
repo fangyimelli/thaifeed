@@ -25,6 +25,11 @@ function buildAcceptedAliasSet(question: SharedConsonantQuestion): Set<string> {
   return aliases;
 }
 
+export function getAcceptedAliasCandidatesForQuestion(question: SharedConsonantQuestion | undefined): string[] {
+  if (!question) return [];
+  return Array.from(buildAcceptedAliasSet(question)).filter(Boolean);
+}
+
 const ALL_ALIAS_TO_CONSONANT = new Map<string, string>();
 for (const question of SHARED_CONSONANT_QUESTION_BANK) {
   for (const alias of buildAcceptedAliasSet(question)) {
@@ -47,6 +52,12 @@ export function normalizeInput(raw: string): string {
 
 export function getSharedConsonantQuestionById(questionId: string): SharedConsonantQuestion | undefined {
   return QUESTION_BY_ID.get(questionId);
+}
+
+export function getAcceptedAliasCandidates(input: { questionId?: string; consonant?: string }): string[] {
+  const byId = input.questionId ? getSharedConsonantQuestionById(input.questionId) : undefined;
+  const question = byId ?? SHARED_CONSONANT_QUESTION_BANK.find((item) => item.consonant === input.consonant);
+  return getAcceptedAliasCandidatesForQuestion(question);
 }
 
 export function parseConsonantAnswer(raw: string): ConsonantParseResult {

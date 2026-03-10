@@ -58,6 +58,7 @@ import {
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState, type SandboxPrompt } from '../modes/sandbox_story/sandboxStoryMode';
 import { getClassicConsonantPrompt, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
+import { getAcceptedAliasCandidates, getSharedConsonantQuestionById } from '../shared/consonant-engine';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
@@ -851,6 +852,41 @@ export default function App() {
     replyTarget: '-',
     sourceMessageId: '-',
     sourceType: '-'
+  });
+  const sandboxConsonantAuditRef = useRef<{
+    parse: {
+      raw: string;
+      normalized: string;
+      kind: string;
+      ok: boolean;
+      blockReason: string;
+      allowedKinds: string[];
+      matchedAlias: string;
+    };
+    judge: {
+      expectedConsonant: string;
+      acceptedCandidates: string[];
+      compareInput: string;
+      compareMode: string;
+      resultReason: string;
+    };
+  }>({
+    parse: {
+      raw: '',
+      normalized: '',
+      kind: 'none',
+      ok: false,
+      blockReason: 'not_evaluated',
+      allowedKinds: ['thai_char', 'roman_alias', 'bopomofo_alias', 'question_alias'],
+      matchedAlias: ''
+    },
+    judge: {
+      expectedConsonant: '',
+      acceptedCandidates: [],
+      compareInput: '',
+      compareMode: 'normalized_alias_membership',
+      resultReason: 'not_evaluated'
+    }
   });
 
   const qnaStateRef = useRef(createInitialQnaState());
@@ -1912,7 +1948,8 @@ export default function App() {
       raw: evalState.rawInput,
       normalized: evalState.normalizedInput,
       classifiedAs: evalState.consumed ? 'consumed' : 'rejected',
-      at: now
+      at: now,
+      audit: sandboxConsonantAuditRef.current
     });
   }, [deriveSandboxReplyGateState]);
 
@@ -1995,6 +2032,7 @@ export default function App() {
             node: node && node.id === currentPrompt.wordKey ? node : undefined,
             activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
           });
+          sandboxConsonantAuditRef.current = pipeline.audit;
           consonantParsed = pipeline.parsed;
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result !== 'correct') {
@@ -2002,6 +2040,25 @@ export default function App() {
             setSandboxRevealTick(Date.now());
             return false;
           }
+        } else {
+          sandboxConsonantAuditRef.current = {
+            parse: {
+              raw,
+              normalized: stripped,
+              kind: 'no_prompt',
+              ok: false,
+              blockReason: 'missing_consonant_prompt',
+              allowedKinds: ['thai_char', 'roman_alias', 'bopomofo_alias', 'question_alias'],
+              matchedAlias: ''
+            },
+            judge: {
+              expectedConsonant: '',
+              acceptedCandidates: [],
+              compareInput: stripped,
+              compareMode: 'normalized_alias_membership',
+              resultReason: 'missing_consonant_prompt'
+            }
+          };
         }
       } else if (!stripped) {
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate });
@@ -3525,6 +3582,12 @@ export default function App() {
       } else {
         sandboxWaitReplyRuntimeRef.current = { lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0, burstStarted: false, completed: false };
       }
+      const promptQuestionId = sandboxState.prompt.current?.wordKey || '';
+      const promptQuestion = promptQuestionId ? getSharedConsonantQuestionById(promptQuestionId) : undefined;
+      const promptAcceptedCandidates = getAcceptedAliasCandidates({
+        questionId: promptQuestionId || undefined,
+        consonant: sandboxState.prompt.current?.consonant
+      });
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
@@ -3738,7 +3801,21 @@ export default function App() {
         blockedOptionsCount: sandboxBlockedOptionsCountRef.current,
         judge: {
           lastInput: sandboxState.consonant.judge.lastInput || '-',
-          lastResult: sandboxState.consonant.judge.lastResult
+          lastResult: sandboxState.consonant.judge.lastResult,
+          expectedConsonant: sandboxConsonantAuditRef.current.judge.expectedConsonant,
+          acceptedCandidates: sandboxConsonantAuditRef.current.judge.acceptedCandidates,
+          compareInput: sandboxConsonantAuditRef.current.judge.compareInput,
+          compareMode: sandboxConsonantAuditRef.current.judge.compareMode,
+          resultReason: sandboxConsonantAuditRef.current.judge.resultReason
+        },
+        parse: {
+          raw: sandboxConsonantAuditRef.current.parse.raw,
+          normalized: sandboxConsonantAuditRef.current.parse.normalized,
+          kind: sandboxConsonantAuditRef.current.parse.kind,
+          ok: sandboxConsonantAuditRef.current.parse.ok,
+          blockReason: sandboxConsonantAuditRef.current.parse.blockReason,
+          allowedKinds: sandboxConsonantAuditRef.current.parse.allowedKinds,
+          matchedAlias: sandboxConsonantAuditRef.current.parse.matchedAlias
         },
         ghost: { gate: { lastReason: sandboxState.ghostGate?.lastReason ?? '-' } },
         advance: {
@@ -3747,7 +3824,19 @@ export default function App() {
           lastReason: sandboxState.advance.lastReason || '-',
           blockedReason: sandboxState.advance.blockedReason || '-'
         },
-        currentPrompt: sandboxState.currentPrompt,
+        currentPrompt: {
+          ...(sandboxState.currentPrompt ?? {}),
+          answerSource: promptQuestion ? 'shared_consonant_question_bank' : 'runtime_prompt_only',
+          classicQuestionId: promptQuestion?.questionId ?? '-',
+          sharedFromClassic: Boolean(promptQuestion),
+          acceptedAnswers: promptQuestion?.acceptedAnswers ?? [],
+          aliases: promptQuestion?.aliases ?? []
+        },
+        answerAudit: {
+          source: promptQuestion ? 'shared_consonant_question_bank' : 'runtime_prompt_only',
+          classicQuestionId: promptQuestion?.questionId ?? '-',
+          acceptedCandidates: promptAcceptedCandidates
+        },
         prompt: {
           current: {
             kind: sandboxState.prompt.current?.kind ?? '-',
@@ -6583,6 +6672,11 @@ export default function App() {
                     <div>sandbox.prompt.current.promptId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.promptId ?? '-'}</div>
                     <div>sandbox.prompt.current.consonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.consonant ?? '-'}</div>
                     <div>sandbox.prompt.current.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.prompt?.current?.wordKey ?? '-'}</div>
+                    <div>currentPrompt.answerSource: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.answerSource ?? '-'}</div>
+                    <div>currentPrompt.classicQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.classicQuestionId ?? '-'}</div>
+                    <div>currentPrompt.sharedFromClassic: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.sharedFromClassic ?? false)}</div>
+                    <div>currentPrompt.acceptedAnswers: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.acceptedAnswers ?? [])}</div>
+                    <div>currentPrompt.aliases: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.currentPrompt?.aliases ?? [])}</div>
                     <div>sandbox.judge.result: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.result ?? '-'}</div>
                     <div>word.reveal.active: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.active ?? false)}</div>
                     <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
@@ -6614,6 +6708,18 @@ export default function App() {
                     <div>word.reveal.durationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.durationMs ?? '-'}</div>
                     <div>consonant.judge.lastInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastInput ?? '-'}</div>
                     <div>consonant.judge.lastResult: {(window.__CHAT_DEBUG__ as any)?.sandbox?.consonant?.judge?.lastResult ?? 'none'}</div>
+                    <div>parse.raw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.raw ?? '-'}</div>
+                    <div>parse.normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.normalized ?? '-'}</div>
+                    <div>parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.kind ?? '-'}</div>
+                    <div>parse.ok: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.ok ?? false)}</div>
+                    <div>parse.blockReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.blockReason ?? '-'}</div>
+                    <div>parse.allowedKinds: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.allowedKinds ?? [])}</div>
+                    <div>parse.matchedAlias: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.matchedAlias ?? '-'}</div>
+                    <div>judge.expectedConsonant: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.expectedConsonant ?? '-'}</div>
+                    <div>judge.acceptedCandidates: {JSON.stringify((window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.acceptedCandidates ?? [])}</div>
+                    <div>judge.compareInput: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.compareInput ?? '-'}</div>
+                    <div>judge.compareMode: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.compareMode ?? '-'}</div>
+                    <div>judge.resultReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.resultReason ?? '-'}</div>
                     <div>sandbox.judge.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.judge?.blockedReason ?? '-'}</div>
                     <div>sandbox.prompt.next.id: {(window.__CHAT_DEBUG__ as any)?.sandbox?.promptNext?.id ?? '-'}</div>
                   </div>
