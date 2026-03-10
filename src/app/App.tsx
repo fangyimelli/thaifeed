@@ -1966,7 +1966,17 @@ export default function App() {
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
       const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
-      const gate = deriveSandboxReplyGateState();
+      const derivedGate = deriveSandboxReplyGateState();
+      const waitReplyStep = sandboxState.flow.step === 'WAIT_WARMUP_REPLY' || sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
+      const gate = (!derivedGate.replyGateType && waitReplyStep)
+        ? {
+            ...derivedGate,
+            replyGateType: sandboxState.flow.step === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer',
+            replyGateArmed: true,
+            canReply: true,
+            replySourceMessageId: sandboxState.replyGate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || null
+          }
+        : derivedGate;
       if (!gate.replyGateType) {
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate });
         return false;
@@ -1990,8 +2000,8 @@ export default function App() {
             activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
           });
           sandboxModeRef.current.commitConsonantJudgeResult({ input: stripped, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
-          if (pipeline.result === 'wrong' || pipeline.result === 'unknown') {
-            const invalidReason = pipeline.result === 'wrong' ? 'wrong_format' : 'parse_miss';
+          if (pipeline.result === 'wrong_format' || pipeline.result === 'unknown') {
+            const invalidReason = pipeline.result === 'wrong_format' ? 'wrong_format' : 'parse_miss';
             writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: invalidReason, gate });
             setSandboxRevealTick(Date.now());
             return false;
@@ -5659,6 +5669,14 @@ export default function App() {
     if (sandboxState.flow.step === 'WAIT_REPLY_1') {
       const currentPrompt = sandboxState.prompt.current;
       const gate = sandboxState.replyGate;
+      const fallbackSourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+      if (!gate?.gateType || gate.gateType === 'none') {
+        sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceMessageId: fallbackSourceMessageId });
+        sandboxModeRef.current.setSandboxFlow({ gateType: 'consonant_answer', replyGateActive: true, canReply: true, gateConsumed: false, replySourceMessageId: fallbackSourceMessageId });
+      }
+      if (!fallbackSourceMessageId) {
+        sandboxModeRef.current.commitAdvanceBlockedReason('wait_reply_1_missing_source_message_id');
+      }
       if (currentPrompt?.kind === 'consonant') {
         const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxState.player?.handle || 'player') || 'player';
         const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
@@ -5728,6 +5746,28 @@ export default function App() {
         setPinnedReply: ({ messageId }) => {
           markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
           lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: messageId };
+          const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxModeRef.current.getState().player?.handle || 'player') || 'player';
+          sandboxModeRef.current.setReplyGate?.({
+            gateType: 'consonant_answer',
+            armed: true,
+            canReply: true,
+            gateConsumed: false,
+            targetPlayerId,
+            sourceMessageId: messageId,
+            sourceType: 'chat',
+            consumePolicy: 'classic_parse_and_judge',
+            createdAt: askedAt
+          });
+          sandboxModeRef.current.setSandboxFlow({
+            gateType: 'consonant_answer',
+            replyGateActive: true,
+            canReply: true,
+            replyTarget: targetPlayerId,
+            gateConsumed: false,
+            replySourceMessageId: messageId,
+            replySourceType: 'chat',
+            consumePolicy: 'classic_parse_and_judge'
+          });
           const pinnedOk = setPinnedQuestionMessage({ source: 'sandboxPromptCoordinator', messageId, hasTagToActiveUser: true });
           if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
         },

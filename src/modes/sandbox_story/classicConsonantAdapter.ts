@@ -1,10 +1,11 @@
 import type { NightNode } from '../../ssot/sandbox_story/types';
+import { judgeConsonantAnswer, normalizeInput, parseThaiConsonant } from '../classic/consonantJudge';
 
 type PromptInput = { nodeChar: string; node?: NightNode; activeUser: string };
 
 type ParseJudgeInput = PromptInput;
 
-type JudgeResult = 'correct' | 'wrong' | 'unknown';
+type JudgeResult = 'correct' | 'wrong_format' | 'unknown';
 
 export function getClassicConsonantPrompt(input: PromptInput) {
   return {
@@ -13,13 +14,8 @@ export function getClassicConsonantPrompt(input: PromptInput) {
 }
 
 export function parseAndJudgeUsingClassic(raw: string, input: ParseJudgeInput): { parsed: string; result: JudgeResult } {
-  const normalized = raw.trim();
-  if (!normalized) return { parsed: normalized, result: 'unknown' };
-  if (normalized === input.nodeChar || input.node?.correctKeywords?.includes(normalized)) {
-    return { parsed: normalized, result: 'correct' };
-  }
-  if (['不知道', '不知', 'ไม่รู้'].includes(normalized)) {
-    return { parsed: normalized, result: 'unknown' };
-  }
-  return { parsed: normalized, result: 'wrong' };
+  const normalized = normalizeInput(raw);
+  const parsed = parseThaiConsonant(normalized, input);
+  const result = judgeConsonantAnswer(parsed, input);
+  return { parsed: parsed.normalized, result };
 }

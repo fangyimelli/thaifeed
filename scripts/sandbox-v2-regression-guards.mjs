@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const app = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
 const mode = fs.readFileSync(new URL('../src/modes/sandbox_story/sandboxStoryMode.ts', import.meta.url), 'utf8');
+const adapter = fs.readFileSync(new URL('../src/modes/sandbox_story/classicConsonantAdapter.ts', import.meta.url), 'utf8');
 
 const checks = [
   {
@@ -154,11 +155,21 @@ if (!app.includes("'WAIT_WARMUP_REPLY'")) { throw new Error('WAIT_WARMUP_REPLY s
 if (!app.includes("gateType = waitStep === 'WAIT_WARMUP_REPLY' ? 'warmup_tag'")) { throw new Error('WAIT_WARMUP_REPLY must arm warmup_tag replyGate'); }
 if (!app.includes("if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY')")) { throw new Error('WAIT_WARMUP_REPLY gate repair guard missing'); }
 if (!app.includes("needsWarmupGateRepair")) { throw new Error('WAIT_WARMUP_REPLY replyGate invariant repair missing'); }
+if (!app.includes("if (sandboxState.flow.step === 'WAIT_REPLY_1')")) { throw new Error('WAIT_REPLY_1 consonant gate repair guard missing'); }
+if (!app.includes("needsConsonantGateRepair")) { throw new Error('WAIT_REPLY_1 consonant replyGate invariant repair missing'); }
+if (!app.includes("if (!gate?.gateType || gate.gateType === 'none')")) { throw new Error('WAIT_REPLY_1 must not allow gateType=none'); }
+if (!app.includes('wait_reply_1_missing_source_message_id')) { throw new Error('WAIT_REPLY_1 must guard non-empty sourceMessageId'); }
 if (!app.includes("if (isSandboxWaitReplyStep(sandboxState.flow.step))")) { throw new Error('wait-reply step should not fallback to free chat'); }
 if (!app.includes("setFlowStep('POST_REPLY_CHAT'")) { throw new Error('POST_REPLY_CHAT transition missing'); }
 if (!app.includes("setFlowStep('ANSWER_EVAL'")) { throw new Error('ANSWER_EVAL transition missing'); }
 if (!app.includes("setFlowStep('REVEAL_WORD'")) { throw new Error('REVEAL_WORD transition missing'); }
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT'")) { throw new Error('POST_REVEAL_CHAT transition missing'); }
+if (!app.includes("const gate = (!derivedGate.replyGateType && waitReplyStep)")) {
+  throw new Error('player input eval must not keep lastReplyEval.gateType as none during wait-reply');
+}
+if (!adapter.includes('normalizeInput(raw)') || !adapter.includes('parseThaiConsonant(normalized, input)') || !adapter.includes('judgeConsonantAnswer(parsed, input)')) {
+  throw new Error('sandbox consonant flow must use classic normalize/parse/judge pipeline');
+}
 console.log('sandbox v2 regression guards passed');
 
 

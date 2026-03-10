@@ -1,3 +1,7 @@
+- [sandbox][WAIT_REPLY_1 gate binding] `TAG_PLAYER_1 -> WAIT_REPLY_1` 發問送出後立即把 VIP 問題 `messageId` 寫入 `replyGate.sourceMessageId`（並同步 `sandboxFlow.replySourceMessageId`），確保 retry/highlight/consume 可追溯同一題來源。
+- [sandbox][legacy gate mirror] `answerGate` 改成純 compatibility mirror：`setAnswerGate` 不再獨立控制 waiting/paused，統一以正式 `replyGate` 映射，避免雙軌分裂。
+- [sandbox][classic consonant SSOT] sandbox 子音評分改走 classic pipeline：`normalizeInput() -> parseThaiConsonant() -> judgeConsonantAnswer()`；`wrong_format` 僅在無法解析任何 alias 時出現（例如 `不會` 會被判為 `unknown` 而非 format error）。
+
 - [sandbox][warmup gate authority] `WAIT_WARMUP_REPLY` 進入時強制建立正式 `replyGate`（`gateType=warmup_tag`, `armed=true`, `canReply=true`, `targetPlayerId/sourceMessageId/sourceType/consumePolicy`），並加入 step guard 自動修復缺欄位 gate。
 - [sandbox][input routing] wait-reply step 期間玩家輸入不再 fallback 到 free chat；submit 失敗仍保留在正式 evaluator 路徑，`lastReplyEval` 不再被覆寫成 `consume_fallback_to_free_chat`。
 - [sandbox][legacy mirror] `answerGate` 改由 `replyGate` 同步鏡像（compatibility only），避免 `answerGate.waiting=true` 但 `replyGate` 空殼的雙軌矛盾。

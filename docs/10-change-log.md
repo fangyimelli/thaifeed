@@ -1,3 +1,7 @@
+- 2026-03-10 sandbox_story integration fix: `WAIT_REPLY_1` 正式 gate 新增 source message binding，`replyGate.sourceMessageId` 不可為空（發問 message commit 當下即回填）。
+- 2026-03-10 sandbox_story integration fix: `answerGate` 降級為 debug compatibility mirror，不再獨立驅動流程。
+- 2026-03-10 sandbox_story integration fix: consonant evaluator 對齊 classic SSOT，改用 `normalizeInput/parseThaiConsonant/judgeConsonantAnswer`，並新增 guard 防止回退到 sandbox 自有 parser。
+
 - [sandbox][WAIT_WARMUP_REPLY] 修復 flow 已進 `WAIT_WARMUP_REPLY` 但 `replyGate` 未 armed 的缺陷；進入 wait step 時強制建/補 `warmup_tag` gate（含 `targetPlayerId/sourceMessageId/sourceType/consumePolicy`）。
 - [sandbox][routing] wait-reply step 玩家輸入改為只能走 evaluator consume，不再 fallback 成 free chat（移除該步驟 `consume_fallback_to_free_chat` 覆寫路徑）。
 - [sandbox][legacy compatibility] `answerGate` 只保留 mirror，狀態由正式 `replyGate` 同步，避免 authority 分裂。
