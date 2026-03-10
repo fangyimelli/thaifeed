@@ -1,3 +1,9 @@
+## This Change (2026-03-10 full-night auto-answer same submit/consume path)
+- `Run Full Night Test` Q1 自動答題改為與真人相同送出路徑：`submitChat` 建立 player message 後，將 `messageId/sourceType/playerId/targetPlayerId/sourceMessageId` 一併送入 `consumePlayerReply(payload)`。
+- `consumePlayerReply` 接受 authoritative metadata payload，`writeSandboxLastReplyEval` 也改為可保存真實 `messageId`，避免 debug trace 用合成 id 誤導。
+- Full Night Test Q1 驗證新增 authoritative success gate：parse 已評估、parse.ok=true、judge audit 寫入且 `consumedAt>0`、flow 離開 `WAIT_REPLY_1`。
+- Full Night Test 失敗分類改為 `message_injected_but_not_consumed` / `message_rejected_by_gate` / `parse_failed:*` / `judge_failed`，不再把「聊天室有顯示 `You X`」當成 consume 成功。
+
 ## 2026-03-10 sandbox q2 render commit fix
 
 ### Scope

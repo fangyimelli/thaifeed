@@ -1938,6 +1938,7 @@ export default function App() {
     rawInput: string;
     normalizedInput?: string;
     extractedAnswer?: string;
+    messageId?: string;
     consumed: boolean;
     reason: string;
     gate?: SandboxReplyGateState;
@@ -1947,7 +1948,7 @@ export default function App() {
     sandboxModeRef.current.setSandboxFlow({ playerLastReply: payload.normalizedInput ?? payload.rawInput.trim() });
     const evalState = {
       timestamp: now,
-      messageId: `player:${now}`,
+      messageId: payload.messageId || `player:${now}`,
       rawInput: payload.rawInput,
       normalizedInput: payload.normalizedInput ?? payload.rawInput.trim(),
       extractedAnswer: payload.extractedAnswer ?? payload.normalizedInput ?? payload.rawInput.trim(),
@@ -2021,7 +2022,8 @@ export default function App() {
     }
   }, [chatAutoScrollMode, chatFreeze.isFrozen, clearChatFreeze, clearReplyUi]);
 
-  const consumePlayerReply = useCallback((raw: string) => {
+  const consumePlayerReply = useCallback((payload: { raw: string; messageId?: string; sourceType?: string; playerId?: string; targetPlayerId?: string; sourceMessageId?: string }) => {
+    const raw = payload.raw;
     const persistJudgeAudit = (auditPatch: Record<string, unknown>) => {
       sandboxModeRef.current.setConsonantJudgeAudit?.({
         rawInput: '',
@@ -2060,12 +2062,18 @@ export default function App() {
             replySourceMessageId: derivedGate.replySourceMessageId || sandboxState.replyGate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || null
           }
         : derivedGate;
+      const evalGate = {
+        ...gate,
+        replySourceMessageId: payload.sourceMessageId || gate.replySourceMessageId,
+        replySourceType: payload.sourceType || gate.replySourceType,
+        replyTarget: payload.targetPlayerId || gate.replyTarget
+      };
       if (!gate.replyGateType) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate: evalGate, messageId: payload.messageId });
         return false;
       }
       if (!gate.replyGateArmed) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate: evalGate, messageId: payload.messageId });
         return false;
       }
       let consonantParsed = stripped;
@@ -2100,7 +2108,7 @@ export default function App() {
           consonantParsed = pipeline.parsed;
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result !== 'correct') {
-            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate });
+            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate: evalGate, messageId: payload.messageId });
             setSandboxRevealTick(Date.now());
             return false;
           }
@@ -2125,7 +2133,7 @@ export default function App() {
           });
         }
       } else if (!stripped) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate: evalGate, messageId: payload.messageId });
         return false;
       }
 
@@ -2153,10 +2161,10 @@ export default function App() {
       } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
         sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed');
       } else {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate: evalGate, messageId: payload.messageId });
         return false;
       }
-      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success', gate });
+      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success', gate: evalGate, messageId: payload.messageId });
       setSandboxRevealTick(Date.now());
       return true;
     }
@@ -3604,8 +3612,17 @@ export default function App() {
               ? '應該唸 ga'
               : (sandboxState.flow.questionIndex >= 9 ? '我猜是等待和怨念' : '我猜它在指某個女生'));
           sandboxModeRef.current.setSandboxFlow({ waitingForMockReply: false, autoplayNightStatus: 'running' });
-          dispatchChatMessage(createPlayerMessage(mock, activeUserInitialHandleRef.current || 'player'), { source: 'sandbox_consonant', sourceTag: 'sandbox_autoplay_mock_reply' });
-          consumePlayerReply(mock);
+          const mockPlayerHandle = activeUserInitialHandleRef.current || 'player';
+          const mockMessage = createPlayerMessage(mock, mockPlayerHandle);
+          dispatchChatMessage(mockMessage, { source: 'sandbox_consonant', sourceTag: 'sandbox_autoplay_mock_reply' });
+          consumePlayerReply({
+            raw: mock,
+            messageId: mockMessage.id,
+            sourceType: 'sandbox_autoplay_mock_reply',
+            playerId: mockPlayerHandle,
+            targetPlayerId: sandboxState.replyGate?.targetPlayerId || undefined,
+            sourceMessageId: sandboxState.replyGate?.sourceMessageId || undefined
+          });
         }
       }
       if (modeRef.current.id === 'sandbox_story' && sandboxState.flow.step === 'WAIT_REPLY_1' && sandboxReplyToActive) {
@@ -4933,12 +4950,20 @@ export default function App() {
       if (!activeUserInitialHandleRef.current) {
         return markBlocked('no_active_user');
       }
-      dispatchChatMessage(createPlayerMessage(outgoingText, activeUserInitialHandleRef.current), {
+      const playerMessage = createPlayerMessage(outgoingText, activeUserInitialHandleRef.current);
+      dispatchChatMessage(playerMessage, {
         source: 'player_input',
         sourceTag: source
       });
       sandboxChatEngineRef.current?.markPlayerReply(Date.now());
-      const sandboxQnaConsumed = modeRef.current.id === 'sandbox_story' ? consumePlayerReply(outgoingText) : false;
+      const sandboxQnaConsumed = modeRef.current.id === 'sandbox_story' ? consumePlayerReply({
+        raw: outgoingText,
+        messageId: playerMessage.id,
+        sourceType: source,
+        playerId: activeUserInitialHandleRef.current || undefined,
+        targetPlayerId: lockStateRef.current.target || undefined,
+        sourceMessageId: lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || undefined
+      }) : false;
       if (modeRef.current.id === 'sandbox_story') {
         if (sandboxTagPhaseTimeoutFiredRef.current) {
           const recoveryLines = ['喔喔喔', '終於', '剛剛卡住'];
@@ -5674,12 +5699,31 @@ export default function App() {
         blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted',
         flowStep: st.flow.step,
         canReply: Boolean(st.replyGate?.canReply),
+        gateType: st.replyGate?.gateType || 'none',
+        gateArmed: Boolean(st.replyGate?.armed),
         gateConsumed: Boolean(st.replyGate?.gateConsumed || st.sandboxFlow?.gateConsumed),
         parseRaw: judgeAudit?.rawInput ?? '',
         parseKind: judgeAudit?.parseKind ?? 'not_evaluated',
         parseOk: Boolean(judgeAudit?.parseOk),
-        judgeResult: judgeAudit?.judgeResult ?? ''
+        judgeResult: judgeAudit?.judgeResult ?? '',
+        judgeAuditWritten: Boolean(judgeAudit?.consumedAt && judgeAudit.consumedAt > 0),
+        consumedAt: Number(judgeAudit?.consumedAt ?? 0)
       };
+    };
+    const classifyAutoAnswerFailure = (authoritative: ReturnType<typeof readFullNightAuthoritativeState>) => {
+      if (authoritative.parseKind !== 'not_evaluated' && authoritative.parseRaw.length > 0 && !authoritative.parseOk) {
+        return `parse_failed:${authoritative.parseKind}`;
+      }
+      if (authoritative.parseOk && (!authoritative.judgeAuditWritten || authoritative.consumedAt <= 0 || !authoritative.judgeResult || authoritative.judgeResult === 'not_evaluated')) {
+        return 'judge_failed';
+      }
+      if (authoritative.parseKind === 'not_evaluated' && authoritative.parseRaw.length === 0 && authoritative.flowStep === 'WAIT_REPLY_1' && authoritative.gateArmed && authoritative.gateType === 'consonant_answer' && authoritative.canReply) {
+        return 'message_injected_but_not_consumed';
+      }
+      if (authoritative.flowStep === 'WAIT_REPLY_1' && !authoritative.canReply) {
+        return 'message_rejected_by_gate';
+      }
+      return 'answer_not_consumed';
     };
     const fail = (failedStep: string, failureReason: string) => {
       const authoritative = readFullNightAuthoritativeState();
@@ -5798,14 +5842,11 @@ export default function App() {
 
     const answerConsumed = await waitFor(() => {
       const authoritative = readFullNightAuthoritativeState();
-      return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed;
+      return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0;
     }, 6_000);
     if (!answerConsumed) {
       const authoritative = readFullNightAuthoritativeState();
-      const failureReason = authoritative.parseRaw
-        ? 'judge_not_triggered'
-        : (authoritative.canReply ? 'answer_not_consumed' : 'answer_not_submitted');
-      fail('auto_answer_q1', failureReason);
+      fail('auto_answer_q1', classifyAutoAnswerFailure(authoritative));
       return;
     }
 
@@ -5814,13 +5855,25 @@ export default function App() {
       return authoritative.parseKind !== 'not_evaluated' && authoritative.parseRaw.length > 0;
     }, 6_000);
     if (!judgeTriggered) {
-      fail('auto_answer_q1', 'judge_not_triggered');
+      fail('auto_answer_q1', classifyAutoAnswerFailure(readFullNightAuthoritativeState()));
       return;
     }
 
     const judgeSnapshot = readFullNightAuthoritativeState();
+    if (judgeSnapshot.parseRaw !== answer) {
+      fail('auto_answer_q1', `parse_failed:raw_mismatch:${judgeSnapshot.parseRaw || '-'}`);
+      return;
+    }
     if (!judgeSnapshot.parseOk) {
-      fail('auto_answer_q1', `judge_parse_failed:${judgeSnapshot.parseKind}`);
+      fail('auto_answer_q1', `parse_failed:${judgeSnapshot.parseKind}`);
+      return;
+    }
+    if (!judgeSnapshot.judgeAuditWritten || judgeSnapshot.consumedAt <= 0 || !judgeSnapshot.judgeResult || judgeSnapshot.judgeResult === 'not_evaluated') {
+      fail('auto_answer_q1', 'judge_failed');
+      return;
+    }
+    if (judgeSnapshot.flowStep === 'WAIT_REPLY_1') {
+      fail('auto_answer_q1', 'message_injected_but_not_consumed');
       return;
     }
 
@@ -5831,10 +5884,7 @@ export default function App() {
     if (!revealDone) {
       const authoritative = readFullNightAuthoritativeState();
       if (authoritative.flowStep === 'WAIT_REPLY_1') {
-        const failureReason = authoritative.parseRaw
-          ? (authoritative.parseKind === 'not_evaluated' ? 'judge_not_triggered' : 'answer_not_consumed')
-          : (authoritative.canReply ? 'answer_not_consumed' : 'answer_not_submitted');
-        fail('auto_answer_q1', failureReason);
+        fail('auto_answer_q1', classifyAutoAnswerFailure(authoritative));
         return;
       }
       if (authoritative.secondQuestionAuthoritative) {

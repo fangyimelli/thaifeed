@@ -352,7 +352,7 @@ if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted
 if (!app.includes("const answerConsumed = await waitFor(() =>")) {
   throw new Error('Run Full Night Test auto answer must wait for authoritative consume path');
 }
-if (!app.includes("return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed;")) {
+if (!app.includes("return authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0;")) {
   throw new Error('Run Full Night Test auto answer must not stay at WAIT_REPLY_1 after submission');
 }
 if (!app.includes("const judgeTriggered = await waitFor(() =>")) {
@@ -361,8 +361,11 @@ if (!app.includes("const judgeTriggered = await waitFor(() =>")) {
 if (!app.includes("authoritative.parseKind !== 'not_evaluated' && authoritative.parseRaw.length > 0")) {
   throw new Error('Run Full Night Test must enforce parse.kind/raw completion after auto answer');
 }
-if (!app.includes("fail('auto_answer_q1', 'judge_not_triggered')") || !app.includes("'answer_not_consumed'") || !app.includes("'answer_not_submitted'")) {
-  throw new Error('Run Full Night Test failure reasons must reflect authoritative stop point');
+if (!app.includes('if (judgeSnapshot.parseRaw !== answer)')) {
+  throw new Error('Run Full Night Test must verify authoritative parse.raw equals the auto answer content');
+}
+if (!app.includes("'message_injected_but_not_consumed'") || !app.includes("'message_rejected_by_gate'") || !app.includes('parse_failed:${') || !app.includes("'judge_failed'")) {
+  throw new Error('Run Full Night Test failure reasons must distinguish inject/gate/parse/judge authoritative states');
 }
 if (!app.includes("if (authoritative.flowStep === 'WAIT_REPLY_1')")) {
   throw new Error('Run Full Night Test must map reveal timeout failure to authoritative WAIT_REPLY_1 state');
@@ -373,6 +376,18 @@ if (!app.includes('const expectedGateType = waitReplyStep')) {
 }
 if (!app.includes('replyGateType: expectedGateType')) {
   throw new Error('consumePlayerReply must override stale gateType during wait-reply steps');
+}
+if (!app.includes('const consumePlayerReply = useCallback((payload: { raw: string; messageId?: string; sourceType?: string; playerId?: string; targetPlayerId?: string; sourceMessageId?: string }) =>')) {
+  throw new Error('consumePlayerReply must accept authoritative submission metadata payload');
+}
+if (!app.includes('messageId: playerMessage.id') || !app.includes('sourceType: source') || !app.includes('sourceMessageId: lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || undefined')) {
+  throw new Error('real player submit path must pass authoritative message metadata to consumePlayerReply');
+}
+if (!app.includes("sourceType: 'sandbox_autoplay_mock_reply'") || !app.includes('targetPlayerId: sandboxState.replyGate?.targetPlayerId || undefined')) {
+  throw new Error('auto-answer submission path must pass authoritative metadata to consumePlayerReply');
+}
+if (!app.includes('messageId: payload.messageId || `player:${now}`')) {
+  throw new Error('lastReplyEval must preserve authoritative messageId when available');
 }
 if (!app.includes("expectedConsonant: pipeline.audit.judge.expectedConsonant") || !app.includes("acceptedCandidates: pipeline.audit.judge.acceptedCandidates") || !app.includes("compareMode: pipeline.audit.judge.compareMode") || !app.includes("resultReason: pipeline.audit.judge.resultReason") || !app.includes("sourcePromptId: currentPrompt.promptId") || !app.includes("sourceQuestionId: node?.id ?? currentPrompt.wordKey") || !app.includes("sourceWordKey: currentPrompt.wordKey") || !app.includes("consumedAt: consumeAt")) {
   throw new Error('consumePlayerReply must persist full authoritative judge audit fields for normal/auto answers');
