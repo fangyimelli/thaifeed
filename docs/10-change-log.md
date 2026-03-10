@@ -1,3 +1,8 @@
+- [sandbox][debug-panel] Sandbox debug panel 改為 `Flow Test` + `Force Debug` 兩區，僅保留 `Run Full Night Test`、`Pass Flow`、`Force Correct Now`、`Force Next Question`、`Force Ghost Event`。
+- [sandbox][full-night-test] `Run Full Night Test` 每次先強制 bootstrap/re-init 乾淨起點，修正中途狀態導致 `vip_tag_not_emitted` 假失敗問題。
+- [sandbox][force-path] `Pass Flow`（正式 guard path）與 `Force Next Question`（force path）語義分離：前者走 `advancePrompt`，後者走 `forceAdvanceNode` + `nextQuestion*` authoritative audit。
+- [sandbox][force-correct] `Force Correct Now` 保持完整 judge audit 寫入，且 blockedReason 僅在 truly impossible 條件出現。
+
 ## 2026-03-10 sandbox debug panel 收斂 + auto flow test（integration enforced）
 
 - [sandbox][debug buttons] 依 SSOT/authority 收斂 debug buttons：保留 `Pass Flow`、`Force Correct`、`Trigger Random Ghost`、`Run Sandbox Flow Test`；刪除重疊與非必要按鈕（ForceResolveQna、ClearReplyUi、Force Next Node、Force Reveal Word、ForcePlayPronounce、ForceWave*）。
