@@ -1,4 +1,5 @@
 | `Run Full Night Test` second question assert | `flow.questionIndex >= 1 && nextQuestionEmitted && toQuestionId` | `nextQuestionEmitted && toQuestionId`（authoritative） | `questionIndex` 可能暫時未收斂，曾造成 emitted=true 仍誤判失敗。 |
+| `Run Full Night Test` auto-answer consume/judge convergence | autoAnswer 送出後直接等 reveal/post-reveal | 先等 authoritative consume（離開 `WAIT_REPLY_1` 或 gateConsumed）+ parse/judge 完整（`parse.raw`、`parse.kind!=not_evaluated`、`parse.ok=true`）再進 reveal 檢查 | 避免只顯示答案未正式提交/consume 就誤判後段失敗。 |
 | `Run Full Night Test` fail write timing | timeout 立即寫 `failedStep=second_question` | fail 前二次收斂 authoritative emit；若已 emit 直接 pass | 避免 stale timeout 與正式 emit 競態。 |
 | wait-reply gateType source (judge path) | 優先沿用 derived/stale gateType | wait-reply 一律以 `flow.step` 派生 expected gateType | 防止 `WAIT_REPLY_1` 被舊 `warmup_tag` 污染，導致 judge audit 半段缺值。 |
 ## 2026-03 Debug Panel Restructure (Flow Test / Force Debug)

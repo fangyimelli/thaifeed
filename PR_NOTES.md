@@ -1,3 +1,8 @@
+## This Change (2026-03-10 full-night authoritative auto-answer fix)
+- 修正 `Run Full Night Test` 自動答題驗證：提交後先等 authoritative consume（`flow.step` 不再是 `WAIT_REPLY_1` 或 gateConsumed=true），再等 parse/judge（`parse.raw` 有值、`parse.kind != not_evaluated`、`parse.ok=true`）。
+- 修正失敗分類：若 authoritative 仍卡在 `WAIT_REPLY_1`，改回報 `answer_not_submitted` / `answer_not_consumed` / `judge_not_triggered`，`failedStep` 回填 `auto_answer_q1`，與 authoritative flow 停點一致。
+- 新增 regression guards：禁止 Full Night Test 在 `autoAnswerUsed` 後仍以 `WAIT_REPLY_1 + parse.not_evaluated` 進入誤導失敗分類。
+
 ## This Change (authoritative follow-up #2)
 - 修正 `Run Full Night Test` 第二題成功判定：以 authoritative `sandboxFlow.nextQuestionEmitted/toQuestionId` 為準。
 - 新增 fail 前 authoritative re-converge：timeout 後先再次收斂 `nextQuestion` emit，若已 emit 直接 `passed`，不可再寫 `failedStep=second_question`。
