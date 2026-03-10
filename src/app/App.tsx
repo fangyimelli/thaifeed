@@ -1980,7 +1980,7 @@ export default function App() {
         return false;
       }
 
-      if (gate.replyGateType === 'consonant_guess') {
+      if (gate.replyGateType === 'consonant_guess' || gate.replyGateType === 'consonant_answer') {
         const currentPrompt = sandboxState.prompt.current;
         const node = sandboxModeRef.current.getCurrentNode();
         if (currentPrompt?.kind === 'consonant') {
@@ -5276,13 +5276,11 @@ export default function App() {
   const hasSandboxQuestionPrerequisites = useCallback((sandboxState: ReturnType<ReturnType<typeof createSandboxStoryMode>['getState']>) => {
     const currentPrompt = sandboxState.prompt.current;
     return Boolean(
-      sandboxState.reveal.visible
-      && currentPrompt?.kind === 'consonant'
+      currentPrompt?.kind === 'consonant'
       && currentPrompt.promptId
       && currentPrompt.wordKey
       && currentPrompt.consonant
       && sandboxState.consonant.nodeChar
-      && sandboxState.reveal.wordKey
     );
   }, []);
 
@@ -5622,9 +5620,6 @@ export default function App() {
           unknownKeywords: node.unknownKeywords ?? ['不知道']
         });
       }
-      if (!sandboxState.reveal.visible) {
-        sandboxModeRef.current.forceRevealCurrent();
-      }
       const hydratedState = sandboxModeRef.current.getState();
       if (hasSandboxQuestionPrerequisites(hydratedState)) {
         sandboxModeRef.current.setFlowStep('REVEAL_1_RIOT', 'reveal_prompt_ready', Date.now());
@@ -5662,6 +5657,23 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'WAIT_REPLY_1') {
+      const currentPrompt = sandboxState.prompt.current;
+      const gate = sandboxState.replyGate;
+      if (currentPrompt?.kind === 'consonant') {
+        const targetPlayerId = normalizeHandle(activeUserInitialHandleRef.current || sandboxState.player?.handle || 'player') || 'player';
+        const sourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || '';
+        const sourceType = gate?.sourceType || 'chat';
+        const consumePolicy = gate?.consumePolicy || 'single';
+        const needsConsonantGateRepair = gate?.gateType !== 'consonant_answer' || !gate?.armed || !gate?.canReply || !gate?.targetPlayerId || !sourceMessageId || !gate?.sourceType || !gate?.consumePolicy;
+        if (needsConsonantGateRepair) {
+          const askedAt = sandboxState.flow.stepStartedAt || Date.now();
+          sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, targetPlayerId, sourceMessageId, sourceType, consumePolicy, createdAt: askedAt });
+          sandboxModeRef.current.setSandboxFlow({ gateType: 'consonant_answer', replyGateActive: true, canReply: true, replyTarget: targetPlayerId, gateConsumed: false, replySourceMessageId: sourceMessageId, replySourceType: sourceType, consumePolicy });
+        }
+      }
+      if (sandboxState.reveal.visible && sandboxState.consonant?.judge?.lastResult === 'idle') {
+        sandboxModeRef.current.setReveal?.({ visible: false, phase: 'idle', text: '', wordKey: '' });
+      }
       if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       if (!hasSandboxQuestionPrerequisites(sandboxState)) {
         sandboxModeRef.current.setSandboxFlow({ canReply: false, replyGateActive: false });
