@@ -205,6 +205,23 @@ if (!app.includes('scheduler.phase (non-authoritative)')) {
 if (!app.includes("nextQuestionBlockedReason: 'reply_gate_still_armed'")) {
   throw new Error('ADVANCE_NEXT should have single-path guard against armed replyGate');
 }
+
+if (!adapter.includes('result: JudgeResult')) {
+  throw new Error('classic adapter judge audit must expose authoritative judge.result');
+}
+if (!app.includes('judgeResult: pipeline.audit.judge.result')) {
+  throw new Error('consumePlayerReply must persist judge.result from authoritative pipeline audit');
+}
+if (!app.includes("nextQuestionConsumer: 'advance_next_effect'")) {
+  throw new Error('ADVANCE_NEXT must have a single explicit consumer tag for next-question emission');
+}
+if (!app.includes('nextQuestionFromQuestionId') || !app.includes('nextQuestionToQuestionId') || !app.includes('nextQuestionDecidedAt') || !app.includes('nextQuestionEmittedAt')) {
+  throw new Error('nextQuestion audit observability fields are incomplete');
+}
+if (!app.includes('sandboxPreheatDedupRef') || !app.includes('emittedFingerprints')) {
+  throw new Error('preheat duplicate injection dedupe state missing');
+}
+
 console.log('sandbox v2 regression guards passed');
 
 

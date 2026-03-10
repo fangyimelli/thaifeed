@@ -111,3 +111,19 @@
   - `postRevealChatState: started -> done`
   - `nextQuestionReady/nextQuestionEmitted/nextQuestionBlockedReason`
   - `ADVANCE_NEXT` consumer 僅在 `replyGate` 已釋放時前進，避免第一題後卡住。
+
+## Follow-up integration guardrails (2026-03-10)
+
+- Authoritative judge audit SSOT: `state.consonantJudgeAudit`（panel 僅可讀這裡，不可再混讀 parse-only/ref state）。
+- `ADVANCE_NEXT` 單一 consumer：`advance_next_effect`。
+- next-question observability（必填）：
+  - `nextQuestionReady`
+  - `nextQuestionEmitted`
+  - `nextQuestionBlockedReason`
+  - `nextQuestionFromQuestionId`
+  - `nextQuestionToQuestionId`
+  - `nextQuestionDecidedAt`
+  - `nextQuestionEmittedAt`
+  - `nextQuestionConsumer`
+- 規則：若 `nextQuestionEmitted=false`，`nextQuestionBlockedReason` 不可為空。
+- 規則：同輪 preheat/warmup 注入不得重播同 fingerprint 句。

@@ -33,6 +33,7 @@ export function parseAndJudgeUsingClassic(raw: string, input: ParseJudgeInput): 
       acceptedCandidates: string[];
       compareInput: string;
       compareMode: string;
+      result: JudgeResult;
       resultReason: string;
     };
   };
@@ -60,6 +61,7 @@ export function parseAndJudgeUsingClassic(raw: string, input: ParseJudgeInput): 
         acceptedCandidates,
         compareInput: parsed.normalized,
         compareMode: 'normalized_alias_membership',
+        result,
         resultReason: result
       }
     }
