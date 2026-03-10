@@ -309,7 +309,14 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     },
     commitConsonantJudgeResult: () => undefined,
     setFreeze: (v: any) => { state.freeze = { ...state.freeze, ...v }; },
-    setAnswerGate: (v: any) => { state.answerGate = { ...state.answerGate, ...v }; },
+    setAnswerGate: (v: any) => {
+      state.answerGate = {
+        ...state.answerGate,
+        ...v,
+        waiting: Boolean(state.replyGate.armed && state.replyGate.gateType !== 'none'),
+        pausedChat: Boolean(state.replyGate.armed && state.replyGate.canReply),
+      };
+    },
     commitPinnedWriter: () => undefined,
     commitPromptPinnedRendered: () => undefined,
     canTriggerGhostMotion: () => ({ allowed: true, reason: 'ok' }),

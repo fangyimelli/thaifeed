@@ -1,3 +1,10 @@
+## This PR (WAIT_REPLY_1 consonant/classic integration alignment)
+- 修復 `TAG_PLAYER_1 -> WAIT_REPLY_1` 後 `replyGate.sourceMessageId` 為空：當 VIP 題目 message committed 時立刻回填到 `replyGate/sourceMessageId` + `sandboxFlow.replySourceMessageId`。
+- `answerGate` 改為純 compatibility mirror（由 `replyGate` 映射 waiting/paused），不再獨立影響 state authority。
+- sandbox consonant evaluator 改接 classic pipeline：`normalizeInput()` -> `parseThaiConsonant()` -> `judgeConsonantAnswer()`。
+- `wrong_format` 現僅在無法解析 alias 時出現；像 `不會` 會判為 `unknown`。
+- 新增 regression guards：`WAIT_REPLY_1` 的 gateType/sourceMessageId invariants、player input `lastReplyEval.gateType` 非 `none`、classic parser pipeline 使用檢查。
+
 ## This PR (WAIT_WARMUP_REPLY replyGate authority alignment)
 - 修復 `flow.step=WAIT_WARMUP_REPLY` 時正式 `replyGate` 缺失/未 armed 問題：進入 wait step 後若 gateType/armed/canReply/target/sourceMessageId 任一缺失，立即補齊 `warmup_tag` gate。
 - 將 warmup gate 正式名稱統一為 `warmup_tag`，並保證 `targetPlayerId/sourceMessageId/sourceType/consumePolicy` 完整存在。

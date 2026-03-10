@@ -1,3 +1,9 @@
+### Integration guards (WAIT_REPLY_1 consonant authority)
+- Guard 1: `flow.step=WAIT_REPLY_1` 時 `replyGate.gateType != none`。
+- Guard 2: `flow.step=WAIT_REPLY_1` 時 `replyGate.sourceMessageId` 不可為空。
+- Guard 3: `prompt.current.kind=consonant` 時 evaluator 必須使用 classic pipeline（`normalizeInput -> parseThaiConsonant -> judgeConsonantAnswer`）。
+- Guard 4: 玩家輸入評估寫入 `lastReplyEval` 時 `gateType` 不可為 `none`。
+
 - PREHEAT contract（強制）：
   - 啟動路徑：`BOOT -> PREHEAT_CHAT`（mode entry 即啟動，禁止停在 `-`）。
   - `introGate.minDurationMs=30000`，未滿 30 秒不得出題 / 不得要求玩家回答泰文題。
