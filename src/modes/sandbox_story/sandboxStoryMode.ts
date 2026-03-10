@@ -23,6 +23,22 @@ export type SandboxFearDebugState = {
 
 const SANDBOX_BOOTSTRAP_MIN_DURATION_MS = 30_000;
 
+function mirrorAnswerGateFromReplyGate(
+  answerGate: Record<string, any> | undefined,
+  replyGate: Record<string, any> | undefined,
+  fallbackAskedAt: number
+) {
+  const armed = Boolean(replyGate?.armed && replyGate?.gateType && replyGate.gateType !== 'none');
+  return {
+    ...(answerGate ?? {}),
+    waiting: armed,
+    pausedChat: armed,
+    askedAt: armed
+      ? (replyGate?.createdAt ?? answerGate?.askedAt ?? fallbackAskedAt)
+      : 0
+  };
+}
+
 export const createSandboxV2InitialState = () => {
   const bootAt = Date.now();
   const initialTransitions = [
@@ -128,6 +144,7 @@ export function ensureSandboxV2StateShape(raw: any) {
     gateType: legacyReplyGate.gateType ?? legacyReplyGate.type ?? base.replyGate.gateType,
     targetPlayerId: legacyReplyGate.targetPlayerId ?? legacyReplyGate.targetActor ?? base.replyGate.targetPlayerId
   };
+  next.answerGate = mirrorAnswerGateFromReplyGate(raw?.answerGate ?? base.answerGate, next.replyGate, next.flow?.stepStartedAt ?? Date.now());
   next.lastReplyEval = raw?.lastReplyEval ? { ...(base.lastReplyEval ?? {}), ...(raw?.lastReplyEval ?? {}) } : null;
   next.techBacklog = { ...base.techBacklog, ...(raw?.techBacklog ?? {}) };
   next.theory = { ...base.theory, ...(raw?.theory ?? {}) };
@@ -267,10 +284,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         targetPlayerId: state.sandboxFlow.replyTarget ?? state.replyGate.targetPlayerId
       };
       state.answerGate = {
-        ...state.answerGate,
-        waiting: Boolean(state.replyGate.armed && state.replyGate.gateType !== 'none'),
-        pausedChat: Boolean(state.replyGate.armed && state.replyGate.canReply),
-        askedAt: state.answerGate?.askedAt ?? state.flow?.stepStartedAt ?? Date.now()
+        ...mirrorAnswerGateFromReplyGate(state.answerGate, state.replyGate, state.flow?.stepStartedAt ?? Date.now())
       };
     },
     setReplyGate: (v: any) => {
@@ -287,10 +301,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         consumePolicy: state.replyGate.consumePolicy,
       };
       state.answerGate = {
-        ...state.answerGate,
-        waiting: Boolean(state.replyGate.armed && state.replyGate.gateType !== 'none'),
-        pausedChat: Boolean(state.replyGate.armed && state.replyGate.canReply),
-        askedAt: state.answerGate?.askedAt ?? state.flow?.stepStartedAt ?? Date.now()
+        ...mirrorAnswerGateFromReplyGate(state.answerGate, state.replyGate, state.flow?.stepStartedAt ?? Date.now())
       };
     },
     setLastReplyEval: (evalPatch: any) => {
@@ -337,12 +348,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     },
     setFreeze: (v: any) => { state.freeze = { ...state.freeze, ...v }; },
     setAnswerGate: (v: any) => {
-      state.answerGate = {
-        ...state.answerGate,
-        ...v,
-        waiting: Boolean(state.replyGate.armed && state.replyGate.gateType !== 'none'),
-        pausedChat: Boolean(state.replyGate.armed && state.replyGate.canReply),
-      };
+      state.answerGate = mirrorAnswerGateFromReplyGate({ ...state.answerGate, ...(v ?? {}) }, state.replyGate, state.flow?.stepStartedAt ?? Date.now());
     },
     commitPinnedWriter: () => undefined,
     commitPromptPinnedRendered: () => undefined,
