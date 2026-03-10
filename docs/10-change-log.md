@@ -982,3 +982,11 @@
 - [sandbox] guard：`reveal_word_done` 只允許在 `reveal.phase=done` 且 `reveal.rendered=true`（或 `missing_word_text` 明確阻塞原因）時觸發。
 - [sandbox][debug] 新增 reveal observability：`visible/wordKey/text/base/rest/startedAt/finishedAt/rendered/blockedReason`。
 - [classic] 無變更。
+
+
+## 2026-03-10 — sandbox normal-path prompt/reveal visibility convergence
+
+- [sandbox][flow/ui] `WAIT_REPLY_1` normal path now commits authoritative prompt visibility sync (`currentPrompt`/overlay/renderSync) so prompt bubble + glyph show without force actions.
+- [sandbox][reveal] `REVEAL_WORD` normal path now sets `visible/rendered/startedAt` at activation and blocks completion when reveal timing observability (`startedAt/finishedAt`) is missing.
+- [sandbox][debug] reveal render callback now backfills `startedAt` when rendered evidence arrives; debug glyph source can explicitly report reply-gate authoritative sync.
+- [guards] regression guards added for normal prompt activation visibility, normal reveal visibility initialization, and reveal done timing gate.

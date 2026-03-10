@@ -223,3 +223,13 @@
 - Debug mirror now includes `sandbox.reveal.text` alongside `visible/phase/wordKey/startedAt/finishedAt/rendered/blockedReason`.
 - Purpose: keep reveal payload inspection in a single authoritative block (`sandbox.reveal`) during REVEAL_WORD audits.
 - No flow transition rule/timer changed in this update.
+
+
+## 2026-03-10 patch note — visibility contract (normal vs force)
+
+| Flow step | Required authoritative state | Required visible state | Guard |
+| --- | --- | --- | --- |
+| `WAIT_REPLY_1` (normal) | `currentPrompt.kind=consonant`, `replyGate.armed=true`, `replyGate.canReply=true` | prompt overlay consonant committed, `renderSync.renderedQuestionId = currentPrompt.wordKey`, prompt glyph visible source from authoritative gate sync | `wait_reply_1_gate_armed` renderSync commit must exist |
+| `REVEAL_WORD` enter (normal) | reveal payload initialized from current node | `word.reveal.visible=true`, `word.reveal.rendered=true`, `word.reveal.startedAt>0` | reveal init cannot skip visible/rendered/timestamp |
+| `REVEAL_WORD` done gate | reveal phase reaches `done` | reveal must have timing evidence (`startedAt>0 && finishedAt>=startedAt`) and rendered evidence (or explicit missing text block) | cannot transition to `POST_REVEAL_CHAT` when timing observability is missing |
+| Force actions | override allowed | should not be the only path that produces visible prompt/reveal | normal and force visibility behavior converged |

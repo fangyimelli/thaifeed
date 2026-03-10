@@ -441,3 +441,17 @@ if (!app.includes("word.reveal.rendered") || !app.includes("word.reveal.blockedR
 if (!mode.includes("rendered: false") || !mode.includes("startedAt: 0") || !mode.includes("finishedAt: 0") || !mode.includes("blockedReason: ''")) {
   throw new Error('sandbox reveal state schema must include rendered/start/finish/blockedReason fields');
 }
+
+
+if (!app.includes("commitSource: 'wait_reply_1_gate_armed'") || !app.includes("renderedQuestionId: currentPrompt.wordKey")) {
+  throw new Error('normal WAIT_REPLY_1 activation must commit authoritative prompt visibility sync');
+}
+if (!app.includes("source: (sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar'")) {
+  throw new Error('debug ui.promptGlyph visibility source must show authoritative reply-gate sync');
+}
+if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_done_missing_timing_observability")) {
+  throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and block silent completion');
+}
+if (!app.includes("startedAt: nextStartedAt")) {
+  throw new Error('reveal render-state callback must backfill startedAt when rendered evidence arrives');
+}

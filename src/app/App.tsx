@@ -3756,13 +3756,16 @@ export default function App() {
         ui: {
           consonantBubble: {
             visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)
+              && (sandboxState.replyGate?.armed ? Boolean(renderedQuestionId) : true)
               && !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
           },
           promptGlyph: {
             className: 'glyph-blink sandbox-story-prompt-glyph',
             colorResolved: '#8fd6ff',
-            opacityResolved: !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done') ? 'dynamic' : '0',
-            source: 'cssVar',
+            opacityResolved: (sandboxState.replyGate?.armed && renderedQuestionId)
+              ? '1'
+              : (!(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done') ? 'dynamic' : '0'),
+            source: (sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar',
             isBlueExpected: true
           }
         },
@@ -6125,6 +6128,16 @@ export default function App() {
     if (sandboxState.flow.step === 'WAIT_REPLY_1') {
       const currentPrompt = sandboxState.prompt.current;
       const gate = sandboxState.replyGate;
+      const activePromptArmed = currentPrompt?.kind === 'consonant' && Boolean(gate?.armed && gate?.canReply && gate?.gateType !== 'none');
+      if (activePromptArmed) {
+        sandboxModeRef.current.commitPromptOverlay({ consonantShown: currentPrompt.consonant });
+        sandboxModeRef.current.commitRenderSync?.({
+          stateQuestionId: currentPrompt.wordKey,
+          renderedQuestionId: currentPrompt.wordKey,
+          renderBlockedReason: 'none',
+          commitSource: 'wait_reply_1_gate_armed'
+        });
+      }
       const fallbackSourceMessageId = gate?.sourceMessageId || lockStateRef.current.replyingToMessageId || qnaStateRef.current.active.questionMessageId || lastQuestionMessageId || '';
       if (!gate?.gateType || gate.gateType === 'none') {
         sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceMessageId: fallbackSourceMessageId });
@@ -6248,9 +6261,12 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'REVEAL_WORD') {
-      if (sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text')) {
+      const revealHasObservableTiming = sandboxState.reveal.startedAt > 0 && sandboxState.reveal.finishedAt > 0 && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
+      if (sandboxState.reveal.phase === 'done' && revealHasObservableTiming && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text')) {
         sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
         setSandboxRevealTick(Date.now());
+      } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_done_missing_timing_observability' });
       } else if (sandboxState.reveal.phase === 'idle') {
         const revealStartedAt = Date.now();
         const node = sandboxModeRef.current.forceRevealCurrent?.();
@@ -6269,7 +6285,7 @@ export default function App() {
           startedAt: revealStartedAt,
           finishedAt: 0,
           doneAt: 0,
-          rendered: false,
+          rendered: Boolean(revealText),
           blockedReason: revealText ? '' : 'missing_word_text',
           baseGrapheme,
           restText,
@@ -6786,12 +6802,14 @@ export default function App() {
     const preserveRenderedAfterDone = st.reveal.phase === 'done' && st.reveal.rendered && !payload.rendered;
     const nextRendered = preserveRenderedAfterDone ? true : payload.rendered;
     const nextBlockedReason = preserveRenderedAfterDone ? '' : (payload.blockedReason || '');
+    const nextStartedAt = nextRendered ? (st.reveal.startedAt || now) : st.reveal.startedAt;
     const nextFinishedAt = st.reveal.phase === 'done'
       ? (st.reveal.finishedAt || now)
       : (nextRendered ? 0 : st.reveal.finishedAt || 0);
     sandboxModeRef.current.setReveal?.({
       rendered: nextRendered,
       blockedReason: nextBlockedReason,
+      startedAt: nextStartedAt,
       finishedAt: nextFinishedAt
     });
     if (st.flow.step === 'POST_REVEAL_CHAT' && !nextRendered && st.reveal.phase !== 'done') {

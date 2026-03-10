@@ -194,3 +194,24 @@
 - 新增最短可見時間常數：`SANDBOX_REVEAL_VISIBLE_MIN_MS=2500`。
 - debug panel 與 `window.__CHAT_DEBUG__.sandbox.word.reveal` 新增 reveal 可見性稽核欄位。
 - regression guard 新增 reveal 可見性與 done gate 檢查，避免 Q1/Q2 只過 flow 不過畫面。
+
+
+## 2026-03-10 sandbox prompt/reveal normal-flow visibility fix
+
+### Scope
+- Sandbox mode integration path only (no classic mode changes).
+
+### What changed
+- Normal question activation (`WAIT_REPLY_1`) now performs authoritative visibility sync equivalent to force-visible behavior:
+  - commits prompt overlay consonant,
+  - commits `renderSync.stateQuestionId/renderedQuestionId`,
+  - ensures prompt UI visibility derives from reply-gate-authoritative state.
+- Normal `REVEAL_WORD` now initializes reveal as visible/rendered with `startedAt`, then enforces done-gate timing observability (`startedAt/finishedAt`) before `POST_REVEAL_CHAT`.
+- Reveal render callback now backfills `startedAt` whenever rendered evidence is first observed.
+
+### Regression guards
+- Added guards for:
+  - normal WAIT_REPLY prompt visibility sync,
+  - reply-gate-driven prompt glyph visibility source,
+  - reveal visible/rendered/timing initialization,
+  - REVEAL_WORD done blocking when timing observability is missing.
