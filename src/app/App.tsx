@@ -1985,28 +1985,27 @@ export default function App() {
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate });
         return false;
       }
-      if (!stripped) {
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate });
-        return false;
-      }
-
+      let consonantParsed = stripped;
       if (gate.replyGateType === 'consonant_guess' || gate.replyGateType === 'consonant_answer') {
         const currentPrompt = sandboxState.prompt.current;
         const node = sandboxModeRef.current.getCurrentNode();
         if (currentPrompt?.kind === 'consonant') {
-          const pipeline = parseAndJudgeUsingClassic(stripped, {
+          const pipeline = parseAndJudgeUsingClassic(raw, {
             nodeChar: currentPrompt.consonant,
             node: node && node.id === currentPrompt.wordKey ? node : undefined,
             activeUser: normalizeHandle(activeUserInitialHandleRef.current || '') || 'you'
           });
-          sandboxModeRef.current.commitConsonantJudgeResult({ input: stripped, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
+          consonantParsed = pipeline.parsed;
+          sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result === 'wrong_format' || pipeline.result === 'unknown') {
-            const invalidReason = pipeline.result === 'wrong_format' ? 'wrong_format' : 'parse_miss';
-            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: invalidReason, gate });
+            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate });
             setSandboxRevealTick(Date.now());
             return false;
           }
         }
+      } else if (!stripped) {
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate });
+        return false;
       }
 
       sandboxModeRef.current.setSandboxFlow({
@@ -2036,7 +2035,7 @@ export default function App() {
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate });
         return false;
       }
-      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: true, reason: 'consume_success', gate });
+      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success', gate });
       setSandboxRevealTick(Date.now());
       return true;
     }

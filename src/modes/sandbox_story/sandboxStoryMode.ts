@@ -307,7 +307,34 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         }
       };
     },
-    commitConsonantJudgeResult: () => undefined,
+    commitConsonantJudgeResult: (payload: { input?: string; parsed?: string; judge?: string; classicJudgeResult?: string }) => {
+      const normalizedInput = payload?.parsed ?? '';
+      state.consonant = {
+        ...state.consonant,
+        parse: {
+          ...state.consonant.parse,
+          inputRaw: payload?.input ?? '',
+          inputNorm: normalizedInput,
+          matchedAlias: normalizedInput,
+          matched: normalizedInput,
+          ok: Boolean(normalizedInput),
+          blockedReason: payload?.judge === 'wrong_format' ? 'wrong_format' : ''
+        },
+        judge: {
+          ...state.consonant.judge,
+          lastInput: normalizedInput,
+          lastResult: payload?.judge ?? state.consonant.judge.lastResult
+        }
+      };
+      state.parity = {
+        ...state.parity,
+        sandboxJudgeResult: payload?.judge ?? state.parity.sandboxJudgeResult,
+        classicJudgeResult: payload?.classicJudgeResult ?? payload?.judge ?? state.parity.classicJudgeResult,
+        sandboxClassicParity: payload?.judge && payload?.classicJudgeResult
+          ? (payload.judge === payload.classicJudgeResult ? 'match' : 'mismatch')
+          : state.parity.sandboxClassicParity
+      };
+    },
     setFreeze: (v: any) => { state.freeze = { ...state.freeze, ...v }; },
     setAnswerGate: (v: any) => {
       state.answerGate = {
