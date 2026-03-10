@@ -877,3 +877,20 @@
 - [sandbox][gate fix] WAIT_REPLY_1 / WAIT_WARMUP_REPLY 進 gate 時會綁定 `replyGate.sourceMessageId`；缺值時由 lock/qna fallback repair 並回寫 `sandboxFlow.replySourceMessageId`。
 - [sandbox][legacy gate] `answerGate` 維持 compatibility mirror，debug 新增 mirror consistency 指標，避免與 replyGate 矛盾。
 - [Removed/Deprecated Log] deprecated `src/shared/questionBank/night01QuestionBank.ts` 舊的「題目+單字」混合資料責任，改為 compatibility re-export；sandbox 單字資料已拆到 sandbox scope。
+
+## 2026-03-10 — Sandbox consonant judge audit (audit-only)
+
+- 進行 sandbox `consonant_answer` 稽核，確認目前判題實際走 `classicConsonantAdapter -> classic/consonantJudge -> shared/consonant-engine`，並非獨立 sandbox parser。
+- 新增 debug/audit 可觀測欄位（不改功能）：
+  - `currentPrompt.answerSource/classicQuestionId/sharedFromClassic/acceptedAnswers/aliases`
+  - `parse.raw/normalized/kind/ok/blockReason/allowedKinds/matchedAlias`
+  - `judge.expectedConsonant/acceptedCandidates/compareInput/compareMode/resultReason`
+- `lastReplyEval` 補寫 `audit` 快照，確保每次玩家輸入都留下判定紀錄。
+- classic mode：無行為變更。
+
+### Regression checklist (for fix phase)
+- 泰文字輸入（應可正確命中）。
+- 英文 romanization 輸入（應可正確命中）。
+- 注音 alias 輸入（例如 `ㄖ`，應與 classic 一致）。
+- sandbox 與 classic 同題一致判定。
+- `wrong_format` 與 `wrong_answer` 不得混淆。

@@ -1,4 +1,12 @@
 ### Integration guards (WAIT_REPLY_1 consonant authority)
+- Audit-first state table（debug-only, no behavior change）
+
+| Audit State | Trigger | parse/judge data source | UI/debug authority | Expected output |
+|---|---|---|---|---|
+| `not_evaluated` | 尚未收到玩家輸入 | `sandboxConsonantAuditRef` 初始值 | `sandbox.parse.*` / `sandbox.judge.*` | `parse.ok=false`, `judge.resultReason=not_evaluated` |
+| `evaluated` | 玩家輸入命中 `consonant_answer` gate | classic pipeline + shared consonant engine | `sandbox.currentPrompt.*` + `sandbox.parse.*` + `sandbox.judge.*` | 顯示 raw/normalized/matchedAlias + expectedConsonant/acceptedCandidates |
+| `missing_prompt` | gate 為子音作答但 prompt 缺失 | consume guard fallback audit record | 同上 | `parse.kind=no_prompt`, `parse.blockReason=missing_consonant_prompt` |
+
 - Guard 1: `flow.step=WAIT_REPLY_1` 時 `replyGate.gateType != none`。
 - Guard 2: `flow.step=WAIT_REPLY_1` 時 `replyGate.sourceMessageId` 不可為空。
 - Guard 3: `prompt.current.kind=consonant` 時 evaluator 必須使用 classic pipeline（`normalizeInput -> parseThaiConsonant -> judgeConsonantAnswer`）。

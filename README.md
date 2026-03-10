@@ -1,3 +1,7 @@
+- [sandbox][audit-only][consonant_answer] 追蹤判題鏈路：`consumePlayerReply -> parseAndJudgeUsingClassic -> parseThaiConsonant/judgeConsonantAnswer -> shared/consonant-engine`，本次僅新增 audit/debug 可觀測欄位，不修功能。
+- [sandbox][debug audit fields] 新增 `currentPrompt.answerSource/classicQuestionId/sharedFromClassic/acceptedAnswers/aliases`、`parse.*`、`judge.*` 與 `lastReplyEval.audit`，用於定位 `wrong_format` vs `wrong_answer` 根因。
+- [sandbox][SSOT/Removed/Deprecated Log] 本次 audit-only，無 SSOT schema 變更；無移除/廢棄正式邏輯。
+
 - [sandbox][WAIT_REPLY_1 gate binding] `TAG_PLAYER_1 -> WAIT_REPLY_1` 發問送出後立即把 VIP 問題 `messageId` 寫入 `replyGate.sourceMessageId`（並同步 `sandboxFlow.replySourceMessageId`），確保 retry/highlight/consume 可追溯同一題來源。
 - [sandbox][legacy gate mirror] `answerGate` 改成純 compatibility mirror：`setAnswerGate` 不再獨立控制 waiting/paused，統一以正式 `replyGate` 映射，避免雙軌分裂。
 - [sandbox][classic consonant SSOT] sandbox 子音評分改走 classic pipeline：`normalizeInput() -> parseThaiConsonant() -> judgeConsonantAnswer()`；`wrong_format` 僅在無法解析任何 alias 時出現（例如 `不會` 會被判為 `unknown` 而非 format error）。
