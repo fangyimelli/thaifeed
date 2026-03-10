@@ -208,3 +208,12 @@
   - `targetState`
   - `lastResult`
 - UI must not present legacy/unavailable action as silently clickable without result.
+
+
+## 2026-03-10 reveal visibility guard (sandbox authoritative)
+
+- Authoritative reveal driver: `state.reveal`（非僅 flow.step）。
+- `REVEAL_WORD` 進入時寫入：`visible/phase/text/wordKey/baseGrapheme/restText/startedAt/rendered=false/blockedReason`。
+- `reveal_word_done` gate：必須 `reveal.phase=done` 且 `reveal.rendered=true`，否則禁止前進（例外：`blockedReason=missing_word_text`）。
+- `POST_REVEAL_CHAT` 只可在 reveal done+render evidence 後啟動，防止 flow 與畫面脫鉤。
+- 可見時長下限：`SANDBOX_REVEAL_VISIBLE_MIN_MS=2500`。

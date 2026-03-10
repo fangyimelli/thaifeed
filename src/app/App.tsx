@@ -120,6 +120,7 @@ type DebugForceExecuteOptions = {
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
 const SANDBOX_WORD_RIOT_BURST_COUNT = 6;
+const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;
 const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
 const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
 
@@ -3767,11 +3768,15 @@ export default function App() {
         },
         word: {
           reveal: {
+            visible: sandboxState.reveal.visible,
             active: sandboxState.reveal.visible,
             phase: sandboxState.reveal.phase,
+            rendered: Boolean(sandboxState.reveal.rendered),
+            blockedReason: sandboxState.reveal.blockedReason || '-',
             wordKey: sandboxState.reveal.wordKey,
             consonantFromPrompt: sandboxState.reveal.consonantFromPrompt || '-',
             durationMs: sandboxState.reveal.durationMs,
+            text: sandboxState.reveal.text || '-',
             base: sandboxState.reveal.baseGrapheme || '-',
             rest: sandboxState.reveal.restText || '-',
             baseGrapheme: sandboxState.reveal.baseGrapheme || '-',
@@ -3787,7 +3792,9 @@ export default function App() {
               maxX: sandboxState.reveal.safeRect.maxX,
               minY: sandboxState.reveal.safeRect.minY,
               maxY: sandboxState.reveal.safeRect.maxY
-            }
+            },
+            startedAt: sandboxState.reveal.startedAt || 0,
+            finishedAt: sandboxState.reveal.finishedAt || 0
           }
         },
         audio: { pronounce: { lastKey: sandboxState.audio.lastKey || '-', state: sandboxState.audio.state } },
@@ -4032,6 +4039,10 @@ export default function App() {
           visible: sandboxState.reveal.visible,
           phase: sandboxState.reveal.phase,
           doneAt: sandboxState.reveal.doneAt,
+          startedAt: sandboxState.reveal.startedAt || 0,
+          finishedAt: sandboxState.reveal.finishedAt || 0,
+          rendered: Boolean(sandboxState.reveal.rendered),
+          blockedReason: sandboxState.reveal.blockedReason || '-',
           active: sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done',
           wordKey: sandboxState.reveal.wordKey || '-',
           durationMs: sandboxState.reveal.durationMs
@@ -5995,10 +6006,10 @@ export default function App() {
     if (reveal.visible && reveal.phase === 'enter') {
       sandboxModeRef.current.setPronounceState('idle', { key: reveal.audioKey, reason: 'reserved_no_side_effect' });
     }
-    if (reveal.visible && reveal.mode === 'correct' && reveal.startedAt > 0) {
+    if (reveal.visible && reveal.phase === 'word' && reveal.startedAt > 0) {
       clearSandboxRevealDoneTimer();
       const elapsed = Date.now() - reveal.startedAt;
-      const remainMs = Math.max(0, 4000 - elapsed);
+      const remainMs = Math.max(0, SANDBOX_REVEAL_VISIBLE_MIN_MS - elapsed);
       sandboxRevealDoneTimerRef.current = window.setTimeout(() => {
         sandboxModeRef.current.forceRevealDone();
         sandboxModeRef.current.markRevealDone();
@@ -6236,15 +6247,45 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'REVEAL_WORD') {
-      const node = sandboxModeRef.current.forceRevealCurrent?.();
-      if (node?.audioKey) {
-        void playPronounce(node.audioKey).then((result) => {
-          sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
-          setSandboxRevealTick(Date.now());
+      if (sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text')) {
+        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
+        setSandboxRevealTick(Date.now());
+      } else if (sandboxState.reveal.phase === 'idle') {
+        const revealStartedAt = Date.now();
+        const node = sandboxModeRef.current.forceRevealCurrent?.();
+        const revealText = node?.wordText ?? '';
+        const graphemes = revealText ? Array.from(revealText) : [];
+        const baseGrapheme = graphemes[0] ?? '';
+        const restText = graphemes.slice(1).join('');
+        sandboxModeRef.current.setReveal?.({
+          visible: Boolean(revealText),
+          phase: revealText ? 'word' : 'hidden',
+          mode: revealText ? 'correct' : 'idle',
+          text: revealText,
+          wordKey: node?.id ?? sandboxState.prompt.current?.wordKey ?? '',
+          consonantFromPrompt: sandboxState.prompt.current?.consonant ?? '',
+          durationMs: SANDBOX_REVEAL_VISIBLE_MIN_MS,
+          startedAt: revealStartedAt,
+          finishedAt: 0,
+          doneAt: 0,
+          rendered: false,
+          blockedReason: revealText ? '' : 'missing_word_text',
+          baseGrapheme,
+          restText,
+          restLen: restText.length,
+          splitter: baseGrapheme && restText ? 'first_grapheme' : ''
         });
+        if (node?.audioKey) {
+          void playPronounce(node.audioKey).then((result) => {
+            sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
+            setSandboxRevealTick(Date.now());
+          });
+        }
+        if (!revealText) {
+          sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_text_missing' });
+        }
+        setSandboxRevealTick(Date.now());
       }
-      sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
-      setSandboxRevealTick(Date.now());
     }
     const hasReplyGateArmed = (state: any) => Boolean(state.replyGate?.armed && state.replyGate?.gateType !== 'none');
     const hasPostRevealCompletionEvidence = (state: any) => {
@@ -6258,7 +6299,11 @@ export default function App() {
     if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {
       const hasReplyGate = hasReplyGateArmed(sandboxState);
       const postRevealDone = hasPostRevealCompletionEvidence(sandboxState);
-      if (!postRevealDone && (sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') !== 'started') {
+      const revealReadyForPostChat = sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text');
+      if (!revealReadyForPostChat) {
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: sandboxState.reveal.blockedReason || 'reveal_not_finished_or_not_rendered' });
+        setSandboxRevealTick(Date.now());
+      } else if (!postRevealDone && (sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') !== 'started') {
         sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'started', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'post_reveal_chat_in_progress', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
         setSandboxRevealTick(Date.now());
       } else if (!hasReplyGate) {
@@ -6733,6 +6778,27 @@ export default function App() {
     setFearDebugState(sandboxModeRef.current.getFearDebugState());
   }, []);
 
+  const handleSandboxRevealRenderStateChange = useCallback((payload: { rendered: boolean; blockedReason: string }) => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    const st = sandboxModeRef.current.getState();
+    const now = Date.now();
+    const preserveRenderedAfterDone = st.reveal.phase === 'done' && st.reveal.rendered && !payload.rendered;
+    const nextRendered = preserveRenderedAfterDone ? true : payload.rendered;
+    const nextBlockedReason = preserveRenderedAfterDone ? '' : (payload.blockedReason || '');
+    const nextFinishedAt = st.reveal.phase === 'done'
+      ? (st.reveal.finishedAt || now)
+      : (nextRendered ? 0 : st.reveal.finishedAt || 0);
+    sandboxModeRef.current.setReveal?.({
+      rendered: nextRendered,
+      blockedReason: nextBlockedReason,
+      finishedAt: nextFinishedAt
+    });
+    if (st.flow.step === 'POST_REVEAL_CHAT' && !nextRendered && st.reveal.phase !== 'done') {
+      sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: nextBlockedReason || 'reveal_not_rendered' });
+    }
+    setSandboxRevealTick(now);
+  }, []);
+
   const sandboxReplyGateState = deriveSandboxReplyGateState();
 
   return (
@@ -6773,7 +6839,8 @@ export default function App() {
                   consonantFromPrompt: st.reveal.consonantFromPrompt,
                   mismatch: isSandboxPromptRevealMismatch(st),
                   durationMs: st.reveal.durationMs,
-                  wordText: st.reveal.text
+                  wordText: st.reveal.text,
+                  onRenderStateChange: handleSandboxRevealRenderStateChange
                 };
               })() : undefined}
             />
@@ -7155,6 +7222,13 @@ export default function App() {
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>AUTHORITATIVE JUDGE AUDIT</strong></div>
                     <div>word.reveal.phase: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.phase ?? '-'}</div>
+                    <div>word.reveal.visible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.visible ?? false)}</div>
+                    <div>word.reveal.rendered: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rendered ?? false)}</div>
+                    <div>word.reveal.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.blockedReason ?? '-'}</div>
+                    <div>word.reveal.wordKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.wordKey ?? '-'}</div>
+                    <div>word.reveal.text/base/rest: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.text ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'}</div>
+                    <div>word.reveal.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.startedAt ?? 0}</div>
+                    <div>word.reveal.finishedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.finishedAt ?? 0}</div>
                     <div>parse.raw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.raw ?? '-'}</div>
                     <div>parse.normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.normalized ?? '-'}</div>
                     <div>parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.kind ?? '-'}</div>
