@@ -1,3 +1,17 @@
+## 2026-03-10 Sandbox post-reveal SSOT + ADVANCE_NEXT emit fix
+
+### This Change
+- 修正 `advance_next_effect` 的 post-reveal completion 來源分裂：新增 `hasPostRevealCompletionEvidence(state)`，統一使用 `postRevealChatState` + `audit.transitions(post_reveal_chat_done)` + `backlogTechMessages.length===0` 收斂。
+- `ADVANCE_NEXT` emit 下一題後，立即同步切換 `currentPrompt` 到新題，並將 flow step 從 Q1 跳到 `TAG_PLAYER_2_PRONOUNCE`（Q2 跳 `TAG_PLAYER_3_MEANING`），避免題目/影片顯示停留上一題。
+- `Run Full Night Test` 第二題成功判定改為 authoritative `emit + prompt 對齊`（`prompt.current.wordKey === nextQuestionToQuestionId`）。
+
+### Regression Guards
+- `post_reveal_chat_done` transition + backlog 清空時，`ADVANCE_NEXT` 不可再 blocked 為 `post_reveal_chat_not_done`。
+- 第二題 emit 後必須有 `setCurrentPrompt(next)` 與 next flow step 跳轉語句。
+- Full Night Test secondQuestionShown 必須由 `emit + prompt alignment` 決定。
+- 正常答題/自動答題/Force Correct judge audit 關鍵欄位寫入語句持續受 guard。
+
+
 ## This Change (2026-03-10 full-night authoritative auto-answer fix)
 - 修正 `Run Full Night Test` 自動答題驗證：提交後先等 authoritative consume（`flow.step` 不再是 `WAIT_REPLY_1` 或 gateConsumed=true），再等 parse/judge（`parse.raw` 有值、`parse.kind != not_evaluated`、`parse.ok=true`）。
 - 修正失敗分類：若 authoritative 仍卡在 `WAIT_REPLY_1`，改回報 `answer_not_submitted` / `answer_not_consumed` / `judge_not_triggered`，`failedStep` 回填 `auto_answer_q1`，與 authoritative flow 停點一致。

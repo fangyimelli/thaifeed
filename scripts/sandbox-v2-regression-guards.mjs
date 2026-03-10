@@ -222,6 +222,35 @@ if (!app.includes('sandboxPreheatDedupRef') || !app.includes('emittedFingerprint
   throw new Error('preheat duplicate injection dedupe state missing');
 }
 
+
+if (!app.includes('const hasPostRevealCompletionEvidence = (state: any) => {')) {
+  throw new Error('advance_next_effect must derive post-reveal completion from shared SSOT helper');
+}
+if (!app.includes("item?.to === 'ADVANCE_NEXT' && item?.reason === 'post_reveal_chat_done'")) {
+  throw new Error('post-reveal completion helper must honor audit transition reason post_reveal_chat_done');
+}
+if (!app.includes('(state.sandboxFlow?.backlogTechMessages?.length ?? 0) === 0')) {
+  throw new Error('post-reveal completion helper must include backlogTechMessages cleared condition');
+}
+if (!app.includes("nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE' : (beforeAdvance === 1 ? 'TAG_PLAYER_3_MEANING' : afterState.flow.step)")) {
+  throw new Error('ADVANCE_NEXT must route to authoritative next tag step after emit');
+}
+if (!app.includes('sandboxModeRef.current.setCurrentPrompt({')) {
+  throw new Error('ADVANCE_NEXT must switch currentPrompt to emitted next question prompt');
+}
+if (!app.includes('secondPromptAligned')) {
+  throw new Error('Full Night Test must derive secondQuestionShown from authoritative emit+prompt alignment');
+}
+if (!app.includes("st.prompt.current?.wordKey === st.sandboxFlow?.nextQuestionToQuestionId")) {
+  throw new Error('Full Night Test second question check must validate current prompt wordKey against emitted toQuestionId');
+}
+if (!app.includes('rawInput: pipeline.audit.parse.raw') || !app.includes('consumedAt: consumeAt')) {
+  throw new Error('normal answer judge audit persistence must include rawInput and consumedAt');
+}
+if (!app.includes("rawInput: '[debug-force-correct]'") || !app.includes("resultReason: 'debug_override_forced_correct'")) {
+  throw new Error('Force Correct Now must persist full authoritative judge audit payload');
+}
+
 console.log('sandbox v2 regression guards passed');
 
 
@@ -283,8 +312,8 @@ if (!app.includes('const readFullNightAuthoritativeState = () =>')) {
 if (!app.includes("if (failedStep === 'second_question' && authoritative.emitted)")) {
   throw new Error('Run Full Night Test must not fail second_question after authoritative emit');
 }
-if (!app.includes("secondQuestionShown: authoritative.emitted")) {
-  throw new Error('Run Full Night Test failed result must expose authoritative secondQuestionShown state');
+if (!app.includes("secondQuestionShown: authoritative.secondPromptAligned")) {
+  throw new Error('Run Full Night Test failed result must expose authoritative secondQuestionShown prompt-aligned state');
 }
 if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted")) {
   throw new Error('Run Full Night Test must re-converge on authoritative emit before failing second_question');
