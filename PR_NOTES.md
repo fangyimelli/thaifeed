@@ -1,3 +1,10 @@
+## 2026-03-11 sandbox integration fix (reveal/post-reveal/advance-next unblock)
+- A. `REVEAL_WORD` guard fallback：`reveal.phase=done && rendered=true` 且 timing 缺失時，自動補齊 `startedAt/finishedAt`，並以 `reveal_word_done_timing_repaired` 前進 `POST_REVEAL_CHAT`。
+- B. nextQuestion blocked reason stage 化：`reveal_guard_blocked:*` / `post_reveal_blocked:*` / `advance_next_blocked:*` / `emitted`，並新增 `nextQuestionBlockedReasonSource` + `nextQuestionStage`。
+- C. `ADVANCE_NEXT` emit 穩定：emit 依 authoritative flow + gate release + next node；`scene_not_synced` 僅 warning，不作為 emit gate。
+- D. Debug 可觀測性：新增 `reveal.guardReady`、`reveal.hasObservableTiming`、`postReveal.guardReady`、`advanceNext.guardReady`、`nextQuestion.stage`、`nextQuestion.blockedReason.source`。
+- E. Regression guard：新增字串級防回歸檢查，覆蓋 Q1->reveal->post_reveal->advance_next->Q2 emit 與 stage-scoped blocked reason。
+
 
 ## 2026-03-11 sandbox integration follow-up (A→E)
 

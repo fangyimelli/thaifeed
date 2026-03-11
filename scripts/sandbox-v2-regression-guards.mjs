@@ -202,7 +202,7 @@ if (!app.includes('displayAcceptedAnswers') || !app.includes('runtimeAcceptedCan
 if (!app.includes('scheduler.phase (non-authoritative)')) {
   throw new Error('debug must mark scheduler.phase as non-authoritative');
 }
-if (!app.includes("nextQuestionBlockedReason: 'reply_gate_still_armed'")) {
+if (!app.includes("nextQuestionBlockedReason: 'advance_next_blocked:reply_gate_still_armed'")) {
   throw new Error('ADVANCE_NEXT should have single-path guard against armed replyGate');
 }
 
@@ -455,7 +455,7 @@ if (!app.includes("commitSource: 'wait_reply_1_gate_armed'") || !app.includes("r
 if (!app.includes("'authoritative_reply_gate_sync'") || !app.includes("'reveal_prompt_cleanup'")) {
   throw new Error('debug ui.promptGlyph visibility source must expose authoritative and reveal-cleanup paths');
 }
-if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_done_missing_timing_observability") || !app.includes("sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
+if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_word_done_timing_repaired") || !app.includes("sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
   throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and self-repair hidden/non-rendered reveal state');
 }
 if (!app.includes("startedAt: nextStartedAt")) {
@@ -483,4 +483,32 @@ if (!mode.includes('finishedAt = state.reveal.finishedAt > 0 ? state.reveal.fini
 }
 if (!app.includes("reason: 'submit_accepted', messageId: playerMessage.id")) {
   throw new Error('submit success eval must retain authoritative player messageId');
+}
+
+if (!app.includes("nextQuestionBlockedReasonSource") || !app.includes("nextQuestionStage")) {
+  throw new Error('nextQuestion blocked reason debug source/stage fields are missing');
+}
+if (!app.includes("reveal.guardReady") || !app.includes("reveal.hasObservableTiming") || !app.includes("postReveal.guardReady") || !app.includes("advanceNext.guardReady")) {
+  throw new Error('debug panel must expose reveal/post_reveal/advance guard readiness fields');
+}
+if (!app.includes("nextQuestion.blockedReason.source") || !app.includes("nextQuestion.stage")) {
+  throw new Error('debug panel must expose nextQuestion blocked reason source and stage');
+}
+if (!app.includes("post_reveal_blocked:pending_post_reveal_chat") || !app.includes("advance_next_blocked:pending_emit") || !app.includes("reveal_guard_blocked:")) {
+  throw new Error('stage-scoped nextQuestion blocked reason prefixes are missing');
+}
+if (!app.includes("renderBlockedReason === 'scene_not_synced' ? 'scene_not_synced_warning' : renderBlockedReason")) {
+  throw new Error('scene_not_synced must be downgraded to warning and not block second-question emit');
+}
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired')")) {
+  throw new Error('REVEAL_WORD missing timing fallback transition to POST_REVEAL_CHAT');
+}
+if (!app.includes("setReveal?.({ startedAt: repairedStartedAt, finishedAt: repairedFinishedAt")) {
+  throw new Error('REVEAL_WORD must repair missing observability timing before advancing');
+}
+if (!app.includes("if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {") || !app.includes("setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')")) {
+  throw new Error('POST_REVEAL_CHAT must stably advance to ADVANCE_NEXT');
+}
+if (!app.includes("setRunning({ lastPassedStep: 'first_question', fromQuestionId: firstPrompt.wordKey, currentStep: 'auto_answer_q1' })") || !app.includes("setRunning({ lastPassedStep: 'reveal_post_reveal', currentStep: 'second_question' })")) {
+  throw new Error('Night Smoke Test must cover first_question -> second_question_shown path');
 }
