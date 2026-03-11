@@ -1,3 +1,4 @@
+- 2026-03-11 [sandbox][authoritative-consume-chain] 修正 smoke `auto_answer_q1` 假失敗：auto answer 若注入後未 consume，會在 bounded time 內 retry 並用 authoritative 原因失敗（`reply_blocked:*` / `message_injected_but_not_consumed`），成功判定改為 consume record + flow 離開 `WAIT_REPLY_1` + judge/reveal 進展；第二題顯示判定改為 `nextQuestion emit + toQuestionId + prompt/flow index` authoritative 對齊，禁止 render-only 假陽性。
 ## 2026-03-11 sandbox reveal->post_reveal->advance_next guard stabilization
 - 修正 `REVEAL_WORD` timing observability 缺欄位導致無限停留：若 `phase=done/rendered=true` 但 `startedAt/finishedAt` 缺失，先補 timing 後以 `reveal_word_done_timing_repaired` 前進 `POST_REVEAL_CHAT`。
 - `nextQuestionBlockedReason` 改為 stage-scoped 前綴，並新增 `nextQuestionStage`、`nextQuestionBlockedReasonSource`，清除 reset 初值 `not_armed` 在 reveal/post-reveal/advance 期間誤導 debug。

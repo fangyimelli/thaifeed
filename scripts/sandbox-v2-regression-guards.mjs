@@ -247,7 +247,7 @@ if (!app.includes("st.prompt.current?.wordKey === secondQuestionId")) {
 if (!app.includes('flowAdvanced') || !app.includes("st.flow.step === 'WAIT_REPLY_2'")) {
   throw new Error('Full Night Test second question check must include flow.step >= WAIT_REPLY_2 authoritative condition');
 }
-if (!app.includes("st.replyGate?.gateType === 'consonant_answer' && Boolean(st.replyGate?.armed)")) {
+if (!app.includes("st.replyGate?.gateType === 'consonant_answer'") || !app.includes('secondGateAligned')) {
   throw new Error('Full Night Test second question check must include replyGate authoritative condition');
 }
 if (!app.includes('render.blockedReason')) {
@@ -352,7 +352,10 @@ if (!app.includes("await waitFor(() => readFullNightAuthoritativeState().emitted
 if (!app.includes("const answerConsumed = await waitFor(() =>")) {
   throw new Error('Run Full Night Test auto answer must wait for authoritative consume path');
 }
-if (!app.includes("(authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0)")) {
+if (!app.includes('const replyTelemetryConsumed = authoritative.lastConsumedMessageId === answerMessageId && authoritative.lastConsumedAt > 0')) {
+  throw new Error('Night Smoke Test auto answer must include reply telemetry consume evidence');
+}
+if (!app.includes("authoritative.flowStep !== 'WAIT_REPLY_1'") || !app.includes('authoritative.gateConsumed') || !app.includes('authoritative.consumedAt > 0')) {
   throw new Error('Run Full Night Test auto answer must not stay at WAIT_REPLY_1 after submission');
 }
 if (!app.includes('st.lastReplyEval?.messageId === answerMessageId')) {
@@ -487,6 +490,15 @@ if (!app.includes("reason: 'submit_accepted', messageId: playerMessage.id")) {
 
 if (!app.includes("nextQuestionBlockedReasonSource") || !app.includes("nextQuestionStage")) {
   throw new Error('nextQuestion blocked reason debug source/stage fields are missing');
+}
+if (!mode.includes("nextQuestionBlockedReasonSource: 'reply'") || !mode.includes("reply_blocked:awaiting_consume")) {
+  throw new Error('setFlowStep must reset nextQuestion blocked reason to step-scoped reply stage defaults');
+}
+if (!app.includes('reply.lastInjectedMessageId/text/at') || !app.includes('reply.consumeSource/result/blocked')) {
+  throw new Error('debug panel must expose authoritative reply inject/consume telemetry');
+}
+if (!app.includes('lastInjectedMessageId: sandboxState.reply?.lastInjectedMessageId') || !mode.includes('reply: { lastInjectedMessageId')) {
+  throw new Error('sandbox state + debug mirror must include reply inject/consume SSOT fields');
 }
 if (!app.includes("reveal.guardReady") || !app.includes("reveal.hasObservableTiming") || !app.includes("postReveal.guardReady") || !app.includes("advanceNext.guardReady")) {
   throw new Error('debug panel must expose reveal/post_reveal/advance guard readiness fields');

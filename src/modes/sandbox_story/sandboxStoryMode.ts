@@ -114,6 +114,7 @@ export const createSandboxV2InitialState = () => {
     consumedAt: 0
   },
   replyGate: { gateType: 'none', armed: false, canReply: false, gateConsumed: false, questionEmitter: '', retryCount: 0, retryLimit: 2, sourceMessageId: '', targetPlayerId: '', sourceType: '', consumePolicy: 'single' },
+  reply: { lastInjectedMessageId: '', lastInjectedText: '', lastInjectedAt: 0, lastConsumedMessageId: '', lastConsumedText: '', lastConsumedAt: 0, consumeSource: '', consumeResult: 'idle', consumeBlockedReason: '' },
   lastReplyEval: null as null | { messageId: string; gateType: string; consumed: boolean; reason: string; rawInput: string; normalizedInput: string; extractedAnswer: string; raw: string; normalized: string; classifiedAs: string; at: number },
   techBacklog: { queued: 0, pending: 0, lastDrainAt: 0 },
   theory: { active: false, nodeId: '', promptId: '', pendingQuestions: [] as string[] },
@@ -165,6 +166,7 @@ export function ensureSandboxV2StateShape(raw: any) {
     targetPlayerId: legacyReplyGate.targetPlayerId ?? legacyReplyGate.targetActor ?? base.replyGate.targetPlayerId
   };
   next.answerGate = mirrorAnswerGateFromReplyGate(raw?.answerGate ?? base.answerGate, next.replyGate, next.flow?.stepStartedAt ?? Date.now());
+  next.reply = { ...base.reply, ...(raw?.reply ?? {}) };
   next.lastReplyEval = raw?.lastReplyEval ? { ...(base.lastReplyEval ?? {}), ...(raw?.lastReplyEval ?? {}) } : null;
   next.techBacklog = { ...base.techBacklog, ...(raw?.techBacklog ?? {}) };
   next.theory = { ...base.theory, ...(raw?.theory ?? {}) };
@@ -257,6 +259,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       state.renderSync = { ...state.renderSync, stateQuestionId: '', renderedQuestionId: '', renderBlockedReason: 'state_question_missing', committedAt: bootAt, commitSource: reason };
       state.currentPrompt = null;
       state.lastReplyEval = null;
+      state.reply = { ...createSandboxV2InitialState().reply };
       state.consonantJudgeAudit = { ...createSandboxV2InitialState().consonantJudgeAudit };
       appendTransition('BOOTSTRAP_RUNTIME', bootAt, reason);
       appendTransition('ENTER_PREHEAT_CHAT', bootAt, reason);
@@ -298,8 +301,27 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       const transitionAt = at ?? Date.now();
       const previousStep = state.flow?.step ?? 'unknown';
       const nextQuestionIndex = Number.isInteger(state.flow?.questionIndex) ? state.flow.questionIndex : 0;
+      const deriveStepScopedNextQuestion = (flowStep: string) => {
+        if (flowStep === 'WAIT_WARMUP_REPLY' || flowStep === 'WAIT_REPLY_1' || flowStep === 'WAIT_REPLY_2' || flowStep === 'WAIT_REPLY_3') {
+          return { nextQuestionStage: 'REPLY', nextQuestionBlockedReasonSource: 'reply', nextQuestionBlockedReason: 'reply_blocked:awaiting_consume' };
+        }
+        if (flowStep === 'ANSWER_EVAL') {
+          return { nextQuestionStage: 'ANSWER_EVAL', nextQuestionBlockedReasonSource: 'answer_eval', nextQuestionBlockedReason: 'answer_eval_blocked:awaiting_judge' };
+        }
+        if (flowStep === 'REVEAL_WORD') {
+          return { nextQuestionStage: 'REVEAL_WORD', nextQuestionBlockedReasonSource: 'reveal', nextQuestionBlockedReason: 'reveal_guard_blocked:awaiting_reveal' };
+        }
+        if (flowStep === 'POST_REVEAL_CHAT') {
+          return { nextQuestionStage: 'POST_REVEAL_CHAT', nextQuestionBlockedReasonSource: 'post_reveal', nextQuestionBlockedReason: 'post_reveal_blocked:awaiting_post_reveal' };
+        }
+        if (flowStep === 'ADVANCE_NEXT') {
+          return { nextQuestionStage: 'ADVANCE_NEXT', nextQuestionBlockedReasonSource: 'advance_next', nextQuestionBlockedReason: 'advance_next_blocked:pending_emit' };
+        }
+        return null;
+      };
+      const stepScopedNextQuestion = deriveStepScopedNextQuestion(step);
       state.flow = { ...state.flow, step, questionIndex: nextQuestionIndex, stepStartedAt: transitionAt, tagAskedThisStep: false };
-      state.sandboxFlow = { ...state.sandboxFlow, step, stepStartedAt: transitionAt, questionIndex: nextQuestionIndex };
+      state.sandboxFlow = { ...state.sandboxFlow, step, stepStartedAt: transitionAt, questionIndex: nextQuestionIndex, ...(stepScopedNextQuestion ?? {}) };
       appendTransition(reason || 'setFlowStep', transitionAt, step);
       appendAuditTransition(previousStep, step, transitionAt, reason || 'setFlowStep');
     },
@@ -346,6 +368,12 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     setLastReplyEval: (evalPatch: any) => {
       const prev = state.lastReplyEval ?? { messageId: '', gateType: 'none', consumed: false, reason: '', rawInput: '', normalizedInput: '', extractedAnswer: '', raw: '', normalized: '', classifiedAs: 'none', at: 0 };
       state.lastReplyEval = { ...prev, ...evalPatch };
+    },
+    setReplyTelemetry: (patch: any) => {
+      state.reply = {
+        ...(state.reply ?? createSandboxV2InitialState().reply),
+        ...(patch ?? {})
+      };
     },
     setJudgeResult: (result: string, detail?: any) => {
       state.consonant = {

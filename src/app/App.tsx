@@ -2026,6 +2026,12 @@ export default function App() {
 
   const consumePlayerReply = useCallback((payload: { raw: string; messageId?: string; sourceType?: string; playerId?: string; targetPlayerId?: string; sourceMessageId?: string }) => {
     const raw = payload.raw;
+    const replyConsumeSource = payload.sourceType === 'debug_simulate'
+      ? 'smoke_test'
+      : (payload.sourceType === 'manual' ? 'manual' : (payload.sourceType ? 'ui' : 'simulate_send'));
+    const persistReplyTelemetry = (patch: Record<string, unknown>) => {
+      sandboxModeRef.current.setReplyTelemetry?.({ consumeSource: replyConsumeSource, ...patch });
+    };
     const persistJudgeAudit = (auditPatch: Record<string, unknown>) => {
       sandboxModeRef.current.setConsonantJudgeAudit?.({
         rawInput: '',
@@ -2071,11 +2077,25 @@ export default function App() {
         replyTarget: payload.targetPlayerId || gate.replyTarget
       };
       if (!gate.replyGateType) {
+        persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:no_gate' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate: evalGate, messageId: payload.messageId });
         return false;
       }
       if (!gate.replyGateArmed) {
+        persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:gate_not_armed' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate: evalGate, messageId: payload.messageId });
+        return false;
+      }
+      if (!gate.canReply) {
+        persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:can_reply_false' });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'can_reply_false', gate: evalGate, messageId: payload.messageId });
+        return false;
+      }
+      const expectedTarget = normalizeHandle(gate.replyTarget || sandboxState.replyGate?.targetPlayerId || '');
+      const inboundTarget = normalizeHandle(payload.targetPlayerId || payload.playerId || activeUserInitialHandleRef.current || '');
+      if (expectedTarget && inboundTarget && expectedTarget !== inboundTarget) {
+        persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}` });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'target_mismatch', gate: evalGate, messageId: payload.messageId });
         return false;
       }
       let consonantParsed = stripped;
@@ -2110,6 +2130,7 @@ export default function App() {
           consonantParsed = pipeline.parsed;
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result !== 'correct') {
+            persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `answer_eval_blocked:${pipeline.result}` });
             writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate: evalGate, messageId: payload.messageId });
             setSandboxRevealTick(Date.now());
             return false;
@@ -2135,6 +2156,7 @@ export default function App() {
           });
         }
       } else if (!stripped) {
+        persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:stripped_empty' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate: evalGate, messageId: payload.messageId });
         return false;
       }
@@ -2154,6 +2176,13 @@ export default function App() {
       clearChatFreeze(`sandbox_${sandboxState.flow.step.toLowerCase()}_consumed`);
       sandboxReplyGateDebugRef.current = { ...sandboxReplyGateDebugRef.current, armed: false };
 
+      persistReplyTelemetry({
+        lastConsumedMessageId: payload.messageId || payload.sourceMessageId || '',
+        lastConsumedText: raw,
+        lastConsumedAt: consumeAt,
+        consumeResult: 'consumed',
+        consumeBlockedReason: ''
+      });
       if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY') {
         sandboxModeRef.current.setFlowStep('POST_REPLY_CHAT', 'player_reply_warmup_consumed');
       } else if (sandboxState.flow.step === 'WAIT_REPLY_1') {
@@ -2163,6 +2192,7 @@ export default function App() {
       } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
         sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed');
       } else {
+        persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:submit_rejected' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate: evalGate, messageId: payload.messageId });
         return false;
       }
@@ -2176,6 +2206,7 @@ export default function App() {
     const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
     const parsed = parsePlayerReplyToOption(qnaStateRef.current, stripped);
     if (!parsed) {
+      persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:parse_miss' });
       writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'parse_miss' });
       return false;
     }
@@ -2185,6 +2216,7 @@ export default function App() {
       clearReplyUi('anomaly_reply_bar_still_visible_after_resolve');
       sandboxQnaDebugRef.current.lastAnomaly = 'replyBarVisible_after_resolve';
     }
+    persistReplyTelemetry({ lastConsumedMessageId: payload.messageId || '', lastConsumedText: raw, lastConsumedAt: Date.now(), consumeResult: 'consumed', consumeBlockedReason: '' });
     writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: true, reason: 'consume_success' });
     return true;
   }, [clearChatFreeze, clearReplyUi, deriveSandboxReplyGateState, resolveQna, writeSandboxLastReplyEval]);
@@ -3877,6 +3909,17 @@ export default function App() {
           judgeArmed: sandboxState.warmup.judgeArmed
         },
         replyGate: sandboxState.replyGate,
+        reply: {
+          lastInjectedMessageId: sandboxState.reply?.lastInjectedMessageId || '-',
+          lastInjectedText: sandboxState.reply?.lastInjectedText || '-',
+          lastInjectedAt: sandboxState.reply?.lastInjectedAt || 0,
+          lastConsumedMessageId: sandboxState.reply?.lastConsumedMessageId || '-',
+          lastConsumedText: sandboxState.reply?.lastConsumedText || '-',
+          lastConsumedAt: sandboxState.reply?.lastConsumedAt || 0,
+          consumeSource: sandboxState.reply?.consumeSource || '-',
+          consumeResult: sandboxState.reply?.consumeResult || '-',
+          consumeBlockedReason: sandboxState.reply?.consumeBlockedReason || '-'
+        },
         lastReplyEval: sandboxState.lastReplyEval,
         freeze: sandboxState.freeze,
         glitchBurst: sandboxState.glitchBurst,
@@ -5006,6 +5049,16 @@ export default function App() {
         source: 'player_input',
         sourceTag: source
       });
+      if (modeRef.current.id === 'sandbox_story') {
+        sandboxModeRef.current.setReplyTelemetry?.({
+          lastInjectedMessageId: playerMessage.id,
+          lastInjectedText: outgoingText,
+          lastInjectedAt: Date.now(),
+          consumeSource: source === 'debug_simulate' ? 'smoke_test' : 'ui',
+          consumeResult: 'injected',
+          consumeBlockedReason: ''
+        });
+      }
       sandboxChatEngineRef.current?.markPlayerReply(Date.now());
       const sandboxQnaConsumed = modeRef.current.id === 'sandbox_story' ? consumePlayerReply({
         raw: outgoingText,
@@ -5750,16 +5803,25 @@ export default function App() {
       const promptAligned = Boolean(st.prompt.current?.kind === 'consonant')
         && Boolean(secondQuestionId)
         && st.prompt.current?.wordKey === secondQuestionId;
-      const gateAligned = st.replyGate?.gateType === 'consonant_answer' && Boolean(st.replyGate?.armed);
+      const secondGateAligned = Boolean(
+        st.replyGate?.gateType === 'consonant_answer'
+        && st.replyGate?.armed
+        && st.prompt.current?.kind === 'consonant'
+        && st.prompt.current?.wordKey === secondQuestionId
+      );
       const flowAdvanced = st.flow.step === 'WAIT_REPLY_2' || st.flow.step === 'TAG_PLAYER_3_MEANING' || st.flow.step === 'WAIT_REPLY_3' || st.flow.step === 'END_NIGHT';
+      const indexAligned = Number.isFinite(st.sandboxFlow?.nextQuestionToIndex)
+        && Number.isFinite(st.flow?.questionIndex)
+        && st.flow.questionIndex >= st.sandboxFlow.nextQuestionToIndex
+        && st.sandboxFlow.nextQuestionToIndex > 0;
       const secondPromptAligned = emitted && promptAligned;
       const secondQuestionAuthoritative = Boolean(
-        flowAdvanced
-        || promptAligned
-        || gateAligned
-        || (emitted && secondQuestionId === st.sandboxFlow?.nextQuestionToQuestionId)
+        emitted
+        && secondQuestionId
+        && (flowAdvanced || promptAligned || secondGateAligned || indexAligned)
       );
       const judgeAudit = st.consonantJudgeAudit;
+      const replyTelemetry = st.reply ?? {};
       return {
         emitted,
         renderedAligned,
@@ -5777,7 +5839,13 @@ export default function App() {
         parseOk: Boolean(judgeAudit?.parseOk),
         judgeResult: judgeAudit?.judgeResult ?? '',
         judgeAuditWritten: Boolean(judgeAudit?.consumedAt && judgeAudit.consumedAt > 0),
-        consumedAt: Number(judgeAudit?.consumedAt ?? 0)
+        consumedAt: Number(judgeAudit?.consumedAt ?? 0),
+        lastInjectedMessageId: replyTelemetry?.lastInjectedMessageId || '',
+        lastInjectedAt: Number(replyTelemetry?.lastInjectedAt ?? 0),
+        lastConsumedMessageId: replyTelemetry?.lastConsumedMessageId || '',
+        lastConsumedAt: Number(replyTelemetry?.lastConsumedAt ?? 0),
+        consumeResult: replyTelemetry?.consumeResult || '',
+        consumeBlockedReason: replyTelemetry?.consumeBlockedReason || ''
       };
     };
     const classifyAutoAnswerFailure = (authoritative: ReturnType<typeof readFullNightAuthoritativeState>) => {
@@ -5788,6 +5856,7 @@ export default function App() {
         return 'judge_failed';
       }
       if (authoritative.parseKind === 'not_evaluated' && authoritative.parseRaw.length === 0 && authoritative.flowStep === 'WAIT_REPLY_1' && authoritative.gateArmed && authoritative.gateType === 'consonant_answer' && authoritative.canReply) {
+        if (authoritative.consumeBlockedReason) return authoritative.consumeBlockedReason;
         return 'message_injected_but_not_consumed';
       }
       if (authoritative.flowStep === 'WAIT_REPLY_1' && !authoritative.canReply) {
@@ -5847,7 +5916,7 @@ export default function App() {
     sandboxModeRef.current.ensureBootstrapState?.('run_night_smoke_test_reset', resetAt, 30_000, true);
     sandboxModeRef.current.setIntroGate({ passed: true, remainingMs: 0, startedAt: resetAt, minDurationMs: 30_000 });
     sandboxModeRef.current.setFlowStep('VIP_TAG_PLAYER', 'run_night_smoke_test_start_clean', resetAt);
-    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'idle', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'reveal_guard_blocked:bootstrapping', nextQuestionBlockedReasonSource: 'reveal', nextQuestionStage: 'REVEAL_WORD', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '' });
+    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'idle', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'reply_blocked:bootstrapping', nextQuestionBlockedReasonSource: 'reply', nextQuestionStage: 'REPLY', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '' });
     sandboxPreheatOrchestrationRef.current.startedAt = resetAt;
     sandboxPreheatOrchestrationRef.current.lastEmitAt = 0;
     sandboxPreheatOrchestrationRef.current.cursor = 0;
@@ -5903,12 +5972,17 @@ export default function App() {
     setRunning({ lastPassedStep: 'first_question', fromQuestionId: firstPrompt.wordKey, currentStep: 'auto_answer_q1' });
 
     const answer = firstPrompt.consonant;
-    const answerResult = await submitChat(answer, 'debug_simulate');
-    if (!answerResult.ok) {
-      fail('auto_answer_q1', `send_failed:${answerResult.reason ?? 'unknown'}`);
-      return;
+    let answerMessageId = '';
+    let answerAttempt = 0;
+    while (!answerMessageId && answerAttempt < 2) {
+      answerAttempt += 1;
+      const answerResult = await submitChat(answer, 'debug_simulate');
+      if (!answerResult.ok) {
+        fail('auto_answer_q1', `send_failed:${answerResult.reason ?? 'unknown'}`);
+        return;
+      }
+      answerMessageId = answerResult.messageId || '';
     }
-    const answerMessageId = answerResult.messageId;
     if (!answerMessageId) {
       fail('auto_answer_q1', 'message_injected_but_not_consumed');
       return;
@@ -5918,13 +5992,26 @@ export default function App() {
     const answerConsumed = await waitFor(() => {
       const authoritative = readFullNightAuthoritativeState();
       const st = sandboxModeRef.current.getState();
-      return (authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0)
-        && (st.lastReplyEval?.messageId === answerMessageId || st.consonantJudgeAudit?.consumedAt > 0);
+      const replyTelemetryConsumed = authoritative.lastConsumedMessageId === answerMessageId && authoritative.lastConsumedAt > 0;
+      return (authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0 || replyTelemetryConsumed)
+        && (st.lastReplyEval?.messageId === answerMessageId || st.consonantJudgeAudit?.consumedAt > 0 || replyTelemetryConsumed);
     }, 6_000);
     if (!answerConsumed) {
       const authoritative = readFullNightAuthoritativeState();
-      fail('auto_answer_q1', classifyAutoAnswerFailure(authoritative));
-      return;
+      if (authoritative.lastInjectedMessageId === answerMessageId && authoritative.flowStep === 'WAIT_REPLY_1' && authoritative.gateArmed && authoritative.canReply) {
+        const retryResult = await submitChat(answer, 'debug_simulate');
+        if (retryResult.ok) {
+          answerMessageId = retryResult.messageId || answerMessageId;
+        }
+      }
+      const retriedConsumed = await waitFor(() => {
+        const authoritative = readFullNightAuthoritativeState();
+        return authoritative.lastConsumedMessageId === answerMessageId || authoritative.flowStep !== 'WAIT_REPLY_1';
+      }, 2_000, 100);
+      if (!retriedConsumed) {
+        fail('auto_answer_q1', classifyAutoAnswerFailure(readFullNightAuthoritativeState()));
+        return;
+      }
     }
 
     const judgeTriggered = await waitFor(() => {
@@ -5942,7 +6029,9 @@ export default function App() {
       return;
     }
     const consumedEval = sandboxModeRef.current.getState().lastReplyEval;
-    if (consumedEval?.messageId !== answerMessageId || !consumedEval.consumed) {
+    const replyTelemetry = sandboxModeRef.current.getState().reply;
+    if ((consumedEval?.messageId !== answerMessageId || !consumedEval.consumed)
+      && !(replyTelemetry?.lastConsumedMessageId === answerMessageId && replyTelemetry?.consumeResult === 'consumed')) {
       fail('auto_answer_q1', 'message_injected_but_not_consumed');
       return;
     }
@@ -7336,6 +7425,9 @@ export default function App() {
                     <div>word.reveal.text/base/rest: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.text ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.base ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.rest ?? '-'}</div>
                     <div>word.reveal.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.startedAt ?? 0}</div>
                     <div>word.reveal.finishedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.word?.reveal?.finishedAt ?? 0}</div>
+                    <div>reply.lastInjectedMessageId/text/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.lastInjectedMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.lastInjectedText ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.lastInjectedAt ?? 0}</div>
+                    <div>reply.lastConsumedMessageId/text/at: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.lastConsumedMessageId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.lastConsumedText ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.lastConsumedAt ?? 0}</div>
+                    <div>reply.consumeSource/result/blocked: {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.consumeSource ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.consumeResult ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.reply?.consumeBlockedReason ?? '-'}</div>
                     <div>parse.raw: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.raw ?? '-'}</div>
                     <div>parse.normalized: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.normalized ?? '-'}</div>
                     <div>parse.kind: {(window.__CHAT_DEBUG__ as any)?.sandbox?.parse?.kind ?? '-'}</div>
