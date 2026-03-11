@@ -6355,7 +6355,9 @@ export default function App() {
         sandboxModeRef.current.markRevealDone();
         setSandboxRevealTick(Date.now());
       }
-      return;
+      if (sandboxState.flow.step !== 'REVEAL_WORD') {
+        return;
+      }
     }
     if (sandboxForcedReplyGateActive) {
       return () => {
