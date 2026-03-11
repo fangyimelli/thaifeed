@@ -1,3 +1,11 @@
+## 2026-03-11 Reveal Snapshot SSOT 補充
+
+| Stage | Authoritative snapshot | Commit invariant | Regression guard |
+|---|---|---|---|
+| REVEAL_WORD eligibility | `buildRevealTransitionSnapshot(state)` | `revealGuardReady/revealCompletionReady/revealTransitionEligible/revealTransitionBlockedBy` 必須同源 | helper 必須存在且 REVEAL_WORD path 直接使用 |
+| REVEAL_WORD commit | 以同一 `snapshotId` commit | eligible=true 時必須 `transitionCommitAttempted=true`、`transitionCommittedAt>0`、`transitionCommitBlockedBy=none` 並 `setFlowStep('POST_REVEAL_CHAT',...,commitAt)` | 禁止出現 eligible=true 且 blockedBy=`reveal_not_done` |
+| Commit observability | `revealEligibilitySnapshotId === revealCommitSourceSnapshotId`（同輪 commit） | debug/authoritative flow 一致，不得分開各算一套 | guard 檢查 snapshot 欄位存在 |
+
 ## Transition Commit SSOT (2026-03-11)
 
 | Stage | Authoritative commit condition | Required commit writes | Block policy |

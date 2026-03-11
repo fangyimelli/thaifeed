@@ -1,3 +1,11 @@
+## 2026-03-11 Sandbox reveal SSOT commit fix
+
+- Root cause: `REVEAL_WORD` eligibility debug used one derivation, but transition commit could still read stale branch state and write `reveal_not_done`, causing `transitionEligible=true` with commit blocked mismatch.
+- Fix: introduce single `buildRevealTransitionSnapshot()` and require both debug observability + commit writes to consume the same snapshot id (`revealEligibilitySnapshotId`, `revealCommitSourceSnapshotId`).
+- Commit contract: when snapshot is eligible, commit writes `revealTransitionCommitAttempted=true`, `revealTransitionCommittedAt>0`, `revealTransitionCommitBlockedBy=none`, and immediately executes `setFlowStep('POST_REVEAL_CHAT', reason, commitAt)` in the same path.
+- Post chain preserved: `POST_REVEAL_CHAT` writes `postRevealEnteredAt`, transitions to `ADVANCE_NEXT`, and emits next question with `nextQuestion.ready/emitted=true` and `flow.questionIndex` advancement.
+- Regression guards: updated `scripts/sandbox-v2-regression-guards.mjs` to enforce snapshot helper existence, commit-path usage, snapshot observability fields, and eligible=>commit invariants.
+
 ## 2026-03-11 sandbox integration fix (reveal transition commit SSOT + q2 progression)
 - Root cause：`REVEAL_WORD` 已 done/rendered/eligible 但 commit observability 未與 `setFlowStep` 綁定，造成 guard 看起來放行、authoritative flow 卻未進 `POST_REVEAL_CHAT`。
 - Fix：`REVEAL_WORD -> POST_REVEAL_CHAT` 以同一 `commitAt` 同步寫入 `revealTransitionCommitAttempted/CommittedAt/CommitReason/CommitBlockedBy` + `setFlowStep(..., commitAt)`。

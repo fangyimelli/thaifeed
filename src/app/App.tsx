@@ -139,6 +139,50 @@ type ChatSendSource =
 type ChatAutoScrollMode = 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
 const FREEZE_AFTER_MESSAGE_COUNT = 10;
 
+type RevealTransitionSnapshot = {
+  snapshotId: string;
+  guardReady: boolean;
+  completionReady: boolean;
+  transitionEligible: boolean;
+  transitionBlockedBy: string;
+  hasObservableTiming: boolean;
+};
+
+const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnapshot => {
+  const hasObservableTiming = sandboxState.reveal.startedAt > 0
+    && sandboxState.reveal.finishedAt > 0
+    && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
+  const completionReady = sandboxState.reveal.phase === 'done'
+    && Boolean(sandboxState.reveal.rendered)
+    && hasObservableTiming;
+  const guardReady = completionReady;
+  const transitionEligible = sandboxState.flow.step === 'REVEAL_WORD' && guardReady;
+  const transitionBlockedBy = transitionEligible
+    ? 'none'
+    : (sandboxState.reveal.phase !== 'done'
+      ? 'reveal_not_done'
+      : (!sandboxState.reveal.rendered
+        ? 'reveal_not_rendered'
+        : (!hasObservableTiming ? 'timing_missing' : 'unknown')));
+  const snapshotId = [
+    sandboxState.flow.step,
+    sandboxState.reveal.phase,
+    sandboxState.reveal.rendered ? '1' : '0',
+    sandboxState.reveal.startedAt || 0,
+    sandboxState.reveal.finishedAt || 0,
+    sandboxState.reveal.doneAt || 0,
+    sandboxState.reveal.wordKey || ''
+  ].join('|');
+  return {
+    snapshotId,
+    guardReady,
+    completionReady,
+    transitionEligible,
+    transitionBlockedBy,
+    hasObservableTiming
+  };
+};
+
 type ChatFreezeState = {
   isFrozen: boolean;
   reason: 'tagged_question' | 'vip_direct_mention' | 'story_critical_hint_followup' | null;
@@ -3749,22 +3793,13 @@ export default function App() {
         ? ''
         : stateQuestionId;
       const renderBlockedReasonEffective = renderSyncReason;
-      const revealHasObservableTiming = sandboxState.reveal.startedAt > 0
-        && sandboxState.reveal.finishedAt > 0
-        && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
-      const revealCompletionReady = sandboxState.reveal.phase === 'done'
-        && Boolean(sandboxState.reveal.rendered)
-        && revealHasObservableTiming;
-      const revealGuardReady = revealCompletionReady;
+      const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);
+      const revealHasObservableTiming = revealTransitionSnapshot.hasObservableTiming;
+      const revealCompletionReady = revealTransitionSnapshot.completionReady;
+      const revealGuardReady = revealTransitionSnapshot.guardReady;
       const revealVisibilityOnly = revealCompletionReady && !sandboxState.reveal.visible;
-      const revealTransitionEligible = sandboxState.flow.step === 'REVEAL_WORD' && revealGuardReady && revealCompletionReady;
-      const revealTransitionBlockedBy = revealTransitionEligible
-        ? 'none'
-        : (sandboxState.reveal.phase !== 'done'
-          ? 'reveal_not_done'
-          : (!sandboxState.reveal.rendered
-            ? 'reveal_not_rendered'
-            : (!revealHasObservableTiming ? 'timing_missing' : 'unknown')));
+      const revealTransitionEligible = revealTransitionSnapshot.transitionEligible;
+      const revealTransitionBlockedBy = revealTransitionSnapshot.transitionBlockedBy;
       const postRevealGuardReady = sandboxState.flow.step === 'POST_REVEAL_CHAT'
         && sandboxState.reveal.phase === 'done'
         && (Boolean(sandboxState.reveal.rendered) || sandboxState.reveal.blockedReason === 'missing_word_text');
@@ -3840,6 +3875,8 @@ export default function App() {
           revealVisibilityOnly,
           revealTransitionEligible,
           revealTransitionBlockedBy,
+          revealEligibilitySnapshotId: sandboxState.sandboxFlow.revealEligibilitySnapshotId || revealTransitionSnapshot.snapshotId,
+          revealCommitSourceSnapshotId: sandboxState.sandboxFlow.revealCommitSourceSnapshotId || '',
           revealTransitionCommitAttempted: sandboxState.sandboxFlow.revealTransitionCommitAttempted ?? false,
           revealTransitionCommittedAt: sandboxState.sandboxFlow.revealTransitionCommittedAt ?? 0,
           revealTransitionCommitReason: sandboxState.sandboxFlow.revealTransitionCommitReason || '',
@@ -6556,13 +6593,18 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'REVEAL_WORD') {
+      const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);
       sandboxModeRef.current.setSandboxFlow({
         nextQuestionStage: 'REVEAL_WORD',
-        nextQuestionBlockedReasonSource: 'reveal'
+        nextQuestionBlockedReasonSource: 'reveal',
+        revealGuardReady: revealTransitionSnapshot.guardReady,
+        revealCompletionReady: revealTransitionSnapshot.completionReady,
+        revealTransitionEligible: revealTransitionSnapshot.transitionEligible,
+        revealTransitionBlockedBy: revealTransitionSnapshot.transitionBlockedBy,
+        revealEligibilitySnapshotId: revealTransitionSnapshot.snapshotId
       });
-      const revealHasObservableTiming = sandboxState.reveal.startedAt > 0 && sandboxState.reveal.finishedAt > 0 && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
-      const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;
-      const revealTransitionEligible = revealCompletionReady;
+      const revealHasObservableTiming = revealTransitionSnapshot.hasObservableTiming;
+      const revealTransitionEligible = revealTransitionSnapshot.transitionEligible;
       const promptWordKey = sandboxState.prompt.current?.wordKey ?? '';
       const ensureRevealActivatedForNormalFlow = () => {
         const revealStartedAt = sandboxState.reveal.startedAt > 0 ? sandboxState.reveal.startedAt : Date.now();
@@ -6602,21 +6644,29 @@ export default function App() {
         }
         setSandboxRevealTick(Date.now());
       };
-      if (revealTransitionEligible) {
-        const commitAt = Date.now();
+      const commitRevealTransition = (reason: string, commitAt: number, sourceSnapshotId: string) => {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionBlockedReason: 'post_reveal_blocked:pending_post_reveal_chat',
           nextQuestionBlockedReasonSource: 'post_reveal',
           nextQuestionStage: 'POST_REVEAL_CHAT',
+          revealGuardReady: true,
+          revealCompletionReady: true,
           revealTransitionEligible: true,
           revealTransitionBlockedBy: 'none',
           revealTransitionCommitAttempted: true,
           revealTransitionCommittedAt: commitAt,
-          revealTransitionCommitReason: 'reveal_word_done',
-          revealTransitionCommitBlockedBy: 'none'
+          revealTransitionCommitReason: reason,
+          revealTransitionCommitBlockedBy: 'none',
+          revealEligibilitySnapshotId: sourceSnapshotId,
+          revealCommitSourceSnapshotId: sourceSnapshotId
         });
-        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done', commitAt);
-        setSandboxRevealTick(Date.now());
+        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', reason, commitAt);
+      };
+
+      if (revealTransitionEligible) {
+        const commitAt = Date.now();
+        commitRevealTransition('reveal_word_done', commitAt, revealTransitionSnapshot.snapshotId);
+        setSandboxRevealTick(commitAt);
       } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
         const now = Date.now();
         const repairedStartedAt = sandboxState.reveal.startedAt > 0
@@ -6626,46 +6676,54 @@ export default function App() {
           ? sandboxState.reveal.finishedAt
           : Math.max(now, repairedStartedAt, sandboxState.reveal.doneAt || 0);
         sandboxModeRef.current.setReveal?.({ startedAt: repairedStartedAt, finishedAt: repairedFinishedAt, doneAt: sandboxState.reveal.doneAt || repairedFinishedAt });
-        sandboxModeRef.current.setSandboxFlow({
-          nextQuestionBlockedReason: 'post_reveal_blocked:timing_repaired',
-          nextQuestionBlockedReasonSource: 'post_reveal',
-          nextQuestionStage: 'POST_REVEAL_CHAT',
-          revealTransitionEligible: true,
-          revealTransitionBlockedBy: 'none',
-          revealTransitionCommitAttempted: true,
-          revealTransitionCommittedAt: now,
-          revealTransitionCommitReason: 'reveal_word_done_timing_repaired',
-          revealTransitionCommitBlockedBy: 'none'
-        });
-        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired', now);
-        setSandboxRevealTick(now);
+        const repairedState = {
+          ...sandboxState,
+          reveal: {
+            ...sandboxState.reveal,
+            startedAt: repairedStartedAt,
+            finishedAt: repairedFinishedAt,
+            doneAt: sandboxState.reveal.doneAt || repairedFinishedAt
+          }
+        };
+        const repairedSnapshot = buildRevealTransitionSnapshot(repairedState);
+        if (repairedSnapshot.transitionEligible) {
+          commitRevealTransition('reveal_word_done_timing_repaired', now, repairedSnapshot.snapshotId);
+          setSandboxRevealTick(now);
+        } else {
+          sandboxModeRef.current.setSandboxFlow({
+            nextQuestionBlockedReason: 'reveal_guard_blocked:timing_missing',
+            revealGuardReady: repairedSnapshot.guardReady,
+            revealCompletionReady: repairedSnapshot.completionReady,
+            revealTransitionEligible: repairedSnapshot.transitionEligible,
+            revealTransitionBlockedBy: repairedSnapshot.transitionBlockedBy,
+            revealTransitionCommitAttempted: true,
+            revealTransitionCommittedAt: 0,
+            revealTransitionCommitReason: '',
+            revealTransitionCommitBlockedBy: repairedSnapshot.transitionBlockedBy,
+            revealEligibilitySnapshotId: repairedSnapshot.snapshotId,
+            revealCommitSourceSnapshotId: repairedSnapshot.snapshotId
+          });
+        }
       } else if (sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered)) {
         const revealDoneAt = sandboxState.reveal.doneAt || sandboxState.reveal.finishedAt || sandboxState.reveal.cleanupAt || sandboxState.flow.stepStartedAt || Date.now();
         const revealStalledMs = Date.now() - revealDoneAt;
         if (revealStalledMs >= SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS) {
           const commitAt = Date.now();
-          sandboxModeRef.current.setSandboxFlow({
-            nextQuestionBlockedReason: 'post_reveal_blocked:pending_post_reveal_chat',
-            nextQuestionBlockedReasonSource: 'post_reveal',
-            nextQuestionStage: 'POST_REVEAL_CHAT',
-            revealTransitionEligible: true,
-            revealTransitionBlockedBy: 'none',
-            revealTransitionCommitAttempted: true,
-            revealTransitionCommittedAt: commitAt,
-            revealTransitionCommitReason: 'reveal_word_done_bounded_recovery',
-            revealTransitionCommitBlockedBy: 'none'
-          });
-          sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery', commitAt);
+          commitRevealTransition('reveal_word_done_bounded_recovery', commitAt, revealTransitionSnapshot.snapshotId);
           setSandboxRevealTick(commitAt);
         } else {
           sandboxModeRef.current.setSandboxFlow({
             nextQuestionBlockedReason: 'reveal_guard_blocked:timing_missing',
-            revealTransitionEligible: false,
+            revealGuardReady: revealTransitionSnapshot.guardReady,
+            revealCompletionReady: revealTransitionSnapshot.completionReady,
+            revealTransitionEligible: revealTransitionSnapshot.transitionEligible,
             revealTransitionBlockedBy: 'timing_missing',
             revealTransitionCommitAttempted: true,
             revealTransitionCommittedAt: 0,
             revealTransitionCommitReason: '',
-            revealTransitionCommitBlockedBy: 'timing_missing'
+            revealTransitionCommitBlockedBy: 'timing_missing',
+            revealEligibilitySnapshotId: revealTransitionSnapshot.snapshotId,
+            revealCommitSourceSnapshotId: revealTransitionSnapshot.snapshotId
           });
         }
       } else if (sandboxState.reveal.phase === 'idle' || sandboxState.reveal.phase === 'hidden' || !sandboxState.reveal.rendered || (!sandboxState.reveal.wordKey && Boolean(sandboxState.reveal.text))) {
@@ -6675,25 +6733,31 @@ export default function App() {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionBlockedReason: `reveal_guard_blocked:${revealBlockedReason}`,
           nextQuestionBlockedReasonSource: 'reveal',
-          revealTransitionEligible: false,
+          revealGuardReady: revealTransitionSnapshot.guardReady,
+          revealCompletionReady: revealTransitionSnapshot.completionReady,
+          revealTransitionEligible: revealTransitionSnapshot.transitionEligible,
           revealTransitionBlockedBy: revealBlockedReason,
           revealTransitionCommitAttempted: true,
           revealTransitionCommittedAt: 0,
           revealTransitionCommitReason: '',
-          revealTransitionCommitBlockedBy: revealBlockedReason
+          revealTransitionCommitBlockedBy: revealBlockedReason,
+          revealEligibilitySnapshotId: revealTransitionSnapshot.snapshotId,
+          revealCommitSourceSnapshotId: revealTransitionSnapshot.snapshotId
         });
         ensureRevealActivatedForNormalFlow();
       } else {
-        const revealTransitionBlockedBy = sandboxState.reveal.phase !== 'done'
-          ? 'reveal_not_done'
-          : (!sandboxState.reveal.rendered ? 'reveal_not_rendered' : 'timing_missing');
+        const revealTransitionBlockedBy = revealTransitionSnapshot.transitionBlockedBy;
         sandboxModeRef.current.setSandboxFlow({
-          revealTransitionEligible: false,
+          revealGuardReady: revealTransitionSnapshot.guardReady,
+          revealCompletionReady: revealTransitionSnapshot.completionReady,
+          revealTransitionEligible: revealTransitionSnapshot.transitionEligible,
           revealTransitionBlockedBy,
           revealTransitionCommitAttempted: true,
           revealTransitionCommittedAt: 0,
           revealTransitionCommitReason: '',
-          revealTransitionCommitBlockedBy: revealTransitionBlockedBy
+          revealTransitionCommitBlockedBy: revealTransitionBlockedBy,
+          revealEligibilitySnapshotId: revealTransitionSnapshot.snapshotId,
+          revealCommitSourceSnapshotId: revealTransitionSnapshot.snapshotId
         });
       }
     }
@@ -7638,6 +7702,8 @@ export default function App() {
                     <div>reveal.transitionCommittedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommittedAt ?? 0}</div>
                     <div>reveal.transitionCommitReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommitReason ?? '-'}</div>
                     <div>reveal.transitionCommitBlockedBy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommitBlockedBy ?? '-'}</div>
+                    <div>reveal.eligibilitySnapshotId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealEligibilitySnapshotId ?? '-'}</div>
+                    <div>reveal.commitSourceSnapshotId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealCommitSourceSnapshotId ?? '-'}</div>
                     <div>reveal.blockedReason.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealBlockedReasonSource ?? '-'}</div>
                     <div>reveal.hasObservableTiming: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealHasObservableTiming ?? false)}</div>
                     <div>postReveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealGuardReady ?? false)}</div>

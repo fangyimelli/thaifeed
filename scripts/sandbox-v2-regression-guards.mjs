@@ -261,16 +261,16 @@ if (!app.includes('render.stateQuestionId/renderedQuestionId')) {
 }
 
 
-if (!app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming")) {
-  throw new Error('REVEAL_WORD completion guard must be based on phase+rendered+timing SSOT');
+if (!app.includes('buildRevealTransitionSnapshot')) {
+  throw new Error('REVEAL_WORD completion guard must be based on authoritative snapshot helper');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done'")) {
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', reason, commitAt)")) {
   throw new Error('REVEAL_WORD done must commit authoritative transition to POST_REVEAL_CHAT');
 }
 if (!app.includes('revealTransitionCommitAttempted') || !app.includes('revealTransitionCommittedAt') || !app.includes('revealTransitionCommitReason') || !app.includes('revealTransitionCommitBlockedBy')) {
   throw new Error('reveal transition commit observability fields missing');
 }
-if (!app.includes("revealTransitionCommitReason: 'reveal_word_done'")) {
+if (!app.includes("commitRevealTransition('reveal_word_done'")) {
   throw new Error('REVEAL_WORD success path must stamp reveal transition commit reason');
 }
 if (!app.includes("revealTransitionCommitBlockedBy: 'none'")) {
@@ -479,10 +479,10 @@ if (!app.includes("scene_not_synced_warning")) {
 if (!app.includes('const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
   throw new Error('reveal duration guard missing minimum visible duration constant');
 }
-if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;")) {
-  throw new Error('REVEAL_WORD must derive completion readiness from authoritative reveal state');
+if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes('const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);')) {
+  throw new Error('REVEAL_WORD must derive completion readiness from authoritative reveal snapshot state');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done', commitAt)")) {
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', reason, commitAt)")) {
   throw new Error('reveal_word_done transition missing');
 }
 if (!app.includes("word.reveal.rendered") || !app.includes("word.reveal.blockedReason") || !app.includes("word.reveal.startedAt") || !app.includes("word.reveal.finishedAt")) {
@@ -499,7 +499,7 @@ if (!app.includes("commitSource: 'wait_reply_1_gate_armed'") || !app.includes("r
 if (!app.includes("'authoritative_reply_gate_sync'") || !app.includes("'reveal_prompt_cleanup'")) {
   throw new Error('debug ui.promptGlyph visibility source must expose authoritative and reveal-cleanup paths');
 }
-if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_word_done_timing_repaired") || !app.includes("revealBlockedReason = sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
+if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealTransitionSnapshot.hasObservableTiming") || !app.includes("reveal_word_done_timing_repaired") || !app.includes("cleanup_hidden") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
   throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and self-repair hidden/non-rendered reveal state');
 }
 if (!app.includes("startedAt: nextStartedAt")) {
@@ -557,7 +557,7 @@ if (!app.includes("scene_not_synced_warning") || !app.includes("const renderSync
 if (!app.includes("SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS")) {
   throw new Error('REVEAL_WORD should enforce bounded stall recovery to POST_REVEAL_CHAT');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery', commitAt)")) {
+if (!app.includes("commitRevealTransition('reveal_word_done_bounded_recovery'")) {
   throw new Error('REVEAL_WORD bounded recovery transition missing');
 }
 if (app.includes("reveal_guard_warning:cleanup_hidden")) {
@@ -572,7 +572,7 @@ if (!app.includes("nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_
 if (!app.includes("const nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE'")) {
   throw new Error('First question correct path must stably advance into second-question flow');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired', now)")) {
+if (!app.includes("commitRevealTransition('reveal_word_done_timing_repaired'")) {
   throw new Error('REVEAL_WORD missing timing fallback transition to POST_REVEAL_CHAT');
 }
 if (!app.includes("setReveal?.({ startedAt: repairedStartedAt, finishedAt: repairedFinishedAt")) {
@@ -607,7 +607,7 @@ if (!app.includes("setReveal?.({ visible: false, phase: 'idle', text: '', wordKe
 if (!app.includes("setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_force_next_question'")) {
   throw new Error('Force Next Question must re-arm consonant answer gate for new question');
 }
-if (!app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;")) {
+if (!app.includes('revealCompletionReady: revealTransitionSnapshot.completionReady')) {
   throw new Error('REVEAL_WORD guard must rely on done+rendered+timing readiness');
 }
 if (!app.includes("const revealVisibilityOnly = revealCompletionReady && !sandboxState.reveal.visible;")) {
@@ -626,4 +626,24 @@ if (!app.includes('debugAction: {') || !app.includes('usedCanonicalAnswer') || !
 }
 if (!app.includes('const reconcileSandboxDebugState = useCallback((params: {')) {
   throw new Error('debug actions must run unified reconciliation after action');
+}
+
+
+if (!app.includes('const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnapshot => {')) {
+  throw new Error('REVEAL transition must derive eligibility/blockedBy from a single authoritative snapshot helper');
+}
+if (!app.includes('const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);')) {
+  throw new Error('REVEAL_WORD effect must consume authoritative reveal snapshot');
+}
+if (!app.includes('revealEligibilitySnapshotId') || !app.includes('revealCommitSourceSnapshotId')) {
+  throw new Error('reveal snapshot observability fields are missing');
+}
+if (!app.includes('revealTransitionEligible: true') || !app.includes("revealTransitionCommitBlockedBy: 'none'")) {
+  throw new Error('eligible reveal transition must commit with blockedBy=none');
+}
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', reason, commitAt)")) {
+  throw new Error('REVEAL commit must transition to POST_REVEAL_CHAT in the same commit transaction');
+}
+if (!app.includes('revealCompletionReady: true') || !app.includes('revealGuardReady: true')) {
+  throw new Error('reveal commit must persist guard/completion readiness from authoritative snapshot');
 }

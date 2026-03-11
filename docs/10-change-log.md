@@ -1,3 +1,11 @@
+## 2026-03-11 — Sandbox reveal transition stale-state fix (SSOT)
+
+- 新增 reveal transition SSOT helper：`buildRevealTransitionSnapshot()`，將 `guardReady/completionReady/transitionEligible/transitionBlockedBy` 收斂為單一來源。
+- `REVEAL_WORD -> POST_REVEAL_CHAT` commit 改為同一條 authoritative path：eligible 時同次寫入 commit observability 與 `setFlowStep('POST_REVEAL_CHAT', ..., commitAt)`。
+- 新增 snapshot observability：`revealEligibilitySnapshotId`、`revealCommitSourceSnapshotId`，驗證 eligibility 與 commit 同源。
+- Debug panel 顯示新增 snapshot id 欄位，避免「debug 看起來可過但 commit 實際阻擋」脫鉤。
+- Regression guards 補強：eligible snapshot 必須驅動 commit，且 commit blocked reason 不可回退為 `reveal_not_done`。
+
 ## 2026-03-11 sandbox reveal transition commit SSOT fix (integration mode)
 - Root cause：`REVEAL_WORD` debug guard 顯示 eligible，但 transition commit observability 與 authoritative step commit 未強綁，導致 `postReveal.enteredAt/advanceNext.enteredAt` 長期為 0。
 - 修正：REVEAL completion 成立時統一以 commitAt 同步寫入 `reveal.transitionCommit*` 並 `setFlowStep('POST_REVEAL_CHAT', reason, commitAt)`，確保 debug 與 authoritative flow 完全一致。
