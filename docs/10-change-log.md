@@ -1,3 +1,14 @@
+## 2026-03-11 sandbox regression guards：WAIT_REPLY_4 / dynamic WAIT_REPLY_x contract
+
+- Root cause
+  - guard 雖已有 `WAIT_REPLY_2/3 -> ANSWER_EVAL`，但未明確鎖定 `WAIT_REPLY_4+` 動態 consume 契約。
+  - 部分 render/answerable 觀測仍可能殘留 1~3 時代的 step hardcode。
+  - `scene_not_synced_warning` 需維持 render-only 警示語義，避免被誤用為 submit blocking reason。
+- Fix
+  - `scripts/sandbox-v2-regression-guards.mjs` 新增 dynamic consume guard：`WAIT_REPLY_x` consume success 一律進 `ANSWER_EVAL`，禁止 consume 直接 `ADVANCE_NEXT` 與 `submit_rejected` 退回。
+  - 新增 dynamic wait-step guard：global freeze / answerable / consume index 必須使用 `isSandboxWaitReplyStep` + `parseSandboxWaitReplyIndex`。
+  - 新增 render-only guard：`scene_not_synced_warning` 必須只存在 render sync；禁止進入 submit/consume blocked reason。
+
 ## 2026-03-11 sandbox audit fix：Q2/Q3 consume shortcut + cross-question evidence pollution
 
 - Root cause confirmed
