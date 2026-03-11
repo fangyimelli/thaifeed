@@ -1,6 +1,7 @@
 import type { GameMode } from '../types';
 import { NIGHT1 } from '../../ssot/sandbox_story/night1';
 import type { NightScript } from '../../ssot/sandbox_story/types';
+import { isSandboxWaitReplyStep } from './waitReplyStep';
 
 export type SandboxPrompt = {
   kind: 'consonant' | 'theory' | 'final';
@@ -324,7 +325,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       const previousStep = state.flow?.step ?? 'unknown';
       const nextQuestionIndex = Number.isInteger(state.flow?.questionIndex) ? state.flow.questionIndex : 0;
       const deriveStepScopedNextQuestion = (flowStep: string) => {
-        if (flowStep === 'WAIT_WARMUP_REPLY' || flowStep === 'WAIT_REPLY_1' || flowStep === 'WAIT_REPLY_2' || flowStep === 'WAIT_REPLY_3') {
+        if (isSandboxWaitReplyStep(flowStep)) {
           return { nextQuestionStage: 'REPLY', nextQuestionBlockedReasonSource: 'reply', nextQuestionBlockedReason: 'reply_blocked:awaiting_consume' };
         }
         if (flowStep === 'ANSWER_EVAL') {
