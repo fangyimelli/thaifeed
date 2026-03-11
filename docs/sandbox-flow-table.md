@@ -157,7 +157,15 @@
 | 8 | WAIT_REPLY_1 | replyGate.armed=true, gateType=consonant_answer + currentPrompt | 第一題等待回答 |
 | 9 | ANSWER_EVAL | lastReplyEval + judge | 評分 |
 | 10 | REVEAL_WORD | word.reveal + pronounce | 顯字/發音 |
-| 11 | POST_REVEAL_CHAT | post reveal chat | reveal 後聊天室 |
+| 11 | POST_REVEAL_CHAT | `postReveal.enteredAt>0` + `postReveal.startAttempted=true` + (`postReveal.startedAt>0` or `postReveal.completedAt>0`) | reveal 後聊天室（bounded auto-complete，最多 `SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS=900`） |
+| 12 | ADVANCE_NEXT | `postRevealChat.status=done` + `postReveal.completionBlockedBy=''` + `advanceNext.enteredAt>0` | 轉入下一題 emit；`nextQuestion.ready/emitted=true` 後切到第二題 |
+
+## Post-reveal authoritative lifecycle（SSOT）
+
+- 單一來源：`sandboxFlow` 的 `postReveal*` 欄位（`startAttempted/startedAt/completedAt/completionReason/completionBlockedBy/postRevealChatState`）。
+- 進入 `POST_REVEAL_CHAT` 必須立即嘗試啟動（`startAttempted=true`），不得長時間維持 `idle`。
+- completion 若未達成必須明確填寫 `completionBlockedBy`（例如 `reply_gate_armed` / `bounded_wait_pending` / reveal not ready）。
+- completion 成立（`postRevealChatState=done` 且 `completionBlockedBy=''`）必須直接驅動 `ADVANCE_NEXT`。
 
 
 ## Bootstrap SSOT（sandbox_story）

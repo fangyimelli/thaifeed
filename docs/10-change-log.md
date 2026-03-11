@@ -1071,3 +1071,13 @@
 - [sandbox][debug-reconciliation] `Pass Flow / Force Correct Now / Force Next Question` 補齊 authoritative reconciliation（flow step、reply gate、nextQuestion stage/source、prompt/render sync）。
 - [sandbox][observability] debug 新增：`reveal.completionReady`、`reveal.visibilityOnly`、`reveal.blockedReason.source`、`scene.expectedRaw/currentRaw/expectedCanonical/currentCanonical`、`renderSync.reason`。
 - [sandbox][regression-guards] 更新 `scripts/sandbox-v2-regression-guards.mjs`，加入 reveal completion/scene canonicalization/scene warning downgrade/debug reconciliation 檢查。
+# 2026-03-11（post-reveal completion stuck hotfix）
+
+- Root cause：`REVEAL_WORD -> POST_REVEAL_CHAT` transition commit 已成功（含 audit/reveal commit observability），但 post-reveal completion path 未啟動，導致 `postReveal.guardReady=true` 與 `postRevealChat.status=idle` 長期並存，`ADVANCE_NEXT` guard 永遠不放行。
+- 修正 `POST_REVEAL_CHAT` authoritative runner：
+  - 進入 step 後即寫入 `postReveal.startAttempted=true` 與 `postReveal.startedAt`。
+  - 若 reveal readiness 未滿足，寫入 `postReveal.completionBlockedBy`（例如 `reveal_not_finished_or_not_rendered`）。
+  - 若無 reply gate 阻擋，於 bounded time（`SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS=900`）自動完成，落盤 `postReveal.completedAt`、`postReveal.completionReason=auto_complete_bounded`，再轉 `ADVANCE_NEXT`。
+- SSOT/guard 對齊：`advanceNext.guardReady` 改為依 post-reveal authoritative completion（`postRevealChatState=done && completionBlockedBy=''`）判定。
+- Debug observability 補強：新增 `postReveal.startAttempted/startedAt/completedAt/completionReason/completionBlockedBy`，保留 `postReveal.enteredAt`、`advanceNext.enteredAt`。
+- Regression guards：新增檢查 bounded auto-complete 常數、completion reason、blocked-by observability 與 sandbox mode state 欄位存在，避免 regress 成 idle 卡死。

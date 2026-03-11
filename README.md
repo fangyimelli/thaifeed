@@ -1,5 +1,8 @@
 ## Sandbox reveal transition SSOT note (2026-03-11)
 
+- [sandbox][integration-fix][post-reveal-runner-ssot] 修正 root cause：`REVEAL_WORD -> POST_REVEAL_CHAT` 已 commit 後，`postReveal.guardReady=true` 但 `postRevealChat.status` 長期 `idle` 導致無法進 `ADVANCE_NEXT`。現在改為同一 authoritative path 驅動 post-reveal lifecycle：進入 `POST_REVEAL_CHAT` 即寫入 `postReveal.startAttempted/startedAt`，bounded window（`SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS=900`）內自動完成並寫入 `postReveal.completedAt/completionReason=auto_complete_bounded`，之後單一路徑轉 `ADVANCE_NEXT` 並 emit 下一題。
+- [sandbox][debug][post-reveal-observability] debug panel 新增 `postReveal.startAttempted/startedAt/completedAt/completionReason/completionBlockedBy`；`advanceNext.guardReady` 改為依 `postRevealChatState=done && completionBlockedBy=''` 的 authoritative completion readiness 判定，避免 debug 顯示與正式 flow 脫鉤。
+
 - `REVEAL_WORD -> POST_REVEAL_CHAT` 以單一 authoritative snapshot (`buildRevealTransitionSnapshot`) 判定 eligibility 與 blocked reason。
 - 當 snapshot eligible 時，必須同 transaction 寫入 reveal commit observability 並 commit `flow.step=POST_REVEAL_CHAT`。
 - Debug 需檢查 `revealEligibilitySnapshotId` / `revealCommitSourceSnapshotId` 以確認 eligibility 與 commit 同源。
