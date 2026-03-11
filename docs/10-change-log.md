@@ -1,3 +1,9 @@
+## 2026-03-11 sandbox reveal->post_reveal->advance_next guard stabilization
+- 修正 `REVEAL_WORD` timing observability 缺欄位導致無限停留：若 `phase=done/rendered=true` 但 `startedAt/finishedAt` 缺失，先補 timing 後以 `reveal_word_done_timing_repaired` 前進 `POST_REVEAL_CHAT`。
+- `nextQuestionBlockedReason` 改為 stage-scoped 前綴，並新增 `nextQuestionStage`、`nextQuestionBlockedReasonSource`，清除 reset 初值 `not_armed` 在 reveal/post-reveal/advance 期間誤導 debug。
+- debug panel 新增 reveal/post_reveal/advance guard readiness 與 blocked reason source/stage 欄位，可直接判讀卡點。
+- 維持 `scene_not_synced_warning` 為 warning，第二題 emit 不再受 render sync timing 影響。
+
 ## 2026-03-10 reveal pipeline audit (no behavior change)
 
 - Scope: sandbox story reveal observability only; no flow gating or timing logic changed.

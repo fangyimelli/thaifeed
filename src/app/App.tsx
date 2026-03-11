@@ -3699,6 +3699,22 @@ export default function App() {
       const renderBlockedReasonEffective = renderBlockedReason === 'none'
         ? 'none'
         : (forceVisiblePrompt && renderBlockedReason === 'scene_not_synced' ? 'scene_not_synced_warning' : renderBlockedReason);
+      const revealHasObservableTiming = sandboxState.reveal.startedAt > 0
+        && sandboxState.reveal.finishedAt > 0
+        && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
+      const revealGuardReady = sandboxState.reveal.phase === 'done'
+        && sandboxState.reveal.visible
+        && Boolean(sandboxState.reveal.rendered)
+        && sandboxState.reveal.blockedReason !== 'hidden'
+        && revealHasObservableTiming;
+      const postRevealGuardReady = sandboxState.flow.step === 'POST_REVEAL_CHAT'
+        && sandboxState.reveal.phase === 'done'
+        && (Boolean(sandboxState.reveal.rendered) || sandboxState.reveal.blockedReason === 'missing_word_text');
+      const advanceNextGuardReady = sandboxState.flow.step === 'ADVANCE_NEXT'
+        && (sandboxState.sandboxFlow.postRevealChatState === 'done'
+          || ((sandboxState.sandboxFlow?.backlogTechMessages?.length ?? 0) === 0
+            && Boolean((sandboxState.audit?.transitions ?? []).some((item: any) => item?.to === 'ADVANCE_NEXT' && item?.reason === 'post_reveal_chat_done'))))
+        && !(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
       sandboxModeRef.current.commitRenderSync?.({
         stateQuestionId,
         renderedQuestionId,
@@ -3750,9 +3766,15 @@ export default function App() {
           nextQuestionFromQuestionId: sandboxState.sandboxFlow.nextQuestionFromQuestionId,
           nextQuestionToQuestionId: sandboxState.sandboxFlow.nextQuestionToQuestionId,
           nextQuestionBlockedReason: sandboxState.sandboxFlow.nextQuestionBlockedReason,
+          nextQuestionBlockedReasonSource: sandboxState.sandboxFlow.nextQuestionBlockedReasonSource || '-',
+          nextQuestionStage: sandboxState.sandboxFlow.nextQuestionStage || '-',
           nextQuestionDecidedAt: sandboxState.sandboxFlow.nextQuestionDecidedAt,
           nextQuestionEmittedAt: sandboxState.sandboxFlow.nextQuestionEmittedAt,
-          nextQuestionConsumer: sandboxState.sandboxFlow.nextQuestionConsumer
+          nextQuestionConsumer: sandboxState.sandboxFlow.nextQuestionConsumer,
+          revealGuardReady,
+          revealHasObservableTiming,
+          postRevealGuardReady,
+          advanceNextGuardReady
         },
         unresolvedAmbient: {
           active: sandboxState.flow.step === 'WAIT_REPLY_1' && sandboxState.sandboxFlow.replyGateActive && !sandboxState.sandboxFlow.gateConsumed,
@@ -5825,7 +5847,7 @@ export default function App() {
     sandboxModeRef.current.ensureBootstrapState?.('run_night_smoke_test_reset', resetAt, 30_000, true);
     sandboxModeRef.current.setIntroGate({ passed: true, remainingMs: 0, startedAt: resetAt, minDurationMs: 30_000 });
     sandboxModeRef.current.setFlowStep('VIP_TAG_PLAYER', 'run_night_smoke_test_start_clean', resetAt);
-    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'idle', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'not_armed', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '' });
+    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'idle', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'reveal_guard_blocked:bootstrapping', nextQuestionBlockedReasonSource: 'reveal', nextQuestionStage: 'REVEAL_WORD', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '' });
     sandboxPreheatOrchestrationRef.current.startedAt = resetAt;
     sandboxPreheatOrchestrationRef.current.lastEmitAt = 0;
     sandboxPreheatOrchestrationRef.current.cursor = 0;
@@ -6283,6 +6305,10 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'REVEAL_WORD') {
+      sandboxModeRef.current.setSandboxFlow({
+        nextQuestionStage: 'REVEAL_WORD',
+        nextQuestionBlockedReasonSource: 'reveal'
+      });
       const revealHasObservableTiming = sandboxState.reveal.startedAt > 0 && sandboxState.reveal.finishedAt > 0 && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
       const promptWordKey = sandboxState.prompt.current?.wordKey ?? '';
       const ensureRevealActivatedForNormalFlow = () => {
@@ -6328,11 +6354,31 @@ export default function App() {
         && sandboxState.reveal.rendered
         && sandboxState.reveal.blockedReason !== 'hidden';
       if (revealDoneReady && revealHasObservableTiming) {
+        sandboxModeRef.current.setSandboxFlow({
+          nextQuestionBlockedReason: 'post_reveal_blocked:pending_post_reveal_chat',
+          nextQuestionBlockedReasonSource: 'post_reveal',
+          nextQuestionStage: 'POST_REVEAL_CHAT'
+        });
         sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
         setSandboxRevealTick(Date.now());
       } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
-        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_done_missing_timing_observability' });
+        const now = Date.now();
+        const repairedStartedAt = sandboxState.reveal.startedAt > 0
+          ? sandboxState.reveal.startedAt
+          : (sandboxState.reveal.doneAt > 0 ? sandboxState.reveal.doneAt : now);
+        const repairedFinishedAt = sandboxState.reveal.finishedAt > 0
+          ? sandboxState.reveal.finishedAt
+          : Math.max(now, repairedStartedAt, sandboxState.reveal.doneAt || 0);
+        sandboxModeRef.current.setReveal?.({ startedAt: repairedStartedAt, finishedAt: repairedFinishedAt, doneAt: sandboxState.reveal.doneAt || repairedFinishedAt });
+        sandboxModeRef.current.setSandboxFlow({
+          nextQuestionBlockedReason: 'post_reveal_blocked:timing_repaired',
+          nextQuestionBlockedReasonSource: 'post_reveal',
+          nextQuestionStage: 'POST_REVEAL_CHAT'
+        });
+        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired');
+        setSandboxRevealTick(now);
       } else if (sandboxState.reveal.phase === 'idle' || sandboxState.reveal.phase === 'hidden' || !sandboxState.reveal.visible || !sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'hidden' || (!sandboxState.reveal.wordKey && Boolean(sandboxState.reveal.text))) {
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: `reveal_guard_blocked:${sandboxState.reveal.blockedReason || 'reveal_not_ready'}`, nextQuestionBlockedReasonSource: 'reveal' });
         ensureRevealActivatedForNormalFlow();
       }
     }
@@ -6346,17 +6392,18 @@ export default function App() {
     };
 
     if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {
+      sandboxModeRef.current.setSandboxFlow({ nextQuestionStage: 'POST_REVEAL_CHAT', nextQuestionBlockedReasonSource: 'post_reveal' });
       const hasReplyGate = hasReplyGateArmed(sandboxState);
       const postRevealDone = hasPostRevealCompletionEvidence(sandboxState);
       const revealReadyForPostChat = sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text');
       if (!revealReadyForPostChat) {
-        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: sandboxState.reveal.blockedReason || 'reveal_not_finished_or_not_rendered' });
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: `post_reveal_blocked:${sandboxState.reveal.blockedReason || 'reveal_not_finished_or_not_rendered'}` });
         setSandboxRevealTick(Date.now());
       } else if (!postRevealDone && (sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') !== 'started') {
-        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'started', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'post_reveal_chat_in_progress', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
+        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'started', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionBlockedReason: 'post_reveal_blocked:chat_in_progress', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
         setSandboxRevealTick(Date.now());
       } else if (!hasReplyGate) {
-        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', nextQuestionReady: true, nextQuestionEmitted: false, nextQuestionBlockedReason: 'advance_next_pending', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
+        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', nextQuestionReady: true, nextQuestionEmitted: false, nextQuestionBlockedReason: 'advance_next_blocked:pending_emit', nextQuestionBlockedReasonSource: 'advance_next', nextQuestionStage: 'ADVANCE_NEXT', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
         sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done');
         setSandboxRevealTick(Date.now());
       }
@@ -6533,6 +6580,7 @@ export default function App() {
       setSandboxRevealTick(Date.now());
     }
     if (sandboxState.flow.step === 'ADVANCE_NEXT') {
+      sandboxModeRef.current.setSandboxFlow({ nextQuestionStage: 'ADVANCE_NEXT', nextQuestionBlockedReasonSource: 'advance_next' });
       const hasReplyGate = hasReplyGateArmed(sandboxState);
       const postRevealDone = hasPostRevealCompletionEvidence(sandboxState);
       if (!postRevealDone && !hasReplyGate && (sandboxState.reveal.phase === 'done' || !sandboxState.reveal.visible)) {
@@ -6540,7 +6588,7 @@ export default function App() {
           postRevealChatState: 'done',
           nextQuestionReady: true,
           nextQuestionEmitted: false,
-          nextQuestionBlockedReason: 'advance_next_pending',
+          nextQuestionBlockedReason: 'advance_next_blocked:pending_emit',
           nextQuestionDecidedAt: Date.now(),
           nextQuestionEmittedAt: 0,
           nextQuestionConsumer: 'advance_next_effect'
@@ -6560,7 +6608,7 @@ export default function App() {
           nextQuestionToIndex: -1,
           nextQuestionFromQuestionId: fromQuestionId,
           nextQuestionToQuestionId: '',
-          nextQuestionBlockedReason: 'post_reveal_chat_not_done',
+          nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_chat_not_done',
           nextQuestionDecidedAt: decidedAt,
           nextQuestionEmittedAt: 0,
           nextQuestionConsumer: 'advance_next_effect'
@@ -6577,7 +6625,7 @@ export default function App() {
           nextQuestionToIndex: -1,
           nextQuestionFromQuestionId: fromQuestionId,
           nextQuestionToQuestionId: '',
-          nextQuestionBlockedReason: 'reply_gate_still_armed',
+          nextQuestionBlockedReason: 'advance_next_blocked:reply_gate_still_armed',
           nextQuestionDecidedAt: decidedAt,
           nextQuestionEmittedAt: 0,
           nextQuestionConsumer: 'advance_next_effect'
@@ -6596,7 +6644,7 @@ export default function App() {
           nextQuestionToIndex: -1,
           nextQuestionFromQuestionId: fromQuestionId,
           nextQuestionToQuestionId: '',
-          nextQuestionBlockedReason: 'end_of_nodes',
+          nextQuestionBlockedReason: 'advance_next_blocked:end_of_nodes',
           nextQuestionDecidedAt: decidedAt,
           nextQuestionEmittedAt: 0,
           nextQuestionConsumer: 'advance_next_effect'
@@ -6632,6 +6680,8 @@ export default function App() {
         nextQuestionFromQuestionId: fromQuestionId,
         nextQuestionToQuestionId: afterNode?.id ?? '',
         nextQuestionBlockedReason: 'emitted',
+        nextQuestionBlockedReasonSource: 'advance_next',
+        nextQuestionStage: 'emitted',
         nextQuestionDecidedAt: decidedAt,
         nextQuestionEmittedAt: Date.now(),
         nextQuestionConsumer: 'advance_next_effect'
@@ -6845,7 +6895,7 @@ export default function App() {
       finishedAt: nextFinishedAt
     });
     if (st.flow.step === 'POST_REVEAL_CHAT' && !nextRendered && st.reveal.phase !== 'done') {
-      sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: nextBlockedReason || 'reveal_not_rendered' });
+      sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: `post_reveal_blocked:${nextBlockedReason || 'reveal_not_rendered'}`, nextQuestionBlockedReasonSource: 'post_reveal', nextQuestionStage: 'POST_REVEAL_CHAT' });
     }
     setSandboxRevealTick(now);
   }, []);
@@ -7246,7 +7296,13 @@ export default function App() {
                     <div>nextQuestion.fromQuestionId/toQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionFromQuestionId || '-'} {'->'} {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionToQuestionId || '-'}</div>
                     <div>nextQuestion.decidedAt/emittedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionDecidedAt ?? 0} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionEmittedAt ?? 0}</div>
                     <div>nextQuestion.consumer: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionConsumer || '-'}</div>
+                    <div>nextQuestion.stage: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionStage || '-'}</div>
                     <div>nextQuestion.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionBlockedReason ?? '-'}</div>
+                    <div>nextQuestion.blockedReason.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionBlockedReasonSource ?? '-'}</div>
+                    <div>reveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealGuardReady ?? false)}</div>
+                    <div>reveal.hasObservableTiming: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealHasObservableTiming ?? false)}</div>
+                    <div>postReveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealGuardReady ?? false)}</div>
+                    <div>advanceNext.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.advanceNextGuardReady ?? false)}</div>
                     <div>render.stateQuestionId/renderedQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.stateQuestionId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.renderedQuestionId ?? '-'}</div>
                     <div>render.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.renderBlockedReason ?? '-'}</div>
                     <div>render.expectedSceneKey/video.currentKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.expectedSceneKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.videoCurrentKey ?? '-'}</div>
