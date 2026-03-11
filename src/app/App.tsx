@@ -326,6 +326,14 @@ function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
 }
 
+function canonicalizeSandboxSceneKey(raw: string): string {
+  const normalized = (raw || '').trim().toLowerCase();
+  if (!normalized) return '';
+  const directLoop = normalized.match(/loop([0-9]+)/u);
+  if (directLoop?.[1]) return `loop${directLoop[1]}`;
+  return normalized;
+}
+
 function sanitizeSandboxJoinName(raw: string): string {
   const noControl = raw.replace(/[\u0000-\u001F\u007F]/gu, '');
   const normalized = normalizeHandle(noControl).trim();
@@ -3709,36 +3717,40 @@ export default function App() {
       });
       const expectedSceneKey = resolveSandboxSceneKeyByQuestionIndex(sandboxState.flow.questionIndex);
       const videoCurrentKey = (window.__VIDEO_DEBUG__ as { currentKey?: string } | undefined)?.currentKey ?? '';
+      const expectedCanonicalSceneKey = canonicalizeSandboxSceneKey(expectedSceneKey);
+      const currentCanonicalSceneKey = canonicalizeSandboxSceneKey(videoCurrentKey);
       const stateQuestionId = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.wordKey : '';
       const promptConsonant = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '';
       const overlayConsonant = sandboxState.prompt.overlay.consonantShown || '';
-      const sceneSynced = videoCurrentKey === expectedSceneKey;
+      const sceneSynced = Boolean(expectedCanonicalSceneKey) && expectedCanonicalSceneKey === currentCanonicalSceneKey;
       const isAnswerablePromptStep = sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
       const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === 'consonant_answer');
-      const renderBlockedReason = !stateQuestionId
+      const renderSyncReason = !stateQuestionId
         ? 'state_question_missing'
         : (!promptConsonant ? 'prompt_missing'
           : (overlayConsonant !== promptConsonant ? 'overlay_not_committed'
-            : (sceneSynced ? 'none' : 'scene_not_synced')));
+            : (sceneSynced ? 'none' : 'scene_not_synced_warning')));
       const authoritativeQ2Advanced = sandboxState.sandboxFlow.nextQuestionEmitted
         && sandboxState.sandboxFlow.nextQuestionToQuestionId
         && (sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'TAG_PLAYER_3_MEANING' || sandboxState.flow.step === 'WAIT_REPLY_3' || sandboxState.flow.step === 'END_NIGHT')
         && sandboxState.prompt.current?.kind === 'consonant'
         && sandboxState.prompt.current.wordKey === sandboxState.sandboxFlow.nextQuestionToQuestionId;
       const promptVisuallyReady = Boolean(stateQuestionId && promptConsonant && overlayConsonant === promptConsonant);
-      const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);
-      const renderedQuestionId = renderBlockedReason === 'none' || forceVisiblePrompt ? stateQuestionId : '';
-      const renderBlockedReasonEffective = renderBlockedReason === 'none'
-        ? 'none'
-        : (forceVisiblePrompt && renderBlockedReason === 'scene_not_synced' ? 'scene_not_synced_warning' : renderBlockedReason);
+      const forceVisiblePrompt = Boolean(stateQuestionId) && (promptVisuallyReady || isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);
+      const renderedQuestionId = !stateQuestionId
+        ? ''
+        : (renderSyncReason === 'state_question_missing' || renderSyncReason === 'prompt_missing' || renderSyncReason === 'overlay_not_committed')
+          ? ''
+          : stateQuestionId;
+      const renderBlockedReasonEffective = renderSyncReason;
       const revealHasObservableTiming = sandboxState.reveal.startedAt > 0
         && sandboxState.reveal.finishedAt > 0
         && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
-      const revealGuardReady = sandboxState.reveal.phase === 'done'
-        && sandboxState.reveal.visible
+      const revealCompletionReady = sandboxState.reveal.phase === 'done'
         && Boolean(sandboxState.reveal.rendered)
-        && sandboxState.reveal.blockedReason !== 'hidden'
         && revealHasObservableTiming;
+      const revealGuardReady = revealCompletionReady;
+      const revealVisibilityOnly = revealCompletionReady && !sandboxState.reveal.visible;
       const postRevealGuardReady = sandboxState.flow.step === 'POST_REVEAL_CHAT'
         && sandboxState.reveal.phase === 'done'
         && (Boolean(sandboxState.reveal.rendered) || sandboxState.reveal.blockedReason === 'missing_word_text');
@@ -3751,7 +3763,7 @@ export default function App() {
         stateQuestionId,
         renderedQuestionId,
         renderBlockedReason: renderBlockedReasonEffective,
-        commitSource: forceVisiblePrompt && renderBlockedReason !== 'none' ? 'authoritative_prompt_visibility_override' : (authoritativeQ2Advanced ? 'authoritative_flow_override' : 'app_tick_render_sync')
+        commitSource: forceVisiblePrompt && renderSyncReason !== 'none' ? 'authoritative_prompt_visibility_override' : (authoritativeQ2Advanced ? 'authoritative_flow_override' : 'app_tick_render_sync')
       });
       const judgeAudit = sandboxState.consonantJudgeAudit;
       const revealPromptSuppressed = sandboxState.reveal.phase === 'word' || sandboxState.reveal.phase === 'done';
@@ -3804,7 +3816,10 @@ export default function App() {
           nextQuestionEmittedAt: sandboxState.sandboxFlow.nextQuestionEmittedAt,
           nextQuestionConsumer: sandboxState.sandboxFlow.nextQuestionConsumer,
           revealGuardReady,
+          revealCompletionReady,
           revealHasObservableTiming,
+          revealVisibilityOnly,
+          revealBlockedReasonSource: sandboxState.reveal.blockedReason === 'hidden' ? 'ui_cleanup' : 'reveal_guard',
           postRevealGuardReady,
           advanceNextGuardReady
         },
@@ -4090,8 +4105,13 @@ export default function App() {
           stateQuestionId,
           renderedQuestionId,
           renderBlockedReason: renderBlockedReasonEffective,
+          renderSyncReason,
           expectedSceneKey,
-          videoCurrentKey
+          videoCurrentKey,
+          expectedRawKey: expectedSceneKey,
+          currentRawKey: videoCurrentKey,
+          expectedCanonicalKey: expectedCanonicalSceneKey,
+          currentCanonicalKey: currentCanonicalSceneKey
         },
         hint: {
           active: sandboxState.hint.active,
@@ -5666,10 +5686,41 @@ export default function App() {
     clearChatFreeze('sandbox_debug_pass');
     setChatAutoPaused(false);
     setInput('');
-    const afterIndex = sandboxModeRef.current.getState().nodeIndex;
+    const afterState = sandboxModeRef.current.getState();
+    const afterIndex = afterState.nodeIndex;
+    const afterNode = sandboxModeRef.current.getCurrentNode();
+    if (advanced && afterNode) {
+      sandboxModeRef.current.setCurrentPrompt({
+        kind: 'consonant',
+        promptId: crypto.randomUUID(),
+        consonant: afterNode.char,
+        wordKey: afterNode.id,
+        pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
+        correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
+        unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
+      });
+      sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_pass_flow', consumePolicy: 'single' });
+      sandboxModeRef.current.setSandboxFlow({
+        postRevealChatState: 'idle',
+        nextQuestionReady: true,
+        nextQuestionEmitted: true,
+        nextQuestionFromIndex: beforeIndex,
+        nextQuestionToIndex: afterState.flow.questionIndex,
+        nextQuestionToQuestionId: afterNode.id,
+        nextQuestionBlockedReason: 'emitted',
+        nextQuestionBlockedReasonSource: 'advance_next',
+        nextQuestionStage: 'emitted',
+        nextQuestionDecidedAt: now,
+        nextQuestionEmittedAt: Date.now(),
+        nextQuestionConsumer: 'debug_pass_flow'
+      });
+      sandboxModeRef.current.setFlowStep(afterState.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING', 'debug_pass_flow_emit');
+      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(afterState.flow.questionIndex), reason: `debug_pass_q${afterState.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
+      sandboxModeRef.current.commitRenderSync?.({ stateQuestionId: afterNode.id, renderedQuestionId: afterNode.id, renderBlockedReason: 'force_next_prompt_activated', commitSource: 'debug_pass_flow' });
+    }
     recordSandboxDebugAction('pass_flow', { effectApplied: Boolean(advanced && afterIndex !== beforeIndex), blockedReason: advanced ? '-' : 'end_of_nodes', lastResult: advanced ? `advanced_to:${afterIndex}` : 'blocked' });
     setSandboxRevealTick(Date.now());
-  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze, recordSandboxDebugAction]);
+  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze, recordSandboxDebugAction, requestSceneAction, resolveSandboxSceneKeyByQuestionIndex]);
 
 
   const handleSandboxDebugForceCorrectNow = useCallback(() => {
@@ -5719,6 +5770,12 @@ export default function App() {
       consumedAt: now
     });
     applySandboxCorrect({ input: '[debug-force-correct]', matchedChar: currentPrompt.consonant, source: 'debug_button' });
+    sandboxModeRef.current.setSandboxFlow({
+      nextQuestionStage: 'REVEAL_WORD',
+      nextQuestionBlockedReasonSource: 'reveal',
+      nextQuestionBlockedReason: 'reveal_guard_blocked:awaiting_reveal'
+    });
+    sandboxModeRef.current.setFlowStep('REVEAL_WORD', 'debug_force_correct_transition');
     recordSandboxDebugAction('force_correct_now', { effectApplied: true, blockedReason: '-', lastResult: `correct:${currentPrompt.consonant}` });
   }, [applySandboxCorrect, recordSandboxDebugAction]);
 
@@ -5740,7 +5797,7 @@ export default function App() {
     }
     clearReplyUi('sandbox_force_next_question');
     clearChatFreeze('sandbox_force_next_question');
-    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', nextQuestionReady: true, nextQuestionEmitted: false, nextQuestionBlockedReason: 'force_next_question_pending', nextQuestionDecidedAt: clickedAt, nextQuestionEmittedAt: 0, nextQuestionConsumer: 'force_next_question_debug' });
+    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', nextQuestionReady: true, nextQuestionEmitted: false, nextQuestionBlockedReason: 'force_next_question_pending', nextQuestionBlockedReasonSource: 'advance_next', nextQuestionStage: 'ADVANCE_NEXT', nextQuestionDecidedAt: clickedAt, nextQuestionEmittedAt: 0, nextQuestionConsumer: 'force_next_question_debug' });
     const advanced = sandboxModeRef.current.forceAdvanceNode();
     if (!advanced) {
       recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'force_advance_failed', lastResult: 'blocked' });
@@ -5768,6 +5825,7 @@ export default function App() {
       renderBlockedReason: 'force_next_prompt_activated',
       commitSource: 'force_next_question_debug'
     });
+    sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_force_next_question', consumePolicy: 'single' });
     sandboxModeRef.current.setSandboxFlow({
       postRevealChatState: 'idle',
       nextQuestionReady: true,
@@ -5777,10 +5835,13 @@ export default function App() {
       nextQuestionFromQuestionId: fromNode?.id ?? '',
       nextQuestionToQuestionId: afterNode.id,
       nextQuestionBlockedReason: 'emitted',
+      nextQuestionBlockedReasonSource: 'advance_next',
+      nextQuestionStage: 'emitted',
       nextQuestionDecidedAt: clickedAt,
       nextQuestionEmittedAt: Date.now(),
       nextQuestionConsumer: 'force_next_question_debug'
     });
+    sandboxModeRef.current.setFlowStep(stateAfter.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING', 'force_next_question_emitted');
     setSandboxRevealTick(Date.now());
     recordSandboxDebugAction('force_next_question', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${stateAfter.flow.questionIndex}:${afterNode.id}` });
   }, [clearChatFreeze, clearReplyUi, recordSandboxDebugAction, resolveSandboxSceneKeyByQuestionIndex]);
@@ -6399,6 +6460,7 @@ export default function App() {
         nextQuestionBlockedReasonSource: 'reveal'
       });
       const revealHasObservableTiming = sandboxState.reveal.startedAt > 0 && sandboxState.reveal.finishedAt > 0 && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
+      const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;
       const promptWordKey = sandboxState.prompt.current?.wordKey ?? '';
       const ensureRevealActivatedForNormalFlow = () => {
         const revealStartedAt = sandboxState.reveal.startedAt > 0 ? sandboxState.reveal.startedAt : Date.now();
@@ -6434,15 +6496,11 @@ export default function App() {
           });
         }
         if (!revealText) {
-          sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_text_missing' });
+          sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_guard_blocked:reveal_text_missing', nextQuestionBlockedReasonSource: 'reveal' });
         }
         setSandboxRevealTick(Date.now());
       };
-      const revealDoneReady = sandboxState.reveal.phase === 'done'
-        && sandboxState.reveal.visible
-        && sandboxState.reveal.rendered
-        && sandboxState.reveal.blockedReason !== 'hidden';
-      if (revealDoneReady && revealHasObservableTiming) {
+      if (revealCompletionReady) {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionBlockedReason: 'post_reveal_blocked:pending_post_reveal_chat',
           nextQuestionBlockedReasonSource: 'post_reveal',
@@ -6466,8 +6524,11 @@ export default function App() {
         });
         sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired');
         setSandboxRevealTick(now);
-      } else if (sandboxState.reveal.phase === 'idle' || sandboxState.reveal.phase === 'hidden' || !sandboxState.reveal.visible || !sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'hidden' || (!sandboxState.reveal.wordKey && Boolean(sandboxState.reveal.text))) {
-        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: `reveal_guard_blocked:${sandboxState.reveal.blockedReason || 'reveal_not_ready'}`, nextQuestionBlockedReasonSource: 'reveal' });
+      } else if (sandboxState.reveal.phase === 'idle' || sandboxState.reveal.phase === 'hidden' || !sandboxState.reveal.rendered || (!sandboxState.reveal.wordKey && Boolean(sandboxState.reveal.text))) {
+        const revealBlockedReason = sandboxState.reveal.blockedReason === 'hidden'
+          ? 'cleanup_hidden'
+          : (sandboxState.reveal.blockedReason || 'reveal_not_ready');
+        sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: `reveal_guard_blocked:${revealBlockedReason}`, nextQuestionBlockedReasonSource: 'reveal' });
         ensureRevealActivatedForNormalFlow();
       }
     }
@@ -7389,12 +7450,18 @@ export default function App() {
                     <div>nextQuestion.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionBlockedReason ?? '-'}</div>
                     <div>nextQuestion.blockedReason.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.nextQuestionBlockedReasonSource ?? '-'}</div>
                     <div>reveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealGuardReady ?? false)}</div>
+                    <div>reveal.completionReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealCompletionReady ?? false)}</div>
+                    <div>reveal.visibilityOnly: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealVisibilityOnly ?? false)}</div>
+                    <div>reveal.blockedReason.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealBlockedReasonSource ?? '-'}</div>
                     <div>reveal.hasObservableTiming: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealHasObservableTiming ?? false)}</div>
                     <div>postReveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealGuardReady ?? false)}</div>
                     <div>advanceNext.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.advanceNextGuardReady ?? false)}</div>
                     <div>render.stateQuestionId/renderedQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.stateQuestionId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.renderedQuestionId ?? '-'}</div>
                     <div>render.blockedReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.renderBlockedReason ?? '-'}</div>
                     <div>render.expectedSceneKey/video.currentKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.expectedSceneKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.videoCurrentKey ?? '-'}</div>
+                    <div>scene.expectedRawKey/currentRawKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.expectedRawKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.currentRawKey ?? '-'}</div>
+                    <div>scene.expectedCanonicalKey/currentCanonicalKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.expectedCanonicalKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.currentCanonicalKey ?? '-'}</div>
+                    <div>renderSync.reason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.renderSyncReason ?? '-'}</div>
                     <div>introGate.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.startedAt ?? 0}</div>
                     <div>introGate.minDurationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.minDurationMs ?? 0}</div>
                     <div>introGate.passed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.passed ?? false)}</div>

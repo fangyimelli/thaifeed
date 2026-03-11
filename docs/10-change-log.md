@@ -1037,3 +1037,14 @@
 - [sandbox][D] submit 成功後 `lastReplyEval` 保留同一 `playerMessage.id`，Night Smoke Test consume 對帳不再被覆寫成 injected 假失敗。
 - [sandbox][E] judge audit 寫入路徑維持 consume authoritative，並加 regression guard 防止欄位回退。
 
+
+## 2026-03-11 sandbox authoritative flow unstick fix
+
+- [sandbox][reveal-guard] 修正 `REVEAL_WORD` 完成 guard：改以 `phase=done + rendered + timing` 判定完成，`visible=false` 僅視為 cleanup/visibility state，不再阻擋 `POST_REVEAL_CHAT`。
+- [sandbox][cleanup-decouple] reveal cleanup 與 flow guard 解耦；`reveal_guard_blocked:hidden` 改為 `cleanup_hidden` 可觀測訊號，不作為 done reveal 的硬阻擋條件。
+- [sandbox][scene-canonicalization] 新增 scene key canonicalization，`loop3` 與 `oldhouse_room_loop3` 會被視為同場景。
+- [sandbox][render-warning-only] `scene_not_synced` 降級為 `scene_not_synced_warning`，不再阻擋 prompt 顯示與 nextQuestion emit。
+- [sandbox][render-fallback] `renderedQuestionId` 策略改為 bounded fallback，避免背景 scene warning 導致題目長期為空。
+- [sandbox][debug-reconciliation] `Pass Flow / Force Correct Now / Force Next Question` 補齊 authoritative reconciliation（flow step、reply gate、nextQuestion stage/source、prompt/render sync）。
+- [sandbox][observability] debug 新增：`reveal.completionReady`、`reveal.visibilityOnly`、`reveal.blockedReason.source`、`scene.expectedRaw/currentRaw/expectedCanonical/currentCanonical`、`renderSync.reason`。
+- [sandbox][regression-guards] 更新 `scripts/sandbox-v2-regression-guards.mjs`，加入 reveal completion/scene canonicalization/scene warning downgrade/debug reconciliation 檢查。
