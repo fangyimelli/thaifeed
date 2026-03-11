@@ -318,3 +318,16 @@
 
 ### Regression guards
 - `scripts/sandbox-v2-regression-guards.mjs` 新增 reveal completion guard、scene canonicalization、scene warning downgrade、debug reconciliation 檢查。
+## 2026-03-11 post-reveal completion stuck fix
+
+- Root cause: transition into `POST_REVEAL_CHAT` was already committed, but post-reveal completion lifecycle was not guaranteed to start, causing `postReveal.guardReady=true` while `postRevealChat.status` stayed `idle`, which blocked `ADVANCE_NEXT`.
+- Authoritative fix:
+  - Entering `POST_REVEAL_CHAT` now always records `postReveal.startAttempted=true` and `postReveal.startedAt`.
+  - Completion is bounded by `SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS=900` and records `postReveal.completedAt` + `postReveal.completionReason=auto_complete_bounded`.
+  - Blocking reasons are explicitly written via `postReveal.completionBlockedBy` (e.g. reveal not ready or reply gate armed), keeping debug and flow in sync.
+  - Completion directly triggers `setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')` on the same authoritative path.
+- Observability: debug panel now exposes `postReveal.startAttempted`, `postReveal.startedAt`, `postReveal.completedAt`, `postReveal.completionReason`, `postReveal.completionBlockedBy` along with `postReveal.enteredAt`/`advanceNext.enteredAt`.
+- Regression guards expanded to assert:
+  - bounded post-reveal auto-complete logic exists,
+  - completion reason + blockedBy fields exist,
+  - mode state carries post-reveal lifecycle SSOT fields.

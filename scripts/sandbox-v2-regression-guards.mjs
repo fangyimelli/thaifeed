@@ -581,6 +581,21 @@ if (!app.includes("setReveal?.({ startedAt: repairedStartedAt, finishedAt: repai
 if (!app.includes("if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {") || !app.includes("setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')")) {
   throw new Error('POST_REVEAL_CHAT must stably advance to ADVANCE_NEXT');
 }
+if (!app.includes('SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS')) {
+  throw new Error('POST_REVEAL_CHAT should auto-complete in bounded time');
+}
+if (!app.includes("postRevealCompletionReason: 'auto_complete_bounded'")) {
+  throw new Error('POST_REVEAL_CHAT bounded auto-complete reason missing');
+}
+if (!app.includes("postRevealCompletionBlockedBy: hasReplyGate ? 'reply_gate_armed' : 'bounded_wait_pending'")) {
+  throw new Error('POST_REVEAL_CHAT must record completion blocked-by source when not done');
+}
+if (!app.includes('postReveal.startAttempted') || !app.includes('postReveal.startedAt') || !app.includes('postReveal.completedAt') || !app.includes('postReveal.completionReason') || !app.includes('postReveal.completionBlockedBy')) {
+  throw new Error('debug panel must expose postReveal start/completion observability fields');
+}
+if (!mode.includes('postRevealStartAttempted') || !mode.includes('postRevealStartedAt') || !mode.includes('postRevealCompletedAt') || !mode.includes('postRevealCompletionReason') || !mode.includes('postRevealCompletionBlockedBy')) {
+  throw new Error('sandbox mode state must include postReveal start/completion SSOT fields');
+}
 if (!app.includes("setRunning({ lastPassedStep: 'first_question', fromQuestionId: firstPrompt.wordKey, currentStep: 'auto_answer_q1' })") || !app.includes("setRunning({ lastPassedStep: 'reveal_post_reveal', currentStep: 'second_question' })")) {
   throw new Error('Night Smoke Test must cover first_question -> second_question_shown path');
 }
