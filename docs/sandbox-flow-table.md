@@ -1,3 +1,11 @@
+## 2026-03-11 WAIT_REPLY_4+ / Dynamic WAIT_REPLY_x Guard Contract
+
+| Contract | Required behavior | Forbidden |
+| --- | --- | --- |
+| consume success path (`WAIT_REPLY_x`) | `player_reply_x_consumed -> ANSWER_EVAL`（含 `WAIT_REPLY_4+`） | consume 後 `submit_rejected`、或直接 `ADVANCE_NEXT` |
+| wait-reply detection (freeze/render/answerable) | 一律使用 `isSandboxWaitReplyStep` / `parseSandboxWaitReplyIndex` | 只列舉 `WAIT_REPLY_1~3` |
+| `scene_not_synced_warning` domain | 僅 render sync warning | submit/consume blocked reason |
+
 ## 2026-03-11 NIGHT_01 Unified Authoritative Flow Table (Integrated Repair SSOT)
 
 | Step | Enter condition | Authoritative owner | Allowed side effects | Exit condition | Blocked reasons | Writes questionId evidence | Opens reply gate | Can emit next question |

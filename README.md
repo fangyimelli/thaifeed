@@ -1,3 +1,9 @@
+## 2026-03-11 Sandbox WAIT_REPLY_4+ Guard Extension（Dynamic WAIT_REPLY_x）
+
+- regression guards 補強 `WAIT_REPLY_4` 與動態 `WAIT_REPLY_x` consume 契約：consume success 必須走 `ANSWER_EVAL`，不得落入 `submit_rejected` 或 shortcut `ADVANCE_NEXT`。
+- `isSandboxWaitReplyStep` / global freeze / render answerable 判斷改以動態 `WAIT_REPLY_x` 為準，不可再依賴 1~3 hardcode。
+- `scene_not_synced_warning` 僅允許存在 render sync warning；submit/consume blocking reason 禁止使用此值。
+
 ## 2026-03-11 Sandbox NIGHT_01 Integrated Flow Convergence (Project-level)
 
 - NIGHT_01 flow authority converged to a single per-question chain: `WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> TAG_PLAYER_(x+1) -> WAIT_REPLY_(x+1)`.

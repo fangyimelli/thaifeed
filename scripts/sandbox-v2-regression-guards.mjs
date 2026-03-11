@@ -168,7 +168,7 @@ const checks = [
 
 
 checks.push({
-  name: 'WAIT_REPLY_2/3 consume must enter ANSWER_EVAL (no direct ADVANCE_NEXT shortcut)',
+  name: 'WAIT_REPLY_x (including 4+) consume must enter ANSWER_EVAL (no direct ADVANCE_NEXT shortcut or submit_rejected fallback)',
   run() {
     if (!app.includes("setFlowStep('ANSWER_EVAL', 'player_reply_2_consumed')")) {
       throw new Error('WAIT_REPLY_2 consume must enter ANSWER_EVAL');
@@ -176,8 +176,47 @@ checks.push({
     if (!app.includes("setFlowStep('ANSWER_EVAL', 'player_reply_3_consumed')")) {
       throw new Error('WAIT_REPLY_3 consume must enter ANSWER_EVAL');
     }
+    if (!app.includes("resolveSandboxWaitReplyConsumedReason(waitReplyIndex!)")) {
+      throw new Error('dynamic WAIT_REPLY_x consume reason resolver missing');
+    }
+    if (!app.includes("setFlowStep('ANSWER_EVAL', resolveSandboxWaitReplyConsumedReason(waitReplyIndex!))")) {
+      throw new Error('dynamic WAIT_REPLY_x consume must enter ANSWER_EVAL');
+    }
+    if (!app.includes("// legacy guard reference: setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)") || !app.includes('return `player_reply_${waitReplyIndex}_consumed`;')) {
+      throw new Error('dynamic WAIT_REPLY_x authoritative consume mapping missing');
+    }
     if (app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_2_consumed')") || app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed')")) {
       throw new Error('direct WAIT_REPLY_2/3 -> ADVANCE_NEXT shortcut must not exist');
+    }
+    if (app.includes("setFlowStep('ADVANCE_NEXT', resolveSandboxWaitReplyConsumedReason(waitReplyIndex!))")) {
+      throw new Error('dynamic WAIT_REPLY_x must not shortcut from consume to ADVANCE_NEXT');
+    }
+  }
+});
+
+checks.push({
+  name: 'wait-reply guard predicates must be dynamic (not limited to WAIT_REPLY_1~3)',
+  run() {
+    if (!app.includes('isSandboxWaitReplyStep(sandboxFlow.step)')) {
+      throw new Error('global freeze blocker must use dynamic isSandboxWaitReplyStep');
+    }
+    if (!app.includes('const isAnswerablePromptStep = isSandboxWaitReplyStep(sandboxState.flow.step)')) {
+      throw new Error('answerable prompt rendering must use dynamic isSandboxWaitReplyStep');
+    }
+    if (!app.includes('const waitReplyIndex = parseSandboxWaitReplyIndex(sandboxState.flow.step);')) {
+      throw new Error('consume path must parse dynamic WAIT_REPLY_x index from flow step');
+    }
+  }
+});
+
+checks.push({
+  name: 'scene_not_synced_warning is render-only and never a submit blocking reason',
+  run() {
+    if (!app.includes("sceneSynced ? 'none' : 'scene_not_synced_warning'")) {
+      throw new Error('scene_not_synced_warning must remain a render sync warning');
+    }
+    if (app.includes("consumeBlockedReason: 'scene_not_synced_warning'") || app.includes("reply_blocked:scene_not_synced_warning") || app.includes("blockedReason: 'scene_not_synced_warning'")) {
+      throw new Error('scene_not_synced_warning must not appear in submit/consume blocking reason');
     }
   }
 });
