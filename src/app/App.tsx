@@ -149,9 +149,11 @@ const resolveSandboxTagStepByQuestionNumber = (questionNumber: number): string =
   return `TAG_PLAYER_${questionNumber}`;
 };
 
-const resolveSandboxWaitReplyStepByQuestionNumber = (questionNumber: number): string => {
+const resolveSandboxWaitReplyStepByQuestionNumber = (questionNumber: number): 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3' => {
   if (questionNumber <= 0) return 'WAIT_WARMUP_REPLY';
-  return `WAIT_REPLY_${questionNumber}`;
+  if (questionNumber === 1) return 'WAIT_REPLY_1';
+  if (questionNumber === 2) return 'WAIT_REPLY_2';
+  return 'WAIT_REPLY_3';
 };
 
 type ChatSendSource =
@@ -2107,6 +2109,8 @@ export default function App() {
     consumed: boolean;
     reason: string;
     gate?: SandboxReplyGateState;
+    authoritativeWaitReplyIndex?: number | null;
+    submitRejectedAtStep?: string;
   }) => {
     const gate = payload.gate ?? deriveSandboxReplyGateState();
     const now = Date.now();
@@ -2122,7 +2126,9 @@ export default function App() {
       reason: payload.reason,
       replyTarget: gate.replyTarget ?? '-',
       sourceMessageId: gate.replySourceMessageId ?? '-',
-      sourceType: gate.replySourceType ?? '-'
+      sourceType: gate.replySourceType ?? '-',
+      authoritativeWaitReplyIndex: payload.authoritativeWaitReplyIndex ?? null,
+      submitRejectedAtStep: payload.submitRejectedAtStep ?? ''
     };
     sandboxLastReplyEvalRef.current = evalState;
     sandboxModeRef.current.setLastReplyEval?.({
@@ -2137,6 +2143,8 @@ export default function App() {
       normalized: evalState.normalizedInput,
       classifiedAs: evalState.consumed ? 'consumed' : 'rejected',
       at: now,
+      authoritativeWaitReplyIndex: evalState.authoritativeWaitReplyIndex,
+      submitRejectedAtStep: evalState.submitRejectedAtStep,
       audit: sandboxModeRef.current.getState().consonantJudgeAudit
     });
   }, [deriveSandboxReplyGateState]);
@@ -2244,9 +2252,10 @@ export default function App() {
       const extraction = extractConsonantAnswerPayload(raw);
       const stripped = extraction.stripped;
       const derivedGate = deriveSandboxReplyGateState();
-      const waitReplyStep = sandboxState.flow.step === 'WAIT_WARMUP_REPLY' || sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
+      const waitReplyIndex = parseSandboxWaitReplyIndex(sandboxState.flow.step);
+      const waitReplyStep = waitReplyIndex !== null;
       const expectedGateType = waitReplyStep
-        ? (sandboxState.flow.step === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer')
+        ? (waitReplyIndex === 0 ? 'warmup_tag' : 'consonant_answer')
         : null;
       const gate = waitReplyStep
         ? {
@@ -2266,19 +2275,19 @@ export default function App() {
       if (!gate.replyGateType) {
         persistBlockedJudgeAudit('reply_blocked:no_gate', 'none');
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:no_gate' });
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate: evalGate, messageId: payload.messageId });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
         return false;
       }
       if (!gate.replyGateArmed) {
         persistBlockedJudgeAudit('reply_blocked:gate_not_armed', gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:gate_not_armed' });
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate: evalGate, messageId: payload.messageId });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
         return false;
       }
       if (!gate.canReply) {
         persistBlockedJudgeAudit('reply_blocked:can_reply_false', gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:can_reply_false' });
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'can_reply_false', gate: evalGate, messageId: payload.messageId });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'can_reply_false', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
         return false;
       }
       const expectedTarget = normalizeHandle(gate.replyTarget || sandboxState.replyGate?.targetPlayerId || '');
@@ -2287,7 +2296,7 @@ export default function App() {
       if (!targetIgnoredByGate && expectedTarget && inboundTarget && expectedTarget !== inboundTarget) {
         persistBlockedJudgeAudit(`reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}`, gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}` });
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'target_mismatch', gate: evalGate, messageId: payload.messageId });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'target_mismatch', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
         return false;
       }
       let consonantParsed = stripped;
@@ -2329,7 +2338,7 @@ export default function App() {
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
           if (pipeline.result !== 'correct') {
             persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `answer_eval_blocked:${pipeline.result}` });
-            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate: evalGate, messageId: payload.messageId });
+            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
             bumpSandboxRevealTick();
             return false;
           }
@@ -2356,7 +2365,7 @@ export default function App() {
       } else if (!stripped) {
         persistBlockedJudgeAudit('reply_blocked:stripped_empty', gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:stripped_empty' });
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate: evalGate, messageId: payload.messageId });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
         return false;
       }
 
@@ -2382,20 +2391,16 @@ export default function App() {
         consumeResult: 'consumed',
         consumeBlockedReason: ''
       });
-      if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY') {
+      if (waitReplyIndex === 0) {
         sandboxModeRef.current.setFlowStep('POST_REPLY_CHAT', 'player_reply_warmup_consumed');
-      } else if (sandboxState.flow.step === 'WAIT_REPLY_1') {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_1_consumed');
-      } else if (sandboxState.flow.step === 'WAIT_REPLY_2') {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_2_consumed');
-      } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_3_consumed');
+      } else if ((waitReplyIndex ?? -1) >= 1) {
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`);
       } else {
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:submit_rejected' });
-        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate: evalGate, messageId: payload.messageId });
+        writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex, submitRejectedAtStep: sandboxState.flow.step || '' });
         return false;
       }
-      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success', gate: evalGate, messageId: payload.messageId });
+      writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
       bumpSandboxRevealTick();
       return true;
     }
