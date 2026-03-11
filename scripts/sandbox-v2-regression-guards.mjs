@@ -308,11 +308,11 @@ if (!app.includes("item?.to === 'ADVANCE_NEXT' && item?.reason === 'post_reveal_
 if (!app.includes('(state.sandboxFlow?.backlogTechMessages?.length ?? 0) === 0')) {
   throw new Error('post-reveal completion helper must include backlogTechMessages cleared condition');
 }
-if (!app.includes('resolveSandboxTagStepByQuestionNumber(nextQuestionNumber)')) {
+if (!app.includes('nextTagStep: resolveSandboxTagStepByQuestionNumber(beforeAdvance + 2)')) {
   throw new Error('ADVANCE_NEXT must route to authoritative next tag step after emit');
 }
-if (!app.includes('sandboxModeRef.current.setCurrentPrompt({')) {
-  throw new Error('ADVANCE_NEXT must switch currentPrompt to emitted next question prompt');
+if (!mode.includes('advancePromptAtomically') || !mode.includes('state.prompt.current = {')) {
+  throw new Error('ADVANCE_NEXT must switch currentPrompt within atomic emitter');
 }
 if (!app.includes('secondQuestionAuthoritative')) {
   throw new Error('Full Night Test must derive second-question success from authoritative flow state');
@@ -656,8 +656,8 @@ if (!app.includes("reveal.transitionEligible") || !app.includes("reveal.transiti
 if (!app.includes("nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_chat_not_done'")) {
   throw new Error('ADVANCE_NEXT must preserve post_reveal completion guard prior to emit');
 }
-if (!app.includes('const nextTagStep = resolveSandboxTagStepByQuestionNumber(nextQuestionNumber);')) {
-  throw new Error('First question correct path must stably advance into second-question flow');
+if (!app.includes('advancePromptAtomically?.({')) {
+  throw new Error('ADVANCE_NEXT must use atomic advance path');
 }
 if (!app.includes("commitRevealTransition('reveal_word_done_timing_repaired'")) {
   throw new Error('REVEAL_WORD missing timing fallback transition to POST_REVEAL_CHAT');
@@ -700,7 +700,7 @@ if (!app.includes("lastResult: `correct:${canonicalAnswer}`")) {
 if (!app.includes("setFlowStep('ANSWER_EVAL', 'debug_force_correct_consume')") || !app.includes("setFlowStep('REVEAL_WORD', 'debug_force_correct_transition')")) {
   throw new Error('Force Correct Now must follow WAIT_REPLY -> ANSWER_EVAL -> REVEAL_WORD semantics');
 }
-if (!app.includes("const nextStep = stateAfterAdvance.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING';")) {
+if (!app.includes("const nextStep = resolveSandboxTagStepByQuestionNumber(stateAfterAdvance.flow.questionIndex + 1);")) {
   throw new Error('Force Next Question must advance to next answerable tag/wait stage, not reveal');
 }
 if (!app.includes("setReveal?.({ visible: false, phase: 'idle', text: '', wordKey: '', consonantFromPrompt: '', durationMs: 0")) {
@@ -753,6 +753,21 @@ if (!app.includes('revealCompletionReady: true') || !app.includes('revealGuardRe
 
 if (!app.includes('const derivePostRevealRuntimeStatus = (sandboxState: any): PostRevealRuntimeStatus => {')) {
   throw new Error('POST_REVEAL_CHAT must use a single authoritative runtime helper');
+}
+if (!app.includes("setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)")) {
+  throw new Error('Guard-1 missing: WAIT_REPLY consume must enter ANSWER_EVAL');
+}
+if (!app.includes('revealCommittedQuestionId: revealTransitionSnapshot.sourceQuestionId')) {
+  throw new Error('Guard-2 missing: reveal commit must bind committedQuestionId to current question');
+}
+if (!app.includes('postRevealCompletedQuestionId: sourceQuestionId')) {
+  throw new Error('Guard-3 missing: postReveal completion must bind completedQuestionId');
+}
+if (!app.includes('answerEvalDoneForQuestion && revealDoneForQuestion && postRevealDoneForQuestion')) {
+  throw new Error('Guard-4 missing: ADVANCE_NEXT same-question chain evidence check');
+}
+if (!app.includes('nextQuestionEmitted: false')) {
+  throw new Error('Guard-5 missing: emitted=false guard state should be explicit');
 }
 if (!app.includes('if (runtimeStatus.startEligible) {') || !app.includes("postRevealStartAttempted: true") || !app.includes("postRevealChatState: 'started'")) {
   throw new Error('POST_REVEAL_CHAT entered must bounded-start and mark startAttempted=true');

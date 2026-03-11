@@ -1,3 +1,17 @@
+## 2026-03-11 NIGHT_01 Unified Authoritative Flow Table (Integrated Repair SSOT)
+
+| Step | Enter condition | Authoritative owner | Allowed side effects | Exit condition | Blocked reasons | Writes questionId evidence | Opens reply gate | Can emit next question |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `WAIT_REPLY_x` | `flow.step=WAIT_REPLY_x` and `currentPrompt.questionId=Qx` | `flow.step + currentPrompt + replyGate` | consume input, write `lastReplyEval` + `consonantJudgeAudit` | consume success must enter `ANSWER_EVAL` | `reply_blocked:no_gate/gate_not_armed/can_reply_false` | judge `sourceQuestionId=Qx` | ✅ (`gateType=consonant_answer`) | ❌ |
+| `ANSWER_EVAL` | consumed reply for `Qx` | `flow.step + answerEval` | compare answer against prompt accepted candidates | judge complete -> `REVEAL_WORD` | `answer_eval_blocked:*` | `answerEvalCompletedQuestionId=Qx` | ❌ | ❌ |
+| `REVEAL_WORD` | `answerEvalCompletedQuestionId=Qx` | `flow.step + reveal` | build per-question reveal snapshot and reveal text | reveal committed -> `POST_REVEAL_CHAT` | `question_mismatch/reveal_not_done/reveal_not_rendered` | `revealCommittedQuestionId=Qx` | ❌ | ❌ |
+| `POST_REVEAL_CHAT` | reveal committed for `Qx` | `flow.step + postReveal` | bounded chat completion, update completion status | completion -> `ADVANCE_NEXT` | `not_started/reply_gate_armed/bounded_wait_pending` | `postRevealStartedQuestionId=Qx`, `postRevealCompletedQuestionId=Qx` | ❌ | ❌ |
+| `ADVANCE_NEXT` | postReveal completed for `Qx` | `flow.step + nextQuestion + questionIndex/currentPrompt` | validate same-question chain and atomically emit next question | emitted -> `TAG_PLAYER_(x+1)` | `missing_per_question_chain/pending_emit/reply_gate_still_armed` | `nextQuestion.fromQuestionId=Qx`, `toQuestionId=Qx+1` | ❌ | ✅ |
+| `TAG_PLAYER_(x+1)` | `nextQuestion.emitted=true` | `flow.step + nextQuestion` | emit tag chat for next prompt | moves to `WAIT_REPLY_(x+1)` | `prompt_missing_for_tag` | reuse emitted from/to ids | ❌ | ❌ |
+
+Canonical chain for every question (Q1+):
+`WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> TAG_PLAYER_(x+1) -> WAIT_REPLY_(x+1)`.
+
 ## 2026-03-11 Sandbox NIGHT_01 authoritative state machine（SSOT）
 
 | Order | Authoritative step | Gate policy | Required boundary evidence |

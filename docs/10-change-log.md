@@ -1157,3 +1157,11 @@
 - Smoke labels now output `smokeStep + authoritativeFlowStep + authoritativeBlockedReason(source)` and align failedStep with authoritative flow.
 - Regression guards expanded for post-reveal start/complete/advance and second-question progression invariants.
 
+
+## 2026-03-11 sandbox NIGHT_01 integrated flow repair (unified TAG_PLAYER_x + atomic ADVANCE_NEXT)
+
+- Removed per-question special steps `TAG_PLAYER_2_PRONOUNCE` and `TAG_PLAYER_3_MEANING`; NIGHT_01 now uses generic `TAG_PLAYER_x` for all questions.
+- Reworked `ADVANCE_NEXT` to use atomic `advancePromptAtomically()` ownership path so `questionIndex/currentPrompt/nextQuestion/flow.step` update in one transaction.
+- Enforced reply-gate semantics: `WAIT_REPLY_x` is still the only step that re-arms `replyGate`.
+- Added regression guards to lock `WAIT_REPLY_x -> ANSWER_EVAL`, questionId-bound reveal/postReveal evidence, and same-question chain checks before emit.
+- Scope verified as sandbox-only (no classic mode file touched).
