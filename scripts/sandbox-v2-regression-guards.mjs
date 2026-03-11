@@ -541,6 +541,25 @@ if (!app.includes("post_reveal_blocked:pending_post_reveal_chat") || !app.includ
 if (!app.includes("scene_not_synced_warning") || !app.includes("const renderSyncReason = !stateQuestionId")) {
   throw new Error('scene_not_synced must be downgraded to warning and not block second-question emit');
 }
+
+if (!app.includes("SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS")) {
+  throw new Error('REVEAL_WORD should enforce bounded stall recovery to POST_REVEAL_CHAT');
+}
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery')")) {
+  throw new Error('REVEAL_WORD bounded recovery transition missing');
+}
+if (!app.includes("reveal_guard_warning:cleanup_hidden")) {
+  throw new Error('cleanup_hidden must be downgraded to warning after reveal completion');
+}
+if (!app.includes("reveal.transitionEligible") || !app.includes("reveal.transitionBlockedBy") || !app.includes("postReveal.enteredAt") || !app.includes("advanceNext.enteredAt")) {
+  throw new Error('debug panel must expose reveal transition + post/advance enteredAt observability');
+}
+if (!app.includes("nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_chat_not_done'")) {
+  throw new Error('ADVANCE_NEXT must preserve post_reveal completion guard prior to emit');
+}
+if (!app.includes("const nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE'")) {
+  throw new Error('First question correct path must stably advance into second-question flow');
+}
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired')")) {
   throw new Error('REVEAL_WORD missing timing fallback transition to POST_REVEAL_CHAT');
 }

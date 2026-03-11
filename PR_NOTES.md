@@ -1,3 +1,11 @@
+## 2026-03-11 sandbox integration fix (reveal completion -> postReveal unblock)
+- Root cause confirmed from latest log: `REVEAL_WORD` had `phase=done/rendered=true/completionReady=true`, but flow still blocked by `reveal_guard_blocked:cleanup_hidden` after visual cleanup (`visible=false`).
+- Transition fix: `REVEAL_WORD -> POST_REVEAL_CHAT` now keys on reveal completion SSOT (`done+rendered+timing`) and treats `cleanup_hidden` as warning-only (`reveal_guard_warning:cleanup_hidden`).
+- Bounded recovery: added `SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS` + `reveal_word_done_bounded_recovery` transition to prevent indefinite REVEAL_WORD stalls.
+- Post/Advance activation observability: added `reveal.transitionEligible`, `reveal.transitionBlockedBy`, `postReveal.enteredAt`, `advanceNext.enteredAt` in debug mirror/panel.
+- Regression guards expanded to cover reveal stall bound, cleanup_hidden non-blocking, and first-question-to-second-question advancement stability.
+
+
 ## 2026-03-11 Debug Action Authority & Reconciliation
 - 重構三個 debug action 契約：
   - `Pass Flow`：僅前進合法 stage，不跨題直接 reveal。

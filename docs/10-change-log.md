@@ -1,3 +1,10 @@
+## 2026-03-11 sandbox reveal completion transition unblock (integration mode)
+- Root cause：`REVEAL_WORD` 雖然 `phase=done/rendered=true/completionReady=true`，但 cleanup 後 `visible=false` 仍被誤映射成 `reveal_guard_blocked:cleanup_hidden`，導致無法轉入 `POST_REVEAL_CHAT`，後續 `ADVANCE_NEXT/nextQuestion emit` 全鏈停滯。
+- 修正：reveal guard 以 `done + rendered + timing` 為唯一 transition SSOT；`cleanup_hidden` 降級為 `reveal_guard_warning:cleanup_hidden`（非阻擋）。
+- 補 bounded guard：`REVEAL_WORD` 完成後若超過 `SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS` 仍未轉場，觸發 `reveal_word_done_bounded_recovery` 進 `POST_REVEAL_CHAT`。
+- observability：新增 `reveal.transitionEligible` / `reveal.transitionBlockedBy` / `postReveal.enteredAt` / `advanceNext.enteredAt`。
+- regression guards：新增 bounded recovery、cleanup_hidden warning-only、Q1 正解後必入 Q2 flow、post/advance enteredAt 可觀測檢查。
+
 - [sandbox][integration-fix][debug-action-ssot-reconciliation] 修正三個 debug action 語義與狀態收斂：Pass Flow 只走合法流程 stage；Force Correct Now 僅以 currentPrompt/questionId 的 authoritative canonical answer 判對，且 blocked 條件需有 active answer gate；Force Next Question 僅切到下一題可回答狀態，不可直接進 reveal，並統一清空 reveal/judge/parse/consume 殘留。同步新增 debugAction 可觀測欄位、scene key canonicalization、renderedQuestionId bounded fallback、以及 `REVEAL_WORD(done+rendered+timing)` 不再被 `visible=false` 阻擋。
 - 2026-03-11 [sandbox][authoritative-consume-chain] 修正 smoke `auto_answer_q1` 假失敗：auto answer 若注入後未 consume，會在 bounded time 內 retry 並用 authoritative 原因失敗（`reply_blocked:*` / `message_injected_but_not_consumed`），成功判定改為 consume record + flow 離開 `WAIT_REPLY_1` + judge/reveal 進展；第二題顯示判定改為 `nextQuestion emit + toQuestionId + prompt/flow index` authoritative 對齊，禁止 render-only 假陽性。
 ## 2026-03-11 sandbox reveal->post_reveal->advance_next guard stabilization
