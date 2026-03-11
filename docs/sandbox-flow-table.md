@@ -401,3 +401,17 @@ Smoke output now must include:
 - Authoritative pipeline（SSOT）：`raw -> detect mentions -> strip leading mentions/reply wrapper -> normalize -> candidate compare -> judge -> consume`。
 - `replyTarget` 僅作 UI/thread/debug trace，不再是 `consonant_answer` consume 必要條件。
 - `scheduler.phase` 維持 non-authoritative projection；正式判斷僅看 `flow.step + replyGate + prompt/judge audit`。
+
+## 2026-03-11 Sandbox NIGHT pool/cursor state table (authoritative)
+
+| State field | Type | Authority | Description |
+| --- | --- | --- | --- |
+| `round.nightId` | string | sandbox night SSOT | Current NIGHT id (`NIGHT_01/02/03`). |
+| `round.questionOrder` | number[] | runtime on night-enter | Shuffled order for this NIGHT only. |
+| `round.currentQuestionCursor` | number | runtime | Cursor over `questionOrder`. |
+| `round.currentQuestionId` | string | runtime + SSOT | Current question id resolved from order+cursor. |
+| `round.remainingQuestionCount` | number | runtime | Remaining count in the same NIGHT pool. |
+| `round.authoritativeQuestionSource` | string | runtime constant | `sandbox_night_question_pool`. |
+| `currentPrompt.expectedConsonant` | string | question SSOT | Authoritative expected consonant. |
+| `currentPrompt.acceptedCandidates` | string[] | question SSOT | Thai / roman / bopomofo accepted candidates. |
+| `currentPrompt.revealWord` | string | question SSOT | Authoritative reveal word. |

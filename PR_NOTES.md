@@ -22,3 +22,28 @@
 ### Scope
 - Sandbox regression guard + documentation only.
 - Runtime behavior unchanged by this patch (guard/doc reinforcement).
+
+## 2026-03-11 Sandbox NIGHT pool shuffle SSOT integration
+
+### 新的 sandbox night question SSOT
+- 新增 `src/ssot/sandbox_story/nightQuestionPools.ts`：
+  - SSOT shape: `nightId -> questionId -> expectedConsonant/revealWord/acceptedCandidates`
+  - 由 `buildNightScriptFromPool` 產生 sandbox 使用的 `NightScript`。
+
+### NIGHT1 / NIGHT2 / NIGHT3 pool
+- NIGHT_01 / NIGHT_02 / NIGHT_03 各自固定 10 題，不跨 NIGHT 抽題。
+- 每題 acceptedCandidates 至少含：泰文子音 / 英文拼音 / 注音。
+
+### shuffle 機制
+- 進入 NIGHT（bootstrap/importSSOT）建立 `round.questionOrder`（只對當前 NIGHT pool shuffle）。
+- 以 `round.currentQuestionCursor + round.questionOrder` 推進。
+- 終止改為 `end_of_question_pool`，不再依賴固定 `end_of_nodes`。
+
+### classic 未受影響的證據
+- 未變更 `src/modes/classic/*` 流程邏輯。
+- classic adapter 只增加「若 sandbox node 已帶 authoritative acceptedCandidates 則優先使用」，不改 classic gate/flow。
+
+### 驗證方式
+- `npm run build`
+- `node scripts/regression-sandbox-night-pool-ssot.mjs`
+- `node scripts/sandbox-v2-regression-guards.mjs`

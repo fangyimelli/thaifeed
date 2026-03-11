@@ -2105,3 +2105,12 @@ Console（debug 模式）可觀察：
 - 修正 smoke label：新增 `authoritativeFlowStep`/`authoritativeBlockedReason`，failedStep 會對齊 authoritative flow，避免 `flow=POST_REVEAL_CHAT` 但 failedStep 還顯示 `first_question`。
 - 新增 regression guards：覆蓋 post reveal start/complete/advance 與 second-question emit 對齊。
 
+
+## 2026-03-11 Sandbox NIGHT question pool SSOT + per-night shuffle
+
+- [sandbox][ssot] 新增 `src/ssot/sandbox_story/nightQuestionPools.ts` 作為 sandbox 專用 NIGHT 題庫 SSOT，定義 `nightId/questionId/expectedConsonant/revealWord/acceptedCandidates`，固定 NIGHT1/2/3 各 10 題。
+- [sandbox][flow] 進入 NIGHT（bootstrap/importSSOT）時只針對該 NIGHT pool 建立 `round.questionOrder` 並 shuffle；題目推進改由 `questionOrder + currentQuestionCursor + currentQuestionId`，不再依賴固定 node index 鏈。
+- [sandbox][judge+reveal] `currentPrompt` 補齊 authoritative `expectedConsonant/acceptedCandidates/revealWord`，judge/reveal/next 皆對齊 current question SSOT。
+- [sandbox][debug] 新增 round/debug 欄位可觀察：`round.nightId/questionOrder/currentQuestionCursor/currentQuestionId/remainingQuestionCount/authoritativeQuestionSource`。
+- [guard] 新增 `scripts/regression-sandbox-night-pool-ssot.mjs` 檢查 NIGHT pool 固定題量、必要 acceptedCandidates、round cursor 推進與 end_of_question_pool guard。
+- [classic] classic mode 未改邏輯路徑（僅 sandbox 導向資料與 flow authority 調整）。

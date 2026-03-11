@@ -3,6 +3,9 @@ export type NightNode = {
   char: string;
   wordText: string;
   word?: string;
+  expectedConsonant?: string;
+  revealWord?: string;
+  acceptedCandidates?: string[];
   translationZh: string;
   audioKey: string;
   correctKeywords: string[];
