@@ -1956,7 +1956,8 @@ export default function SceneView({
   const anchorPos = ANCHOR_POSITIONS[anchor];
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
-  const consonantBubbleVisible = !(wordReveal?.visible && wordReveal.phase !== 'idle' && wordReveal.phase !== 'done');
+  const revealPromptSuppressed = Boolean(wordReveal?.phase === 'word' || wordReveal?.phase === 'done');
+  const consonantBubbleVisible = !revealPromptSuppressed;
 
   return (
     <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
@@ -1973,7 +1974,6 @@ export default function SceneView({
             playsInline
             autoPlay
             onError={() => {
-              setAssets((prev) => ({ ...prev, videoOk: false }));
               updateVideoDebug({
                 lastError: 'videoA element error',
                 slotReadyState: {
@@ -2009,7 +2009,6 @@ export default function SceneView({
             playsInline
             autoPlay
             onError={() => {
-              setAssets((prev) => ({ ...prev, videoOk: false }));
               updateVideoDebug({
                 lastError: 'videoB element error',
                 slotReadyState: {

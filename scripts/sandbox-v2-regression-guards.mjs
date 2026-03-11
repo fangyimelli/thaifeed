@@ -452,8 +452,8 @@ if (!mode.includes("rendered: false") || !mode.includes("startedAt: 0") || !mode
 if (!app.includes("commitSource: 'wait_reply_1_gate_armed'") || !app.includes("renderedQuestionId: currentPrompt.wordKey")) {
   throw new Error('normal WAIT_REPLY_1 activation must commit authoritative prompt visibility sync');
 }
-if (!app.includes("source: (sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar'")) {
-  throw new Error('debug ui.promptGlyph visibility source must show authoritative reply-gate sync');
+if (!app.includes("'authoritative_reply_gate_sync'") || !app.includes("'reveal_prompt_cleanup'")) {
+  throw new Error('debug ui.promptGlyph visibility source must expose authoritative and reveal-cleanup paths');
 }
 if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_done_missing_timing_observability") || !app.includes("sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
   throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and self-repair hidden/non-rendered reveal state');
@@ -461,9 +461,26 @@ if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasOb
 if (!app.includes("startedAt: nextStartedAt")) {
   throw new Error('reveal render-state callback must backfill startedAt when rendered evidence arrives');
 }
-if (!mode.includes("forceRevealDone: () => { const now = Date.now(); state.reveal = { ...state.reveal, phase: 'done', doneAt: now, finishedAt: now, visible: true, mode: 'idle' }; }")) {
-  throw new Error('forceRevealDone must preserve visible done-state for REVEAL_WORD completion evidence');
+if (!mode.includes('forceRevealDone: () => { const now = Date.now(); const finishedAt = state.reveal.finishedAt > 0 ? state.reveal.finishedAt : Math.max(now, state.reveal.startedAt || now);')) {
+  throw new Error('forceRevealDone must preserve authoritative reveal timing before cleanup');
 }
-if (!mode.includes("forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null; const node = ssot.nodes.find((n) => n.id === prompt.wordKey); const now = Date.now(); const revealText = node?.wordText ?? ''; state.reveal = { ...state.reveal, visible: Boolean(revealText), phase: revealText ? 'word' : 'hidden', text: revealText, wordKey: node?.id ?? prompt.wordKey, rendered: Boolean(revealText), blockedReason: revealText ? '' : 'missing_word_text', startedAt: state.reveal.startedAt || now, finishedAt: 0 }; return node; }")) {
-  throw new Error('forceRevealCurrent must populate wordKey + rendered/blockedReason from authoritative reveal payload');
+if (!mode.includes('forceRevealCurrent: () => { const prompt = state.prompt.current; if (!prompt) return null;') || !mode.includes('startedAt: now, finishedAt: 0, doneAt: 0, cleanupAt: 0')) {
+  throw new Error('forceRevealCurrent must reset reveal timing and cleanup fields from authoritative payload');
+}
+
+
+if (!app.includes("const revealPromptSuppressed = sandboxState.reveal.phase === 'word' || sandboxState.reveal.phase === 'done'")) {
+  throw new Error('prompt glyph cleanup must suppress bubble during/after reveal completion');
+}
+if (!app.includes("source: revealPromptSuppressed") || !app.includes("'reveal_prompt_cleanup'")) {
+  throw new Error('prompt glyph debug source must expose reveal_prompt_cleanup path');
+}
+if (!mode.includes('cleanupAt: 0')) {
+  throw new Error('reveal lifecycle must track cleanupAt in sandbox mode state');
+}
+if (!mode.includes('finishedAt = state.reveal.finishedAt > 0 ? state.reveal.finishedAt : Math.max(doneAt, state.reveal.startedAt || doneAt)')) {
+  throw new Error('markRevealDone must preserve authoritative finishedAt timing');
+}
+if (!app.includes("reason: 'submit_accepted', messageId: playerMessage.id")) {
+  throw new Error('submit success eval must retain authoritative player messageId');
 }

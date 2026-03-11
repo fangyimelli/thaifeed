@@ -244,3 +244,9 @@
 | `REVEAL_WORD` activation self-repair | `flow.step=REVEAL_WORD` and reveal is `idle/hidden/not-visible/not-rendered/blockedReason=hidden/wordKey missing` | `word.reveal.visible=true`, `word.reveal.rendered=true`, `word.reveal.wordKey!=empty` when text exists, `startedAt>0` | Normal path must call `ensureRevealActivatedForNormalFlow()` instead of waiting for force-path side effects |
 | `REVEAL_WORD` done gate | `reveal.phase=done` | Require `visible=true && rendered=true && blockedReason!=hidden && startedAt>0 && finishedAt>=startedAt` before `POST_REVEAL_CHAT` | REVEAL_WORD cannot complete on hidden/partial reveal lifecycle |
 | force-path parity | `forceRevealCurrent/forceRevealDone` | Same reveal observability fields as normal flow (`wordKey/rendered/blockedReason/timestamps`) | prevent debug force path from masking normal-flow reveal activation gaps |
+
+| Reveal prompt cleanup (A) | reveal done 後 prompt glyph 仍可能 blink/可見 | reveal `phase=word/done` 時強制 `revealPromptSuppressed`，bubble 隱藏 + glyph class 改 cleanup + opacity=0 | 防止 flow 已 reveal 完成但 prompt UI 殘留誤導。 |
+| Reveal timing observability (B) | `markRevealDone` 每 tick 覆寫 finishedAt/doneAt，時間不可信 | reveal state 新增 `cleanupAt`；done cleanup 只補 `cleanupAt` 並保留首個 finishedAt/doneAt | startedAt/finishedAt 反映真實 reveal 持續時間。 |
+| Video element error recovery (C) | `videoA/videoB onError` 直接關閉 `assets.videoOk` 導致永久故障畫面 | 保留 slot/source/error/swap 診斷但不立即全局熄滅；交由 switch/fallback path 自恢復 | scene_not_synced 可恢復，不因單次 slot error 永久卡死。 |
+| Smoke submit message binding (D) | consume 成功後 `submit_accepted` 覆寫成新 messageId，誤報 injected/not consumed | submit 成功 eval 固定寫回 `playerMessage.id` | Night Smoke Test 以 authoritative messageId 對帳穩定。 |
+| Judge audit persistence guard (E) | parse 有值但 judge 欄位可能回退未寫滿 | regression guard 強制檢查 consume/submit 路徑 messageId 與 reveal/judge state 欄位 | 防止 judge audit 欄位再次缺漏。 |
