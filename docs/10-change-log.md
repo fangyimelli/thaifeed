@@ -1020,3 +1020,13 @@
 - 更新 regression guard：
   - render recovery 必須包含 `gateAuthoritativeReady` 與 extended `forceVisiblePrompt`。
   - smoke test 必須驗證 `st.lastReplyEval?.messageId === answerMessageId`。
+
+
+## 2026-03-11 sandbox reveal cleanup + render recovery + smoke/judge persistence
+
+- [sandbox][A] REVEAL_WORD 與 reveal done 期間強制清 prompt glyph：bubble hidden、glyph blink class 移除、debug source 改標 `reveal_prompt_cleanup`。
+- [sandbox][B] reveal lifecycle 新增 `cleanupAt`；`markRevealDone` 改為保留既有 `finishedAt/doneAt`，避免每 tick 重寫造成不實時間。
+- [sandbox][C] videoA/videoB onError 不再直接 `assets.videoOk=false`（避免永久 error overlay）；保留 slot/source/error/swap 診斷，讓 scene/render mismatch 可恢復。
+- [sandbox][D] submit 成功後 `lastReplyEval` 保留同一 `playerMessage.id`，Night Smoke Test consume 對帳不再被覆寫成 injected 假失敗。
+- [sandbox][E] judge audit 寫入路徑維持 consume authoritative，並加 regression guard 防止欄位回退。
+

@@ -1,3 +1,12 @@
+
+## 2026-03-11 sandbox integration follow-up (A→E)
+
+- A. Prompt glyph cleanup on reveal：`phase=word/done` 一律 suppress prompt bubble/glyph，debug `ui.promptGlyph.source=reveal_prompt_cleanup`。
+- B. Reveal lifecycle timing：新增 `reveal.cleanupAt`；`markRevealDone` 不再覆寫既有 `finishedAt`，保持可審計 reveal duration。
+- C. Video/render sync：video element error 保留診斷但不直接熄滅 assets，避免 `scene_not_synced` 後永久無法恢復。
+- D. Night Smoke consume path：submit 成功後的 eval 保留 authoritative `playerMessage.id`，避免 `message_injected_but_not_consumed` 假失敗。
+- E. Judge audit persistence：維持 consume 時完整 parse+judge+source+consumedAt 落盤，並新增 guards。
+
 ## This Change (reveal audit observability, no behavior change)
 - Audited sandbox reveal pipeline end-to-end (`REVEAL_WORD -> render -> POST_REVEAL_CHAT`).
 - Added `sandbox.reveal.text` to debug mirror payload in `window.__CHAT_DEBUG__`, complementing existing reveal fields (`visible/phase/wordKey/startedAt/finishedAt/rendered/blockedReason`).

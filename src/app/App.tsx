@@ -3706,6 +3706,10 @@ export default function App() {
         commitSource: forceVisiblePrompt && renderBlockedReason !== 'none' ? 'authoritative_prompt_visibility_override' : (authoritativeQ2Advanced ? 'authoritative_flow_override' : 'app_tick_render_sync')
       });
       const judgeAudit = sandboxState.consonantJudgeAudit;
+      const revealPromptSuppressed = sandboxState.reveal.phase === 'word' || sandboxState.reveal.phase === 'done';
+      const promptGlyphClassName = revealPromptSuppressed
+        ? 'sandbox-story-prompt-glyph reveal-cleanup'
+        : 'glyph-blink sandbox-story-prompt-glyph';
       setSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
@@ -3759,16 +3763,18 @@ export default function App() {
           consonantBubble: {
             visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)
               && (sandboxState.replyGate?.armed ? Boolean(renderedQuestionId) : true)
-              && !(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done')
+              && !revealPromptSuppressed
           },
           promptGlyph: {
-            className: 'glyph-blink sandbox-story-prompt-glyph',
-            colorResolved: '#8fd6ff',
-            opacityResolved: (sandboxState.replyGate?.armed && renderedQuestionId)
-              ? '1'
-              : (!(sandboxState.reveal.visible && sandboxState.reveal.phase !== 'idle' && sandboxState.reveal.phase !== 'done') ? 'dynamic' : '0'),
-            source: (sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar',
-            isBlueExpected: true
+            className: promptGlyphClassName,
+            colorResolved: revealPromptSuppressed ? 'transparent' : '#8fd6ff',
+            opacityResolved: revealPromptSuppressed
+              ? '0'
+              : ((sandboxState.replyGate?.armed && renderedQuestionId) ? '1' : 'dynamic'),
+            source: revealPromptSuppressed
+              ? 'reveal_prompt_cleanup'
+              : ((sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar'),
+            isBlueExpected: !revealPromptSuppressed
           }
         },
         word: {
@@ -5012,14 +5018,14 @@ export default function App() {
           tagSlowActiveRef.current = false;
           return markSent('sandbox_wait_reply_rejected', playerMessage.id);
         }
-        writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: false, reason: 'consume_fallback_to_free_chat' });
+        writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: false, reason: 'consume_fallback_to_free_chat', messageId: playerMessage.id });
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
         return markSent('sandbox_free_chat_sent', playerMessage.id);
       }
       if (modeRef.current.id === 'sandbox_story' && sandboxQnaConsumed) {
-        writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: true, reason: 'submit_accepted' });
+        writeSandboxLastReplyEval({ rawInput: outgoingText, normalizedInput: outgoingText.trim(), consumed: true, reason: 'submit_accepted', messageId: playerMessage.id });
         setInput('');
         sendCooldownUntil.current = Date.now() + 350;
         tagSlowActiveRef.current = false;
@@ -6034,9 +6040,11 @@ export default function App() {
         setSandboxRevealTick(Date.now());
       }, remainMs);
     }
-    if (reveal.visible && reveal.phase === 'done') {
-      sandboxModeRef.current.markRevealDone();
-      setSandboxRevealTick(Date.now());
+    if (reveal.phase === 'done') {
+      if (reveal.visible || !reveal.cleanupAt) {
+        sandboxModeRef.current.markRevealDone();
+        setSandboxRevealTick(Date.now());
+      }
       return;
     }
     if (sandboxForcedReplyGateActive) {
@@ -6296,6 +6304,7 @@ export default function App() {
           startedAt: revealStartedAt,
           finishedAt: sandboxState.reveal.phase === 'done' ? (sandboxState.reveal.finishedAt || Date.now()) : 0,
           doneAt: sandboxState.reveal.phase === 'done' ? (sandboxState.reveal.doneAt || Date.now()) : 0,
+          cleanupAt: 0,
           rendered: Boolean(revealText),
           blockedReason: revealText ? '' : 'missing_word_text',
           baseGrapheme,
