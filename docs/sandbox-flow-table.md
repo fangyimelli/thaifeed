@@ -1,3 +1,11 @@
+## 2026-03-11 POST_REVEAL runner wakeup invariant（same-ms safe）
+
+| Stage | Authoritative state | Runner wakeup invariant | Blocked reason contract |
+|---|---|---|---|
+| REVEAL_WORD -> POST_REVEAL_CHAT commit | `flow.step='POST_REVEAL_CHAT'`（authority） | commit 後必須觸發 monotonic tick（不可依賴同毫秒 `Date.now()` setState） | 若未啟動 postReveal，必須有真實 blocked reason，不可 `eligible=true + blockedBy=none + startAttempted=false` |
+| POST_REVEAL_CHAT start | `postRevealEnteredAt>0` + `guardReady=true` | 同輪 effect 必須可重跑並寫入 `postRevealStartAttempted=true` 與 `postRevealStartedAt>0` | `startBlockedBy` 僅可為 runtime 真因（`not_entered`/`reveal_not_ready`/`already_started`...） |
+| POST_REVEAL_CHAT completion -> ADVANCE_NEXT | `postRevealChatState='started'` 且 bounded wait 完成 | completion 後 tick 必須再次推進，確保 `setFlowStep('ADVANCE_NEXT')` 被消費 | `nextQuestionBlockedReason` stage/source 必須與 authority 同步 |
+
 ## 2026-03-11 Reveal Snapshot SSOT 補充
 
 | Stage | Authoritative snapshot | Commit invariant | Regression guard |

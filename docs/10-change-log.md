@@ -1,3 +1,16 @@
+## 2026-03-11 sandbox integration fix（POST_REVEAL runner same-ms stall）
+
+- Root cause（primary）
+  - sandbox authoritative flow 在 `REVEAL_WORD` commit 後可正確進入 `POST_REVEAL_CHAT`，但 runner 喚醒依賴 `setSandboxRevealTick(Date.now())`。同一毫秒內重複寫入會被 React 視為相同值，effect 不重跑，造成 entered-but-not-started。
+- Fix
+  - 新增 monotonic tick helper：`bumpSandboxRevealTick(hintAt?)`，採 functional updater，保證每次 transition 都會產生遞增 tick。
+  - 全部 sandbox runner 喚醒點改用 helper，包含 reveal/postReveal/advanceNext/debug actions。
+- Regression guard
+  - `scripts/sandbox-v2-regression-guards.mjs` 新增檢查：
+    - 必須存在 `bumpSandboxRevealTick`。
+    - 必須使用 `setSandboxRevealTick((prev) => ...)`。
+    - 禁止直接 `setSandboxRevealTick(Date.now())`。
+
 ## 2026-03-11 — Sandbox reveal transition stale-state fix (SSOT)
 
 - 新增 reveal transition SSOT helper：`buildRevealTransitionSnapshot()`，將 `guardReady/completionReady/transitionEligible/transitionBlockedBy` 收斂為單一來源。
