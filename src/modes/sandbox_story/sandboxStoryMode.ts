@@ -566,6 +566,77 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     commitHintText: (text: string, source = 'unknown') => { state.hint = { ...state.hint, active: Boolean(text), lastText: text, count: (state.hint.count ?? 0) + 1, lastShownAt: Date.now(), source }; },
     activateDebugOverride: (source = 'debug') => { state.debugOverride = { ...state.debugOverride, active: true, source, consumedAt: 0 }; },
     advancePrompt: (reason = 'advance') => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: 'end_of_nodes' }; return false; } const previousIndex = state.nodeIndex; const nextIndex = Math.min(ssot.nodes.length - 1, previousIndex + 1); state.nodeIndex = nextIndex; state.flow = { ...state.flow, questionIndex: nextIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: nextIndex, stepStartedAt: now, nextQuestionFromIndex: previousIndex, nextQuestionToIndex: nextIndex, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now, answerEvalCompletedQuestionId: '', revealCommittedQuestionId: '', postRevealStartedQuestionId: '', postRevealCompletedQuestionId: '', revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', revealSnapshotQuestionId: '', revealSnapshotWordKey: '' }; state.prompt = { ...state.prompt, current: null }; state.currentPrompt = null; state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '', mode: 'idle' }; state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: '' }; return true; },
+    advancePromptAtomically: (payload?: { reason?: string; nextTagStep?: string; sceneKeyResolver?: (questionIndex: number) => string }) => {
+      const now = Date.now();
+      const reason = payload?.reason ?? 'advance_atomic';
+      if (state.nodeIndex >= ssot.nodes.length - 1) {
+        state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: 'end_of_nodes' };
+        return { ok: false, blockedReason: 'end_of_nodes' };
+      }
+      const previousIndex = state.nodeIndex;
+      const nextIndex = Math.min(ssot.nodes.length - 1, previousIndex + 1);
+      const nextNode = ssot.nodes[nextIndex];
+      if (!nextNode) {
+        state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: 'next_node_missing' };
+        return { ok: false, blockedReason: 'next_node_missing' };
+      }
+      const promptId = crypto.randomUUID();
+      const nextTagStep = payload?.nextTagStep ?? `TAG_PLAYER_${nextIndex + 1}`;
+      const sceneKey = payload?.sceneKeyResolver ? payload.sceneKeyResolver(nextIndex) : '';
+      state.nodeIndex = nextIndex;
+      state.flow = { ...state.flow, step: nextTagStep, questionIndex: nextIndex, stepStartedAt: now, tagAskedThisStep: false };
+      state.sandboxFlow = {
+        ...state.sandboxFlow,
+        step: nextTagStep,
+        questionIndex: nextIndex,
+        stepStartedAt: now,
+        gateType: 'none',
+        replyGateActive: false,
+        canReply: false,
+        gateConsumed: false,
+        nextQuestionReady: true,
+        nextQuestionEmitted: true,
+        nextQuestionFromIndex: previousIndex,
+        nextQuestionToIndex: nextIndex,
+        nextQuestionFromQuestionId: ssot.nodes[previousIndex]?.id ?? '',
+        nextQuestionToQuestionId: nextNode.id,
+        nextQuestionBlockedReason: 'emitted',
+        nextQuestionBlockedReasonSource: 'advance_next',
+        nextQuestionStage: 'emitted',
+        nextQuestionDecidedAt: now,
+        nextQuestionEmittedAt: now,
+        nextQuestionConsumer: 'advance_next_effect',
+        answerEvalCompletedQuestionId: '',
+        revealCommittedQuestionId: '',
+        postRevealStartedQuestionId: '',
+        postRevealCompletedQuestionId: '',
+        revealEligibilitySnapshotId: '',
+        revealCommitSourceSnapshotId: '',
+        revealSnapshotQuestionId: '',
+        revealSnapshotWordKey: '',
+        postRevealChatState: 'idle',
+        postRevealStartAttempted: false,
+        postRevealStartedAt: 0,
+        postRevealCompletedAt: 0,
+        postRevealCompletionReason: '',
+        postRevealCompletionBlockedBy: ''
+      };
+      state.prompt.current = {
+        kind: 'consonant',
+        promptId,
+        consonant: nextNode.char,
+        wordKey: nextNode.id,
+        pinnedText: `請讀出剛剛閃過的字：${nextNode.char}`,
+        correctKeywords: nextNode.correctKeywords ?? [nextNode.char],
+        unknownKeywords: nextNode.unknownKeywords ?? ['不知道']
+      };
+      state.currentPrompt = { id: promptId, kind: 'consonant', consonant: nextNode.char, wordKey: nextNode.id, thaiWord: nextNode.wordText ?? '', translationZh: nextNode.translationZh ?? '' };
+      state.replyGate = { ...state.replyGate, gateType: 'none', armed: false, canReply: false, gateConsumed: false, sourceMessageId: '', targetPlayerId: '' };
+      state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '', mode: 'idle' };
+      state.renderSync = { ...state.renderSync, stateQuestionId: nextNode.id, renderedQuestionId: nextNode.id, renderBlockedReason: 'none', committedAt: now, commitSource: 'advancePromptAtomically' };
+      state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: '' };
+      return { ok: true, questionIndex: nextIndex, questionId: nextNode.id, nextTagStep, sceneKey };
+    },
     applyCorrect: (payload?: { input?: string; matchedChar?: string }) => { const now = Date.now(); const prompt = state.prompt.current; state.consonant = { ...state.consonant, parse: { ...state.consonant.parse, ok: true, inputRaw: payload?.input ?? state.consonant.parse.inputRaw, inputNorm: payload?.matchedChar ?? state.consonant.parse.inputNorm, matchedChar: payload?.matchedChar ?? state.consonant.parse.matchedChar, matchedAlias: payload?.matchedChar ?? state.consonant.parse.matchedAlias, blockedReason: '' }, judge: { ...state.consonant.judge, lastInput: payload?.matchedChar ?? state.consonant.judge.lastInput, lastResult: 'correct' } }; if (prompt) { const node = ssot.nodes.find((n) => n.id === prompt.wordKey); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey, consonantFromPrompt: prompt.consonant, startedAt: now, finishedAt: 0, doneAt: 0, cleanupAt: 0 }; } state.replyGate = { ...state.replyGate, armed: false, canReply: false, gateConsumed: true }; state.sandboxFlow = { ...state.sandboxFlow, replyGateActive: false, canReply: false, gateConsumed: true }; state.answerGate = { ...state.answerGate, waiting: false, pausedChat: false, askedAt: 0 }; if (state.debugOverride.active) state.debugOverride = { ...state.debugOverride, active: false, consumedAt: now }; },
     debugAddFear: (n: number) => { fear.fearLevel = Math.min(fear.maxFear, fear.fearLevel + n); fear.pressureLevel = fear.fearLevel > 80 ? 'panic' : fear.fearLevel > 66 ? 'high' : fear.fearLevel > 33 ? 'medium' : 'low'; },
     debugResetFear: () => { fear.fearLevel = 0; fear.pressureLevel = 'low'; },

@@ -1,3 +1,24 @@
+## 2026-03-11 Sandbox NIGHT_01 Integrated Flow Convergence (Project-level)
+
+- NIGHT_01 flow authority converged to a single per-question chain: `WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> TAG_PLAYER_(x+1) -> WAIT_REPLY_(x+1)`.
+- `ADVANCE_NEXT` now uses atomic emit (`advancePromptAtomically`) so `questionIndex/currentPrompt/flow.step/nextQuestion.from-to` are committed together.
+- `TAG_PLAYER_2_PRONOUNCE` / `TAG_PLAYER_3_MEANING` removed; question 2+ now all use dynamic `TAG_PLAYER_x` and `WAIT_REPLY_x`.
+- Every consume path continues to write `lastReplyEval + consonantJudgeAudit`; blocked reasons remain explicit (`no_gate`, `gate_not_armed`, `can_reply_false`, etc.).
+
+### Removed / Deprecated Log
+
+- 2026-03-11: deprecated `TAG_PLAYER_2_PRONOUNCE`, `TAG_PLAYER_3_MEANING` (replaced by generic `TAG_PLAYER_x` ownership flow).
+
+## 2026-03-11 Sandbox NIGHT_01 Integrated Fix（Atomic ADVANCE_NEXT + Dynamic WAIT_REPLY_x）
+
+- Sandbox 主流程改為單一路徑：`WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> TAG_PLAYER_(x+1) -> WAIT_REPLY_(x+1)`（x>=1，含 Q4+）。
+- `ADVANCE_NEXT` 改為先鎖定 `advanceFromQuestionId` 並驗證同題 chain（answerEval/reveal/postReveal）後才允許切題，避免 prompt/index 半套前進。
+- 新增 regression guards：`illegal half-advanced prompt detected`、`prompt-step divergence` warning；並保留 `scene_not_synced_warning` 為 render warning，不阻斷 flow。
+
+### Removed / Deprecated Log
+
+- 2026-03-11：移除 `ADVANCE_NEXT` 的 `beforeAdvance===0/1` 硬編碼切題路徑，改為 questionIndex 動態決定 `TAG_PLAYER_(x+1)`。
+
 ## 2026-03-11 Sandbox WAIT_REPLY_x -> ANSWER_EVAL 鏈路修復（AUDIT-BASED FIX）
 
 - 修正主因：`WAIT_REPLY_2/WAIT_REPLY_3` consume 後不再 shortcut 到 `ADVANCE_NEXT`，統一改回 `ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT`。
