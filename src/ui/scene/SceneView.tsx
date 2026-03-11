@@ -51,6 +51,7 @@ type Props = {
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
   mode?: 'classic' | 'sandbox_story';
+  promptVisible?: boolean;
   wordReveal?: {
     visible: boolean;
     phase: SandboxWordRevealTextPhase;
@@ -568,6 +569,7 @@ export default function SceneView({
   onSceneRunning,
   onSceneError,
   mode = 'classic',
+  promptVisible = true,
   wordReveal
 }: Props) {
   const [assets, setAssets] = useState<SceneAssetState>(initialAssets);
@@ -1957,7 +1959,7 @@ export default function SceneView({
   const pulseStrength = Math.min(1.4, 0.7 + curse / 80);
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
   const revealPromptSuppressed = Boolean(wordReveal?.phase === 'word' || wordReveal?.phase === 'done');
-  const consonantBubbleVisible = !revealPromptSuppressed;
+  const consonantBubbleVisible = Boolean(promptVisible) && !revealPromptSuppressed;
 
   return (
     <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
