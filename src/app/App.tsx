@@ -6663,6 +6663,7 @@ export default function App() {
           revealCommitSourceSnapshotId: sourceSnapshotId
         });
         sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', reason, commitAt);
+        setSandboxRevealTick(Date.now());
       };
 
       if (revealTransitionEligible) {
