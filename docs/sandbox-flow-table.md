@@ -337,3 +337,18 @@ Smoke output now must include:
 - `authoritativeFlowStep`
 - `authoritativeBlockedReason` (`nextQuestionBlockedReason + source`)
 
+
+
+## 2026-03-11 WAIT_REPLY_x mention/tag consume contract（authoritative）
+
+| gateType | Raw input example | stripped payload（before judge） | normalized compare input | consume gate |
+| --- | --- | --- | --- | --- |
+| `consonant_answer` | `ㄅ` / `b` / `บ` | same as raw | alias-normalized | can consume |
+| `consonant_answer` | `@mod_live ㄅ` | `ㄅ` | alias-normalized | can consume（target ignored） |
+| `consonant_answer` | `@123132 ㄅ` | `ㄅ` | alias-normalized | can consume（target ignored） |
+| `consonant_answer` | `@mod_live @123132 ㄅ` | `ㄅ` | alias-normalized | can consume（target ignored） |
+| `consonant_answer` | `回覆 @mod_live: ㄅ` | `ㄅ` | alias-normalized | can consume（target ignored） |
+
+- Authoritative pipeline（SSOT）：`raw -> detect mentions -> strip leading mentions/reply wrapper -> normalize -> candidate compare -> judge -> consume`。
+- `replyTarget` 僅作 UI/thread/debug trace，不再是 `consonant_answer` consume 必要條件。
+- `scheduler.phase` 維持 non-authoritative projection；正式判斷僅看 `flow.step + replyGate + prompt/judge audit`。

@@ -1,3 +1,17 @@
+## 2026-03-11 sandbox mention/tag answer pipeline 對齊（AUDIT+FIX）
+
+- Root cause（primary）
+  - UI 顯示 NPC tag 玩家提問，但 `consonant_answer` consume 仍以 `replyTarget` 作為 hard gate；玩家輸入 `@mod_live ㄅ` / `@123132 ㄅ` 會在 judge 前被 `reply_blocked:target_mismatch` 擋下，導致 UI 引導與 authoritative consume 規則衝突。
+- Secondary issues
+  - answer extraction 舊路徑僅做簡單前置 `@mention` regex，對 reply wrapper / 多 mention / 系統自動 tag 不一致。
+  - blocked path 與 evaluated path 觀測欄位不一致，造成 judge audit 常見空值。
+- Fix
+  - 新增單一 authoritative answer extraction pipeline：`raw -> detect mentions -> strip leading mentions/reply wrapper -> normalize -> candidate compare -> judge -> consume`。
+  - `consonant_answer` / `consonant_guess` consume 改為忽略 reply target mismatch；target 僅保留 trace/debug。
+  - judge/telemetry 寫入 extraction 資料（mentions、stripped payload、normalized），確保每次玩家輸入都有可審計紀錄。
+- Regression guard
+  - 新增 `scripts/regression-consonant-mention-pipeline.mjs`，檢查：mention stripping helper 存在、consonant gate 明確忽略 target mismatch、answer pipeline 寫入 telemetry/audit。
+
 ## 2026-03-11 sandbox NIGHT_01 post-reveal deadlock fix（authoritative runner + judge blocked audit）
 
 - Root cause
