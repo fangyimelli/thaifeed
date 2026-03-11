@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 
-const isWaitReplyStep = (step) => /^WAIT_REPLY_\d+$/.test(step);
+const WAIT_REPLY_STEPS = new Set(['WAIT_REPLY_1', 'WAIT_REPLY_2', 'WAIT_REPLY_3']);
 
 function sandboxFlowCanEmit({ step, sourceTag }) {
-  if (isWaitReplyStep(step)) return false;
+  if (WAIT_REPLY_STEPS.has(step)) return false;
   return sourceTag.startsWith('sandbox_tag_player_')
     || sourceTag === 'sandbox_consonant_prompt'
     || sourceTag === 'sandbox_crowd_react_word'

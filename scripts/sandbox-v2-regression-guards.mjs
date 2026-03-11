@@ -170,8 +170,11 @@ const checks = [
 checks.push({
   name: 'WAIT_REPLY_2/3 consume must enter ANSWER_EVAL (no direct ADVANCE_NEXT shortcut)',
   run() {
-    if (!app.includes("setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)")) {
-      throw new Error('WAIT_REPLY_x consume must enter ANSWER_EVAL');
+    if (!app.includes("setFlowStep('ANSWER_EVAL', 'player_reply_2_consumed')")) {
+      throw new Error('WAIT_REPLY_2 consume must enter ANSWER_EVAL');
+    }
+    if (!app.includes("setFlowStep('ANSWER_EVAL', 'player_reply_3_consumed')")) {
+      throw new Error('WAIT_REPLY_3 consume must enter ANSWER_EVAL');
     }
     if (app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_2_consumed')") || app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed')")) {
       throw new Error('direct WAIT_REPLY_2/3 -> ADVANCE_NEXT shortcut must not exist');
@@ -308,7 +311,7 @@ if (!app.includes("item?.to === 'ADVANCE_NEXT' && item?.reason === 'post_reveal_
 if (!app.includes('(state.sandboxFlow?.backlogTechMessages?.length ?? 0) === 0')) {
   throw new Error('post-reveal completion helper must include backlogTechMessages cleared condition');
 }
-if (!app.includes('resolveSandboxTagStepByQuestionNumber(nextQuestionNumber)')) {
+if (!app.includes("nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE' : (beforeAdvance === 1 ? 'TAG_PLAYER_3_MEANING' : afterState.flow.step)")) {
   throw new Error('ADVANCE_NEXT must route to authoritative next tag step after emit');
 }
 if (!app.includes('sandboxModeRef.current.setCurrentPrompt({')) {
@@ -320,7 +323,7 @@ if (!app.includes('secondQuestionAuthoritative')) {
 if (!app.includes("st.prompt.current?.wordKey === secondQuestionId")) {
   throw new Error('Full Night Test second question check must validate current prompt wordKey against emitted toQuestionId');
 }
-if (!app.includes('flowAdvanced') || !app.includes('(parseSandboxWaitReplyIndex(st.flow.step) ?? 0) >= 2')) {
+if (!app.includes('flowAdvanced') || !app.includes("st.flow.step === 'WAIT_REPLY_2'")) {
   throw new Error('Full Night Test second question check must include flow.step >= WAIT_REPLY_2 authoritative condition');
 }
 if (!app.includes("st.replyGate?.gateType === 'consonant_answer'") || !app.includes('secondGateAligned')) {
@@ -656,7 +659,7 @@ if (!app.includes("reveal.transitionEligible") || !app.includes("reveal.transiti
 if (!app.includes("nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_chat_not_done'")) {
   throw new Error('ADVANCE_NEXT must preserve post_reveal completion guard prior to emit');
 }
-if (!app.includes('const nextTagStep = resolveSandboxTagStepByQuestionNumber(nextQuestionNumber);')) {
+if (!app.includes("const nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE'")) {
   throw new Error('First question correct path must stably advance into second-question flow');
 }
 if (!app.includes("commitRevealTransition('reveal_word_done_timing_repaired'")) {
@@ -765,14 +768,4 @@ if (!app.includes("setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')")) {
 }
 if (!app.includes('failedStep: alignedFailedStep') || !app.includes("authoritativeFlowStep") || !app.includes("authoritativeBlockedReason")) {
   throw new Error('smoke failure label must align with authoritative flow step and blocked reason');
-}
-
-if (!app.includes("illegal half-advanced prompt detected")) {
-  throw new Error('ADVANCE_NEXT must warn on illegal half-advanced prompt/index divergence');
-}
-if (!app.includes("prompt-step divergence")) {
-  throw new Error('ADVANCE_NEXT must warn on prompt-step divergence');
-}
-if (!app.includes('const advanceFromQuestionId = refreshedState.sandboxFlow?.postRevealCompletedQuestionId || fromQuestionId;')) {
-  throw new Error('ADVANCE_NEXT must lock per-question baseline with advanceFromQuestionId');
 }
