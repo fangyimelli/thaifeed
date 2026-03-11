@@ -1,3 +1,15 @@
+## Sandbox NIGHT_01 Integrated Flow Fix (Project-level)
+
+### What changed
+- Rebuilt sandbox NIGHT_01 answer pipeline into one authoritative chain: `WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> TAG_PLAYER_(x+1) -> WAIT_REPLY_(x+1)`.
+- Converted `ADVANCE_NEXT` to atomic handoff with `advanceFromQuestionId` baseline check.
+- Removed hardcoded `beforeAdvance===0/1` routing and added dynamic Q4+ tag/wait handlers.
+- Added divergence guards (`illegal half-advanced prompt detected`, `prompt-step divergence`) and kept `scene_not_synced_warning` as non-blocking render warning.
+
+### Regression guards
+- Updated `scripts/sandbox-v2-regression-guards.mjs` to assert dynamic next-tag routing and `advanceFromQuestionId` baseline checks.
+- Updated wait-step guard scripts to use `WAIT_REPLY_\d+` pattern instead of only `WAIT_REPLY_1..3`.
+
 ## 2026-03-11 sandbox audit-based fix (Q2/Q3 shortcut + per-question evidence)
 
 ## Summary

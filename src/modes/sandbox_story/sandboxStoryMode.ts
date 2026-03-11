@@ -324,7 +324,8 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       const previousStep = state.flow?.step ?? 'unknown';
       const nextQuestionIndex = Number.isInteger(state.flow?.questionIndex) ? state.flow.questionIndex : 0;
       const deriveStepScopedNextQuestion = (flowStep: string) => {
-        if (flowStep === 'WAIT_WARMUP_REPLY' || flowStep === 'WAIT_REPLY_1' || flowStep === 'WAIT_REPLY_2' || flowStep === 'WAIT_REPLY_3') {
+        const isWaitReplyStep = flowStep === 'WAIT_WARMUP_REPLY' || /^WAIT_REPLY_\d+$/.test(flowStep);
+        if (isWaitReplyStep) {
           return { nextQuestionStage: 'REPLY', nextQuestionBlockedReasonSource: 'reply', nextQuestionBlockedReason: 'reply_blocked:awaiting_consume' };
         }
         if (flowStep === 'ANSWER_EVAL') {

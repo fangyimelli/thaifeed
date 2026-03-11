@@ -1,3 +1,17 @@
+## 2026-03-11 Sandbox NIGHT_01 authoritative state machine（SSOT）
+
+| Order | Authoritative step | Gate policy | Required boundary evidence |
+| --- | --- | --- | --- |
+| 1 | `WAIT_REPLY_x` | `replyGateArmed=true`, `replyGateType=consonant_answer`, `canReply=true`, `replyGateTargetQuestionId=Qx` | every input must write `lastReplyEval + consonantJudgeAudit` |
+| 2 | `ANSWER_EVAL` | `canReply=false` | `answerEvalCompletedQuestionId=Qx` |
+| 3 | `REVEAL_WORD` | `canReply=false` | `revealCommittedQuestionId=Qx` |
+| 4 | `POST_REVEAL_CHAT` | `canReply=false` | `postRevealCompletedQuestionId=Qx` |
+| 5 | `ADVANCE_NEXT` | `canReply=false` | lock `advanceFromQuestionId=Qx`; chain must satisfy `answerEval/reveal/postReveal===Qx` |
+| 6 | `TAG_PLAYER_(x+1)` | `canReply=false` | nextQuestion(from=Qx,to=Qx+1) |
+| 7 | `WAIT_REPLY_(x+1)` | gate re-armed only here | reply gate now targets `Qx+1` |
+
+> `scene_not_synced_warning` 僅為 render warning（projection layer），不可阻斷 authoritative flow。
+
 ## 2026-03-11 AUDIT FIX — WAIT_REPLY_x authoritative chain restore
 
 | Stage | Required authoritative transition | Per-question evidence requirement | Forbidden |
