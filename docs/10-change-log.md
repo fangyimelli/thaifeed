@@ -1,3 +1,17 @@
+## 2026-03-11 AUDIT ONLY — NIGHT1 consonant source and 10-question composition audit
+
+- Scope
+  - Audit only; **no functional/runtime code change**.
+  - Target: sandbox NIGHT1 authoritative question source, concrete 10-question composition, and classic/sandbox shared data relationship.
+- Findings
+  - Authoritative composition source is `SHARED_CONSONANT_QUESTION_BANK` (`src/shared/consonant-engine/questionBank.ts`), mapped to sandbox `NIGHT1.nodes` via `buildSandboxNightNodes(...)`.
+  - NIGHT1 currently yields 10 questions because shared bank currently has 10 entries, and progression stops by `end_of_nodes` guard (`state.nodeIndex >= ssot.nodes.length - 1`).
+  - No `slice(0,10)` / `take(10)` / `MAX_QUESTIONS` / `NIGHT1_QUESTION_COUNT` mechanism was found for NIGHT1 composition.
+  - Classic and sandbox both consume the same shared consonant bank layer (directly or via adapter/re-export paths).
+- Deliverables
+  - `PR_NOTES.md` updated with full evidence table, source chain, required search-hit conclusions, and yes/no verdicts.
+  - README updated with an audit note pointer.
+
 ## 2026-03-11 sandbox regression guards：WAIT_REPLY_4 / dynamic WAIT_REPLY_x contract
 
 - Root cause

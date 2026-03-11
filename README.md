@@ -1,3 +1,10 @@
+## 2026-03-11 AUDIT ONLY — NIGHT1 consonant source and 10-question composition audit
+
+- 本次為 **AUDIT ONLY / NO FUNCTIONAL CHANGE**。
+- 已確認 sandbox NIGHT1 authoritative 題目來源為 shared consonant bank：`src/shared/consonant-engine/questionBank.ts`，並透過 `src/ssot/sandbox_story/night1.ts` 映射為 `NIGHT1.nodes`。
+- 已確認目前 10 題來源為 shared bank 現有 10 筆 + flow `end_of_nodes` guard（`ssot.nodes.length`）；非 `slice(0,10)` / `take(10)` 類 cap。
+- 完整證據表與 yes/no verdict 見 `PR_NOTES.md`（標題同本節）。
+
 ## 2026-03-11 Sandbox WAIT_REPLY_4+ Guard Extension（Dynamic WAIT_REPLY_x）
 
 - regression guards 補強 `WAIT_REPLY_4` 與動態 `WAIT_REPLY_x` consume 契約：consume success 必須走 `ANSWER_EVAL`，不得落入 `submit_rejected` 或 shortcut `ADVANCE_NEXT`。
