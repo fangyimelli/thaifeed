@@ -1,3 +1,16 @@
+## 2026-03-11 AUDIT FIX — WAIT_REPLY_x authoritative chain restore
+
+| Stage | Required authoritative transition | Per-question evidence requirement | Forbidden |
+| --- | --- | --- | --- |
+| `WAIT_REPLY_2/3` consume | `player_reply_x_consumed -> ANSWER_EVAL` | 寫入 `lastReplyEval(consumed=true)` + judge audit | 直接 `-> ADVANCE_NEXT` |
+| `ANSWER_EVAL` done | `ANSWER_EVAL -> REVEAL_WORD` | `answerEvalCompletedQuestionId = currentPrompt.wordKey` | 以 consume 成功當成可 next |
+| `REVEAL_WORD` done | `REVEAL_WORD -> POST_REVEAL_CHAT` | `revealCommittedQuestionId = currentPrompt.wordKey` + snapshot question/word 同題 | 使用前題 snapshot |
+| `POST_REVEAL_CHAT` done | `POST_REVEAL_CHAT -> ADVANCE_NEXT` | `postRevealCompletedQuestionId = currentPrompt.wordKey` | 使用前題 `post_reveal_chat_done` |
+| `ADVANCE_NEXT` emit | `ADVANCE_NEXT -> next_question_emitted` | 同題必須同時具備 answerEval/reveal/postReveal 完成證據 | 跨題 evidence 污染 |
+
+Canonical chain（Q2/Q3 and same-type gates）：
+`WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> next_question_emitted`
+
 ## NIGHT_01 Flow Patch — POST_REVEAL authority constraints (2026-03-11)
 
 | Stage | Authoritative gate | Must-write audit | Forbidden dependency |

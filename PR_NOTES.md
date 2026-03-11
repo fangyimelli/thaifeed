@@ -1,3 +1,37 @@
+## 2026-03-11 sandbox audit-based fix (Q2/Q3 shortcut + per-question evidence)
+
+## Summary
+- sandbox only：修正 `WAIT_REPLY_2/WAIT_REPLY_3` consume 後直接 `ADVANCE_NEXT` 的 shortcut，恢復 authoritative chain：`WAIT_REPLY_x -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT`。
+- 將 `ADVANCE_NEXT` completion evidence 改為同題綁定，避免 Q2 吃到 Q1 的 `post_reveal_chat_done` 歷史。
+- reveal snapshot 改為 per-question reset/rebuild，避免殘留前題資料誤導 debug。
+
+## Changed
+- `consumePlayerReply`：`player_reply_2_consumed`、`player_reply_3_consumed` 皆改為進 `ANSWER_EVAL`。
+- `hasPostRevealCompletionEvidence`：要求 `postRevealCompletedQuestionId === currentQuestionId`，audit transition 也需 `item.questionId === currentQuestionId`。
+- `ADVANCE_NEXT`：新增 per-question chain guard（`answerEvalCompletedQuestionId + revealCommittedQuestionId + postRevealCompletedQuestionId`）；缺任一項則 `advance_next_blocked:missing_per_question_chain`。
+- `buildRevealTransitionSnapshot`：新增 `sourceQuestionId/sourceWordKey` + `question_mismatch` guard；snapshot id 具題目作用域。
+- `setCurrentPrompt/forceAdvanceNode/advancePrompt`：切題時重置 reveal snapshot/commit debug 欄位。
+- debug panel：新增 `reveal.snapshotQuestionId/wordKey`、`reveal.committedQuestionId`、`reveal.notEntered`、`postReveal.startedQuestionId/completedQuestionId`、`answerEval.completedQuestionId`。
+
+## Regression guards
+- `scripts/sandbox-v2-regression-guards.mjs`
+  - 禁止 `WAIT_REPLY_2/3 -> ADVANCE_NEXT` shortcut。
+  - `ADVANCE_NEXT` completion evidence 必須 question-scoped。
+  - reveal snapshot 必須 question/word scoped 並具 `question_mismatch` guard。
+
+## Docs
+- [x] README.md updated
+- [x] docs/10-change-log.md updated
+- [x] docs/sandbox-flow-table.md updated
+- [x] PR_NOTES.md updated
+- [x] .github/pull_request_template.md synced
+
+## Scope
+- [x] sandbox only
+- [x] classic mode untouched
+
+---
+
 ## Summary
 - sandbox only：修正 `consonant_answer` 在第二題因 tag/target mismatch 擋掉正確答案的問題，建立單一 answer extraction pipeline，並補齊 audit/telemetry。
 

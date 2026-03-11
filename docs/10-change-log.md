@@ -1,3 +1,19 @@
+## 2026-03-11 sandbox audit fix：Q2/Q3 consume shortcut + cross-question evidence pollution
+
+- Root cause confirmed
+  - `WAIT_REPLY_2/WAIT_REPLY_3` consume 後直接 `ADVANCE_NEXT`（未經 `ANSWER_EVAL/REVEAL_WORD/POST_REVEAL_CHAT`）。
+  - `ADVANCE_NEXT` completion evidence 可吃到前題 `post_reveal_chat_done`（跨題污染）。
+  - reveal snapshot 僅在特定路徑 reset，Q2 未進 reveal 時會殘留 Q1 snapshot。
+- Fix
+  - consume transition 改為：`player_reply_2_consumed -> ANSWER_EVAL`、`player_reply_3_consumed -> ANSWER_EVAL`。
+  - `hasPostRevealCompletionEvidence` 改為 per-question：要求 `postRevealCompletedQuestionId === currentQuestionId`；audit transition 也需 `item.questionId === currentQuestionId`。
+  - `ADVANCE_NEXT` 新增同題完整鏈 guard：同題需具備 `answerEvalCompletedQuestionId + revealCommittedQuestionId + postRevealCompletedQuestionId`，否則 `advance_next_blocked:missing_per_question_chain`。
+  - reveal snapshot 增加 per-question 欄位並在 `setCurrentPrompt/forceAdvanceNode/advancePrompt` reset：`revealEligibilitySnapshotId/revealCommitSourceSnapshotId/revealSnapshotQuestionId/revealSnapshotWordKey`。
+- Regression guards
+  - 新增 script guard：禁止 `WAIT_REPLY_2/3 -> ADVANCE_NEXT` shortcut。
+  - 新增 script guard：`ADVANCE_NEXT` 必須使用 per-question evidence。
+  - 新增 script guard：reveal snapshot 必須具 question/word scope 與 mismatch guard。
+
 ## 2026-03-11 sandbox mention/tag answer pipeline 對齊（AUDIT+FIX）
 
 - Root cause（primary）

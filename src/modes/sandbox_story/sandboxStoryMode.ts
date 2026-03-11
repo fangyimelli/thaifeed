@@ -50,7 +50,7 @@ export const createSandboxV2InitialState = () => {
   ssot: { version: NIGHT1.meta.version },
   nightId: NIGHT1.meta.id,
   flow: { step: 'PREHEAT_CHAT', questionIndex: 0, stepStartedAt: bootAt, transitions: initialTransitions, tagAskedThisStep: false },
-  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[], postRevealChatState: 'idle', postRevealEnteredAt: 0, postRevealStartAttempted: false, postRevealStartedAt: 0, postRevealCompletedAt: 0, postRevealCompletionReason: '', postRevealCompletionBlockedBy: '', postRevealGuardReady: false, postRevealStartEligible: false, postRevealStartBlockedBy: 'not_post_reveal_step', postRevealCompletionEligible: false, advanceNextEnteredAt: 0, revealTransitionEligible: false, revealTransitionBlockedBy: 'bootstrap', revealTransitionCommitAttempted: false, revealTransitionCommittedAt: 0, revealTransitionCommitReason: '', revealTransitionCommitBlockedBy: '', revealGuardReady: false, revealCompletionReady: false, revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionFromIndex: -1, nextQuestionToIndex: -1, nextQuestionFromQuestionId: '', nextQuestionToQuestionId: '', nextQuestionBlockedReason: 'not_armed', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '', nextQuestionStage: 'boot', nextQuestionBlockedReasonSource: 'bootstrap' },
+  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[], postRevealChatState: 'idle', postRevealEnteredAt: 0, postRevealStartAttempted: false, postRevealStartedAt: 0, postRevealCompletedAt: 0, postRevealCompletionReason: '', postRevealCompletionBlockedBy: '', postRevealGuardReady: false, postRevealStartEligible: false, postRevealStartBlockedBy: 'not_post_reveal_step', postRevealCompletionEligible: false, advanceNextEnteredAt: 0, revealTransitionEligible: false, revealTransitionBlockedBy: 'bootstrap', revealTransitionCommitAttempted: false, revealTransitionCommittedAt: 0, revealTransitionCommitReason: '', revealTransitionCommitBlockedBy: '', revealGuardReady: false, revealCompletionReady: false, revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', revealSnapshotQuestionId: '', revealSnapshotWordKey: '', answerEvalCompletedQuestionId: '', revealCommittedQuestionId: '', postRevealStartedQuestionId: '', postRevealCompletedQuestionId: '', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionFromIndex: -1, nextQuestionToIndex: -1, nextQuestionFromQuestionId: '', nextQuestionToQuestionId: '', nextQuestionBlockedReason: 'not_armed', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '', nextQuestionStage: 'boot', nextQuestionBlockedReasonSource: 'bootstrap' },
   prompt: {
     current: null,
     overlay: { consonantShown: '' },
@@ -199,10 +199,15 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     state.transitions = [...(state.transitions ?? []), { event, at, detail }].slice(-20);
     state.flow.transitions = state.transitions;
   };
-  const appendAuditTransition = (from: string, to: string, at: number, reason?: string) => {
+  const appendAuditTransition = (from: string, to: string, at: number, reason?: string, questionId?: string) => {
+    const scopedQuestionId = questionId
+      || state.prompt?.current?.wordKey
+      || state.currentPrompt?.wordKey
+      || ssot.nodes?.[state.flow?.questionIndex ?? 0]?.id
+      || '';
     state.audit = {
       ...state.audit,
-      transitions: [...(state.audit?.transitions ?? []), { from, to, at, reason }].slice(-20)
+      transitions: [...(state.audit?.transitions ?? []), { from, to, at, reason, questionId: scopedQuestionId }].slice(-20)
     };
   };
   const hasBootstrapState = () => Boolean(
@@ -323,7 +328,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
           return { nextQuestionStage: 'REPLY', nextQuestionBlockedReasonSource: 'reply', nextQuestionBlockedReason: 'reply_blocked:awaiting_consume' };
         }
         if (flowStep === 'ANSWER_EVAL') {
-          return { nextQuestionStage: 'ANSWER_EVAL', nextQuestionBlockedReasonSource: 'answer_eval', nextQuestionBlockedReason: 'answer_eval_blocked:awaiting_judge' };
+          return { nextQuestionStage: 'ANSWER_EVAL', nextQuestionBlockedReasonSource: 'answer_eval', nextQuestionBlockedReason: 'answer_eval_blocked:awaiting_judge', answerEvalCompletedQuestionId: '' };
         }
         if (flowStep === 'REVEAL_WORD') {
           return {
@@ -339,7 +344,10 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
             revealGuardReady: false,
             revealCompletionReady: false,
             revealEligibilitySnapshotId: '',
-            revealCommitSourceSnapshotId: ''
+            revealCommitSourceSnapshotId: '',
+            revealSnapshotQuestionId: '',
+            revealSnapshotWordKey: '',
+            revealCommittedQuestionId: ''
           };
         }
         if (flowStep === 'POST_REVEAL_CHAT') {
@@ -358,6 +366,8 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
             postRevealStartEligible: false,
             postRevealStartBlockedBy: 'not_entered',
             postRevealCompletionEligible: false,
+            postRevealStartedQuestionId: '',
+            postRevealCompletedQuestionId: '',
             revealTransitionBlockedBy: 'none'
           };
         }
@@ -517,6 +527,17 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         thaiWord: node?.wordText ?? '',
         translationZh: node?.translationZh ?? ''
       };
+      state.sandboxFlow = {
+        ...state.sandboxFlow,
+        revealEligibilitySnapshotId: '',
+        revealCommitSourceSnapshotId: '',
+        revealSnapshotQuestionId: '',
+        revealSnapshotWordKey: '',
+        revealCommittedQuestionId: '',
+        answerEvalCompletedQuestionId: '',
+        postRevealStartedQuestionId: '',
+        postRevealCompletedQuestionId: ''
+      };
       state.consonant.nodeChar = prompt.consonant;
       state.renderSync = {
         ...state.renderSync,
@@ -541,10 +562,10 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
     markTagAskedThisStep: () => { state.flow.tagAskedThisStep = true; },
     setLastTimestamps: (v: any) => { state.last = { ...state.last, ...v }; },
     setReveal: (v: any) => { state.reveal = { ...state.reveal, ...v }; },
-    forceAdvanceNode: () => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, blockedReason: 'end_of_nodes', lastAt: now, inFlight: false }; return false; } state.nodeIndex += 1; state.flow = { ...state.flow, questionIndex: state.nodeIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: state.nodeIndex, stepStartedAt: now, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now }; state.prompt = { ...state.prompt, current: null }; state.currentPrompt = null; state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '', mode: 'idle' }; state.renderSync = { ...state.renderSync, stateQuestionId: '', renderedQuestionId: '', renderBlockedReason: 'state_question_missing', committedAt: now, commitSource: 'forceAdvanceNode_reset' }; state.unresolvedAmbient = { ...state.unresolvedAmbient, remaining: 0 }; state.advance = { ...state.advance, blockedReason: '', lastAt: now, inFlight: false, lastReason: 'force_advance_node' }; return true; },
+    forceAdvanceNode: () => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, blockedReason: 'end_of_nodes', lastAt: now, inFlight: false }; return false; } state.nodeIndex += 1; state.flow = { ...state.flow, questionIndex: state.nodeIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: state.nodeIndex, stepStartedAt: now, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now, answerEvalCompletedQuestionId: '', revealCommittedQuestionId: '', postRevealStartedQuestionId: '', postRevealCompletedQuestionId: '', revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', revealSnapshotQuestionId: '', revealSnapshotWordKey: '' }; state.prompt = { ...state.prompt, current: null }; state.currentPrompt = null; state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '', mode: 'idle' }; state.renderSync = { ...state.renderSync, stateQuestionId: '', renderedQuestionId: '', renderBlockedReason: 'state_question_missing', committedAt: now, commitSource: 'forceAdvanceNode_reset' }; state.unresolvedAmbient = { ...state.unresolvedAmbient, remaining: 0 }; state.advance = { ...state.advance, blockedReason: '', lastAt: now, inFlight: false, lastReason: 'force_advance_node' }; return true; },
     commitHintText: (text: string, source = 'unknown') => { state.hint = { ...state.hint, active: Boolean(text), lastText: text, count: (state.hint.count ?? 0) + 1, lastShownAt: Date.now(), source }; },
     activateDebugOverride: (source = 'debug') => { state.debugOverride = { ...state.debugOverride, active: true, source, consumedAt: 0 }; },
-    advancePrompt: (reason = 'advance') => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: 'end_of_nodes' }; return false; } const previousIndex = state.nodeIndex; const nextIndex = Math.min(ssot.nodes.length - 1, previousIndex + 1); state.nodeIndex = nextIndex; state.flow = { ...state.flow, questionIndex: nextIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: nextIndex, stepStartedAt: now, nextQuestionFromIndex: previousIndex, nextQuestionToIndex: nextIndex, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now }; state.prompt = { ...state.prompt, current: null }; state.currentPrompt = null; state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '', mode: 'idle' }; state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: '' }; return true; },
+    advancePrompt: (reason = 'advance') => { const now = Date.now(); if (state.nodeIndex >= ssot.nodes.length - 1) { state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: 'end_of_nodes' }; return false; } const previousIndex = state.nodeIndex; const nextIndex = Math.min(ssot.nodes.length - 1, previousIndex + 1); state.nodeIndex = nextIndex; state.flow = { ...state.flow, questionIndex: nextIndex, stepStartedAt: now, tagAskedThisStep: false }; state.sandboxFlow = { ...state.sandboxFlow, questionIndex: nextIndex, stepStartedAt: now, nextQuestionFromIndex: previousIndex, nextQuestionToIndex: nextIndex, nextQuestionBlockedReason: '', nextQuestionDecidedAt: now, nextQuestionEmittedAt: now, answerEvalCompletedQuestionId: '', revealCommittedQuestionId: '', postRevealStartedQuestionId: '', postRevealCompletedQuestionId: '', revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', revealSnapshotQuestionId: '', revealSnapshotWordKey: '' }; state.prompt = { ...state.prompt, current: null }; state.currentPrompt = null; state.reveal = { ...state.reveal, visible: false, phase: 'idle', text: '', wordKey: '', doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '', mode: 'idle' }; state.advance = { ...state.advance, inFlight: false, lastAt: now, lastReason: reason, blockedReason: '' }; return true; },
     applyCorrect: (payload?: { input?: string; matchedChar?: string }) => { const now = Date.now(); const prompt = state.prompt.current; state.consonant = { ...state.consonant, parse: { ...state.consonant.parse, ok: true, inputRaw: payload?.input ?? state.consonant.parse.inputRaw, inputNorm: payload?.matchedChar ?? state.consonant.parse.inputNorm, matchedChar: payload?.matchedChar ?? state.consonant.parse.matchedChar, matchedAlias: payload?.matchedChar ?? state.consonant.parse.matchedAlias, blockedReason: '' }, judge: { ...state.consonant.judge, lastInput: payload?.matchedChar ?? state.consonant.judge.lastInput, lastResult: 'correct' } }; if (prompt) { const node = ssot.nodes.find((n) => n.id === prompt.wordKey); state.reveal = { ...state.reveal, visible: true, phase: 'word', text: node?.wordText ?? '', wordKey: prompt.wordKey, consonantFromPrompt: prompt.consonant, startedAt: now, finishedAt: 0, doneAt: 0, cleanupAt: 0 }; } state.replyGate = { ...state.replyGate, armed: false, canReply: false, gateConsumed: true }; state.sandboxFlow = { ...state.sandboxFlow, replyGateActive: false, canReply: false, gateConsumed: true }; state.answerGate = { ...state.answerGate, waiting: false, pausedChat: false, askedAt: 0 }; if (state.debugOverride.active) state.debugOverride = { ...state.debugOverride, active: false, consumedAt: now }; },
     debugAddFear: (n: number) => { fear.fearLevel = Math.min(fear.maxFear, fear.fearLevel + n); fear.pressureLevel = fear.fearLevel > 80 ? 'panic' : fear.fearLevel > 66 ? 'high' : fear.fearLevel > 33 ? 'medium' : 'low'; },
     debugResetFear: () => { fear.fearLevel = 0; fear.pressureLevel = 'low'; },

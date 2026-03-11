@@ -166,6 +166,48 @@ const checks = [
   }
 ];
 
+
+checks.push({
+  name: 'WAIT_REPLY_2/3 consume must enter ANSWER_EVAL (no direct ADVANCE_NEXT shortcut)',
+  run() {
+    if (!app.includes("setFlowStep('ANSWER_EVAL', 'player_reply_2_consumed')")) {
+      throw new Error('WAIT_REPLY_2 consume must enter ANSWER_EVAL');
+    }
+    if (!app.includes("setFlowStep('ANSWER_EVAL', 'player_reply_3_consumed')")) {
+      throw new Error('WAIT_REPLY_3 consume must enter ANSWER_EVAL');
+    }
+    if (app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_2_consumed')") || app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed')")) {
+      throw new Error('direct WAIT_REPLY_2/3 -> ADVANCE_NEXT shortcut must not exist');
+    }
+  }
+});
+
+checks.push({
+  name: 'ADVANCE_NEXT evidence must be per-question scoped',
+  run() {
+    if (!app.includes('postRevealCompletedQuestionId')) {
+      throw new Error('per-question post reveal completion id missing');
+    }
+    if (!app.includes("advance_next_blocked:missing_per_question_chain")) {
+      throw new Error('ADVANCE_NEXT per-question chain guard missing');
+    }
+    if (!app.includes('item?.questionId === questionId')) {
+      throw new Error('audit transition evidence is not scoped by questionId');
+    }
+  }
+});
+
+checks.push({
+  name: 'reveal snapshot ids must be per-question scoped',
+  run() {
+    if (!app.includes('revealSnapshotQuestionId') || !app.includes('revealSnapshotWordKey')) {
+      throw new Error('reveal snapshot question/word observability missing');
+    }
+    if (!app.includes("'question_mismatch'")) {
+      throw new Error('reveal snapshot question mismatch guard missing');
+    }
+  }
+});
 for (const check of checks) {
   check.run();
 }
