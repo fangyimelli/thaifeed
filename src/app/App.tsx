@@ -149,6 +149,14 @@ type RevealTransitionSnapshot = {
   hasObservableTiming: boolean;
 };
 
+type PostRevealRuntimeStatus = {
+  guardReady: boolean;
+  startEligible: boolean;
+  startBlockedBy: string;
+  completionEligible: boolean;
+  completionBlockedBy: string;
+};
+
 const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnapshot => {
   const hasObservableTiming = sandboxState.reveal.startedAt > 0
     && sandboxState.reveal.finishedAt > 0
@@ -181,6 +189,51 @@ const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnaps
     transitionEligible,
     transitionBlockedBy,
     hasObservableTiming
+  };
+};
+
+const derivePostRevealRuntimeStatus = (sandboxState: any): PostRevealRuntimeStatus => {
+  const isPostRevealStep = sandboxState.flow.step === 'POST_REVEAL_CHAT';
+  const enteredAt = sandboxState.sandboxFlow?.postRevealEnteredAt || 0;
+  const startedAt = sandboxState.sandboxFlow?.postRevealStartedAt || 0;
+  const postRevealState = sandboxState.sandboxFlow?.postRevealChatState ?? 'idle';
+  const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
+  const guardReady = isPostRevealStep
+    && sandboxState.reveal.phase === 'done'
+    && (Boolean(sandboxState.reveal.rendered) || sandboxState.reveal.blockedReason === 'missing_word_text');
+  const startEligible = guardReady && enteredAt > 0 && postRevealState === 'idle' && startedAt <= 0;
+  const startBlockedBy = startEligible
+    ? 'none'
+    : (!isPostRevealStep
+      ? 'not_post_reveal_step'
+      : (enteredAt <= 0
+        ? 'not_entered'
+        : (!guardReady
+          ? (sandboxState.reveal.blockedReason || 'reveal_not_ready')
+          : (postRevealState !== 'idle' || startedAt > 0 ? 'already_started' : 'unknown'))));
+  const elapsedFromStart = startedAt > 0 ? (Date.now() - startedAt) : 0;
+  const completionEligible = guardReady
+    && startedAt > 0
+    && postRevealState === 'started'
+    && !hasReplyGate
+    && elapsedFromStart >= SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS;
+  const completionBlockedBy = completionEligible
+    ? 'none'
+    : (!guardReady
+      ? (sandboxState.reveal.blockedReason || 'reveal_not_ready')
+      : (startedAt <= 0 || postRevealState === 'idle'
+        ? 'not_started'
+        : (postRevealState === 'done'
+          ? 'already_completed'
+          : (hasReplyGate
+            ? 'reply_gate_armed'
+            : 'bounded_wait_pending'))));
+  return {
+    guardReady,
+    startEligible,
+    startBlockedBy,
+    completionEligible,
+    completionBlockedBy
   };
 };
 
@@ -591,6 +644,8 @@ type SandboxFlowTestResult = {
   lastPassedStep: string;
   failedStep: string;
   failureReason: string;
+  authoritativeFlowStep: string;
+  authoritativeBlockedReason: string;
   fromQuestionId: string;
   toQuestionId: string;
   autoAnswerUsed: string;
@@ -889,6 +944,8 @@ export default function App() {
     lastPassedStep: '-',
     failedStep: '-',
     failureReason: '-',
+    authoritativeFlowStep: '-',
+    authoritativeBlockedReason: '-',
     fromQuestionId: '-',
     toQuestionId: '-',
     autoAnswerUsed: '-',
@@ -3801,12 +3858,13 @@ export default function App() {
       const revealVisibilityOnly = revealCompletionReady && !sandboxState.reveal.visible;
       const revealTransitionEligible = revealTransitionSnapshot.transitionEligible;
       const revealTransitionBlockedBy = revealTransitionSnapshot.transitionBlockedBy;
-      const postRevealGuardReady = sandboxState.flow.step === 'POST_REVEAL_CHAT'
-        && sandboxState.reveal.phase === 'done'
-        && (Boolean(sandboxState.reveal.rendered) || sandboxState.reveal.blockedReason === 'missing_word_text');
+      const postRevealRuntimeStatus = derivePostRevealRuntimeStatus(sandboxState);
+      const postRevealGuardReady = postRevealRuntimeStatus.guardReady;
       const postRevealActive = sandboxState.sandboxFlow?.postRevealChatState === 'started';
       const postRevealDoneState = sandboxState.sandboxFlow?.postRevealChatState === 'done';
-      const postRevealCompletionBlockedBy = sandboxState.sandboxFlow?.postRevealCompletionBlockedBy || '';
+      const postRevealCompletionBlockedBy = postRevealRuntimeStatus.completionBlockedBy === 'none'
+        ? ''
+        : postRevealRuntimeStatus.completionBlockedBy;
       const postRevealCompletionReady = postRevealDoneState && !postRevealCompletionBlockedBy;
       const advanceNextGuardReady = sandboxState.flow.step === 'ADVANCE_NEXT'
         && (postRevealCompletionReady
@@ -3866,7 +3924,6 @@ export default function App() {
           postRevealStartedAt: sandboxState.sandboxFlow.postRevealStartedAt || 0,
           postRevealCompletedAt: sandboxState.sandboxFlow.postRevealCompletedAt || 0,
           postRevealCompletionReason: sandboxState.sandboxFlow.postRevealCompletionReason || '',
-          postRevealCompletionBlockedBy,
           nextQuestionReady: sandboxState.sandboxFlow.nextQuestionReady,
           nextQuestionEmitted: sandboxState.sandboxFlow.nextQuestionEmitted,
           nextQuestionFromIndex: sandboxState.sandboxFlow.nextQuestionFromIndex,
@@ -3893,8 +3950,12 @@ export default function App() {
           revealTransitionCommitBlockedBy: sandboxState.sandboxFlow.revealTransitionCommitBlockedBy || '',
           revealBlockedReasonSource: sandboxState.reveal.blockedReason === 'hidden' ? 'ui_cleanup' : 'reveal_guard',
           postRevealGuardReady,
+          postRevealStartEligible: postRevealRuntimeStatus.startEligible,
+          postRevealStartBlockedBy: postRevealRuntimeStatus.startBlockedBy,
           postRevealActive,
           postRevealCompletionReady,
+          postRevealCompletionEligible: postRevealRuntimeStatus.completionEligible,
+          postRevealCompletionBlockedBy: postRevealRuntimeStatus.completionBlockedBy,
           advanceNextGuardReady,
           postRevealEnteredAt: sandboxState.sandboxFlow.postRevealEnteredAt || 0,
           advanceNextEnteredAt: sandboxState.sandboxFlow.advanceNextEnteredAt || 0
@@ -6043,13 +6104,18 @@ export default function App() {
       );
       const judgeAudit = st.consonantJudgeAudit;
       const replyTelemetry = st.reply ?? {};
+      const postRevealRuntime = derivePostRevealRuntimeStatus(st);
+      const blockedReason = st.flow.step === 'POST_REVEAL_CHAT'
+        ? `post_reveal_blocked:${postRevealRuntime.startBlockedBy !== 'none' ? postRevealRuntime.startBlockedBy : postRevealRuntime.completionBlockedBy}`
+        : (st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted');
       return {
         emitted,
         renderedAligned,
         secondPromptAligned,
         secondQuestionAuthoritative,
         toQuestionId: secondQuestionId || '-',
-        blockedReason: st.sandboxFlow?.nextQuestionBlockedReason || 'second_question_not_emitted',
+        blockedReason,
+        blockedReasonSource: st.sandboxFlow?.nextQuestionBlockedReasonSource || '-',
         flowStep: st.flow.step,
         canReply: Boolean(st.replyGate?.canReply),
         gateType: st.replyGate?.gateType || 'none',
@@ -6085,24 +6151,32 @@ export default function App() {
       }
       return 'answer_not_consumed';
     };
-    const fail = (failedStep: string, failureReason: string) => {
+    const fail = (smokeStep: string, failureReason: string) => {
       const authoritative = readFullNightAuthoritativeState();
-      if (failedStep === 'second_question' && authoritative.emitted) {
+      if (smokeStep === 'second_question' && authoritative.emitted) {
         pass('second_question', authoritative.toQuestionId);
         return;
       }
+      const authoritativeFlowStep = authoritative.flowStep || '-';
+      const authoritativeBlockedReason = `${authoritative.blockedReason || '-'} | source=${authoritative.blockedReasonSource || '-'}`;
+      const alignedFailedStep = authoritativeFlowStep === 'POST_REVEAL_CHAT'
+        ? 'POST_REVEAL_CHAT'
+        : (authoritativeFlowStep || smokeStep);
       setRunning({
         status: 'failed',
         finishedAt: Date.now(),
-        currentStep: failedStep,
-        failedStep,
+        currentStep: smokeStep,
+        failedStep: alignedFailedStep,
         failureReason,
+        authoritativeFlowStep,
+        authoritativeBlockedReason,
         secondQuestionShown: authoritative.secondQuestionAuthoritative,
         toQuestionId: authoritative.toQuestionId
       });
-      recordSandboxDebugAction('run_night_smoke_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${failedStep}` });
+      recordSandboxDebugAction('run_night_smoke_test', { effectApplied: false, blockedReason: failureReason, lastResult: `failed:${smokeStep}` });
     };
     const pass = (lastPassedStep: string, toQuestionId: string) => {
+      const authoritative = readFullNightAuthoritativeState();
       setRunning({
         status: 'passed',
         finishedAt: Date.now(),
@@ -6110,8 +6184,10 @@ export default function App() {
         lastPassedStep,
         failedStep: '-',
         failureReason: '-',
+        authoritativeFlowStep: authoritative.flowStep || '-',
+        authoritativeBlockedReason: `${authoritative.blockedReason || '-'} | source=${authoritative.blockedReasonSource || '-'}`,
         toQuestionId,
-        secondQuestionShown: readFullNightAuthoritativeState().secondQuestionAuthoritative
+        secondQuestionShown: authoritative.secondQuestionAuthoritative
       });
       recordSandboxDebugAction('run_night_smoke_test', { effectApplied: true, blockedReason: '-', lastResult: `passed:${toQuestionId}` });
     };
@@ -6154,6 +6230,8 @@ export default function App() {
       lastPassedStep: '-',
       failedStep: '-',
       failureReason: '-',
+      authoritativeFlowStep: '-',
+      authoritativeBlockedReason: '-',
       fromQuestionId,
       toQuestionId: '-',
       autoAnswerUsed: '-',
@@ -6798,44 +6876,46 @@ export default function App() {
 
     if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {
       const enteredAt = sandboxState.sandboxFlow.postRevealEnteredAt || sandboxState.flow.stepStartedAt || Date.now();
+      const runtimeStatus = derivePostRevealRuntimeStatus({
+        ...sandboxState,
+        sandboxFlow: {
+          ...sandboxState.sandboxFlow,
+          postRevealEnteredAt: enteredAt
+        }
+      });
       sandboxModeRef.current.setSandboxFlow({
         nextQuestionStage: 'POST_REVEAL_CHAT',
         nextQuestionBlockedReasonSource: 'post_reveal',
-        postRevealEnteredAt: enteredAt
+        postRevealEnteredAt: enteredAt,
+        postRevealGuardReady: runtimeStatus.guardReady,
+        postRevealStartEligible: runtimeStatus.startEligible,
+        postRevealStartBlockedBy: runtimeStatus.startBlockedBy,
+        postRevealCompletionEligible: runtimeStatus.completionEligible,
+        postRevealCompletionBlockedBy: runtimeStatus.completionBlockedBy === 'none' ? '' : runtimeStatus.completionBlockedBy
       });
-      const hasReplyGate = hasReplyGateArmed(sandboxState);
-      const postRevealDone = hasPostRevealCompletionEvidence(sandboxState);
-      const revealReadyForPostChat = sandboxState.reveal.phase === 'done' && (sandboxState.reveal.rendered || sandboxState.reveal.blockedReason === 'missing_word_text');
-      if (!revealReadyForPostChat) {
+      if (runtimeStatus.startEligible) {
+        const now = Date.now();
         sandboxModeRef.current.setSandboxFlow({
-          nextQuestionBlockedReason: `post_reveal_blocked:${sandboxState.reveal.blockedReason || 'reveal_not_finished_or_not_rendered'}`,
-          postRevealCompletionBlockedBy: sandboxState.reveal.blockedReason || 'reveal_not_finished_or_not_rendered'
+          postRevealChatState: 'started',
+          postRevealStartAttempted: true,
+          postRevealStartedAt: now,
+          postRevealCompletionBlockedBy: 'bounded_wait_pending',
+          nextQuestionReady: false,
+          nextQuestionEmitted: false,
+          nextQuestionBlockedReason: 'post_reveal_blocked:chat_in_progress',
+          nextQuestionDecidedAt: now,
+          nextQuestionEmittedAt: 0,
+          nextQuestionConsumer: 'advance_next_effect'
         });
         setSandboxRevealTick(Date.now());
-      } else if (!postRevealDone) {
-        const now = Date.now();
-        const startedAt = sandboxState.sandboxFlow.postRevealStartedAt || now;
-        const started = (sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') === 'started';
-        const elapsedFromStart = now - startedAt;
-        if (!started) {
-          sandboxModeRef.current.setSandboxFlow({
-            postRevealChatState: 'started',
-            postRevealStartAttempted: true,
-            postRevealStartedAt: startedAt,
-            postRevealCompletionBlockedBy: hasReplyGate ? 'reply_gate_armed' : '',
-            nextQuestionReady: false,
-            nextQuestionEmitted: false,
-            nextQuestionBlockedReason: 'post_reveal_blocked:chat_in_progress',
-            nextQuestionDecidedAt: now,
-            nextQuestionEmittedAt: 0,
-            nextQuestionConsumer: 'advance_next_effect'
-          });
-        } else if (!hasReplyGate && elapsedFromStart >= SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS) {
+      } else if ((sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') === 'started') {
+        const completionStatus = derivePostRevealRuntimeStatus(sandboxModeRef.current.getState());
+        if (completionStatus.completionEligible) {
+          const doneAt = Date.now();
           sandboxModeRef.current.setSandboxFlow({
             postRevealChatState: 'done',
             postRevealStartAttempted: true,
-            postRevealStartedAt: startedAt,
-            postRevealCompletedAt: now,
+            postRevealCompletedAt: doneAt,
             postRevealCompletionReason: 'auto_complete_bounded',
             postRevealCompletionBlockedBy: '',
             nextQuestionReady: true,
@@ -6843,12 +6923,13 @@ export default function App() {
             nextQuestionBlockedReason: 'advance_next_blocked:pending_emit',
             nextQuestionBlockedReasonSource: 'advance_next',
             nextQuestionStage: 'ADVANCE_NEXT',
-            nextQuestionDecidedAt: now,
+            nextQuestionDecidedAt: doneAt,
             nextQuestionEmittedAt: 0,
             nextQuestionConsumer: 'advance_next_effect'
           });
           sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done');
         } else {
+          const hasReplyGate = completionStatus.completionBlockedBy === 'reply_gate_armed';
           sandboxModeRef.current.setSandboxFlow({
             postRevealStartAttempted: true,
             postRevealCompletionBlockedBy: hasReplyGate ? 'reply_gate_armed' : 'bounded_wait_pending',
@@ -6856,13 +6937,9 @@ export default function App() {
           });
         }
         setSandboxRevealTick(Date.now());
-      } else if (!hasReplyGate) {
-        const doneAt = sandboxState.sandboxFlow.postRevealCompletedAt || Date.now();
-        sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', postRevealCompletionBlockedBy: '', postRevealCompletedAt: doneAt, nextQuestionReady: true, nextQuestionEmitted: false, nextQuestionBlockedReason: 'advance_next_blocked:pending_emit', nextQuestionBlockedReasonSource: 'advance_next', nextQuestionStage: 'ADVANCE_NEXT', nextQuestionDecidedAt: Date.now(), nextQuestionEmittedAt: 0, nextQuestionConsumer: 'advance_next_effect' });
-        sandboxModeRef.current.setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done');
-        setSandboxRevealTick(Date.now());
       }
     }
+
 
     if (sandboxState.flow.step === 'POSSESSION_AUTOFILL') {
       const node = sandboxModeRef.current.getCurrentNode();
@@ -7687,6 +7764,8 @@ export default function App() {
                     <div>lastPassedStep: {sandboxFlowTestResult.lastPassedStep}</div>
                     <div>failedStep: {sandboxFlowTestResult.failedStep}</div>
                     <div>failureReason: {sandboxFlowTestResult.failureReason}</div>
+                    <div>authoritativeFlowStep: {sandboxFlowTestResult.authoritativeFlowStep}</div>
+                    <div>authoritativeBlockedReason: {sandboxFlowTestResult.authoritativeBlockedReason}</div>
                     <div>fromQuestionId: {sandboxFlowTestResult.fromQuestionId}</div>
                     <div>toQuestionId: {sandboxFlowTestResult.toQuestionId}</div>
                     <div>autoAnswerUsed: {sandboxFlowTestResult.autoAnswerUsed}</div>
@@ -7784,11 +7863,14 @@ export default function App() {
                     <div>reveal.blockedReason.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealBlockedReasonSource ?? '-'}</div>
                     <div>reveal.hasObservableTiming: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealHasObservableTiming ?? false)}</div>
                     <div>postReveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealGuardReady ?? false)}</div>
+                    <div>postReveal.startEligible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealStartEligible ?? false)}</div>
+                    <div>postReveal.startBlockedBy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealStartBlockedBy || '-'}</div>
                     <div>postReveal.enteredAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealEnteredAt ?? 0}</div>
                     <div>postReveal.startAttempted: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealStartAttempted ?? false)}</div>
                     <div>postReveal.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealStartedAt ?? 0}</div>
                     <div>postReveal.completedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealCompletedAt ?? 0}</div>
                     <div>postReveal.completionReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealCompletionReason || '-'}</div>
+                    <div>postReveal.completionEligible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealCompletionEligible ?? false)}</div>
                     <div>postReveal.completionBlockedBy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealCompletionBlockedBy || '-'}</div>
                     <div>advanceNext.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.advanceNextGuardReady ?? false)}</div>
                     <div>advanceNext.enteredAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.advanceNextEnteredAt ?? 0}</div>

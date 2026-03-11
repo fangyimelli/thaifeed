@@ -331,3 +331,21 @@
   - bounded post-reveal auto-complete logic exists,
   - completion reason + blockedBy fields exist,
   - mode state carries post-reveal lifecycle SSOT fields.
+
+
+## 2026-03-11 sandbox MVP fix (POST_REVEAL_CHAT SSOT / smoke alignment)
+
+- Introduced `derivePostRevealRuntimeStatus(state)` as SSOT for post-reveal runtime gating:
+  - `guardReady`
+  - `startEligible` / `startBlockedBy`
+  - `completionEligible` / `completionBlockedBy`
+- Unified consumers:
+  - POST_REVEAL_CHAT runner path
+  - Debug projection + panel observability
+  - Night smoke authoritative failure mapping
+- Fixed entered→start and started→complete bounded chain:
+  - entered + eligible ⇒ `postRevealStartAttempted=true`, `postRevealStartedAt>0`
+  - started + eligible ⇒ `postRevealCompletedAt>0`, `postRevealCompletionReason='auto_complete_bounded'`, then `setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')`
+- Smoke result now includes `authoritativeFlowStep` and `authoritativeBlockedReason (reason + source)`; failedStep aligns to authoritative flow when diverged.
+- Regression guards updated to prevent reintroducing entered-but-not-started / post-reveal label mismatch bugs.
+

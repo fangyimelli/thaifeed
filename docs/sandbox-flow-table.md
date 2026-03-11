@@ -305,3 +305,18 @@
 | ADVANCE_NEXT emit | `postRevealChatState=done && !replyGate.armed` | 背景 scene warning 不影響 emit | `nextQuestion.blockedReason.source=advance_next` |
 
 > SSOT 原則：flow step / reveal completion / nextQuestion stage 為 authoritative；scene/render mismatch 只提供 warning 可觀測，不可反向卡流程。
+
+
+## 2026-03-11 POST_REVEAL_CHAT SSOT update
+
+| Stage | Authoritative gate | Required writes | Blocked reason source |
+|---|---|---|---|
+| POST_REVEAL_CHAT start | `derivePostRevealRuntimeStatus(state).startEligible` | `postRevealStartAttempted=true`, `postRevealStartedAt>0`, `postRevealChatState='started'` | `startBlockedBy` |
+| POST_REVEAL_CHAT complete | `derivePostRevealRuntimeStatus(state).completionEligible` | `postRevealCompletedAt>0`, `postRevealCompletionReason='auto_complete_bounded'`, `postRevealChatState='done'` | `completionBlockedBy` |
+| ADVANCE_NEXT handoff | `postRevealChatState='done'` + reply gate released | `advanceNextEnteredAt>0`, `nextQuestion.ready/emitted=true` after emit, question index/prompt switch | `nextQuestionBlockedReason + nextQuestionBlockedReasonSource` |
+
+Smoke output now must include:
+- `smokeStep`
+- `authoritativeFlowStep`
+- `authoritativeBlockedReason` (`nextQuestionBlockedReason + source`)
+
