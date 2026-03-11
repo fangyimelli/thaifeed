@@ -1,3 +1,12 @@
+## Transition Commit SSOT (2026-03-11)
+
+| Stage | Authoritative commit condition | Required commit writes | Block policy |
+|---|---|---|---|
+| REVEAL_WORD -> POST_REVEAL_CHAT | `flow.step=REVEAL_WORD` + `reveal.phase=done` + `reveal.rendered=true` + timing ready + `revealTransitionEligible=true` + `revealTransitionBlockedBy=none` | `revealTransitionCommitAttempted=true`、`revealTransitionCommittedAt=commitAt`、`revealTransitionCommitReason`、`revealTransitionCommitBlockedBy` + `setFlowStep('POST_REVEAL_CHAT', reason, commitAt)` | `cleanup_hidden` 不可阻擋 commit |
+| POST_REVEAL_CHAT entry | authoritative flow step 已是 `POST_REVEAL_CHAT` | `postRevealEnteredAt>0` | reveal 尚未完成才可 block |
+| POST_REVEAL_CHAT -> ADVANCE_NEXT | post-reveal done evidence + reply gate released | `setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')` + `nextQuestionReady=true` | 不可由 reveal cleanup 殘留阻擋 |
+| ADVANCE_NEXT -> Next Question emitted | post-reveal done + gate released + next node exists | `advanceNextEnteredAt>0` + `nextQuestionEmitted=true` + `flow.questionIndex+1` + `currentPrompt.questionId` 切題 | scene sync only warning，不得阻擋 emit |
+
 | REVEAL completion transition SSOT + bounded recovery | reveal done 後 cleanup hidden 導致卡在 REVEAL_WORD（nextQuestion 永不 emit） | `REVEAL_WORD -> POST_REVEAL_CHAT` 以 `phase=done && rendered=true && timing` 為唯一 gate；`cleanup_hidden` 降級 `reveal_guard_warning:cleanup_hidden`（非阻擋）；超過 bounded time 走 `reveal_word_done_bounded_recovery` | reveal 視覺 cleanup 與 flow completion 解耦，確保 postReveal/advanceNext 可啟動。 |
 | Debug action authoritative semantics | Pass/Force Correct/Force Next 混用殘留 state，易出現錯題判對與直接 reveal | Pass Flow=合法 stage 前進；Force Correct Now=當前題 canonical 判對並進 REVEAL_WORD；Force Next Question=切下一題可回答 state（重建 prompt/replyGate/renderSync、清空 reveal/parse/judge/consume） | debug action 與正式 flow contract 對齊，避免跨題污染。 |
 | REVEAL done guard decoupled from visibility | `visible=false` 可能卡 `reveal_guard_blocked:hidden` | guard 以 `phase=done && rendered && observable_timing` 為準；`visible` 只做 visual warning | reveal cleanup 不再阻斷 POST_REVEAL_CHAT。 |
