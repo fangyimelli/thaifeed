@@ -2047,3 +2047,13 @@ Console（debug 模式）可觀察：
 - render sync 策略改為：`stateQuestionId` 存在時，除非 `state_question_missing/prompt_missing/overlay_not_committed`，否則維持 `renderedQuestionId`，避免題目長期消失。
 - Debug observability 新增 reveal completion/visibility-only 與 scene raw/canonical key 對照、renderSync.reason。
 - Debug actions（Pass Flow / Force Correct Now / Force Next Question）新增 authoritative reconciliation，確保 flow/questionIndex/currentPrompt/replyGate/nextQuestion/renderSync 一致。
+
+
+## 2026-03-11 Sandbox SSOT integration fix (POST_REVEAL_CHAT authoritative runtime)
+
+- 僅調整 sandbox flow（classic mode 無變更）。
+- 新增單一 helper `derivePostRevealRuntimeStatus(state)`，統一輸出 `guardReady/startEligible/startBlockedBy/completionEligible/completionBlockedBy`，並由 runner、debug panel、smoke failure mapping 共用。
+- 修正 `POST_REVEAL_CHAT`：entered 後在 bounded path 強制寫入 `postRevealStartAttempted=true` 與 `postRevealStartedAt`；started 後在 bounded auto-complete 寫入 `postRevealCompletedAt` + `postRevealCompletionReason` 並進 `ADVANCE_NEXT`。
+- 修正 smoke label：新增 `authoritativeFlowStep`/`authoritativeBlockedReason`，failedStep 會對齊 authoritative flow，避免 `flow=POST_REVEAL_CHAT` 但 failedStep 還顯示 `first_question`。
+- 新增 regression guards：覆蓋 post reveal start/complete/advance 與 second-question emit 對齊。
+

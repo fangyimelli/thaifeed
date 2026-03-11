@@ -50,7 +50,7 @@ export const createSandboxV2InitialState = () => {
   ssot: { version: NIGHT1.meta.version },
   nightId: NIGHT1.meta.id,
   flow: { step: 'PREHEAT_CHAT', questionIndex: 0, stepStartedAt: bootAt, transitions: initialTransitions, tagAskedThisStep: false },
-  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[], postRevealChatState: 'idle', postRevealEnteredAt: 0, postRevealStartAttempted: false, postRevealStartedAt: 0, postRevealCompletedAt: 0, postRevealCompletionReason: '', postRevealCompletionBlockedBy: '', advanceNextEnteredAt: 0, revealTransitionEligible: false, revealTransitionBlockedBy: 'bootstrap', revealTransitionCommitAttempted: false, revealTransitionCommittedAt: 0, revealTransitionCommitReason: '', revealTransitionCommitBlockedBy: '', revealGuardReady: false, revealCompletionReady: false, revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionFromIndex: -1, nextQuestionToIndex: -1, nextQuestionFromQuestionId: '', nextQuestionToQuestionId: '', nextQuestionBlockedReason: 'not_armed', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '', nextQuestionStage: 'boot', nextQuestionBlockedReasonSource: 'bootstrap' },
+  sandboxFlow: { step: 'PREHEAT_CHAT', stepStartedAt: bootAt, questionIndex: 0, gateType: 'none', replyTarget: null, replyGateActive: false, canReply: false, gateConsumed: false, retryCount: 0, retryLimit: 2, dedupeWindowMs: 5000, backlogTechMessages: [], pendingBacklogMessages: [], autoplayNightStatus: 'running', autoplayNightEnabled: false, questionEmitterId: '', retryEmitterId: '', glitchEmitterIds: [] as string[], postRevealChatState: 'idle', postRevealEnteredAt: 0, postRevealStartAttempted: false, postRevealStartedAt: 0, postRevealCompletedAt: 0, postRevealCompletionReason: '', postRevealCompletionBlockedBy: '', postRevealGuardReady: false, postRevealStartEligible: false, postRevealStartBlockedBy: 'not_post_reveal_step', postRevealCompletionEligible: false, advanceNextEnteredAt: 0, revealTransitionEligible: false, revealTransitionBlockedBy: 'bootstrap', revealTransitionCommitAttempted: false, revealTransitionCommittedAt: 0, revealTransitionCommitReason: '', revealTransitionCommitBlockedBy: '', revealGuardReady: false, revealCompletionReady: false, revealEligibilitySnapshotId: '', revealCommitSourceSnapshotId: '', nextQuestionReady: false, nextQuestionEmitted: false, nextQuestionFromIndex: -1, nextQuestionToIndex: -1, nextQuestionFromQuestionId: '', nextQuestionToQuestionId: '', nextQuestionBlockedReason: 'not_armed', nextQuestionDecidedAt: 0, nextQuestionEmittedAt: 0, nextQuestionConsumer: '', nextQuestionStage: 'boot', nextQuestionBlockedReasonSource: 'bootstrap' },
   prompt: {
     current: null,
     overlay: { consonantShown: '' },
@@ -354,6 +354,10 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
             postRevealCompletedAt: 0,
             postRevealCompletionReason: '',
             postRevealCompletionBlockedBy: '',
+            postRevealGuardReady: false,
+            postRevealStartEligible: false,
+            postRevealStartBlockedBy: 'not_entered',
+            postRevealCompletionEligible: false,
             revealTransitionBlockedBy: 'none'
           };
         }
@@ -362,6 +366,8 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
             nextQuestionStage: 'ADVANCE_NEXT',
             nextQuestionBlockedReasonSource: 'advance_next',
             nextQuestionBlockedReason: 'advance_next_blocked:pending_emit',
+            postRevealStartEligible: false,
+            postRevealCompletionEligible: false,
             advanceNextEnteredAt: transitionAt
           };
         }

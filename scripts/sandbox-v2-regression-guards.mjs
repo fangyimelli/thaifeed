@@ -380,7 +380,7 @@ if (!app.includes("recordSandboxDebugAction('force_ghost_event'")) {
 if (!app.includes('const readFullNightAuthoritativeState = () =>')) {
   throw new Error('Run Full Night Test must resolve second-question result from authoritative nextQuestion state');
 }
-if (!app.includes("if (failedStep === 'second_question' && authoritative.emitted)")) {
+if (!app.includes("if (smokeStep === 'second_question' && authoritative.emitted)")) {
   throw new Error('Run Full Night Test must not fail second_question after authoritative emit');
 }
 if (!app.includes("secondQuestionShown: authoritative.secondQuestionAuthoritative")) {
@@ -661,4 +661,21 @@ if (!app.includes("setFlowStep('POST_REVEAL_CHAT', reason, commitAt)")) {
 }
 if (!app.includes('revealCompletionReady: true') || !app.includes('revealGuardReady: true')) {
   throw new Error('reveal commit must persist guard/completion readiness from authoritative snapshot');
+}
+
+
+if (!app.includes('const derivePostRevealRuntimeStatus = (sandboxState: any): PostRevealRuntimeStatus => {')) {
+  throw new Error('POST_REVEAL_CHAT must use a single authoritative runtime helper');
+}
+if (!app.includes('if (runtimeStatus.startEligible) {') || !app.includes("postRevealStartAttempted: true") || !app.includes("postRevealChatState: 'started'")) {
+  throw new Error('POST_REVEAL_CHAT entered must bounded-start and mark startAttempted=true');
+}
+if (!app.includes('if (completionStatus.completionEligible) {') || !app.includes("postRevealChatState: 'done'") || !app.includes("postRevealCompletionReason: 'auto_complete_bounded'")) {
+  throw new Error('POST_REVEAL_CHAT started must bounded-complete with observable reason');
+}
+if (!app.includes("setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')")) {
+  throw new Error('postReveal completion must advance into ADVANCE_NEXT');
+}
+if (!app.includes('failedStep: alignedFailedStep') || !app.includes("authoritativeFlowStep") || !app.includes("authoritativeBlockedReason")) {
+  throw new Error('smoke failure label must align with authoritative flow step and blocked reason');
 }

@@ -1081,3 +1081,16 @@
 - SSOT/guard 對齊：`advanceNext.guardReady` 改為依 post-reveal authoritative completion（`postRevealChatState=done && completionBlockedBy=''`）判定。
 - Debug observability 補強：新增 `postReveal.startAttempted/startedAt/completedAt/completionReason/completionBlockedBy`，保留 `postReveal.enteredAt`、`advanceNext.enteredAt`。
 - Regression guards：新增檢查 bounded auto-complete 常數、completion reason、blocked-by observability 與 sandbox mode state 欄位存在，避免 regress 成 idle 卡死。
+
+
+## 2026-03-11 sandbox integration MVP (post-reveal SSOT unification)
+
+- Added authoritative helper `derivePostRevealRuntimeStatus` in `App.tsx` and reused it in:
+  - POST_REVEAL_CHAT runner effect
+  - sandbox debug projection/panel fields
+  - Night Smoke Test authoritative failure mapping
+- POST_REVEAL_CHAT no longer stalls at entered-only: startAttempted/startedAt are committed via bounded start path once `startEligible=true`.
+- Started post-reveal now bounded auto-completes with explicit `postRevealCompletionReason='auto_complete_bounded'`, then transitions to `ADVANCE_NEXT`.
+- Smoke labels now output `smokeStep + authoritativeFlowStep + authoritativeBlockedReason(source)` and align failedStep with authoritative flow.
+- Regression guards expanded for post-reveal start/complete/advance and second-question progression invariants.
+
