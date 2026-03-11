@@ -265,3 +265,14 @@
 | ADVANCE_NEXT | emit next question from authoritative step/index | `nextQuestionEmitted + toQuestionId` | `advance_next_blocked:*` / `emitted` |
 
 > `scene_not_synced_warning` 僅為 render warning，不可阻斷 consume/reveal/emit authoritative path。
+
+## 2026-03-11 Guard & Render Sync Convergence
+
+| Stage | Authoritative ready condition | Non-blocking visual state | Blocking reason source |
+| --- | --- | --- | --- |
+| REVEAL_WORD -> POST_REVEAL_CHAT | `reveal.phase=done && reveal.rendered=true && startedAt/finishedAt observable` | `reveal.visible=false` 允許（cleanup only） | `reveal_guard_blocked:*`（僅限未完成 reveal） |
+| RENDER_SYNC (prompt) | `stateQuestionId` + prompt/overlay authority 成立 | `scene_not_synced_warning` 只告警，不清空 prompt | `renderSync.reason` |
+| SCENE_SYNC | compare `expectedCanonicalKey === currentCanonicalKey` | raw key 命名差異（e.g. `loop3` vs `oldhouse_room_loop3`）可視為 synced | `render.warning` |
+| ADVANCE_NEXT emit | `postRevealChatState=done && !replyGate.armed` | 背景 scene warning 不影響 emit | `nextQuestion.blockedReason.source=advance_next` |
+
+> SSOT 原則：flow step / reveal completion / nextQuestion stage 為 authoritative；scene/render mismatch 只提供 warning 可觀測，不可反向卡流程。

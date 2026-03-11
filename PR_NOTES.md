@@ -264,3 +264,20 @@
   - hidden blockedReason cannot remain terminal in REVEAL_WORD,
   - reveal completion requires non-empty lifecycle/timing evidence,
   - force-path reveal state carries same observability fields as normal flow.
+
+## 2026-03-11 Integration patch: reveal guard + scene canonicalization + next emit reconciliation
+
+### Root cause
+- `REVEAL_WORD` completion guard 仍把 `reveal.visible=true` 視為必要條件，導致 cleanup 後 `visible=false` 卡在 `reveal_guard_blocked:hidden`。
+- render sync 對 scene key 採 raw string 比較，`loop3` 與 `oldhouse_room_loop3` 被誤判不同步，進而污染 `renderedQuestionId`。
+
+### Fix highlights
+- reveal completion 改以 `phase=done + rendered=true + timing(startedAt/finishedAt)` 為 authoritative。
+- `hidden` 降級為 visibility-only cleanup 訊號，不再阻擋 reveal done 流轉。
+- 新增 scene key canonicalization，並把 `scene_not_synced` 降級為 `scene_not_synced_warning`。
+- render sync fallback：在 `stateQuestionId` 已存在時維持 `renderedQuestionId`，避免 prompt 消失。
+- debug action（Pass Flow / Force Correct Now / Force Next Question）補齊 flow/question/replyGate/nextQuestion/renderSync reconciliation。
+- debug 可觀測性新增 reveal completion vs cleanup、scene raw/canonical key、renderSync.reason。
+
+### Regression guards
+- `scripts/sandbox-v2-regression-guards.mjs` 新增 reveal completion guard、scene canonicalization、scene warning downgrade、debug reconciliation 檢查。

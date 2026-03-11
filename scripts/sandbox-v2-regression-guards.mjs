@@ -259,6 +259,35 @@ if (!app.includes('authoritative_flow_override')) {
 if (!app.includes('render.stateQuestionId/renderedQuestionId')) {
   throw new Error('debug panel must expose stateQuestionId and renderedQuestionId');
 }
+
+
+if (!app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming")) {
+  throw new Error('REVEAL_WORD completion guard must be based on phase+rendered+timing SSOT');
+}
+if (!app.includes("revealBlockedReason = sandboxState.reveal.blockedReason === 'hidden'")) {
+  throw new Error('reveal hidden cleanup must be treated as visibility-only status, not hard block');
+}
+if (!app.includes('function canonicalizeSandboxSceneKey(raw: string): string')) {
+  throw new Error('scene key canonicalization helper missing');
+}
+if (!app.includes('expectedCanonicalSceneKey') || !app.includes('currentCanonicalSceneKey')) {
+  throw new Error('render sync must compare canonical scene keys');
+}
+if (!app.includes("scene_not_synced_warning")) {
+  throw new Error('scene_not_synced must be downgraded to warning');
+}
+if (!app.includes("nextQuestionBlockedReasonSource: 'advance_next'")) {
+  throw new Error('nextQuestion emit chain must retain blockedReason source');
+}
+if (!app.includes('renderSyncReason')) {
+  throw new Error('render sync reason telemetry missing');
+}
+if (!app.includes('revealCompletionReady') || !app.includes('revealVisibilityOnly')) {
+  throw new Error('debug observability must expose reveal completion vs visibility-only state');
+}
+if (!app.includes('force_next_question_emitted') || !app.includes('debug_pass_flow_emit')) {
+  throw new Error('debug actions must reconcile flow step after forced emission');
+}
 if (!app.includes('authoritative.secondQuestionAuthoritative')) {
   throw new Error('second question shown predicate must rely on authoritative secondQuestionAuthoritative');
 }
@@ -427,7 +456,7 @@ if (!mode.includes("commitSource: 'forceAdvanceNode_reset'")) {
 if (!app.includes('const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === \'consonant_answer\');')) {
   throw new Error('renderSync must expose authoritative gate readiness for scene desync recovery');
 }
-if (!app.includes('const forceVisiblePrompt = promptVisuallyReady && (isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);')) {
+if (!app.includes('const forceVisiblePrompt = Boolean(stateQuestionId) && (promptVisuallyReady || isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);')) {
   throw new Error('renderSync must enforce visible prompt on authoritative answerable question transitions and gate-ready recovery');
 }
 if (!app.includes("scene_not_synced_warning")) {
@@ -438,8 +467,8 @@ if (!app.includes("scene_not_synced_warning")) {
 if (!app.includes('const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
   throw new Error('reveal duration guard missing minimum visible duration constant');
 }
-if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes('const revealDoneReady = sandboxState.reveal.phase === \'done\'')) {
-  throw new Error('REVEAL_WORD must derive revealDoneReady from authoritative reveal state');
+if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;")) {
+  throw new Error('REVEAL_WORD must derive completion readiness from authoritative reveal state');
 }
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done')")) {
   throw new Error('reveal_word_done transition missing');
@@ -458,7 +487,7 @@ if (!app.includes("commitSource: 'wait_reply_1_gate_armed'") || !app.includes("r
 if (!app.includes("'authoritative_reply_gate_sync'") || !app.includes("'reveal_prompt_cleanup'")) {
   throw new Error('debug ui.promptGlyph visibility source must expose authoritative and reveal-cleanup paths');
 }
-if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_word_done_timing_repaired") || !app.includes("sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
+if (!app.includes("rendered: Boolean(revealText)") || !app.includes("revealHasObservableTiming") || !app.includes("reveal_word_done_timing_repaired") || !app.includes("revealBlockedReason = sandboxState.reveal.blockedReason === 'hidden'") || !app.includes("ensureRevealActivatedForNormalFlow()")) {
   throw new Error('REVEAL_WORD must keep visible/rendered/timing observability and self-repair hidden/non-rendered reveal state');
 }
 if (!app.includes("startedAt: nextStartedAt")) {
@@ -509,7 +538,7 @@ if (!app.includes("nextQuestion.blockedReason.source") || !app.includes("nextQue
 if (!app.includes("post_reveal_blocked:pending_post_reveal_chat") || !app.includes("advance_next_blocked:pending_emit") || !app.includes("reveal_guard_blocked:")) {
   throw new Error('stage-scoped nextQuestion blocked reason prefixes are missing');
 }
-if (!app.includes("renderBlockedReason === 'scene_not_synced' ? 'scene_not_synced_warning' : renderBlockedReason")) {
+if (!app.includes("scene_not_synced_warning") || !app.includes("const renderSyncReason = !stateQuestionId")) {
   throw new Error('scene_not_synced must be downgraded to warning and not block second-question emit');
 }
 if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired')")) {

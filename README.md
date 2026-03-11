@@ -2026,3 +2026,12 @@ Console（debug 模式）可觀察：
 - Normal `REVEAL_WORD` now initializes visible + rendered reveal state with explicit timestamps and blocks `POST_REVEAL_CHAT` if reveal timing observability is missing.
 - Debug observability now reports reply-gate-driven prompt glyph visibility source and reveal timing evidence consistently.
 - [sandbox][integration-fix][normal-reveal-activation] 修正 normal flow 在 `REVEAL_WORD` 未切換到 reveal mode 導致 `word.reveal.visible/rendered=false` 的隱藏狀態：新增 `ensureRevealActivatedForNormalFlow()` 在 `idle/hidden/not-visible/not-rendered/blockedReason=hidden/wordKey遺失` 時強制以 authoritative reveal payload 重新啟動，並要求 `reveal_word_done` 必須同時滿足 `phase=done + visible + rendered + timing(startedAt/finishedAt)`，避免 `POST_REVEAL_CHAT` 吃到假完成。
+
+## 2026-03-11 Sandbox integration hotfix (reveal/scene sync/nextQuestion)
+
+- Sandbox only (classic untouched).
+- `REVEAL_WORD` completion guard 改為 authoritative `phase=done + rendered=true + observable timing(startedAt/finishedAt)`；`visible=false`（cleanup）不再阻擋進入 `POST_REVEAL_CHAT`。
+- 新增 scene key canonicalization（例如 `loop3` 與 `oldhouse_room_loop3` 會歸一）；`scene_not_synced` 降級為 warning，不可阻擋 prompt 顯示與 nextQuestion emit。
+- render sync 策略改為：`stateQuestionId` 存在時，除非 `state_question_missing/prompt_missing/overlay_not_committed`，否則維持 `renderedQuestionId`，避免題目長期消失。
+- Debug observability 新增 reveal completion/visibility-only 與 scene raw/canonical key 對照、renderSync.reason。
+- Debug actions（Pass Flow / Force Correct Now / Force Next Question）新增 authoritative reconciliation，確保 flow/questionIndex/currentPrompt/replyGate/nextQuestion/renderSync 一致。

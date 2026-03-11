@@ -467,6 +467,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
       state.renderSync = {
         ...state.renderSync,
         stateQuestionId: prompt.wordKey,
+        renderedQuestionId: state.renderSync.renderedQuestionId || prompt.wordKey,
         renderBlockedReason: state.renderSync.renderedQuestionId === prompt.wordKey ? 'committed' : 'awaiting_visual_commit',
         commitSource: 'setCurrentPrompt'
       };
