@@ -318,6 +318,17 @@ if (!mode.includes('commitPromptPinnedRendered: (messageId: string) =>')) {
 if (!app.includes('rawInput: pipeline.audit.parse.raw') || !app.includes('consumedAt: consumeAt')) {
   throw new Error('normal answer judge audit persistence must include rawInput and consumedAt');
 }
+
+
+if (!app.includes('const bumpSandboxRevealTick = useCallback((hintAt?: number) => {')) {
+  throw new Error('sandbox flow runner must use monotonic bumpSandboxRevealTick helper');
+}
+if (!app.includes('setSandboxRevealTick((prev) => {')) {
+  throw new Error('bumpSandboxRevealTick must use functional state update to avoid same-ms no-op');
+}
+if (app.includes('setSandboxRevealTick(Date.now())')) {
+  throw new Error('direct setSandboxRevealTick(Date.now()) calls are forbidden; use bumpSandboxRevealTick helper');
+}
 if (!app.includes("rawInput: '[debug-force-correct]'") || !app.includes("resultReason: 'debug_override_forced_correct'")) {
   throw new Error('Force Correct Now must persist full authoritative judge audit payload');
 }

@@ -1,3 +1,4 @@
+- [sandbox][integration-fix][post-reveal-runner-same-ms-wakeup] 修正 `POST_REVEAL_CHAT` entered-but-not-started：原因為多段 transition 在同一毫秒內重複 `setSandboxRevealTick(Date.now())`，React 可能忽略相同值導致 runner effect 未重跑。已改為 monotonic `bumpSandboxRevealTick(hintAt?)`（functional updater）作為唯一喚醒來源，確保 reveal -> postReveal -> advanceNext 鏈路每段都可被消費並落盤 `postReveal.startAttempted/startedAt/completedAt`。
 ## Sandbox reveal transition SSOT note (2026-03-11)
 
 - [sandbox][integration-fix][post-reveal-runner-ssot] 修正 root cause：`REVEAL_WORD -> POST_REVEAL_CHAT` 已 commit 後，`postReveal.guardReady=true` 但 `postRevealChat.status` 長期 `idle` 導致無法進 `ADVANCE_NEXT`。現在改為同一 authoritative path 驅動 post-reveal lifecycle：進入 `POST_REVEAL_CHAT` 即寫入 `postReveal.startAttempted/startedAt`，bounded window（`SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS=900`）內自動完成並寫入 `postReveal.completedAt/completionReason=auto_complete_bounded`，之後單一路徑轉 `ADVANCE_NEXT` 並 emit 下一題。

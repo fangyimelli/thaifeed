@@ -799,6 +799,12 @@ export default function App() {
     }
   });
   const [sandboxRevealTick, setSandboxRevealTick] = useState(0);
+  const bumpSandboxRevealTick = useCallback((hintAt?: number) => {
+    setSandboxRevealTick((prev) => {
+      const candidate = Number.isFinite(hintAt) && Number(hintAt) > 0 ? Number(hintAt) : Date.now();
+      return candidate > prev ? candidate : prev + 1;
+    });
+  }, []);
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
@@ -1814,7 +1820,7 @@ export default function App() {
         sandboxModeRef.current.markWaveDone('related', count);
         sandboxWaveRunningRef.current = false;
         sandboxConsonantPromptNodeIdRef.current = null;
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }
     });
     // experience-first rebuild: sandbox engine scheduler is disabled to avoid bypass chatter
@@ -2250,7 +2256,7 @@ export default function App() {
           if (pipeline.result !== 'correct') {
             persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `answer_eval_blocked:${pipeline.result}` });
             writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: pipeline.parsed, extractedAnswer: pipeline.parsed, consumed: false, reason: pipeline.result, gate: evalGate, messageId: payload.messageId });
-            setSandboxRevealTick(Date.now());
+            bumpSandboxRevealTick();
             return false;
           }
         } else {
@@ -2315,7 +2321,7 @@ export default function App() {
         return false;
       }
       writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success', gate: evalGate, messageId: payload.messageId });
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
       return true;
     }
     if (!(qnaStateRef.current.isActive && qnaStateRef.current.awaitingReply)) {
@@ -3887,7 +3893,7 @@ export default function App() {
       const promptGlyphClassName = revealPromptSuppressed
         ? 'sandbox-story-prompt-glyph reveal-cleanup'
         : 'glyph-blink sandbox-story-prompt-glyph';
-      setSandboxRevealTick(now);
+      bumpSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
         sandboxFlow: {
@@ -5047,7 +5053,7 @@ export default function App() {
     sendCooldownUntil.current = Date.now() + 350;
     tagSlowActiveRef.current = false;
     setInput('');
-    setSandboxRevealTick(Date.now());
+    bumpSandboxRevealTick();
   }, [clearChatFreeze]);
 
   const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string }; hintText?: string }) => {
@@ -5932,7 +5938,7 @@ export default function App() {
     requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(beforeIndex + 1), reason: `debug_pass_q${beforeIndex + 2}`, sourceEventKey: 'SCENE_REQUEST' });
     const reconciledState = reconcileSandboxDebugState({ action: 'pass_flow', reason: 'pass_flow_reconcile', sourceQuestionId: beforeQuestionId, targetQuestionId: afterNode.id, targetStep: nextStep, beforeIndex, expectedSceneKey: resolveSandboxSceneKeyByQuestionIndex(beforeIndex + 1) });
     recordSandboxDebugAction('pass_flow', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${reconciledState.flow.questionIndex}:${afterNode.id}`, sourceQuestionId: beforeQuestionId || '-', targetQuestionId: afterNode.id, resultStep: reconciledState.flow.step, reconciled: true });
-    setSandboxRevealTick(Date.now());
+    bumpSandboxRevealTick();
   }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze, reconcileSandboxDebugState, recordSandboxDebugAction, requestSceneAction, resolveSandboxSceneKeyByQuestionIndex]);
 
 
@@ -6063,7 +6069,7 @@ export default function App() {
     sandboxModeRef.current.setFlowStep(nextStep, 'force_next_question_emitted');
     requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(stateAfterAdvance.flow.questionIndex), reason: `force_next_q${stateAfterAdvance.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
     const reconciledState = reconcileSandboxDebugState({ action: 'force_next_question', reason: 'force_next_question_reconcile', sourceQuestionId: fromQuestionId, targetQuestionId: afterNode.id, targetStep: nextStep, beforeIndex, expectedSceneKey: resolveSandboxSceneKeyByQuestionIndex(stateAfterAdvance.flow.questionIndex) });
-    setSandboxRevealTick(Date.now());
+    bumpSandboxRevealTick();
     recordSandboxDebugAction('force_next_question', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${reconciledState.flow.questionIndex}:${afterNode.id}`, sourceQuestionId: fromQuestionId || '-', targetQuestionId: afterNode.id, resultStep: reconciledState.flow.step, reconciled: true });
   }, [clearChatFreeze, clearReplyUi, reconcileSandboxDebugState, recordSandboxDebugAction, resolveSandboxSceneKeyByQuestionIndex]);
 
@@ -6447,13 +6453,13 @@ export default function App() {
       sandboxRevealDoneTimerRef.current = window.setTimeout(() => {
         sandboxModeRef.current.forceRevealDone();
         sandboxModeRef.current.markRevealDone();
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }, remainMs);
     }
     if (reveal.phase === 'done') {
       if (reveal.visible || !reveal.cleanupAt) {
         sandboxModeRef.current.markRevealDone();
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }
       if (sandboxState.flow.step !== 'REVEAL_WORD') {
         return;
@@ -6488,7 +6494,7 @@ export default function App() {
         lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: sent.messageId };
         sandboxFreezeAndWaitForReply(askedAt, 'sandbox_warmup_tag', 'WAIT_WARMUP_REPLY');
       }
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'POST_REPLY_CHAT' && !sandboxWaveRunningRef.current) {
       sandboxWaveRunningRef.current = true;
@@ -6504,7 +6510,7 @@ export default function App() {
       });
       sandboxWaveRunningRef.current = false;
       sandboxModeRef.current.setFlowStep('REVEAL_1_START', 'warmup_post_reply_done', Date.now());
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
 
     if (sandboxState.flow.step === 'REVEAL_1_START') {
@@ -6527,7 +6533,7 @@ export default function App() {
       if (hasSandboxQuestionPrerequisites(hydratedState)) {
         sandboxModeRef.current.setFlowStep('REVEAL_1_RIOT', 'reveal_prompt_ready', Date.now());
       }
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'REVEAL_1_RIOT' && !sandboxWaveRunningRef.current) {
       if (!hasSandboxQuestionPrerequisites(sandboxState)) {
@@ -6547,9 +6553,9 @@ export default function App() {
       window.setTimeout(() => {
         sandboxWaveRunningRef.current = false;
         sandboxModeRef.current.setFlowStep('TAG_PLAYER_1', 'reveal_riot_done', Date.now());
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }, 900);
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'TAG_PLAYER_1') {
       if (!hasSandboxQuestionPrerequisites(sandboxState)) {
@@ -6557,7 +6563,7 @@ export default function App() {
         return () => { clearSandboxRevealDoneTimer(); };
       }
       sandboxModeRef.current.setFlowStep('WAIT_REPLY_1', 'tag_gate_armed', Date.now());
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'WAIT_REPLY_1') {
       const currentPrompt = sandboxState.prompt.current;
@@ -6611,7 +6617,7 @@ export default function App() {
       const previousAskedAt = sandboxQuestionFingerprintRef.current[questionFingerprint] || 0;
       if (previousAskedAt > 0 && askedAt - previousAskedAt < dedupeWindowMs) {
         sandboxModeRef.current.markTagAskedThisStep(previousAskedAt);
-        setSandboxRevealTick(askedAt);
+        bumpSandboxRevealTick(askedAt);
         return () => { clearSandboxRevealDoneTimer(); };
       }
       sandboxQuestionFingerprintRef.current[questionFingerprint] = askedAt;
@@ -6679,7 +6685,7 @@ export default function App() {
           sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_1', questionMessageId);
         }
       });
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'ANSWER_EVAL') {
       const glitchBurst = [
@@ -6692,7 +6698,7 @@ export default function App() {
       });
       sandboxModeRef.current.setJudgeResult?.('correct');
       sandboxModeRef.current.setFlowStep('REVEAL_WORD', 'answer_eval_done');
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'REVEAL_WORD') {
       const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);
@@ -6738,13 +6744,13 @@ export default function App() {
         if (node?.audioKey) {
           void playPronounce(node.audioKey).then((result) => {
             sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
-            setSandboxRevealTick(Date.now());
+            bumpSandboxRevealTick();
           });
         }
         if (!revealText) {
           sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: 'reveal_guard_blocked:reveal_text_missing', nextQuestionBlockedReasonSource: 'reveal' });
         }
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       };
       const commitRevealTransition = (reason: string, commitAt: number, sourceSnapshotId: string) => {
         sandboxModeRef.current.setSandboxFlow({
@@ -6763,13 +6769,13 @@ export default function App() {
           revealCommitSourceSnapshotId: sourceSnapshotId
         });
         sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', reason, commitAt);
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       };
 
       if (revealTransitionEligible) {
         const commitAt = Date.now();
         commitRevealTransition('reveal_word_done', commitAt, revealTransitionSnapshot.snapshotId);
-        setSandboxRevealTick(commitAt);
+        bumpSandboxRevealTick(commitAt);
       } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
         const now = Date.now();
         const repairedStartedAt = sandboxState.reveal.startedAt > 0
@@ -6791,7 +6797,7 @@ export default function App() {
         const repairedSnapshot = buildRevealTransitionSnapshot(repairedState);
         if (repairedSnapshot.transitionEligible) {
           commitRevealTransition('reveal_word_done_timing_repaired', now, repairedSnapshot.snapshotId);
-          setSandboxRevealTick(now);
+          bumpSandboxRevealTick(now);
         } else {
           sandboxModeRef.current.setSandboxFlow({
             nextQuestionBlockedReason: 'reveal_guard_blocked:timing_missing',
@@ -6813,7 +6819,7 @@ export default function App() {
         if (revealStalledMs >= SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS) {
           const commitAt = Date.now();
           commitRevealTransition('reveal_word_done_bounded_recovery', commitAt, revealTransitionSnapshot.snapshotId);
-          setSandboxRevealTick(commitAt);
+          bumpSandboxRevealTick(commitAt);
         } else {
           sandboxModeRef.current.setSandboxFlow({
             nextQuestionBlockedReason: 'reveal_guard_blocked:timing_missing',
@@ -6907,7 +6913,7 @@ export default function App() {
           nextQuestionEmittedAt: 0,
           nextQuestionConsumer: 'advance_next_effect'
         });
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       } else if ((sandboxState.sandboxFlow?.postRevealChatState ?? 'idle') === 'started') {
         const completionStatus = derivePostRevealRuntimeStatus(sandboxModeRef.current.getState());
         if (completionStatus.completionEligible) {
@@ -6936,7 +6942,7 @@ export default function App() {
             nextQuestionBlockedReason: hasReplyGate ? 'post_reveal_blocked:reply_gate_armed' : 'post_reveal_blocked:bounded_wait_pending'
           });
         }
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }
     }
 
@@ -6952,7 +6958,7 @@ export default function App() {
         });
       }
       sandboxModeRef.current.setFlowStep('POSSESSION_AUTOSEND', 'possession_input_set');
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'POSSESSION_AUTOSEND') {
       const waitMs = randomInt(SANDBOX_POSSESSION_AUTOSEND_MIN_MS, SANDBOX_POSSESSION_AUTOSEND_MAX_MS);
@@ -6960,7 +6966,7 @@ export default function App() {
         sandboxPossessionRef.current.sendToken += 1;
         setSandboxInputControl((prev) => ({ ...prev, sendToken: sandboxPossessionRef.current.sendToken }));
         sandboxModeRef.current.setFlowStep('CROWD_REACT_WORD', 'possession_autosend_done');
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }, waitMs);
     }
     if (sandboxState.flow.step === 'CROWD_REACT_WORD' && !sandboxWaveRunningRef.current) {
@@ -6972,15 +6978,15 @@ export default function App() {
       window.setTimeout(() => {
         sandboxWaveRunningRef.current = false;
         sandboxModeRef.current.setFlowStep('VIP_SUMMARY_1', 'crowd_react_done', Date.now());
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }, 900);
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'VIP_SUMMARY_1') {
       const line = 'VIP 總結：先把剛剛那個單字記住，下一步確認發音。';
       dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: line, language: 'zh', translation: line, isVip: 'VIP_NORMAL', role: 'vip', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_summary_1' });
       sandboxModeRef.current.setFlowStep('DISCUSS_PRONOUNCE', 'vip_summary_1_done', Date.now());
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
 
     if (sandboxState.flow.step === 'DISCUSS_PRONOUNCE' && !sandboxWaveRunningRef.current) {
@@ -6992,16 +6998,16 @@ export default function App() {
       window.setTimeout(() => {
         sandboxWaveRunningRef.current = false;
         sandboxModeRef.current.setFlowStep('TAG_PLAYER_3_MEANING', 'discuss_pronounce_done', Date.now());
-        setSandboxRevealTick(Date.now());
+        bumpSandboxRevealTick();
       }, 900);
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
 
     if (sandboxState.flow.step === 'VIP_SUMMARY_2') {
       const line = 'VIP 總結：發音方向差不多了，最後確認這個詞在指誰。';
       dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: line, language: 'zh', translation: line, isVip: 'VIP_NORMAL', role: 'vip', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_summary_2' });
       sandboxModeRef.current.setFlowStep('TAG_PLAYER_3_MEANING', 'vip_summary_2_done', Date.now());
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
 
     if (sandboxState.flow.step === 'TAG_PLAYER_2_PRONOUNCE') {
@@ -7048,7 +7054,7 @@ export default function App() {
           sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_2');
         }
       });
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
 
     if (sandboxState.flow.step === 'TAG_PLAYER_3_MEANING') {
@@ -7095,7 +7101,7 @@ export default function App() {
           sandboxFreezeAndWaitForReply(askedAt, reason, 'WAIT_REPLY_3');
         }
       });
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'FLUSH_TECH_BACKLOG') {
       const waitedMs = Math.max(sandboxTechBacklogTotalWaitMsRef.current, Date.now() - (sandboxState.flow.stepStartedAt || Date.now()));
@@ -7109,7 +7115,7 @@ export default function App() {
       sandboxTechBacklogLastAtRef.current = 0;
       sandboxTechBacklogTotalWaitMsRef.current = 0;
       sandboxModeRef.current.setFlowStep('POSSESSION_AUTOFILL', 'tech_backlog_flushed');
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'ADVANCE_NEXT') {
       sandboxModeRef.current.setSandboxFlow({
@@ -7233,7 +7239,7 @@ export default function App() {
       sandboxModeRef.current.setAnswerGate({ waiting: false, pausedChat: false });
       sandboxModeRef.current.setLastTimestamps({ lastAskAt: 0 });
       sandboxConsonantPromptNodeIdRef.current = null;
-      setSandboxRevealTick(Date.now());
+      bumpSandboxRevealTick();
     }
     return () => {
       clearSandboxRevealDoneTimer();
@@ -7438,7 +7444,7 @@ export default function App() {
     if (st.flow.step === 'POST_REVEAL_CHAT' && !nextRendered && st.reveal.phase !== 'done') {
       sandboxModeRef.current.setSandboxFlow({ nextQuestionBlockedReason: `post_reveal_blocked:${nextBlockedReason || 'reveal_not_rendered'}`, nextQuestionBlockedReasonSource: 'post_reveal', nextQuestionStage: 'POST_REVEAL_CHAT' });
     }
-    setSandboxRevealTick(now);
+    bumpSandboxRevealTick(now);
   }, []);
 
   const sandboxReplyGateState = deriveSandboxReplyGateState();

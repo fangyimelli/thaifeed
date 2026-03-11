@@ -1,3 +1,10 @@
+## 2026-03-11 Sandbox POST_REVEAL same-ms tick stall fix
+
+- Primary root cause: sandbox runner effect re-trigger relied on `setSandboxRevealTick(Date.now())`; same-millisecond writes could be dropped by React (`Object.is`), so authoritative `flow.step=POST_REVEAL_CHAT` after reveal commit could exist while runner never got a new render tick.
+- Observable symptom match: `postReveal.guardReady/startEligible=true` + `startBlockedBy=none` but `postReveal.startAttempted=false`, `startedAt=0`, `completedAt=0`, and `nextQuestion.blockedReason=post_reveal_blocked:awaiting_post_reveal`.
+- Fix: add monotonic `bumpSandboxRevealTick(hintAt?)` helper (functional updater) and route all sandbox runner wakeups through it; guarantees every transition produces a strictly newer tick even in same-ms burst transitions (`REVEAL_WORD -> POST_REVEAL_CHAT -> postReveal start`).
+- Regression guard: `scripts/sandbox-v2-regression-guards.mjs` now enforces helper existence, functional updater usage, and forbids direct `setSandboxRevealTick(Date.now())` calls.
+
 ## 2026-03-11 Sandbox reveal SSOT commit fix
 
 - Root cause: `REVEAL_WORD` eligibility debug used one derivation, but transition commit could still read stale branch state and write `reveal_not_done`, causing `transitionEligible=true` with commit blocked mismatch.
