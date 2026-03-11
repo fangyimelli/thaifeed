@@ -73,7 +73,9 @@ export function parseAndJudgeUsingClassic(raw: string, input: ParseJudgeInput): 
   const parsed = parseThaiConsonant(extraction.stripped, input);
   const result = judgeConsonantAnswer(parsed, input);
   const parsedFromShared = parseConsonantAnswer(extraction.stripped);
-  const acceptedCandidates = getAcceptedAliasCandidates({ questionId: input.node?.id, consonant: input.nodeChar });
+  const acceptedCandidates = input.node?.acceptedCandidates?.length
+    ? input.node.acceptedCandidates
+    : getAcceptedAliasCandidates({ questionId: input.node?.id, consonant: input.nodeChar });
   return {
     parsed: parsed.normalized,
     result,

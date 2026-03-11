@@ -1167,3 +1167,12 @@
 - Enforced reply-gate semantics: `WAIT_REPLY_x` is still the only step that re-arms `replyGate`.
 - Added regression guards to lock `WAIT_REPLY_x -> ANSWER_EVAL`, questionId-bound reveal/postReveal evidence, and same-question chain checks before emit.
 - Scope verified as sandbox-only (no classic mode file touched).
+
+## 2026-03-11 sandbox NIGHT pool SSOT + per-night shuffle cursor authority
+
+- [sandbox][ssot] 新增 `src/ssot/sandbox_story/nightQuestionPools.ts`，建立 NIGHT_01/02/03 固定題池（各 10 題），每題含 `expectedConsonant/revealWord/acceptedCandidates`。
+- [sandbox][flow] `sandboxStoryMode` 新增 `round.*` authoritative fields：`nightId/questionOrder/currentQuestionCursor/currentQuestionId/remainingQuestionCount/authoritativeQuestionSource`。
+- [sandbox][advance] `advancePrompt/advancePromptAtomically/forceAdvanceNode/getCurrentNode` 全數改為 pool+cursor 驅動；終止條件改為 `end_of_question_pool`（不再只看 `end_of_nodes`）。
+- [sandbox][judge/reveal/debug] `currentPrompt` 補齊 `expectedConsonant/acceptedCandidates/revealWord`；debug panel 顯示 round + authoritative source。
+- [guard] 新增 `scripts/regression-sandbox-night-pool-ssot.mjs` regression guard。
+- [compat] classic mode 行為不變，僅擴充 shared question bank alias coverage 以支援 sandbox NIGHT2/3 作答解析。

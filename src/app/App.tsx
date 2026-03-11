@@ -3912,12 +3912,14 @@ export default function App() {
       } else {
         sandboxWaitReplyRuntimeRef.current = { lastGlitchAt: 0, lastGlitchSender: '', glitchCount: 0, burstStarted: false, completed: false };
       }
-      const promptQuestionId = sandboxState.prompt.current?.wordKey || '';
+      const promptQuestionId = sandboxState.round?.currentQuestionId || sandboxState.prompt.current?.wordKey || '';
       const promptQuestion = promptQuestionId ? getSharedConsonantQuestionById(promptQuestionId) : undefined;
-      const promptAcceptedCandidates = getAcceptedAliasCandidates({
-        questionId: promptQuestionId || undefined,
-        consonant: sandboxState.prompt.current?.consonant
-      });
+      const promptAcceptedCandidates = Array.isArray(sandboxState.currentPrompt?.acceptedCandidates) && sandboxState.currentPrompt.acceptedCandidates.length > 0
+        ? sandboxState.currentPrompt.acceptedCandidates
+        : getAcceptedAliasCandidates({
+          questionId: promptQuestionId || undefined,
+          consonant: sandboxState.currentPrompt?.expectedConsonant || sandboxState.prompt.current?.consonant
+        });
       const expectedSceneKey = resolveSandboxSceneKeyByQuestionIndex(sandboxState.flow.questionIndex);
       const videoCurrentKey = (window.__VIDEO_DEBUG__ as { currentKey?: string } | undefined)?.currentKey ?? '';
       const expectedCanonicalSceneKey = canonicalizeSandboxSceneKey(expectedSceneKey);
@@ -4208,6 +4210,13 @@ export default function App() {
           stepStartedAt: sandboxState.flow.stepStartedAt,
           transitions: sandboxState.flow.transitions
         },
+        round: {
+          nightId: sandboxState.round?.nightId ?? sandboxState.nightId,
+          questionOrder: sandboxState.round?.questionOrder ?? [],
+          currentQuestionCursor: sandboxState.round?.currentQuestionCursor ?? 0,
+          currentQuestionId: sandboxState.round?.currentQuestionId ?? '-',
+          remainingQuestionCount: sandboxState.round?.remainingQuestionCount ?? 0
+        },
         introGate: sandboxState.introGate,
         audit: {
           introGate: {
@@ -4318,12 +4327,15 @@ export default function App() {
         },
         currentPrompt: {
           ...(sandboxState.currentPrompt ?? {}),
-          answerSource: promptQuestion ? 'shared_consonant_question_bank' : 'runtime_prompt_only',
+          answerSource: sandboxState.round?.authoritativeQuestionSource || 'sandbox_night_question_pool',
           classicQuestionId: promptQuestion?.questionId ?? '-',
-          sharedFromClassic: Boolean(promptQuestion),
+          sharedFromClassic: false,
           displayAcceptedAnswers: promptQuestion?.acceptedAnswers ?? [],
           displayAliases: promptQuestion?.aliases ?? [],
-          runtimeAcceptedCandidates: promptAcceptedCandidates
+          runtimeAcceptedCandidates: promptAcceptedCandidates,
+          expectedConsonant: sandboxState.currentPrompt?.expectedConsonant ?? sandboxState.prompt.current?.consonant ?? '-',
+          revealWord: sandboxState.currentPrompt?.revealWord ?? sandboxState.reveal?.text ?? '-',
+          authoritativeQuestionSource: sandboxState.round?.authoritativeQuestionSource ?? 'sandbox_night_question_pool'
         },
         answerAudit: {
           source: promptQuestion ? 'shared_consonant_question_bank' : 'runtime_prompt_only',

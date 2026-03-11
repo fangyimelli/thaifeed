@@ -1,7 +1,7 @@
 import { buildNightScriptFromPool } from './nightQuestionPools';
 
-export const NIGHT1 = buildNightScriptFromPool({
-  id: 'NIGHT_01',
-  title: '誰在等',
+export const NIGHT3 = buildNightScriptFromPool({
+  id: 'NIGHT_03',
+  title: '誰在跑',
   version: '3.0.0'
 });
