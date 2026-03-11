@@ -3840,6 +3840,10 @@ export default function App() {
           revealVisibilityOnly,
           revealTransitionEligible,
           revealTransitionBlockedBy,
+          revealTransitionCommitAttempted: sandboxState.sandboxFlow.revealTransitionCommitAttempted ?? false,
+          revealTransitionCommittedAt: sandboxState.sandboxFlow.revealTransitionCommittedAt ?? 0,
+          revealTransitionCommitReason: sandboxState.sandboxFlow.revealTransitionCommitReason || '',
+          revealTransitionCommitBlockedBy: sandboxState.sandboxFlow.revealTransitionCommitBlockedBy || '',
           revealBlockedReasonSource: sandboxState.reveal.blockedReason === 'hidden' ? 'ui_cleanup' : 'reveal_guard',
           postRevealGuardReady,
           advanceNextGuardReady,
@@ -6558,7 +6562,6 @@ export default function App() {
       });
       const revealHasObservableTiming = sandboxState.reveal.startedAt > 0 && sandboxState.reveal.finishedAt > 0 && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
       const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;
-      const revealVisibilityOnly = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && !sandboxState.reveal.visible;
       const revealTransitionEligible = revealCompletionReady;
       const promptWordKey = sandboxState.prompt.current?.wordKey ?? '';
       const ensureRevealActivatedForNormalFlow = () => {
@@ -6600,14 +6603,19 @@ export default function App() {
         setSandboxRevealTick(Date.now());
       };
       if (revealTransitionEligible) {
+        const commitAt = Date.now();
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionBlockedReason: 'post_reveal_blocked:pending_post_reveal_chat',
           nextQuestionBlockedReasonSource: 'post_reveal',
           nextQuestionStage: 'POST_REVEAL_CHAT',
           revealTransitionEligible: true,
-          revealTransitionBlockedBy: 'none'
+          revealTransitionBlockedBy: 'none',
+          revealTransitionCommitAttempted: true,
+          revealTransitionCommittedAt: commitAt,
+          revealTransitionCommitReason: 'reveal_word_done',
+          revealTransitionCommitBlockedBy: 'none'
         });
-        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done');
+        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done', commitAt);
         setSandboxRevealTick(Date.now());
       } else if (sandboxState.reveal.phase === 'done' && !revealHasObservableTiming) {
         const now = Date.now();
@@ -6623,50 +6631,69 @@ export default function App() {
           nextQuestionBlockedReasonSource: 'post_reveal',
           nextQuestionStage: 'POST_REVEAL_CHAT',
           revealTransitionEligible: true,
-          revealTransitionBlockedBy: 'timing_repaired'
+          revealTransitionBlockedBy: 'none',
+          revealTransitionCommitAttempted: true,
+          revealTransitionCommittedAt: now,
+          revealTransitionCommitReason: 'reveal_word_done_timing_repaired',
+          revealTransitionCommitBlockedBy: 'none'
         });
-        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired');
+        sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired', now);
         setSandboxRevealTick(now);
       } else if (sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered)) {
         const revealDoneAt = sandboxState.reveal.doneAt || sandboxState.reveal.finishedAt || sandboxState.reveal.cleanupAt || sandboxState.flow.stepStartedAt || Date.now();
         const revealStalledMs = Date.now() - revealDoneAt;
         if (revealStalledMs >= SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS) {
+          const commitAt = Date.now();
           sandboxModeRef.current.setSandboxFlow({
             nextQuestionBlockedReason: 'post_reveal_blocked:pending_post_reveal_chat',
             nextQuestionBlockedReasonSource: 'post_reveal',
             nextQuestionStage: 'POST_REVEAL_CHAT',
             revealTransitionEligible: true,
-            revealTransitionBlockedBy: 'bounded_stall_recovered'
+            revealTransitionBlockedBy: 'none',
+            revealTransitionCommitAttempted: true,
+            revealTransitionCommittedAt: commitAt,
+            revealTransitionCommitReason: 'reveal_word_done_bounded_recovery',
+            revealTransitionCommitBlockedBy: 'none'
           });
-          sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery');
-          setSandboxRevealTick(Date.now());
+          sandboxModeRef.current.setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery', commitAt);
+          setSandboxRevealTick(commitAt);
         } else {
           sandboxModeRef.current.setSandboxFlow({
-            nextQuestionBlockedReason: revealVisibilityOnly
-              ? 'reveal_guard_warning:cleanup_hidden'
-              : 'reveal_guard_blocked:timing_missing',
+            nextQuestionBlockedReason: 'reveal_guard_blocked:timing_missing',
             revealTransitionEligible: false,
-            revealTransitionBlockedBy: revealVisibilityOnly ? 'none' : 'timing_missing'
+            revealTransitionBlockedBy: 'timing_missing',
+            revealTransitionCommitAttempted: true,
+            revealTransitionCommittedAt: 0,
+            revealTransitionCommitReason: '',
+            revealTransitionCommitBlockedBy: 'timing_missing'
           });
         }
       } else if (sandboxState.reveal.phase === 'idle' || sandboxState.reveal.phase === 'hidden' || !sandboxState.reveal.rendered || (!sandboxState.reveal.wordKey && Boolean(sandboxState.reveal.text))) {
         const revealBlockedReason = sandboxState.reveal.blockedReason === 'hidden'
           ? 'cleanup_hidden'
           : (sandboxState.reveal.blockedReason || 'reveal_not_ready');
-        const isCleanupHiddenWarning = revealBlockedReason === 'cleanup_hidden' && sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered);
         sandboxModeRef.current.setSandboxFlow({
-          nextQuestionBlockedReason: isCleanupHiddenWarning ? 'reveal_guard_warning:cleanup_hidden' : `reveal_guard_blocked:${revealBlockedReason}`,
+          nextQuestionBlockedReason: `reveal_guard_blocked:${revealBlockedReason}`,
           nextQuestionBlockedReasonSource: 'reveal',
           revealTransitionEligible: false,
-          revealTransitionBlockedBy: isCleanupHiddenWarning ? 'none' : revealBlockedReason
+          revealTransitionBlockedBy: revealBlockedReason,
+          revealTransitionCommitAttempted: true,
+          revealTransitionCommittedAt: 0,
+          revealTransitionCommitReason: '',
+          revealTransitionCommitBlockedBy: revealBlockedReason
         });
         ensureRevealActivatedForNormalFlow();
       } else {
+        const revealTransitionBlockedBy = sandboxState.reveal.phase !== 'done'
+          ? 'reveal_not_done'
+          : (!sandboxState.reveal.rendered ? 'reveal_not_rendered' : 'timing_missing');
         sandboxModeRef.current.setSandboxFlow({
           revealTransitionEligible: false,
-          revealTransitionBlockedBy: sandboxState.reveal.phase !== 'done'
-            ? 'reveal_not_done'
-            : (!sandboxState.reveal.rendered ? 'reveal_not_rendered' : 'timing_missing')
+          revealTransitionBlockedBy,
+          revealTransitionCommitAttempted: true,
+          revealTransitionCommittedAt: 0,
+          revealTransitionCommitReason: '',
+          revealTransitionCommitBlockedBy: revealTransitionBlockedBy
         });
       }
     }
@@ -7607,6 +7634,10 @@ export default function App() {
                     <div>reveal.visibilityOnly: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealVisibilityOnly ?? false)}</div>
                     <div>reveal.transitionEligible: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionEligible ?? false)}</div>
                     <div>reveal.transitionBlockedBy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionBlockedBy ?? '-'}</div>
+                    <div>reveal.transitionCommitAttempted: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommitAttempted ?? false)}</div>
+                    <div>reveal.transitionCommittedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommittedAt ?? 0}</div>
+                    <div>reveal.transitionCommitReason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommitReason ?? '-'}</div>
+                    <div>reveal.transitionCommitBlockedBy: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealTransitionCommitBlockedBy ?? '-'}</div>
                     <div>reveal.blockedReason.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealBlockedReasonSource ?? '-'}</div>
                     <div>reveal.hasObservableTiming: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.revealHasObservableTiming ?? false)}</div>
                     <div>postReveal.guardReady: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.sandboxFlow?.postRevealGuardReady ?? false)}</div>

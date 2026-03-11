@@ -1,3 +1,10 @@
+## 2026-03-11 sandbox reveal transition commit SSOT fix (integration mode)
+- Root cause：`REVEAL_WORD` debug guard 顯示 eligible，但 transition commit observability 與 authoritative step commit 未強綁，導致 `postReveal.enteredAt/advanceNext.enteredAt` 長期為 0。
+- 修正：REVEAL completion 成立時統一以 commitAt 同步寫入 `reveal.transitionCommit*` 並 `setFlowStep('POST_REVEAL_CHAT', reason, commitAt)`，確保 debug 與 authoritative flow 完全一致。
+- 清理：移除 `reveal_guard_warning:cleanup_hidden` 作為 reveal 完成後的 guard 輸出；`cleanup_hidden` 不得再阻擋 completion transition commit。
+- 驗收：第一題流程可達 `WAIT_REPLY_1 -> ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT -> 第二題`，且 `nextQuestion.ready/emitted=true`、`flow.questionIndex=1`、`currentPrompt.questionId` 為第二題。
+- Regression guards：新增 reveal transition commit 欄位與 commit reason 檢查，禁止回歸到 cleanup_hidden warning 阻擋鏈。
+
 ## 2026-03-11 sandbox reveal completion transition unblock (integration mode)
 - Root cause：`REVEAL_WORD` 雖然 `phase=done/rendered=true/completionReady=true`，但 cleanup 後 `visible=false` 仍被誤映射成 `reveal_guard_blocked:cleanup_hidden`，導致無法轉入 `POST_REVEAL_CHAT`，後續 `ADVANCE_NEXT/nextQuestion emit` 全鏈停滯。
 - 修正：reveal guard 以 `done + rendered + timing` 為唯一 transition SSOT；`cleanup_hidden` 降級為 `reveal_guard_warning:cleanup_hidden`（非阻擋）。

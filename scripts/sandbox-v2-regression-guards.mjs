@@ -264,8 +264,20 @@ if (!app.includes('render.stateQuestionId/renderedQuestionId')) {
 if (!app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming")) {
   throw new Error('REVEAL_WORD completion guard must be based on phase+rendered+timing SSOT');
 }
-if (!app.includes("revealBlockedReason = sandboxState.reveal.blockedReason === 'hidden'")) {
-  throw new Error('reveal hidden cleanup must be treated as visibility-only status, not hard block');
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done'")) {
+  throw new Error('REVEAL_WORD done must commit authoritative transition to POST_REVEAL_CHAT');
+}
+if (!app.includes('revealTransitionCommitAttempted') || !app.includes('revealTransitionCommittedAt') || !app.includes('revealTransitionCommitReason') || !app.includes('revealTransitionCommitBlockedBy')) {
+  throw new Error('reveal transition commit observability fields missing');
+}
+if (!app.includes("revealTransitionCommitReason: 'reveal_word_done'")) {
+  throw new Error('REVEAL_WORD success path must stamp reveal transition commit reason');
+}
+if (!app.includes("revealTransitionCommitBlockedBy: 'none'")) {
+  throw new Error('REVEAL_WORD success path must stamp unblocked reveal transition commit state');
+}
+if (app.includes('reveal_guard_warning:cleanup_hidden')) {
+  throw new Error('cleanup_hidden warning must not be used as reveal transition path blocker/guard output');
 }
 if (!app.includes('function canonicalizeSandboxSceneKey(raw: string): string')) {
   throw new Error('scene key canonicalization helper missing');
@@ -470,7 +482,7 @@ if (!app.includes('const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
 if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;")) {
   throw new Error('REVEAL_WORD must derive completion readiness from authoritative reveal state');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done')")) {
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done', commitAt)")) {
   throw new Error('reveal_word_done transition missing');
 }
 if (!app.includes("word.reveal.rendered") || !app.includes("word.reveal.blockedReason") || !app.includes("word.reveal.startedAt") || !app.includes("word.reveal.finishedAt")) {
@@ -545,11 +557,11 @@ if (!app.includes("scene_not_synced_warning") || !app.includes("const renderSync
 if (!app.includes("SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS")) {
   throw new Error('REVEAL_WORD should enforce bounded stall recovery to POST_REVEAL_CHAT');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery')")) {
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_bounded_recovery', commitAt)")) {
   throw new Error('REVEAL_WORD bounded recovery transition missing');
 }
-if (!app.includes("reveal_guard_warning:cleanup_hidden")) {
-  throw new Error('cleanup_hidden must be downgraded to warning after reveal completion');
+if (app.includes("reveal_guard_warning:cleanup_hidden")) {
+  throw new Error('cleanup_hidden legacy warning path should not remain in reveal transition guard');
 }
 if (!app.includes("reveal.transitionEligible") || !app.includes("reveal.transitionBlockedBy") || !app.includes("postReveal.enteredAt") || !app.includes("advanceNext.enteredAt")) {
   throw new Error('debug panel must expose reveal transition + post/advance enteredAt observability');
@@ -560,7 +572,7 @@ if (!app.includes("nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_
 if (!app.includes("const nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE'")) {
   throw new Error('First question correct path must stably advance into second-question flow');
 }
-if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired')")) {
+if (!app.includes("setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done_timing_repaired', now)")) {
   throw new Error('REVEAL_WORD missing timing fallback transition to POST_REVEAL_CHAT');
 }
 if (!app.includes("setReveal?.({ startedAt: repairedStartedAt, finishedAt: repairedFinishedAt")) {

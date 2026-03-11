@@ -1,3 +1,13 @@
+## 2026-03-11 sandbox integration fix (reveal transition commit SSOT + q2 progression)
+- Root cause：`REVEAL_WORD` 已 done/rendered/eligible 但 commit observability 未與 `setFlowStep` 綁定，造成 guard 看起來放行、authoritative flow 卻未進 `POST_REVEAL_CHAT`。
+- Fix：`REVEAL_WORD -> POST_REVEAL_CHAT` 以同一 `commitAt` 同步寫入 `revealTransitionCommitAttempted/CommittedAt/CommitReason/CommitBlockedBy` + `setFlowStep(..., commitAt)`。
+- Post chain：`POST_REVEAL_CHAT` entry 仍即時寫入 `postRevealEnteredAt`，完成後轉 `ADVANCE_NEXT` 並寫入 `advanceNextEnteredAt`，emit 下一題時保證 `nextQuestion.ready/emitted=true`、`flow.questionIndex+1`、`currentPrompt` 切換。
+- Legacy removal：禁止 `cleanup_hidden` warning/blocked path 介入 reveal done commit；cleanup 已降為非 transition gate。
+- Added regression guards：
+  - reveal done eligible 時必須存在 authoritative `setFlowStep('POST_REVEAL_CHAT', 'reveal_word_done', ...)`；
+  - 必須包含 reveal transition commit observability 四欄位；
+  - 禁止 `reveal_guard_warning:cleanup_hidden` 出現在 App guard 字串。
+
 ## 2026-03-11 sandbox integration fix (reveal completion -> postReveal unblock)
 - Root cause confirmed from latest log: `REVEAL_WORD` had `phase=done/rendered=true/completionReady=true`, but flow still blocked by `reveal_guard_blocked:cleanup_hidden` after visual cleanup (`visible=false`).
 - Transition fix: `REVEAL_WORD -> POST_REVEAL_CHAT` now keys on reveal completion SSOT (`done+rendered+timing`) and treats `cleanup_hidden` as warning-only (`reveal_guard_warning:cleanup_hidden`).
