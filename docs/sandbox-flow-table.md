@@ -253,3 +253,15 @@
 | Video element error recovery (C) | `videoA/videoB onError` 直接關閉 `assets.videoOk` 導致永久故障畫面 | 保留 slot/source/error/swap 診斷但不立即全局熄滅；交由 switch/fallback path 自恢復 | scene_not_synced 可恢復，不因單次 slot error 永久卡死。 |
 | Smoke submit message binding (D) | consume 成功後 `submit_accepted` 覆寫成新 messageId，誤報 injected/not consumed | submit 成功 eval 固定寫回 `playerMessage.id` | Night Smoke Test 以 authoritative messageId 對帳穩定。 |
 | Judge audit persistence guard (E) | parse 有值但 judge 欄位可能回退未寫滿 | regression guard 強制檢查 consume/submit 路徑 messageId 與 reveal/judge state 欄位 | 防止 judge audit 欄位再次缺漏。 |
+
+## 2026-03-11 authoritative consume chain guard update
+
+| Stage | Authoritative gate | Consume evidence (required) | Blocked reason prefix |
+|---|---|---|---|
+| WAIT_REPLY_* | `replyGate.armed && canReply && gateType match && target match` | `reply.lastInjected*` then `reply.lastConsumed*` | `reply_blocked:*` |
+| ANSWER_EVAL | parse+jump from WAIT_REPLY_1 only after consume | `consonantJudgeAudit.consumedAt>0` | `answer_eval_blocked:*` |
+| REVEAL_WORD | reveal payload complete (`text/base/rest/rendered/timing`) | `reveal.startedAt/finishedAt` observable | `reveal_guard_blocked:*` |
+| POST_REVEAL_CHAT | reveal done + post chat completion | `postRevealChatState=done` | `post_reveal_blocked:*` |
+| ADVANCE_NEXT | emit next question from authoritative step/index | `nextQuestionEmitted + toQuestionId` | `advance_next_blocked:*` / `emitted` |
+
+> `scene_not_synced_warning` 僅為 render warning，不可阻斷 consume/reveal/emit authoritative path。

@@ -1,3 +1,8 @@
+- [sandbox][integration-fix][authoritative-consume-chain-ssot]
+  - 新增 reply consume SSOT：`reply.lastInjectedMessageId/text/at`、`reply.lastConsumedMessageId/text/at`、`reply.consumeSource`、`reply.consumeResult`、`reply.consumeBlockedReason`。
+  - `consumePlayerReply` 現在強制 gate/canReply/target 對齊，blocked 會寫入 reply telemetry + lastReplyEval，不再出現「chat 有顯示但 authoritative 未 consume」無診斷狀態。
+  - `setFlowStep` 追加 stage-scoped nextQuestion reset（`reply_blocked:*` / `answer_eval_blocked:*` / `reveal_guard_blocked:*` / `post_reveal_blocked:*` / `advance_next_blocked:*`），避免 stale blocked reason 誤導。
+  - Night Smoke `auto_answer_q1` 改為 consume-first 驗證 + bounded retry；第二題成功改為 authoritative emit/prompt/index 對齊。
 ## 2026-03-11 sandbox integration fix (reveal/post-reveal/advance-next unblock)
 - A. `REVEAL_WORD` guard fallback：`reveal.phase=done && rendered=true` 且 timing 缺失時，自動補齊 `startedAt/finishedAt`，並以 `reveal_word_done_timing_repaired` 前進 `POST_REVEAL_CHAT`。
 - B. nextQuestion blocked reason stage 化：`reveal_guard_blocked:*` / `post_reveal_blocked:*` / `advance_next_blocked:*` / `emitted`，並新增 `nextQuestionBlockedReasonSource` + `nextQuestionStage`。
