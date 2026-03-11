@@ -358,7 +358,7 @@ if (!app.includes("forceAdvanceNode()") || !app.includes("nextQuestionConsumer: 
 if (!app.includes("recordSandboxDebugAction('force_correct_now'")) {
   throw new Error('Force Correct Now must write debug action audit');
 }
-if (!app.includes("blockedReason: 'missing_current_prompt'") || !app.includes("blockedReason: 'prompt_not_force_correct_capable'")) {
+if (!app.includes("blockedReason: 'missing_or_non_consonant_prompt'") || !app.includes("blockedReason: 'reply_gate_not_answerable'")) {
   throw new Error('Force Correct Now must expose clear blocked reasons');
 }
 if (!app.includes("recordSandboxDebugAction('force_ghost_event'")) {
@@ -427,7 +427,7 @@ if (!app.includes('messageId: payload.messageId || `player:${now}`')) {
 if (!app.includes("expectedConsonant: pipeline.audit.judge.expectedConsonant") || !app.includes("acceptedCandidates: pipeline.audit.judge.acceptedCandidates") || !app.includes("compareMode: pipeline.audit.judge.compareMode") || !app.includes("resultReason: pipeline.audit.judge.resultReason") || !app.includes("sourcePromptId: currentPrompt.promptId") || !app.includes("sourceQuestionId: node?.id ?? currentPrompt.wordKey") || !app.includes("sourceWordKey: currentPrompt.wordKey") || !app.includes("consumedAt: consumeAt")) {
   throw new Error('consumePlayerReply must persist full authoritative judge audit fields for normal/auto answers');
 }
-if (!app.includes("rawInput: '[debug-force-correct]'") || !app.includes("compareMode: 'debug_override_exact'") || !app.includes("resultReason: 'debug_override_forced_correct'") || !app.includes("consumedAt: now")) {
+if (!app.includes("rawInput: '[debug-force-correct]'") || !app.includes("compareMode: 'debug_override_authoritative_current_prompt'") || !app.includes("resultReason: 'debug_override_forced_correct'") || !app.includes("consumedAt: now")) {
   throw new Error('Force Correct Now must persist complete authoritative judge audit fields');
 }
 
@@ -552,4 +552,47 @@ if (!app.includes("if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {") || !ap
 }
 if (!app.includes("setRunning({ lastPassedStep: 'first_question', fromQuestionId: firstPrompt.wordKey, currentStep: 'auto_answer_q1' })") || !app.includes("setRunning({ lastPassedStep: 'reveal_post_reveal', currentStep: 'second_question' })")) {
   throw new Error('Night Smoke Test must cover first_question -> second_question_shown path');
+}
+
+
+if (!app.includes("const canonicalAnswer = authoritative?.consonant || currentPrompt.consonant;")) {
+  throw new Error('Force Correct Now must read canonical answer from currentPrompt/questionId authoritative question bank');
+}
+if (!app.includes("blockedReason: 'reply_gate_not_answerable'")) {
+  throw new Error('Force Correct Now must be blocked when there is no active answerable reply gate');
+}
+if (!app.includes("lastResult: `correct:${canonicalAnswer}`")) {
+  throw new Error('Force Correct Now must report canonical current prompt answer in debug result');
+}
+if (!app.includes("setFlowStep('ANSWER_EVAL', 'debug_force_correct_consume')") || !app.includes("setFlowStep('REVEAL_WORD', 'debug_force_correct_transition')")) {
+  throw new Error('Force Correct Now must follow WAIT_REPLY -> ANSWER_EVAL -> REVEAL_WORD semantics');
+}
+if (!app.includes("const nextStep = stateAfterAdvance.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING';")) {
+  throw new Error('Force Next Question must advance to next answerable tag/wait stage, not reveal');
+}
+if (!app.includes("setReveal?.({ visible: false, phase: 'idle', text: '', wordKey: '', consonantFromPrompt: '', durationMs: 0")) {
+  throw new Error('Force Next Question must clear reveal state');
+}
+if (!app.includes("setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_force_next_question'")) {
+  throw new Error('Force Next Question must re-arm consonant answer gate for new question');
+}
+if (!app.includes("const revealCompletionReady = sandboxState.reveal.phase === 'done' && Boolean(sandboxState.reveal.rendered) && revealHasObservableTiming;")) {
+  throw new Error('REVEAL_WORD guard must rely on done+rendered+timing readiness');
+}
+if (!app.includes("const revealVisibilityOnly = revealCompletionReady && !sandboxState.reveal.visible;")) {
+  throw new Error('reveal visibility must be observability only and not block advance');
+}
+if (!app.includes(`const renderedQuestionId = !stateQuestionId
+        ? ''
+        : stateQuestionId;`)) {
+  throw new Error('renderedQuestionId must use bounded fallback instead of staying empty on scene mismatch');
+}
+if (!app.includes('const directLoop = normalized.match(/(?:^|[_') || !app.includes('?? normalized.match(/loop([0-9]+)/u);')) {
+  throw new Error('scene key canonicalization must normalize prefixed loop keys');
+}
+if (!app.includes('debugAction: {') || !app.includes('usedCanonicalAnswer') || !app.includes('usedAcceptedCandidates')) {
+  throw new Error('debug action observability fields missing from sandbox debug payload');
+}
+if (!app.includes('const reconcileSandboxDebugState = useCallback((params: {')) {
+  throw new Error('debug actions must run unified reconciliation after action');
 }

@@ -329,7 +329,7 @@ function normalizeHandle(raw: string): string {
 function canonicalizeSandboxSceneKey(raw: string): string {
   const normalized = (raw || '').trim().toLowerCase();
   if (!normalized) return '';
-  const directLoop = normalized.match(/loop([0-9]+)/u);
+  const directLoop = normalized.match(/(?:^|[_\-])loop([0-9]+)(?:$|[_\-])/u) ?? normalized.match(/loop([0-9]+)/u);
   if (directLoop?.[1]) return `loop${directLoop[1]}`;
   return normalized;
 }
@@ -528,6 +528,13 @@ type SandboxDebugActionRecord = {
   blockedReason: string;
   targetState: string;
   lastResult: string;
+  intent: string;
+  sourceQuestionId: string;
+  targetQuestionId: string;
+  resultStep: string;
+  usedCanonicalAnswer: string;
+  usedAcceptedCandidates: string[];
+  reconciled: boolean;
 };
 
 type SandboxFlowTestResult = {
@@ -822,11 +829,11 @@ export default function App() {
   const sandboxBlockedOptionsCountRef = useRef(0);
   const sandboxDebugPassRef = useRef<{ clickedAt: number; action: 'none' | 'called_advance_prompt' | 'state_only' }>({ clickedAt: 0, action: 'none' });
   const sandboxDebugActionAuditRef = useRef<Record<SandboxDebugActionName, SandboxDebugActionRecord>>({
-    run_night_smoke_test: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.bootstrap + sandbox.flow + sandbox.sandboxFlow.nextQuestion* + sandbox.renderSync', lastResult: '-' },
-    pass_flow: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex', lastResult: '-' },
-    force_correct_now: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.consonantJudgeAudit + sandbox.replyGate + sandbox.reveal', lastResult: '-' },
-    force_next_question: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex + sandbox.sandboxFlow.nextQuestion*', lastResult: '-' },
-    force_ghost_event: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'event.queue/startEvent', lastResult: '-' }
+    run_night_smoke_test: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.bootstrap + sandbox.flow + sandbox.sandboxFlow.nextQuestion* + sandbox.renderSync', lastResult: '-', intent: 'validate_end_to_end', sourceQuestionId: '-', targetQuestionId: '-', resultStep: '-', usedCanonicalAnswer: '-', usedAcceptedCandidates: [], reconciled: false },
+    pass_flow: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex', lastResult: '-', intent: 'advance_one_legal_stage', sourceQuestionId: '-', targetQuestionId: '-', resultStep: '-', usedCanonicalAnswer: '-', usedAcceptedCandidates: [], reconciled: false },
+    force_correct_now: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.consonantJudgeAudit + sandbox.replyGate + sandbox.reveal', lastResult: '-', intent: 'force_current_prompt_correct', sourceQuestionId: '-', targetQuestionId: '-', resultStep: '-', usedCanonicalAnswer: '-', usedAcceptedCandidates: [], reconciled: false },
+    force_next_question: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'sandbox.flow.questionIndex + sandbox.sandboxFlow.nextQuestion*', lastResult: '-', intent: 'advance_to_next_question_answerable', sourceQuestionId: '-', targetQuestionId: '-', resultStep: '-', usedCanonicalAnswer: '-', usedAcceptedCandidates: [], reconciled: false },
+    force_ghost_event: { lastClickedAt: 0, handlerInvoked: false, effectApplied: false, blockedReason: '-', targetState: 'event.queue/startEvent', lastResult: '-', intent: 'force_event', sourceQuestionId: '-', targetQuestionId: '-', resultStep: '-', usedCanonicalAnswer: '-', usedAcceptedCandidates: [], reconciled: false }
   });
   const [sandboxFlowTestResult, setSandboxFlowTestResult] = useState<SandboxFlowTestResult>({
     status: 'idle',
@@ -3739,9 +3746,7 @@ export default function App() {
       const forceVisiblePrompt = Boolean(stateQuestionId) && (promptVisuallyReady || isAnswerablePromptStep || authoritativeQ2Advanced || gateAuthoritativeReady);
       const renderedQuestionId = !stateQuestionId
         ? ''
-        : (renderSyncReason === 'state_question_missing' || renderSyncReason === 'prompt_missing' || renderSyncReason === 'overlay_not_committed')
-          ? ''
-          : stateQuestionId;
+        : stateQuestionId;
       const renderBlockedReasonEffective = renderSyncReason;
       const revealHasObservableTiming = sandboxState.reveal.startedAt > 0
         && sandboxState.reveal.finishedAt > 0
@@ -3759,6 +3764,11 @@ export default function App() {
           || ((sandboxState.sandboxFlow?.backlogTechMessages?.length ?? 0) === 0
             && Boolean((sandboxState.audit?.transitions ?? []).some((item: any) => item?.to === 'ADVANCE_NEXT' && item?.reason === 'post_reveal_chat_done'))))
         && !(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
+      const debugActionEntries = Object.entries(sandboxDebugActionAuditRef.current);
+      const latestDebugAction = debugActionEntries
+        .sort((a, b) => (b[1].lastClickedAt || 0) - (a[1].lastClickedAt || 0))[0];
+      const latestDebugActionName = latestDebugAction?.[0] ?? '-';
+      const latestDebugActionAudit = latestDebugAction?.[1] ?? null;
       sandboxModeRef.current.commitRenderSync?.({
         stateQuestionId,
         renderedQuestionId,
@@ -3822,6 +3832,16 @@ export default function App() {
           revealBlockedReasonSource: sandboxState.reveal.blockedReason === 'hidden' ? 'ui_cleanup' : 'reveal_guard',
           postRevealGuardReady,
           advanceNextGuardReady
+        },
+        debugAction: {
+          name: latestDebugActionName,
+          intent: latestDebugActionAudit?.intent ?? '-',
+          sourceQuestionId: latestDebugActionAudit?.sourceQuestionId ?? '-',
+          targetQuestionId: latestDebugActionAudit?.targetQuestionId ?? '-',
+          resultStep: latestDebugActionAudit?.resultStep ?? '-',
+          usedCanonicalAnswer: latestDebugActionAudit?.usedCanonicalAnswer ?? '-',
+          usedAcceptedCandidates: latestDebugActionAudit?.usedAcceptedCandidates ?? [],
+          reconciled: Boolean(latestDebugActionAudit?.reconciled)
         },
         unresolvedAmbient: {
           active: sandboxState.flow.step === 'WAIT_REPLY_1' && sandboxState.sandboxFlow.replyGateActive && !sandboxState.sandboxFlow.gateConsumed,
@@ -5670,143 +5690,84 @@ export default function App() {
 
   const recordSandboxDebugAction = useCallback((action: SandboxDebugActionName, payload: Partial<SandboxDebugActionRecord>) => {
     const prev = sandboxDebugActionAuditRef.current[action];
-    sandboxDebugActionAuditRef.current[action] = { ...prev, ...payload, blockedReason: payload.blockedReason ?? prev.blockedReason ?? '-', lastResult: payload.lastResult ?? prev.lastResult ?? '-' };
+    sandboxDebugActionAuditRef.current[action] = {
+      ...prev,
+      ...payload,
+      blockedReason: payload.blockedReason ?? prev.blockedReason ?? '-',
+      lastResult: payload.lastResult ?? prev.lastResult ?? '-',
+      sourceQuestionId: payload.sourceQuestionId ?? prev.sourceQuestionId ?? '-',
+      targetQuestionId: payload.targetQuestionId ?? prev.targetQuestionId ?? '-',
+      usedCanonicalAnswer: payload.usedCanonicalAnswer ?? prev.usedCanonicalAnswer ?? '-',
+      usedAcceptedCandidates: payload.usedAcceptedCandidates ?? prev.usedAcceptedCandidates ?? [],
+      resultStep: payload.resultStep ?? prev.resultStep ?? '-',
+      intent: payload.intent ?? prev.intent ?? '-',
+      reconciled: payload.reconciled ?? prev.reconciled ?? false
+    };
+  }, []);
+
+  const reconcileSandboxDebugState = useCallback((params: {
+    action: SandboxDebugActionName;
+    reason: string;
+    sourceQuestionId: string;
+    targetQuestionId: string;
+    targetStep: string;
+    beforeIndex: number;
+    expectedSceneKey?: string;
+  }) => {
+    const now = Date.now();
+    const st = sandboxModeRef.current.getState();
+    const prompt = sandboxModeRef.current.getCurrentPrompt();
+    const promptQuestionId = prompt?.kind === 'consonant' ? prompt.wordKey : '';
+    const questionId = params.targetQuestionId || promptQuestionId;
+    const renderedQuestionId = questionId || st.renderSync?.renderedQuestionId || st.renderSync?.stateQuestionId || '';
+    sandboxModeRef.current.setSandboxFlow({
+      questionIndex: st.flow.questionIndex,
+      step: params.targetStep,
+      stepStartedAt: now,
+      replyGateActive: Boolean(st.replyGate?.armed && st.replyGate?.gateType !== 'none'),
+      replyTarget: st.replyGate?.targetPlayerId || null,
+      gateType: st.replyGate?.gateType || 'none',
+      canReply: Boolean(st.replyGate?.canReply),
+      nextQuestionFromIndex: params.beforeIndex,
+      nextQuestionToIndex: st.flow.questionIndex,
+      nextQuestionFromQuestionId: params.sourceQuestionId || '',
+      nextQuestionToQuestionId: questionId,
+      questionPromptFingerprint: questionId ? `${params.action}:${st.flow.questionIndex}:${questionId}` : st.sandboxFlow.questionPromptFingerprint,
+      nextQuestionBlockedReason: st.sandboxFlow.nextQuestionBlockedReason || '-',
+      nextQuestionBlockedReasonSource: st.sandboxFlow.nextQuestionBlockedReasonSource || params.reason,
+      nextQuestionConsumer: `${params.action}_debug`,
+      nextQuestionStage: params.targetStep
+    });
+    sandboxModeRef.current.commitRenderSync?.({
+      stateQuestionId: questionId,
+      renderedQuestionId: renderedQuestionId || questionId,
+      renderBlockedReason: st.renderSync?.renderBlockedReason || 'committed',
+      commitSource: `${params.action}_reconcile`,
+      committedAt: now
+    });
+    sandboxModeRef.current.setReplyTelemetry?.({ parseBlockedReason: '', consumeBlockedReason: '', consumedAt: st.reply?.consumedAt ?? 0, consumeEventId: st.reply?.consumeEventId ?? '' });
+    sandboxModeRef.current.setBlockedReason?.('');
+    sandboxModeRef.current.setCurrentPromptMismatch?.(false);
+    return sandboxModeRef.current.getState();
   }, []);
 
   const handleSandboxDebugPassFlow = useCallback(() => {
     const now = Date.now();
-    recordSandboxDebugAction('pass_flow', { lastClickedAt: now, handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('pass_flow', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    const beforeIndex = sandboxModeRef.current.getState().nodeIndex;
-    sandboxDebugPassRef.current = { clickedAt: now, action: 'called_advance_prompt' };
+    recordSandboxDebugAction('pass_flow', { lastClickedAt: now, handlerInvoked: true, intent: 'advance_one_legal_stage' });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('pass_flow', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked', reconciled: false }); return; }
+    const beforeState = sandboxModeRef.current.getState();
+    const beforeIndex = beforeState.flow.questionIndex;
+    const beforeQuestionId = beforeState.prompt.current?.wordKey || '';
     clearSandboxRevealDoneTimer();
-    const advanced = sandboxModeRef.current.advancePrompt('debug_pass');
+    const advanced = sandboxModeRef.current.advancePrompt('debug_pass_flow_authoritative');
     sandboxConsonantPromptNodeIdRef.current = null;
     clearReplyUi('sandbox_debug_pass');
     clearChatFreeze('sandbox_debug_pass');
     setChatAutoPaused(false);
     setInput('');
-    const afterState = sandboxModeRef.current.getState();
-    const afterIndex = afterState.nodeIndex;
     const afterNode = sandboxModeRef.current.getCurrentNode();
-    if (advanced && afterNode) {
-      sandboxModeRef.current.setCurrentPrompt({
-        kind: 'consonant',
-        promptId: crypto.randomUUID(),
-        consonant: afterNode.char,
-        wordKey: afterNode.id,
-        pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
-        correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
-        unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
-      });
-      sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_pass_flow', consumePolicy: 'single' });
-      sandboxModeRef.current.setSandboxFlow({
-        postRevealChatState: 'idle',
-        nextQuestionReady: true,
-        nextQuestionEmitted: true,
-        nextQuestionFromIndex: beforeIndex,
-        nextQuestionToIndex: afterState.flow.questionIndex,
-        nextQuestionToQuestionId: afterNode.id,
-        nextQuestionBlockedReason: 'emitted',
-        nextQuestionBlockedReasonSource: 'advance_next',
-        nextQuestionStage: 'emitted',
-        nextQuestionDecidedAt: now,
-        nextQuestionEmittedAt: Date.now(),
-        nextQuestionConsumer: 'debug_pass_flow'
-      });
-      sandboxModeRef.current.setFlowStep(afterState.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING', 'debug_pass_flow_emit');
-      requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(afterState.flow.questionIndex), reason: `debug_pass_q${afterState.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
-      sandboxModeRef.current.commitRenderSync?.({ stateQuestionId: afterNode.id, renderedQuestionId: afterNode.id, renderBlockedReason: 'force_next_prompt_activated', commitSource: 'debug_pass_flow' });
-    }
-    recordSandboxDebugAction('pass_flow', { effectApplied: Boolean(advanced && afterIndex !== beforeIndex), blockedReason: advanced ? '-' : 'end_of_nodes', lastResult: advanced ? `advanced_to:${afterIndex}` : 'blocked' });
-    setSandboxRevealTick(Date.now());
-  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze, recordSandboxDebugAction, requestSceneAction, resolveSandboxSceneKeyByQuestionIndex]);
-
-
-  const handleSandboxDebugForceCorrectNow = useCallback(() => {
-    recordSandboxDebugAction('force_correct_now', { lastClickedAt: Date.now(), handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_correct_now', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' }); return; }
-    const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
-    if (!currentPrompt) { recordSandboxDebugAction('force_correct_now', { effectApplied: false, blockedReason: 'missing_current_prompt', lastResult: 'blocked' }); return; }
-    if (currentPrompt.kind !== 'consonant') { recordSandboxDebugAction('force_correct_now', { effectApplied: false, blockedReason: 'prompt_not_force_correct_capable', lastResult: 'blocked' }); return; }
-    const node = sandboxModeRef.current.getCurrentNode();
-    const now = Date.now();
-    sandboxModeRef.current.activateDebugOverride('button');
-    const persistJudgeAudit = (audit: Record<string, unknown>) => sandboxModeRef.current.setConsonantJudgeAudit?.({
-      rawInput: '',
-      normalizedInput: '',
-      parseOk: false,
-      parseKind: 'not_evaluated',
-      matchedAlias: '',
-      expectedConsonant: '',
-      acceptedCandidates: [],
-      compareInput: '',
-      compareMode: 'normalized_alias_membership',
-      judgeResult: 'not_evaluated',
-      resultReason: 'not_evaluated',
-      sourcePromptId: '',
-      sourceQuestionId: '',
-      sourceWordKey: '',
-      gateType: 'none',
-      consumedAt: 0,
-      ...audit
-    });
-    persistJudgeAudit({
-      rawInput: '[debug-force-correct]',
-      normalizedInput: currentPrompt.consonant,
-      parseOk: true,
-      parseKind: 'debug_override',
-      matchedAlias: currentPrompt.consonant,
-      expectedConsonant: currentPrompt.consonant,
-      acceptedCandidates: [currentPrompt.consonant],
-      compareInput: currentPrompt.consonant,
-      compareMode: 'debug_override_exact',
-      judgeResult: 'correct',
-      resultReason: 'debug_override_forced_correct',
-      sourcePromptId: currentPrompt.promptId,
-      sourceQuestionId: node?.id ?? currentPrompt.wordKey,
-      sourceWordKey: currentPrompt.wordKey,
-      gateType: 'consonant_answer',
-      consumedAt: now
-    });
-    applySandboxCorrect({ input: '[debug-force-correct]', matchedChar: currentPrompt.consonant, source: 'debug_button' });
-    sandboxModeRef.current.setSandboxFlow({
-      nextQuestionStage: 'REVEAL_WORD',
-      nextQuestionBlockedReasonSource: 'reveal',
-      nextQuestionBlockedReason: 'reveal_guard_blocked:awaiting_reveal'
-    });
-    sandboxModeRef.current.setFlowStep('REVEAL_WORD', 'debug_force_correct_transition');
-    recordSandboxDebugAction('force_correct_now', { effectApplied: true, blockedReason: '-', lastResult: `correct:${currentPrompt.consonant}` });
-  }, [applySandboxCorrect, recordSandboxDebugAction]);
-
-
-  const handleSandboxDebugForceNextQuestion = useCallback(() => {
-    const clickedAt = Date.now();
-    recordSandboxDebugAction('force_next_question', { lastClickedAt: clickedAt, handlerInvoked: true });
-    if (modeRef.current.id !== 'sandbox_story') {
-      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked' });
-      return;
-    }
-    const stateBefore = sandboxModeRef.current.getState();
-    const beforeIndex = stateBefore.flow.questionIndex;
-    const fromNode = sandboxModeRef.current.getCurrentNode();
-    if (beforeIndex >= NIGHT1.nodes.length - 1) {
-      const reason = stateBefore.sandboxFlow.autoplayNightStatus === 'completed' ? 'story_completed' : 'no_next_question';
-      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: reason, lastResult: 'blocked' });
-      return;
-    }
-    clearReplyUi('sandbox_force_next_question');
-    clearChatFreeze('sandbox_force_next_question');
-    sandboxModeRef.current.setSandboxFlow({ postRevealChatState: 'done', nextQuestionReady: true, nextQuestionEmitted: false, nextQuestionBlockedReason: 'force_next_question_pending', nextQuestionBlockedReasonSource: 'advance_next', nextQuestionStage: 'ADVANCE_NEXT', nextQuestionDecidedAt: clickedAt, nextQuestionEmittedAt: 0, nextQuestionConsumer: 'force_next_question_debug' });
-    const advanced = sandboxModeRef.current.forceAdvanceNode();
-    if (!advanced) {
-      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'force_advance_failed', lastResult: 'blocked' });
-      return;
-    }
-    const stateAfter = sandboxModeRef.current.getState();
-    const afterNode = sandboxModeRef.current.getCurrentNode();
-    if (!afterNode) {
-      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'missing_next_node', lastResult: 'blocked' });
+    if (!advanced || !afterNode) {
+      recordSandboxDebugAction('pass_flow', { effectApplied: false, blockedReason: 'end_of_nodes', lastResult: 'blocked', sourceQuestionId: beforeQuestionId || '-', targetQuestionId: '-', resultStep: beforeState.flow.step, reconciled: false });
       return;
     }
     sandboxModeRef.current.setCurrentPrompt({
@@ -5818,33 +5779,156 @@ export default function App() {
       correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
       unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
     });
-    requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(stateAfter.flow.questionIndex), reason: `force_next_q${stateAfter.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
+    sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_pass_flow', consumePolicy: 'single' });
+    const nextStep = beforeIndex === 0 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING';
+    sandboxModeRef.current.setFlowStep(nextStep, 'debug_pass_flow_emit');
+    sandboxModeRef.current.setSandboxFlow({
+      postRevealChatState: 'idle',
+      nextQuestionReady: true,
+      nextQuestionEmitted: true,
+      nextQuestionFromIndex: beforeIndex,
+      nextQuestionToIndex: beforeIndex + 1,
+      nextQuestionFromQuestionId: beforeQuestionId,
+      nextQuestionToQuestionId: afterNode.id,
+      nextQuestionBlockedReason: 'emitted',
+      nextQuestionBlockedReasonSource: 'advance_next',
+      nextQuestionStage: 'emitted',
+      nextQuestionDecidedAt: now,
+      nextQuestionEmittedAt: now,
+      nextQuestionConsumer: 'debug_pass_flow'
+    });
+    requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(beforeIndex + 1), reason: `debug_pass_q${beforeIndex + 2}`, sourceEventKey: 'SCENE_REQUEST' });
+    const reconciledState = reconcileSandboxDebugState({ action: 'pass_flow', reason: 'pass_flow_reconcile', sourceQuestionId: beforeQuestionId, targetQuestionId: afterNode.id, targetStep: nextStep, beforeIndex, expectedSceneKey: resolveSandboxSceneKeyByQuestionIndex(beforeIndex + 1) });
+    recordSandboxDebugAction('pass_flow', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${reconciledState.flow.questionIndex}:${afterNode.id}`, sourceQuestionId: beforeQuestionId || '-', targetQuestionId: afterNode.id, resultStep: reconciledState.flow.step, reconciled: true });
+    setSandboxRevealTick(Date.now());
+  }, [clearReplyUi, clearSandboxRevealDoneTimer, clearChatFreeze, reconcileSandboxDebugState, recordSandboxDebugAction, requestSceneAction, resolveSandboxSceneKeyByQuestionIndex]);
+
+
+  const handleSandboxDebugForceCorrectNow = useCallback(() => {
+    const now = Date.now();
+    recordSandboxDebugAction('force_correct_now', { lastClickedAt: now, handlerInvoked: true, intent: 'force_current_prompt_correct' });
+    if (modeRef.current.id !== 'sandbox_story') { recordSandboxDebugAction('force_correct_now', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked', reconciled: false }); return; }
+    const stateBefore = sandboxModeRef.current.getState();
+    const currentPrompt = sandboxModeRef.current.getCurrentPrompt();
+    if (!currentPrompt || currentPrompt.kind !== 'consonant') {
+      recordSandboxDebugAction('force_correct_now', { effectApplied: false, blockedReason: 'missing_or_non_consonant_prompt', lastResult: 'blocked', sourceQuestionId: '-', targetQuestionId: '-', reconciled: false });
+      return;
+    }
+    const gate = stateBefore.replyGate;
+    if (!(gate?.armed && gate?.canReply && gate?.gateType === 'consonant_answer')) {
+      recordSandboxDebugAction('force_correct_now', { effectApplied: false, blockedReason: 'reply_gate_not_answerable', lastResult: 'blocked', sourceQuestionId: currentPrompt.wordKey, targetQuestionId: currentPrompt.wordKey, reconciled: false });
+      return;
+    }
+    const authoritative = getSharedConsonantQuestionById(currentPrompt.wordKey);
+    const canonicalAnswer = authoritative?.consonant || currentPrompt.consonant;
+    const acceptedCandidates = getAcceptedAliasCandidates({ questionId: currentPrompt.wordKey, consonant: canonicalAnswer });
+    sandboxModeRef.current.activateDebugOverride('button');
+    sandboxModeRef.current.setConsonantJudgeAudit?.({
+      rawInput: '[debug-force-correct]',
+      normalizedInput: canonicalAnswer,
+      parseOk: true,
+      parseKind: 'debug_override',
+      matchedAlias: canonicalAnswer,
+      expectedConsonant: canonicalAnswer,
+      acceptedCandidates,
+      compareInput: canonicalAnswer,
+      compareMode: 'debug_override_authoritative_current_prompt',
+      judgeResult: 'correct',
+      resultReason: 'debug_override_forced_correct',
+      sourcePromptId: currentPrompt.promptId,
+      sourceQuestionId: currentPrompt.wordKey,
+      sourceWordKey: currentPrompt.wordKey,
+      gateType: 'consonant_answer',
+      consumedAt: now
+    });
+    applySandboxCorrect({ input: '[debug-force-correct]', matchedChar: canonicalAnswer, source: 'debug_button' });
+    sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'debug_force_correct_consume');
+    sandboxModeRef.current.setFlowStep('REVEAL_WORD', 'debug_force_correct_transition');
+    sandboxModeRef.current.setSandboxFlow({
+      nextQuestionStage: 'REVEAL_WORD',
+      nextQuestionBlockedReasonSource: 'reveal',
+      nextQuestionBlockedReason: 'reveal_guard_blocked:awaiting_reveal',
+      nextQuestionConsumer: 'force_correct_now_debug'
+    });
+    const reconciledState = reconcileSandboxDebugState({ action: 'force_correct_now', reason: 'force_correct_reconcile', sourceQuestionId: currentPrompt.wordKey, targetQuestionId: currentPrompt.wordKey, targetStep: 'REVEAL_WORD', beforeIndex: stateBefore.flow.questionIndex, expectedSceneKey: resolveSandboxSceneKeyByQuestionIndex(stateBefore.flow.questionIndex) });
+    recordSandboxDebugAction('force_correct_now', { effectApplied: true, blockedReason: '-', lastResult: `correct:${canonicalAnswer}`, sourceQuestionId: currentPrompt.wordKey, targetQuestionId: currentPrompt.wordKey, usedCanonicalAnswer: canonicalAnswer, usedAcceptedCandidates: acceptedCandidates, resultStep: reconciledState.flow.step, reconciled: true });
+  }, [applySandboxCorrect, reconcileSandboxDebugState, recordSandboxDebugAction, resolveSandboxSceneKeyByQuestionIndex]);
+
+
+  const handleSandboxDebugForceNextQuestion = useCallback(() => {
+    const clickedAt = Date.now();
+    recordSandboxDebugAction('force_next_question', { lastClickedAt: clickedAt, handlerInvoked: true, intent: 'advance_to_next_question_answerable' });
+    if (modeRef.current.id !== 'sandbox_story') {
+      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'not_in_sandbox_story', lastResult: 'blocked', reconciled: false });
+      return;
+    }
+    const stateBefore = sandboxModeRef.current.getState();
+    const beforeIndex = stateBefore.flow.questionIndex;
+    const fromQuestionId = stateBefore.prompt.current?.wordKey || '';
+    if (beforeIndex >= NIGHT1.nodes.length - 1) {
+      const reason = stateBefore.sandboxFlow.autoplayNightStatus === 'completed' ? 'story_completed' : 'no_next_question';
+      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: reason, lastResult: 'blocked', sourceQuestionId: fromQuestionId || '-', targetQuestionId: '-', reconciled: false });
+      return;
+    }
+    clearReplyUi('sandbox_force_next_question');
+    clearChatFreeze('sandbox_force_next_question');
+    const advanced = sandboxModeRef.current.forceAdvanceNode();
+    if (!advanced) {
+      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'force_advance_failed', lastResult: 'blocked', sourceQuestionId: fromQuestionId || '-', targetQuestionId: '-', reconciled: false });
+      return;
+    }
+    const stateAfterAdvance = sandboxModeRef.current.getState();
+    const afterNode = sandboxModeRef.current.getCurrentNode();
+    if (!afterNode) {
+      recordSandboxDebugAction('force_next_question', { effectApplied: false, blockedReason: 'missing_next_node', lastResult: 'blocked', sourceQuestionId: fromQuestionId || '-', targetQuestionId: '-', reconciled: false });
+      return;
+    }
+    const nextStep = stateAfterAdvance.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING';
+    sandboxModeRef.current.setCurrentPrompt({
+      kind: 'consonant',
+      promptId: crypto.randomUUID(),
+      consonant: afterNode.char,
+      wordKey: afterNode.id,
+      pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
+      correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
+      unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
+    });
+    sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_force_next_question', consumePolicy: 'single' });
     sandboxModeRef.current.commitRenderSync?.({
       stateQuestionId: afterNode.id,
       renderedQuestionId: afterNode.id,
       renderBlockedReason: 'force_next_prompt_activated',
       commitSource: 'force_next_question_debug'
     });
-    sandboxModeRef.current.setReplyGate?.({ gateType: 'consonant_answer', armed: true, canReply: true, gateConsumed: false, sourceType: 'debug_force_next_question', consumePolicy: 'single' });
     sandboxModeRef.current.setSandboxFlow({
       postRevealChatState: 'idle',
       nextQuestionReady: true,
       nextQuestionEmitted: true,
       nextQuestionFromIndex: beforeIndex,
-      nextQuestionToIndex: stateAfter.flow.questionIndex,
-      nextQuestionFromQuestionId: fromNode?.id ?? '',
+      nextQuestionToIndex: stateAfterAdvance.flow.questionIndex,
+      nextQuestionFromQuestionId: fromQuestionId,
       nextQuestionToQuestionId: afterNode.id,
       nextQuestionBlockedReason: 'emitted',
       nextQuestionBlockedReasonSource: 'advance_next',
       nextQuestionStage: 'emitted',
       nextQuestionDecidedAt: clickedAt,
       nextQuestionEmittedAt: Date.now(),
-      nextQuestionConsumer: 'force_next_question_debug'
+      nextQuestionConsumer: 'force_next_question_debug',
+      replyGateActive: true,
+      canReply: true,
+      gateType: 'consonant_answer',
+      replyTarget: stateAfterAdvance.replyGate?.targetPlayerId ?? null,
+      questionPromptFingerprint: `force_next_question:${stateAfterAdvance.flow.questionIndex}:${afterNode.id}`
     });
-    sandboxModeRef.current.setFlowStep(stateAfter.flow.questionIndex === 1 ? 'TAG_PLAYER_2_PRONOUNCE' : 'TAG_PLAYER_3_MEANING', 'force_next_question_emitted');
+    sandboxModeRef.current.setReveal?.({ visible: false, phase: 'idle', text: '', wordKey: '', consonantFromPrompt: '', durationMs: 0, doneAt: 0, startedAt: 0, finishedAt: 0, cleanupAt: 0, rendered: false, blockedReason: '' });
+    sandboxModeRef.current.setReplyTelemetry?.({ parseBlockedReason: '', consumeBlockedReason: '', consumeCommitted: false, consumeEventId: '', consumedAt: 0 });
+    sandboxModeRef.current.setLastReplyEval?.({ consumed: false, reason: '', gateType: 'consonant_answer', rawInput: '', normalizedInput: '', extractedAnswer: '', raw: '', normalized: '', classifiedAs: 'none', at: 0 });
+    sandboxModeRef.current.setFlowStep(nextStep, 'force_next_question_emitted');
+    requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(stateAfterAdvance.flow.questionIndex), reason: `force_next_q${stateAfterAdvance.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
+    const reconciledState = reconcileSandboxDebugState({ action: 'force_next_question', reason: 'force_next_question_reconcile', sourceQuestionId: fromQuestionId, targetQuestionId: afterNode.id, targetStep: nextStep, beforeIndex, expectedSceneKey: resolveSandboxSceneKeyByQuestionIndex(stateAfterAdvance.flow.questionIndex) });
     setSandboxRevealTick(Date.now());
-    recordSandboxDebugAction('force_next_question', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${stateAfter.flow.questionIndex}:${afterNode.id}` });
-  }, [clearChatFreeze, clearReplyUi, recordSandboxDebugAction, resolveSandboxSceneKeyByQuestionIndex]);
+    recordSandboxDebugAction('force_next_question', { effectApplied: true, blockedReason: '-', lastResult: `advanced_to:${reconciledState.flow.questionIndex}:${afterNode.id}`, sourceQuestionId: fromQuestionId || '-', targetQuestionId: afterNode.id, resultStep: reconciledState.flow.step, reconciled: true });
+  }, [clearChatFreeze, clearReplyUi, reconcileSandboxDebugState, recordSandboxDebugAction, resolveSandboxSceneKeyByQuestionIndex]);
 
   const runNightSmokeTest = useCallback(async () => {
     const startedAt = Date.now();
@@ -7353,6 +7437,13 @@ export default function App() {
                         <div>effectApplied: {String(audit.effectApplied)}</div>
                         <div>blockedReason: {audit.blockedReason || '-'}</div>
                         <div>targetState: {audit.targetState || '-'}</div>
+                        <div>intent: {audit.intent || '-'}</div>
+                        <div>sourceQuestionId: {audit.sourceQuestionId || '-'}</div>
+                        <div>targetQuestionId: {audit.targetQuestionId || '-'}</div>
+                        <div>resultStep: {audit.resultStep || '-'}</div>
+                        <div>usedCanonicalAnswer: {audit.usedCanonicalAnswer || '-'}</div>
+                        <div>usedAcceptedCandidates: {(audit.usedAcceptedCandidates || []).join(', ') || '-'}</div>
+                        <div>reconciled: {String(audit.reconciled ?? false)}</div>
                         <div>lastResult: {audit.lastResult || '-'}</div>
                       </div>
                     ))}
@@ -7462,6 +7553,13 @@ export default function App() {
                     <div>scene.expectedRawKey/currentRawKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.expectedRawKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.currentRawKey ?? '-'}</div>
                     <div>scene.expectedCanonicalKey/currentCanonicalKey: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.expectedCanonicalKey ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.currentCanonicalKey ?? '-'}</div>
                     <div>renderSync.reason: {(window.__CHAT_DEBUG__ as any)?.sandbox?.renderSync?.renderSyncReason ?? '-'}</div>
+                    <div>debugAction.name: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.name ?? '-'}</div>
+                    <div>debugAction.intent: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.intent ?? '-'}</div>
+                    <div>debugAction.sourceQuestionId/targetQuestionId: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.sourceQuestionId ?? '-'} / {(window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.targetQuestionId ?? '-'}</div>
+                    <div>debugAction.resultStep: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.resultStep ?? '-'}</div>
+                    <div>debugAction.usedCanonicalAnswer: {(window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.usedCanonicalAnswer ?? '-'}</div>
+                    <div>debugAction.usedAcceptedCandidates: {((window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.usedAcceptedCandidates ?? []).join(', ') || '-'}</div>
+                    <div>debugAction.reconciled: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.debugAction?.reconciled ?? false)}</div>
                     <div>introGate.startedAt: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.startedAt ?? 0}</div>
                     <div>introGate.minDurationMs: {(window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.minDurationMs ?? 0}</div>
                     <div>introGate.passed: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.audit?.introGate?.passed ?? false)}</div>

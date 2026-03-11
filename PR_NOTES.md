@@ -1,3 +1,14 @@
+## 2026-03-11 Debug Action Authority & Reconciliation
+- 重構三個 debug action 契約：
+  - `Pass Flow`：僅前進合法 stage，不跨題直接 reveal。
+  - `Force Correct Now`：僅針對 currentPrompt 題目，答案來源改為 currentPrompt.questionId 的 authoritative canonical consonant + accepted aliases。
+  - `Force Next Question`：僅切到下一題可回答 gate，不標記 correct、不進 reveal。
+- 新增 debug action 後統一 reconciliation（flow/questionIndex/currentPrompt/replyGate/nextQuestion/reveal/parse/judge/reply/renderSync/blocked reason/audit reason）。
+- 修正 REVEAL guard：`done + rendered + timing` 即可進 `POST_REVEAL_CHAT`，`visible=false` 僅作 `reveal.visibilityOnly` 診斷。
+- scene/render 收斂：新增 scene key canonicalization（含 `oldhouse_room_loopN`），`scene_not_synced` 降級 warning，`renderedQuestionId` 加入 bounded fallback。
+- 補齊 debug observability：`debugAction.name/intent/sourceQuestionId/targetQuestionId/resultStep/usedCanonicalAnswer/usedAcceptedCandidates/reconciled`。
+- 補 regression guards（force correct authoritative answer、force next 不可 reveal、replyGate/reveal 清理、reveal done guard、scene canonical fallback、debug reconciliation）。
+
 - [sandbox][integration-fix][authoritative-consume-chain-ssot]
   - 新增 reply consume SSOT：`reply.lastInjectedMessageId/text/at`、`reply.lastConsumedMessageId/text/at`、`reply.consumeSource`、`reply.consumeResult`、`reply.consumeBlockedReason`。
   - `consumePlayerReply` 現在強制 gate/canReply/target 對齊，blocked 會寫入 reply telemetry + lastReplyEval，不再出現「chat 有顯示但 authoritative 未 consume」無診斷狀態。
