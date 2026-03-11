@@ -1,3 +1,14 @@
+## 2026-03-11 sandbox NIGHT_01 post-reveal deadlock fix（authoritative runner + judge blocked audit）
+
+- Root cause
+  - `REVEAL_WORD -> POST_REVEAL_CHAT` 已經 commit，但 effect 在 `reveal.phase === 'done'` 時只允許 `flow.step==='REVEAL_WORD'` 繼續執行；一旦 flow 進入 `POST_REVEAL_CHAT` 立即 early return，導致 postReveal runner 不會 start（`startEligible=true` 仍 `startAttempted=false`）。
+- Fix
+  - reveal done guard 改為 authoritative reveal-driven steps：`REVEAL_WORD | POST_REVEAL_CHAT | ADVANCE_NEXT` 才可通過，確保 postReveal/advance runner 必定在合法 tick 內執行。
+  - 補齊 blocked consume judge audit：`no_gate / gate_not_armed / can_reply_false / target_mismatch / stripped_empty` 全部寫入 `consonantJudgeAudit`（含 expected/accepted/compare/result/consumedAt），避免 debug 顯示 `judge=-`。
+- Regression guard
+  - 新增檢查 reveal done runner 必須包含 `POST_REVEAL_CHAT` 與 `ADVANCE_NEXT`。
+  - 新增檢查 blocked consume 必須寫入 `judgeResult='blocked'` 與各 blocked path helper。
+
 ## 2026-03-11 sandbox integration fix（POST_REVEAL runner same-ms stall）
 
 - Root cause（primary）

@@ -2177,6 +2177,29 @@ export default function App() {
         ...auditPatch
       });
     };
+    const persistBlockedJudgeAudit = (reason: string, gateType: string) => {
+      const now = Date.now();
+      const currentPrompt = sandboxModeRef.current.getState().prompt.current;
+      const trimmed = raw.trim();
+      persistJudgeAudit({
+        rawInput: raw,
+        normalizedInput: trimmed,
+        parseOk: false,
+        parseKind: 'not_evaluated',
+        matchedAlias: '',
+        expectedConsonant: currentPrompt?.consonant || '',
+        acceptedCandidates: [],
+        compareInput: trimmed,
+        compareMode: 'normalized_alias_membership',
+        judgeResult: 'blocked',
+        resultReason: reason,
+        sourcePromptId: currentPrompt?.promptId || '',
+        sourceQuestionId: currentPrompt?.wordKey || '',
+        sourceWordKey: currentPrompt?.wordKey || '',
+        gateType,
+        consumedAt: now
+      });
+    };
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
       const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
@@ -2201,16 +2224,19 @@ export default function App() {
         replyTarget: payload.targetPlayerId || gate.replyTarget
       };
       if (!gate.replyGateType) {
+        persistBlockedJudgeAudit('reply_blocked:no_gate', 'none');
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:no_gate' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'no_gate', gate: evalGate, messageId: payload.messageId });
         return false;
       }
       if (!gate.replyGateArmed) {
+        persistBlockedJudgeAudit('reply_blocked:gate_not_armed', gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:gate_not_armed' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'gate_not_armed', gate: evalGate, messageId: payload.messageId });
         return false;
       }
       if (!gate.canReply) {
+        persistBlockedJudgeAudit('reply_blocked:can_reply_false', gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:can_reply_false' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'can_reply_false', gate: evalGate, messageId: payload.messageId });
         return false;
@@ -2218,6 +2244,7 @@ export default function App() {
       const expectedTarget = normalizeHandle(gate.replyTarget || sandboxState.replyGate?.targetPlayerId || '');
       const inboundTarget = normalizeHandle(payload.targetPlayerId || payload.playerId || activeUserInitialHandleRef.current || '');
       if (expectedTarget && inboundTarget && expectedTarget !== inboundTarget) {
+        persistBlockedJudgeAudit(`reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}`, gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}` });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'target_mismatch', gate: evalGate, messageId: payload.messageId });
         return false;
@@ -2280,6 +2307,7 @@ export default function App() {
           });
         }
       } else if (!stripped) {
+        persistBlockedJudgeAudit('reply_blocked:stripped_empty', gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:stripped_empty' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'stripped_empty', gate: evalGate, messageId: payload.messageId });
         return false;
@@ -6461,7 +6489,10 @@ export default function App() {
         sandboxModeRef.current.markRevealDone();
         bumpSandboxRevealTick();
       }
-      if (sandboxState.flow.step !== 'REVEAL_WORD') {
+      const revealDrivenStep = sandboxState.flow.step === 'REVEAL_WORD'
+        || sandboxState.flow.step === 'POST_REVEAL_CHAT'
+        || sandboxState.flow.step === 'ADVANCE_NEXT';
+      if (!revealDrivenStep) {
         return;
       }
     }

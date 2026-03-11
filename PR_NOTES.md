@@ -1,3 +1,13 @@
+## 2026-03-11 sandbox integration fix (POST_REVEAL_CHAT entered-but-not-started deadlock)
+
+- Root cause: reveal-driven effect 在 `reveal.phase=done` 僅允許 `flow.step=REVEAL_WORD`，flow 一旦 commit 到 `POST_REVEAL_CHAT` 立刻 early return；因此 debug 可見 `postReveal.startEligible=true/startBlockedBy=none` 但 `startAttempted=false`。
+- Fix:
+  - 將 reveal done allowlist 改為 authoritative flow steps：`REVEAL_WORD | POST_REVEAL_CHAT | ADVANCE_NEXT`，保證 postReveal runner 以 flow.step 啟動（不依賴 scheduler/UI/render glyph）。
+  - blocked consume path 統一寫入 authoritative judge audit（`judgeResult=blocked` + expected/accepted/compareInput/resultReason/consumedAt），使 debug 與實際 consume 條件一致。
+- Regression guards:
+  - `scripts/sandbox-v2-regression-guards.mjs` 新增 reveal-driven step allowlist guard。
+  - 新增 blocked consume 必寫 judge audit guard（含 no_gate/gate_not_armed/can_reply_false/stripped_empty）。
+
 ## 2026-03-11 Sandbox POST_REVEAL same-ms tick stall fix
 
 - Primary root cause: sandbox runner effect re-trigger relied on `setSandboxRevealTick(Date.now())`; same-millisecond writes could be dropped by React (`Object.is`), so authoritative `flow.step=POST_REVEAL_CHAT` after reveal commit could exist while runner never got a new render tick.

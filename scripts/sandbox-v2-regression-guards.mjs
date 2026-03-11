@@ -114,6 +114,43 @@ const checks = [
     }
   },
   {
+    name: 'reveal done runner must continue in post-reveal/advance steps',
+    run() {
+      if (!app.includes("const revealDrivenStep = sandboxState.flow.step === 'REVEAL_WORD'")) {
+        throw new Error('reveal driven step guard is missing');
+      }
+      if (!app.includes("|| sandboxState.flow.step === 'POST_REVEAL_CHAT'")) {
+        throw new Error('reveal done runner must include POST_REVEAL_CHAT');
+      }
+      if (!app.includes("|| sandboxState.flow.step === 'ADVANCE_NEXT'")) {
+        throw new Error('reveal done runner must include ADVANCE_NEXT');
+      }
+    }
+  },
+  {
+    name: 'blocked reply consume must still write judge audit',
+    run() {
+      if (!app.includes('const persistBlockedJudgeAudit = (reason: string, gateType: string) => {')) {
+        throw new Error('blocked judge audit helper missing');
+      }
+      if (!app.includes("persistBlockedJudgeAudit('reply_blocked:no_gate', 'none')")) {
+        throw new Error('no_gate path must write blocked judge audit');
+      }
+      if (!app.includes("persistBlockedJudgeAudit('reply_blocked:gate_not_armed', gate.replyGateType)")) {
+        throw new Error('gate_not_armed path must write blocked judge audit');
+      }
+      if (!app.includes("persistBlockedJudgeAudit('reply_blocked:can_reply_false', gate.replyGateType)")) {
+        throw new Error('can_reply_false path must write blocked judge audit');
+      }
+      if (!app.includes("persistBlockedJudgeAudit('reply_blocked:stripped_empty', gate.replyGateType)")) {
+        throw new Error('stripped_empty path must write blocked judge audit');
+      }
+      if (!app.includes("judgeResult: 'blocked'")) {
+        throw new Error('blocked judge audit must persist judgeResult=blocked');
+      }
+    }
+  },
+  {
     name: 'transition log not empty after sandbox mode entry',
     run() {
       if (!mode.includes("{ event: 'INIT_SANDBOX_V2'")) {

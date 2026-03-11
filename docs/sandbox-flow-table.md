@@ -1,3 +1,12 @@
+## NIGHT_01 Flow Patch — POST_REVEAL authority constraints (2026-03-11)
+
+| Stage | Authoritative gate | Must-write audit | Forbidden dependency |
+| --- | --- | --- | --- |
+| `POST_REVEAL_CHAT` start | `flow.step === POST_REVEAL_CHAT && postReveal.enteredAt > 0` | `postReveal.startAttempted=true`, `postReveal.startedAt>0` | `scheduler.phase`, UI render state, cleanup glyph |
+| `POST_REVEAL_CHAT` completion | `postReveal.startedAt>0 && bounded wait complete && !replyGate.armed` | `postReveal.completedAt>0`, completion reason | scheduler / visual state |
+| `ADVANCE_NEXT` readiness | `postReveal.completedAt>0` | `nextQuestion.ready=true`, `nextQuestion.emitted=true` | scheduler.phase / chat visual state |
+| blocked reply consume | reply gate blocked reasons | `lastReplyEval` + `consonantJudgeAudit(judgeResult=blocked, resultReason, consumedAt)` | dropping audit on blocked paths |
+
 ## 2026-03-11 POST_REVEAL runner wakeup invariant（same-ms safe）
 
 | Stage | Authoritative state | Runner wakeup invariant | Blocked reason contract |
