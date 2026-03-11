@@ -1,3 +1,14 @@
+## 2026-03-11 Sandbox NIGHT_01 Deadlock Fix
+
+- 修復 `POST_REVEAL_CHAT` entered-but-not-started deadlock：reveal done runner 不再只允許 `REVEAL_WORD`，改為 `REVEAL_WORD/POST_REVEAL_CHAT/ADVANCE_NEXT` 的 authoritative step allowlist。
+- 確保 postReveal start/complete 由 authoritative `flow.step` + `postReveal.enteredAt/startedAt` 決定，不依賴 scheduler.phase。
+- 補齊 blocked consume judge audit（`judgeResult=blocked`），每次輸入皆有可追蹤判定紀錄。
+
+### Removed / Deprecated Log
+
+- Deprecated: reveal done effect 的舊 early-return 條件（僅 `flow.step===REVEAL_WORD`）。
+- Reason: 造成 flow 已進 `POST_REVEAL_CHAT` 但 runner 不啟動，與 authoritative flow 脫鉤。
+
 - [sandbox][integration-fix][post-reveal-runner-same-ms-wakeup] 修正 `POST_REVEAL_CHAT` entered-but-not-started：原因為多段 transition 在同一毫秒內重複 `setSandboxRevealTick(Date.now())`，React 可能忽略相同值導致 runner effect 未重跑。已改為 monotonic `bumpSandboxRevealTick(hintAt?)`（functional updater）作為唯一喚醒來源，確保 reveal -> postReveal -> advanceNext 鏈路每段都可被消費並落盤 `postReveal.startAttempted/startedAt/completedAt`。
 ## Sandbox reveal transition SSOT note (2026-03-11)
 
