@@ -209,8 +209,8 @@ if (!app.includes("postRevealChatState: 'done'")) { throw new Error('POST_REVEAL
 if (!app.includes('const expectedGateType = waitReplyStep') || !app.includes('const gate = waitReplyStep')) {
   throw new Error('player input eval must derive gate from authoritative wait-reply flow step');
 }
-if (!adapter.includes('normalizeInput(raw)') || !adapter.includes('parseThaiConsonant(normalized, input)') || !adapter.includes('judgeConsonantAnswer(parsed, input)')) {
-  throw new Error('sandbox consonant flow must use classic normalize/parse/judge pipeline');
+if (!adapter.includes('extractConsonantAnswerPayload(raw)') || !adapter.includes('parseThaiConsonant(extraction.stripped, input)') || !adapter.includes('judgeConsonantAnswer(parsed, input)')) {
+  throw new Error('sandbox consonant flow must use extraction->classic parse/judge pipeline');
 }
 if (!sharedEngine.includes('export function parseConsonantAnswer') || !sharedEngine.includes("type: 'wrong_answer'") || !sharedEngine.includes("type: 'wrong_format'") || !sharedEngine.includes("type: 'correct'")) {
   throw new Error('shared consonant engine parse/judge contract is missing');

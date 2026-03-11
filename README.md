@@ -6,6 +6,8 @@
 
 ### Removed / Deprecated Log
 
+- 2026-03-11：移除 sandbox `consonant_answer` consume 對 `replyTarget` 的阻擋條件（`reply_blocked:target_mismatch` 不再適用於子音作答 gate）；tag/thread 只保留於 UI/trace，不再影響 judge/consume。
+
 - Deprecated: reveal done effect 的舊 early-return 條件（僅 `flow.step===REVEAL_WORD`）。
 - Reason: 造成 flow 已進 `POST_REVEAL_CHAT` 但 runner 不啟動，與 authoritative flow 脫鉤。
 

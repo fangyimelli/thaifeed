@@ -10,7 +10,7 @@ const checks = [
   ['reveal_before_riot_guard', /flow\.step === 'REVEAL_1_RIOT'[\s\S]*hasSandboxQuestionPrerequisites\(sandboxState\)/.test(app)],
   ['prompt_before_tag_guard', /flow\.step === 'TAG_PLAYER_1'[\s\S]*hasSandboxQuestionPrerequisites\(sandboxState\)/.test(app)],
   ['gate_before_ask_player_guard', /flow\.step === 'WAIT_REPLY_1'[\s\S]*hasSandboxQuestionPrerequisites\(sandboxState\)[\s\S]*@\$\{taggedUser\} 你知道剛剛閃過那個字怎麼唸嗎？/.test(app)],
-  ['mention_stripped_before_judge', /parseAndJudgeUsingClassic\(stripped/.test(app)],
+  ['mention_extraction_pipeline_before_judge', /extractConsonantAnswerPayload\(raw\)/.test(app) && /parseAndJudgeUsingClassic\(raw/.test(app)],
   ['last_reply_eval_contains_extracted_answer', /extractedAnswer/.test(app)],
   ['ambient_burst_is_finite', /glitchCount < 2/.test(app) && /unresolvedAmbient/.test(app)],
   ['flow_doc_contains_boot_reveal_riot_tag_wait_contract', /PREJOIN[\s\S]*PREHEAT[\s\S]*REVEAL_1_START[\s\S]*REVEAL_1_RIOT[\s\S]*TAG_PLAYER_1[\s\S]*WAIT_REPLY_1/.test(flowDoc)]

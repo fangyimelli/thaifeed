@@ -57,7 +57,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
-import { parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
+import { extractConsonantAnswerPayload, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { getAcceptedAliasCandidates, getSharedConsonantQuestionById } from '../shared/consonant-engine';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
@@ -2202,7 +2202,8 @@ export default function App() {
     };
     if (modeRef.current.id === 'sandbox_story') {
       const sandboxState = sandboxModeRef.current.getState();
-      const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
+      const extraction = extractConsonantAnswerPayload(raw);
+      const stripped = extraction.stripped;
       const derivedGate = deriveSandboxReplyGateState();
       const waitReplyStep = sandboxState.flow.step === 'WAIT_WARMUP_REPLY' || sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
       const expectedGateType = waitReplyStep
@@ -2243,7 +2244,8 @@ export default function App() {
       }
       const expectedTarget = normalizeHandle(gate.replyTarget || sandboxState.replyGate?.targetPlayerId || '');
       const inboundTarget = normalizeHandle(payload.targetPlayerId || payload.playerId || activeUserInitialHandleRef.current || '');
-      if (expectedTarget && inboundTarget && expectedTarget !== inboundTarget) {
+      const targetIgnoredByGate = gate.replyGateType === 'consonant_answer' || gate.replyGateType === 'consonant_guess';
+      if (!targetIgnoredByGate && expectedTarget && inboundTarget && expectedTarget !== inboundTarget) {
         persistBlockedJudgeAudit(`reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}`, gate.replyGateType);
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: `reply_blocked:target_mismatch:${expectedTarget}->${inboundTarget}` });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'target_mismatch', gate: evalGate, messageId: payload.messageId });
@@ -2277,6 +2279,12 @@ export default function App() {
             sourceWordKey: currentPrompt.wordKey,
             gateType: gate.replyGateType,
             consumedAt: consumeAt
+          });
+          persistReplyTelemetry({
+            detectedMentions: pipeline.audit.parse.mentions,
+            extractedAnswer: pipeline.audit.parse.stripped,
+            normalizedAnswer: pipeline.audit.parse.normalized,
+            answerPipeline: 'raw>detect_mentions>strip_mentions>normalize>candidate_compare>judge>consume'
           });
           consonantParsed = pipeline.parsed;
           sandboxModeRef.current.commitConsonantJudgeResult({ input: raw, parsed: pipeline.parsed, judge: pipeline.result, classicJudgeResult: pipeline.result });
