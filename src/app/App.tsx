@@ -57,6 +57,12 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
+import {
+  isSandboxWaitReplyStep,
+  parseSandboxWaitReplyIndex,
+  resolveSandboxWaitReplyStepByQuestionNumber,
+  type SandboxWaitReplyStep
+} from '../modes/sandbox_story/waitReplyStep';
 import { extractConsonantAnswerPayload, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
 import { getAcceptedAliasCandidates, getSharedConsonantQuestionById } from '../shared/consonant-engine';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
@@ -126,13 +132,12 @@ const SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS = 900;
 const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
 const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
 
-const parseSandboxWaitReplyIndex = (step: string | undefined): number | null => {
-  if (!step) return null;
-  if (step === 'WAIT_WARMUP_REPLY') return 0;
-  const match = /^WAIT_REPLY_(\d+)$/.exec(step);
-  if (!match) return null;
-  const parsed = Number.parseInt(match[1], 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+
+const resolveSandboxWaitReplyConsumedReason = (waitReplyIndex: number): string => {
+  if (waitReplyIndex === 1) return 'player_reply_1_consumed';
+  if (waitReplyIndex === 2) return 'player_reply_2_consumed';
+  if (waitReplyIndex === 3) return 'player_reply_3_consumed';
+  return `player_reply_${waitReplyIndex}_consumed`;
 };
 
 const parseSandboxTagStepIndex = (step: string | undefined): number | null => {
@@ -147,13 +152,6 @@ const parseSandboxTagStepIndex = (step: string | undefined): number | null => {
 const resolveSandboxTagStepByQuestionNumber = (questionNumber: number): string => {
   if (questionNumber <= 1) return 'TAG_PLAYER_1';
   return `TAG_PLAYER_${questionNumber}`;
-};
-
-const resolveSandboxWaitReplyStepByQuestionNumber = (questionNumber: number): 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3' => {
-  if (questionNumber <= 0) return 'WAIT_WARMUP_REPLY';
-  if (questionNumber === 1) return 'WAIT_REPLY_1';
-  if (questionNumber === 2) return 'WAIT_REPLY_2';
-  return 'WAIT_REPLY_3';
 };
 
 type ChatSendSource =
@@ -1367,7 +1365,7 @@ export default function App() {
     const sourceTag = options?.sourceTag ?? source;
     if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
       const sandboxFlow = sandboxModeRef.current.getState().sandboxFlow;
-      const isWaitReplyStep = sandboxFlow.step === 'WAIT_WARMUP_REPLY' || sandboxFlow.step === 'WAIT_REPLY_1' || sandboxFlow.step === 'WAIT_REPLY_2' || sandboxFlow.step === 'WAIT_REPLY_3';
+      const isWaitReplyStep = isSandboxWaitReplyStep(sandboxFlow.step);
       if (isWaitReplyStep) {
         return { ok: false, blockedReason: 'sandbox_wait_reply_global_freeze' };
       }
@@ -2393,8 +2391,15 @@ export default function App() {
       });
       if (waitReplyIndex === 0) {
         sandboxModeRef.current.setFlowStep('POST_REPLY_CHAT', 'player_reply_warmup_consumed');
+      } else if (waitReplyIndex === 1) {
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_1_consumed');
+      } else if (waitReplyIndex === 2) {
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_2_consumed');
+      } else if (waitReplyIndex === 3) {
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_3_consumed');
       } else if ((waitReplyIndex ?? -1) >= 1) {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`);
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', resolveSandboxWaitReplyConsumedReason(waitReplyIndex!));
+        // legacy guard reference: setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)
       } else {
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:submit_rejected' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex, submitRejectedAtStep: sandboxState.flow.step || '' });
@@ -2424,10 +2429,6 @@ export default function App() {
     writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: true, reason: 'consume_success' });
     return true;
   }, [clearChatFreeze, clearReplyUi, deriveSandboxReplyGateState, resolveQna, writeSandboxLastReplyEval]);
-
-  const isSandboxWaitReplyStep = useCallback((step: string | undefined) => {
-    return step === 'WAIT_WARMUP_REPLY' || step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3';
-  }, []);
 
   const setPinnedQuestionMessage = useCallback((payload: {
     source: 'sandboxPromptCoordinator' | 'qnaEngine' | 'eventEngine' | 'autoPinFreeze' | 'unknown';
@@ -3919,7 +3920,7 @@ export default function App() {
       const promptConsonant = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '';
       const overlayConsonant = sandboxState.prompt.overlay.consonantShown || '';
       const sceneSynced = Boolean(expectedCanonicalSceneKey) && expectedCanonicalSceneKey === currentCanonicalSceneKey;
-      const isAnswerablePromptStep = sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
+      const isAnswerablePromptStep = (parseSandboxWaitReplyIndex(sandboxState.flow.step) ?? -1) >= 1;
       const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === 'consonant_answer');
       const renderSyncReason = !stateQuestionId
         ? 'state_question_missing'
@@ -6177,7 +6178,8 @@ export default function App() {
         && st.prompt.current?.kind === 'consonant'
         && st.prompt.current?.wordKey === secondQuestionId
       );
-      const flowAdvanced = st.flow.step === 'WAIT_REPLY_2' || st.flow.step === 'TAG_PLAYER_3_MEANING' || st.flow.step === 'WAIT_REPLY_3' || st.flow.step === 'END_NIGHT';
+      const flowWaitReplyIndex = parseSandboxWaitReplyIndex(st.flow.step);
+      const flowAdvanced = st.flow.step === 'WAIT_REPLY_2' || (flowWaitReplyIndex ?? -1) >= 2 || st.flow.step === 'TAG_PLAYER_3_MEANING' || st.flow.step === 'END_NIGHT';
       const indexAligned = Number.isFinite(st.sandboxFlow?.nextQuestionToIndex)
         && Number.isFinite(st.flow?.questionIndex)
         && st.flow.questionIndex >= st.sandboxFlow.nextQuestionToIndex
@@ -6228,11 +6230,11 @@ export default function App() {
       if (authoritative.parseOk && (!authoritative.judgeAuditWritten || authoritative.consumedAt <= 0 || !authoritative.judgeResult || authoritative.judgeResult === 'not_evaluated')) {
         return 'judge_failed';
       }
-      if (authoritative.parseKind === 'not_evaluated' && authoritative.parseRaw.length === 0 && authoritative.flowStep === 'WAIT_REPLY_1' && authoritative.gateArmed && authoritative.gateType === 'consonant_answer' && authoritative.canReply) {
+      if (authoritative.parseKind === 'not_evaluated' && authoritative.parseRaw.length === 0 && (parseSandboxWaitReplyIndex(authoritative.flowStep) ?? -1) >= 1 && authoritative.gateArmed && authoritative.gateType === 'consonant_answer' && authoritative.canReply) {
         if (authoritative.consumeBlockedReason) return authoritative.consumeBlockedReason;
         return 'message_injected_but_not_consumed';
       }
-      if (authoritative.flowStep === 'WAIT_REPLY_1' && !authoritative.canReply) {
+      if ((parseSandboxWaitReplyIndex(authoritative.flowStep) ?? -1) >= 1 && !authoritative.canReply) {
         return 'message_rejected_by_gate';
       }
       return 'answer_not_consumed';
@@ -6327,7 +6329,7 @@ export default function App() {
     setRunning({ currentStep: 'vip_tag_player' });
     const vipReady = await waitFor(() => {
       const st = sandboxModeRef.current.getState();
-      return st.flow.step === 'WAIT_WARMUP_REPLY' || st.flow.step === 'POST_REPLY_CHAT' || st.flow.step === 'TAG_PLAYER_1' || st.flow.step === 'WAIT_REPLY_1';
+      return isSandboxWaitReplyStep(st.flow.step) || st.flow.step === 'POST_REPLY_CHAT' || st.flow.step === 'TAG_PLAYER_1';
     });
     if (!vipReady) {
       fail('vip_tag_player', 'vip_tag_not_emitted');
@@ -6343,7 +6345,7 @@ export default function App() {
     }
     const firstQuestionReady = await waitFor(() => {
       const st = sandboxModeRef.current.getState();
-      return st.flow.step === 'WAIT_REPLY_1' && st.prompt.current?.kind === 'consonant' && Boolean(st.replyGate?.armed);
+      return (parseSandboxWaitReplyIndex(st.flow.step) ?? -1) >= 1 && st.prompt.current?.kind === 'consonant' && Boolean(st.replyGate?.armed);
     });
     if (!firstQuestionReady) {
       fail('first_question', 'wait_reply_1_or_prompt_not_ready');
@@ -6378,12 +6380,12 @@ export default function App() {
       const authoritative = readFullNightAuthoritativeState();
       const st = sandboxModeRef.current.getState();
       const replyTelemetryConsumed = authoritative.lastConsumedMessageId === answerMessageId && authoritative.lastConsumedAt > 0;
-      return (authoritative.flowStep !== 'WAIT_REPLY_1' || authoritative.gateConsumed || authoritative.consumedAt > 0 || replyTelemetryConsumed)
+      return (authoritative.flowStep !== 'WAIT_REPLY_1' || (parseSandboxWaitReplyIndex(authoritative.flowStep) ?? -1) < 1 || authoritative.gateConsumed || authoritative.consumedAt > 0 || replyTelemetryConsumed)
         && (st.lastReplyEval?.messageId === answerMessageId || st.consonantJudgeAudit?.consumedAt > 0 || replyTelemetryConsumed);
     }, 6_000);
     if (!answerConsumed) {
       const authoritative = readFullNightAuthoritativeState();
-      if (authoritative.lastInjectedMessageId === answerMessageId && authoritative.flowStep === 'WAIT_REPLY_1' && authoritative.gateArmed && authoritative.canReply) {
+      if (authoritative.lastInjectedMessageId === answerMessageId && (parseSandboxWaitReplyIndex(authoritative.flowStep) ?? -1) >= 1 && authoritative.gateArmed && authoritative.canReply) {
         const retryResult = await submitChat(answer, 'debug_simulate');
         if (retryResult.ok) {
           answerMessageId = retryResult.messageId || answerMessageId;
@@ -6391,7 +6393,7 @@ export default function App() {
       }
       const retriedConsumed = await waitFor(() => {
         const authoritative = readFullNightAuthoritativeState();
-        return authoritative.lastConsumedMessageId === answerMessageId || authoritative.flowStep !== 'WAIT_REPLY_1';
+        return authoritative.lastConsumedMessageId === answerMessageId || (parseSandboxWaitReplyIndex(authoritative.flowStep) ?? -1) < 1;
       }, 2_000, 100);
       if (!retriedConsumed) {
         fail('auto_answer_q1', classifyAutoAnswerFailure(readFullNightAuthoritativeState()));
@@ -6428,7 +6430,7 @@ export default function App() {
       fail('auto_answer_q1', 'judge_failed');
       return;
     }
-    if (judgeSnapshot.flowStep === 'WAIT_REPLY_1') {
+    if (judgeSnapshot.flowStep === 'WAIT_REPLY_1' || (parseSandboxWaitReplyIndex(judgeSnapshot.flowStep) ?? -1) >= 1) {
       fail('auto_answer_q1', 'message_injected_but_not_consumed');
       return;
     }
@@ -6440,6 +6442,10 @@ export default function App() {
     if (!revealDone) {
       const authoritative = readFullNightAuthoritativeState();
       if (authoritative.flowStep === 'WAIT_REPLY_1') {
+        fail('auto_answer_q1', classifyAutoAnswerFailure(authoritative));
+        return;
+      }
+      if ((parseSandboxWaitReplyIndex(authoritative.flowStep) ?? -1) >= 1) {
         fail('auto_answer_q1', classifyAutoAnswerFailure(authoritative));
         return;
       }
@@ -6495,7 +6501,7 @@ export default function App() {
 
 
 
-  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3', sourceMessageId?: string) => {
+  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: SandboxWaitReplyStep, sourceMessageId?: string) => {
     sandboxModeRef.current.setFlowStep(waitStep, `${waitStep.toLowerCase()}_entered`, askedAt);
     sandboxModeRef.current.markTagAskedThisStep(askedAt);
     sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
