@@ -1,12 +1,3 @@
-## 2026-03-11 Sandbox NIGHT_01 integrated flow machine fix
-
-- `ADVANCE_NEXT` handoff 改為 atomic：先驗證 `advanceFromQuestionId` 的 per-question chain，再一次性完成 questionIndex/prompt/nextFlowStep/nextQuestion emit。
-- 移除 `beforeAdvance===0/1` 硬編碼，改為 `TAG_PLAYER_(index+1)` + `WAIT_REPLY_(index+1)` 動態路由，補齊 Q4+ coverage。
-- 新增 guard：
-  - `flow.step===ADVANCE_NEXT && prompt.questionId !== advanceFromQuestionId` => `illegal half-advanced prompt detected` warning。
-  - `prompt 已切題但 step 未進對應 WAIT_REPLY_x` => `prompt-step divergence` warning。
-- `scene_not_synced_warning` 保留為 projection warning，不再影響 consume/eval/reveal/advance/emit。
-
 ## 2026-03-11 sandbox audit fix：Q2/Q3 consume shortcut + cross-question evidence pollution
 
 - Root cause confirmed
