@@ -2089,13 +2089,19 @@ export default function App() {
     }
     const sandboxState = sandboxModeRef.current.getState();
     const gate = sandboxState.replyGate;
+    const authoritativeCanReply = Boolean(
+      gate?.armed
+      && gate?.canReply
+      && gate?.gateType === 'consonant_answer'
+      && isSandboxWaitReplyStep(sandboxState.flow.step)
+    );
     return {
       replyGateArmed: Boolean(gate?.armed),
       replyGateType: gate?.gateType && gate.gateType !== 'none' ? gate.gateType : null,
       replyTarget: gate?.targetPlayerId || null,
       replySourceMessageId: gate?.sourceMessageId || null,
       replySourceType: gate?.sourceType || null,
-      canReply: Boolean(gate?.canReply)
+      canReply: authoritativeCanReply
     };
   }, []);
 
@@ -3920,8 +3926,11 @@ export default function App() {
       const promptConsonant = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '';
       const overlayConsonant = sandboxState.prompt.overlay.consonantShown || '';
       const sceneSynced = Boolean(expectedCanonicalSceneKey) && expectedCanonicalSceneKey === currentCanonicalSceneKey;
-      const isAnswerablePromptStep = (parseSandboxWaitReplyIndex(sandboxState.flow.step) ?? -1) >= 1;
+      const isAnswerablePromptStep = isSandboxWaitReplyStep(sandboxState.flow.step);
       const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === 'consonant_answer');
+      const authoritativeCanReply = Boolean(gateAuthoritativeReady && isAnswerablePromptStep);
+      const hasCurrentPrompt = Boolean(stateQuestionId && promptConsonant);
+      const authoritativePromptVisible = authoritativeCanReply && hasCurrentPrompt;
       const renderSyncReason = !stateQuestionId
         ? 'state_question_missing'
         : (!promptConsonant ? 'prompt_missing'
@@ -3974,6 +3983,8 @@ export default function App() {
       const promptGlyphClassName = revealPromptSuppressed
         ? 'sandbox-story-prompt-glyph reveal-cleanup'
         : 'glyph-blink sandbox-story-prompt-glyph';
+      const promptVisibleButNotAnswerable = !revealPromptSuppressed && Boolean(hasCurrentPrompt) && !authoritativeCanReply;
+      const answerableButPromptHidden = authoritativePromptVisible && revealPromptSuppressed;
       bumpSandboxRevealTick(now);
       (window.__CHAT_DEBUG__ as any).sandbox = {
         ...((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}),
@@ -4065,7 +4076,7 @@ export default function App() {
         ui: {
           consonantBubble: {
             visible: Boolean(sandboxState.flow.step && sandboxState.scheduler.phase && sandboxState.introGate.startedAt > 0)
-              && (sandboxState.replyGate?.armed ? Boolean(renderedQuestionId) : true)
+              && authoritativePromptVisible
               && !revealPromptSuppressed
           },
           promptGlyph: {
@@ -4073,11 +4084,18 @@ export default function App() {
             colorResolved: revealPromptSuppressed ? 'transparent' : '#8fd6ff',
             opacityResolved: revealPromptSuppressed
               ? '0'
-              : ((sandboxState.replyGate?.armed && renderedQuestionId) ? '1' : 'dynamic'),
+              : (authoritativePromptVisible ? '1' : 'dynamic'),
             source: revealPromptSuppressed
               ? 'reveal_prompt_cleanup'
-              : ((sandboxState.replyGate?.armed && renderedQuestionId) ? 'authoritative_reply_gate_sync' : 'cssVar'),
+              : (authoritativePromptVisible ? 'authoritative_reply_gate_sync' : 'cssVar'),
             isBlueExpected: !revealPromptSuppressed
+          },
+          answerabilityHint: {
+            visible: authoritativePromptVisible
+          },
+          divergence: {
+            promptVisibleButNotAnswerable,
+            answerableButPromptHidden
           }
         },
         word: {
@@ -5864,6 +5882,21 @@ export default function App() {
     return consonantShown;
   }, [state.currentConsonant.letter]);
 
+
+  const getSandboxAuthoritativePromptVisible = useCallback(() => {
+    if (modeIdRef.current !== 'sandbox_story') return true;
+    const st = sandboxModeRef.current.getState();
+    const currentPrompt = st.prompt.current;
+    const hasCurrentPrompt = Boolean(currentPrompt?.kind === 'consonant' && currentPrompt.wordKey && currentPrompt.consonant);
+    const authoritativeCanReply = Boolean(
+      st.replyGate?.armed
+      && st.replyGate?.canReply
+      && st.replyGate?.gateType === 'consonant_answer'
+      && isSandboxWaitReplyStep(st.flow.step)
+    );
+    return authoritativeCanReply && hasCurrentPrompt;
+  }, []);
+
   const resolveSandboxSceneKeyByQuestionIndex = useCallback((questionIndex: number): 'loop2' | 'loop3' | 'loop4' => {
     if (questionIndex <= 0) return 'loop3';
     if (questionIndex === 1) return 'loop2';
@@ -7540,6 +7573,7 @@ export default function App() {
           {!hasFatalInitError ? (
             <SceneView
               targetConsonant={getSandboxOverlayConsonant()}
+              promptVisible={getSandboxAuthoritativePromptVisible()}
               curse={state.curse}
               anchor={state.currentAnchor}
               isDesktopLayout={isDesktopLayout}
@@ -8045,6 +8079,8 @@ export default function App() {
                     <div>ui.promptGlyph.opacityResolved: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.opacityResolved ?? '-'}</div>
                     <div>ui.promptGlyph.source: {(window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.source ?? '-'}</div>
                     <div>ui.promptGlyph.isBlueExpected: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.promptGlyph?.isBlueExpected ?? false)}</div>
+                    <div>ui.divergence.promptVisibleButNotAnswerable: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.divergence?.promptVisibleButNotAnswerable ?? false)}</div>
+                    <div>ui.divergence.answerableButPromptHidden: {String((window.__CHAT_DEBUG__ as any)?.sandbox?.ui?.divergence?.answerableButPromptHidden ?? false)}</div>
                     <div>sandbox.debug.isolatedTagLock: {String(debugIsolatedTagLock)}</div>
                     <div>freeze.active / pinned.text: {String((window.__CHAT_DEBUG__ as any)?.chat?.freeze?.isFrozen ?? false)} / {((window.__CHAT_DEBUG__ as any)?.ui?.pinned?.textPreview ?? '-')}</div>
                     <div>sandbox.pinned.sourceType: {(window.__CHAT_DEBUG__ as any)?.ui?.sandboxPinned?.sourceType ?? '-'}</div>
