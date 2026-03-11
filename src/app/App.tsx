@@ -126,6 +126,38 @@ const SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS = 900;
 const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
 const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
 
+const parseSandboxWaitReplyIndex = (step: string | undefined): number | null => {
+  if (!step) return null;
+  if (step === 'WAIT_WARMUP_REPLY') return 0;
+  const match = /^WAIT_REPLY_(\d+)$/.exec(step);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const parseSandboxTagStepIndex = (step: string | undefined): number | null => {
+  if (!step) return null;
+  if (step === 'TAG_PLAYER_1') return 1;
+  if (step === 'TAG_PLAYER_2_PRONOUNCE') return 2;
+  if (step === 'TAG_PLAYER_3_MEANING') return 3;
+  const match = /^TAG_PLAYER_(\d+)$/.exec(step);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const resolveSandboxTagStepByQuestionNumber = (questionNumber: number): string => {
+  if (questionNumber <= 1) return 'TAG_PLAYER_1';
+  if (questionNumber === 2) return 'TAG_PLAYER_2_PRONOUNCE';
+  if (questionNumber === 3) return 'TAG_PLAYER_3_MEANING';
+  return `TAG_PLAYER_${questionNumber}`;
+};
+
+const resolveSandboxWaitReplyStepByQuestionNumber = (questionNumber: number): string => {
+  if (questionNumber <= 0) return 'WAIT_WARMUP_REPLY';
+  return `WAIT_REPLY_${questionNumber}`;
+};
+
 type ChatSendSource =
   | 'player_input'
   | 'audience_idle'
@@ -1337,7 +1369,7 @@ export default function App() {
     const sourceTag = options?.sourceTag ?? source;
     if (modeRef.current.id === 'sandbox_story' && source !== 'player_input') {
       const sandboxFlow = sandboxModeRef.current.getState().sandboxFlow;
-      const isWaitReplyStep = sandboxFlow.step === 'WAIT_WARMUP_REPLY' || sandboxFlow.step === 'WAIT_REPLY_1' || sandboxFlow.step === 'WAIT_REPLY_2' || sandboxFlow.step === 'WAIT_REPLY_3';
+      const isWaitReplyStep = parseSandboxWaitReplyIndex(sandboxFlow.step) !== null;
       if (isWaitReplyStep) {
         return { ok: false, blockedReason: 'sandbox_wait_reply_global_freeze' };
       }
@@ -2216,9 +2248,10 @@ export default function App() {
       const extraction = extractConsonantAnswerPayload(raw);
       const stripped = extraction.stripped;
       const derivedGate = deriveSandboxReplyGateState();
-      const waitReplyStep = sandboxState.flow.step === 'WAIT_WARMUP_REPLY' || sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
+      const waitReplyIndex = parseSandboxWaitReplyIndex(sandboxState.flow.step);
+      const waitReplyStep = waitReplyIndex !== null;
       const expectedGateType = waitReplyStep
-        ? (sandboxState.flow.step === 'WAIT_WARMUP_REPLY' ? 'warmup_tag' : 'consonant_answer')
+        ? (waitReplyIndex === 0 ? 'warmup_tag' : 'consonant_answer')
         : null;
       const gate = waitReplyStep
         ? {
@@ -2354,14 +2387,10 @@ export default function App() {
         consumeResult: 'consumed',
         consumeBlockedReason: ''
       });
-      if (sandboxState.flow.step === 'WAIT_WARMUP_REPLY') {
+      if (waitReplyIndex === 0) {
         sandboxModeRef.current.setFlowStep('POST_REPLY_CHAT', 'player_reply_warmup_consumed');
-      } else if (sandboxState.flow.step === 'WAIT_REPLY_1') {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_1_consumed');
-      } else if (sandboxState.flow.step === 'WAIT_REPLY_2') {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_2_consumed');
-      } else if (sandboxState.flow.step === 'WAIT_REPLY_3') {
-        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', 'player_reply_3_consumed');
+      } else if (waitReplyIndex !== null) {
+        sandboxModeRef.current.setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`);
       } else {
         persistReplyTelemetry({ consumeResult: 'blocked', consumeBlockedReason: 'reply_blocked:submit_rejected' });
         writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: stripped, extractedAnswer: stripped, consumed: false, reason: 'submit_rejected', gate: evalGate, messageId: payload.messageId });
@@ -2393,7 +2422,7 @@ export default function App() {
   }, [clearChatFreeze, clearReplyUi, deriveSandboxReplyGateState, resolveQna, writeSandboxLastReplyEval]);
 
   const isSandboxWaitReplyStep = useCallback((step: string | undefined) => {
-    return step === 'WAIT_WARMUP_REPLY' || step === 'WAIT_REPLY_1' || step === 'WAIT_REPLY_2' || step === 'WAIT_REPLY_3';
+    return parseSandboxWaitReplyIndex(step) !== null;
   }, []);
 
   const setPinnedQuestionMessage = useCallback((payload: {
@@ -3886,7 +3915,8 @@ export default function App() {
       const promptConsonant = sandboxState.prompt.current?.kind === 'consonant' ? sandboxState.prompt.current.consonant : '';
       const overlayConsonant = sandboxState.prompt.overlay.consonantShown || '';
       const sceneSynced = Boolean(expectedCanonicalSceneKey) && expectedCanonicalSceneKey === currentCanonicalSceneKey;
-      const isAnswerablePromptStep = sandboxState.flow.step === 'WAIT_REPLY_1' || sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'WAIT_REPLY_3';
+      const currentWaitReplyIndex = parseSandboxWaitReplyIndex(sandboxState.flow.step);
+      const isAnswerablePromptStep = currentWaitReplyIndex !== null && currentWaitReplyIndex > 0;
       const gateAuthoritativeReady = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.canReply && sandboxState.replyGate?.gateType === 'consonant_answer');
       const renderSyncReason = !stateQuestionId
         ? 'state_question_missing'
@@ -3895,7 +3925,7 @@ export default function App() {
             : (sceneSynced ? 'none' : 'scene_not_synced_warning')));
       const authoritativeQ2Advanced = sandboxState.sandboxFlow.nextQuestionEmitted
         && sandboxState.sandboxFlow.nextQuestionToQuestionId
-        && (sandboxState.flow.step === 'WAIT_REPLY_2' || sandboxState.flow.step === 'TAG_PLAYER_3_MEANING' || sandboxState.flow.step === 'WAIT_REPLY_3' || sandboxState.flow.step === 'END_NIGHT')
+        && ((parseSandboxWaitReplyIndex(sandboxState.flow.step) ?? 0) >= 2 || sandboxState.flow.step === 'END_NIGHT')
         && sandboxState.prompt.current?.kind === 'consonant'
         && sandboxState.prompt.current.wordKey === sandboxState.sandboxFlow.nextQuestionToQuestionId;
       const promptVisuallyReady = Boolean(stateQuestionId && promptConsonant && overlayConsonant === promptConsonant);
@@ -6144,7 +6174,7 @@ export default function App() {
         && st.prompt.current?.kind === 'consonant'
         && st.prompt.current?.wordKey === secondQuestionId
       );
-      const flowAdvanced = st.flow.step === 'WAIT_REPLY_2' || st.flow.step === 'TAG_PLAYER_3_MEANING' || st.flow.step === 'WAIT_REPLY_3' || st.flow.step === 'END_NIGHT';
+      const flowAdvanced = (parseSandboxWaitReplyIndex(st.flow.step) ?? 0) >= 2 || st.flow.step === 'END_NIGHT';
       const indexAligned = Number.isFinite(st.sandboxFlow?.nextQuestionToIndex)
         && Number.isFinite(st.flow?.questionIndex)
         && st.flow.questionIndex >= st.sandboxFlow.nextQuestionToIndex
@@ -6462,7 +6492,7 @@ export default function App() {
 
 
 
-  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: 'WAIT_WARMUP_REPLY' | 'WAIT_REPLY_1' | 'WAIT_REPLY_2' | 'WAIT_REPLY_3', sourceMessageId?: string) => {
+  const sandboxFreezeAndWaitForReply = useCallback((askedAt: number, reason: string, waitStep: string, sourceMessageId?: string) => {
     sandboxModeRef.current.setFlowStep(waitStep, `${waitStep.toLowerCase()}_entered`, askedAt);
     sandboxModeRef.current.markTagAskedThisStep(askedAt);
     sandboxModeRef.current.setFreeze({ frozen: true, reason: 'AWAIT_PLAYER_INPUT', frozenAt: askedAt });
@@ -7010,7 +7040,6 @@ export default function App() {
         }
         bumpSandboxRevealTick();
       }
-    }
 
 
     if (sandboxState.flow.step === 'POSSESSION_AUTOFILL') {
@@ -7169,6 +7198,56 @@ export default function App() {
       });
       bumpSandboxRevealTick();
     }
+
+    const dynamicTagQuestionNumber = parseSandboxTagStepIndex(sandboxState.flow.step);
+    if (dynamicTagQuestionNumber !== null && dynamicTagQuestionNumber >= 4) {
+      if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
+      const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
+      const speaker = 'mod_live';
+      const line = `@${taggedUser} 第 ${dynamicTagQuestionNumber} 題，請直接回答你看到的子音。`;
+      const sourceTag = `sandbox_tag_player_${dynamicTagQuestionNumber}`;
+      void runTagStartFlow({
+        tagMessage: {
+          id: crypto.randomUUID(),
+          username: speaker,
+          type: 'chat',
+          text: line,
+          language: 'zh',
+          translation: line,
+          tagTarget: speaker
+        },
+        pinnedText: line,
+        shouldFreeze: true,
+        appendMessage: (message) => {
+          const sent = dispatchChatMessage(message, { source: 'sandbox_consonant', sourceTag });
+          if (!sent.ok) return sent;
+          return { ok: true as const, messageId: sent.messageId };
+        },
+        forceScrollToBottom: async ({ reason }) => {
+          setScrollMode('FOLLOW', `sandbox_tag${dynamicTagQuestionNumber}_${reason}`);
+          setChatFreeze({ isFrozen: false, reason: null, startedAt: null });
+          setPendingForceScrollReason(`sandbox_tag${dynamicTagQuestionNumber}_${reason}`);
+          await nextAnimationFrame();
+        },
+        setPinnedReply: ({ messageId }) => {
+          const askedAt = Date.now();
+          markQnaQuestionCommitted(qnaStateRef.current, { messageId, askedAt });
+          lockStateRef.current = { isLocked: true, target: speaker, startedAt: askedAt, replyingToMessageId: messageId };
+          const pinnedOk = setPinnedQuestionMessage({ source: 'sandboxPromptCoordinator', messageId, hasTagToActiveUser: true });
+          if (!pinnedOk) setReplyPreviewSuppressedReason('sandbox_pinned_writer_guard');
+        },
+        freezeChat: ({ reason }) => {
+          const askedAt = Date.now();
+          sandboxTechBacklogRef.current = [];
+          sandboxTechBacklogTotalWaitMsRef.current = 0;
+          sandboxTechBacklogLastAtRef.current = askedAt;
+          sandboxModeRef.current.markTagAskedThisStep(askedAt);
+          const waitStep = resolveSandboxWaitReplyStepByQuestionNumber(dynamicTagQuestionNumber);
+          sandboxFreezeAndWaitForReply(askedAt, reason, waitStep);
+        }
+      });
+      bumpSandboxRevealTick();
+    }
     if (sandboxState.flow.step === 'FLUSH_TECH_BACKLOG') {
       const waitedMs = Math.max(sandboxTechBacklogTotalWaitMsRef.current, Date.now() - (sandboxState.flow.stepStartedAt || Date.now()));
       const roundedMinutes = Math.max(1, Math.round((waitedMs / 60000) / 5) * 5 || 1);
@@ -7190,21 +7269,30 @@ export default function App() {
         advanceNextEnteredAt: sandboxState.sandboxFlow.advanceNextEnteredAt || sandboxState.flow.stepStartedAt || Date.now()
       });
       const refreshedState = sandboxModeRef.current.getState();
-      const refreshedPostRevealDone = hasPostRevealCompletionEvidence(refreshedState);
       const beforeAdvance = refreshedState.flow.questionIndex;
       const fromNode = sandboxModeRef.current.getCurrentNode();
       const fromQuestionId = fromNode?.id ?? '';
+      const advanceFromQuestionId = refreshedState.sandboxFlow?.postRevealCompletedQuestionId || fromQuestionId;
       const decidedAt = Date.now();
-      const answerEvalDoneForQuestion = refreshedState.sandboxFlow?.answerEvalCompletedQuestionId === fromQuestionId;
-      const revealDoneForQuestion = refreshedState.sandboxFlow?.revealCommittedQuestionId === fromQuestionId;
-      const postRevealDoneForQuestion = refreshedState.sandboxFlow?.postRevealCompletedQuestionId === fromQuestionId;
+      const refreshedPostRevealDone = hasPostRevealCompletionEvidence(refreshedState);
+      const promptQuestionId = refreshedState.prompt.current?.wordKey || refreshedState.currentPrompt?.wordKey || '';
+      const answerEvalDoneForQuestion = refreshedState.sandboxFlow?.answerEvalCompletedQuestionId === advanceFromQuestionId;
+      const revealDoneForQuestion = refreshedState.sandboxFlow?.revealCommittedQuestionId === advanceFromQuestionId;
+      const postRevealDoneForQuestion = refreshedState.sandboxFlow?.postRevealCompletedQuestionId === advanceFromQuestionId;
+      if (promptQuestionId && advanceFromQuestionId && promptQuestionId !== advanceFromQuestionId) {
+        console.warn('[sandbox][guard] illegal half-advanced prompt detected', {
+          step: refreshedState.flow.step,
+          promptQuestionId,
+          advanceFromQuestionId
+        });
+      }
       if (!(answerEvalDoneForQuestion && revealDoneForQuestion && postRevealDoneForQuestion)) {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionReady: false,
           nextQuestionEmitted: false,
           nextQuestionFromIndex: beforeAdvance,
           nextQuestionToIndex: -1,
-          nextQuestionFromQuestionId: fromQuestionId,
+          nextQuestionFromQuestionId: advanceFromQuestionId,
           nextQuestionToQuestionId: '',
           nextQuestionBlockedReason: 'advance_next_blocked:missing_per_question_chain',
           nextQuestionDecidedAt: decidedAt,
@@ -7221,7 +7309,7 @@ export default function App() {
           nextQuestionEmitted: false,
           nextQuestionFromIndex: beforeAdvance,
           nextQuestionToIndex: -1,
-          nextQuestionFromQuestionId: fromQuestionId,
+          nextQuestionFromQuestionId: advanceFromQuestionId,
           nextQuestionToQuestionId: '',
           nextQuestionBlockedReason: 'advance_next_blocked:post_reveal_chat_not_done',
           nextQuestionDecidedAt: decidedAt,
@@ -7238,7 +7326,7 @@ export default function App() {
           nextQuestionEmitted: false,
           nextQuestionFromIndex: beforeAdvance,
           nextQuestionToIndex: -1,
-          nextQuestionFromQuestionId: fromQuestionId,
+          nextQuestionFromQuestionId: advanceFromQuestionId,
           nextQuestionToQuestionId: '',
           nextQuestionBlockedReason: 'advance_next_blocked:reply_gate_still_armed',
           nextQuestionDecidedAt: decidedAt,
@@ -7250,14 +7338,14 @@ export default function App() {
         };
       }
       sandboxWaveRunningRef.current = false;
-      const advanced = sandboxModeRef.current.forceAdvanceNode();
+      const advanced = sandboxModeRef.current.advancePrompt('advance_next_atomic_emit');
       if (!advanced) {
         sandboxModeRef.current.setSandboxFlow({
           nextQuestionReady: false,
           nextQuestionEmitted: false,
           nextQuestionFromIndex: beforeAdvance,
           nextQuestionToIndex: -1,
-          nextQuestionFromQuestionId: fromQuestionId,
+          nextQuestionFromQuestionId: advanceFromQuestionId,
           nextQuestionToQuestionId: '',
           nextQuestionBlockedReason: 'advance_next_blocked:end_of_nodes',
           nextQuestionDecidedAt: decidedAt,
@@ -7270,6 +7358,8 @@ export default function App() {
       }
       const afterState = sandboxModeRef.current.getState();
       const afterNode = sandboxModeRef.current.getCurrentNode();
+      const nextQuestionNumber = afterState.flow.questionIndex + 1;
+      const nextTagStep = resolveSandboxTagStepByQuestionNumber(nextQuestionNumber);
       if (afterNode) {
         sandboxModeRef.current.setCurrentPrompt({
           kind: 'consonant',
@@ -7280,12 +7370,9 @@ export default function App() {
           correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
           unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
         });
-        requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(afterState.flow.questionIndex), reason: `advance_next_emit_q${afterState.flow.questionIndex + 1}`, sourceEventKey: 'SCENE_REQUEST' });
+        requestSceneAction({ type: 'REQUEST_VIDEO_SWITCH', key: resolveSandboxSceneKeyByQuestionIndex(afterState.flow.questionIndex), reason: `advance_next_emit_q${nextQuestionNumber}`, sourceEventKey: 'SCENE_REQUEST' });
       }
-      const nextFlowStep = beforeAdvance === 0 ? 'TAG_PLAYER_2_PRONOUNCE' : (beforeAdvance === 1 ? 'TAG_PLAYER_3_MEANING' : afterState.flow.step);
-      if (nextFlowStep !== afterState.flow.step) {
-        sandboxModeRef.current.setFlowStep(nextFlowStep, 'next_question_emitted');
-      }
+      sandboxModeRef.current.setFlowStep(nextTagStep, 'next_question_emitted');
       sandboxModeRef.current.setSandboxFlow({
         postRevealChatState: 'idle',
         postRevealStartAttempted: false,
@@ -7305,7 +7392,7 @@ export default function App() {
         nextQuestionEmitted: true,
         nextQuestionFromIndex: beforeAdvance,
         nextQuestionToIndex: afterState.flow.questionIndex,
-        nextQuestionFromQuestionId: fromQuestionId,
+        nextQuestionFromQuestionId: advanceFromQuestionId,
         nextQuestionToQuestionId: afterNode?.id ?? '',
         nextQuestionBlockedReason: 'emitted',
         nextQuestionBlockedReasonSource: 'advance_next',
@@ -7314,6 +7401,19 @@ export default function App() {
         nextQuestionEmittedAt: Date.now(),
         nextQuestionConsumer: 'advance_next_effect'
       });
+      const postEmitState = sandboxModeRef.current.getState();
+      const postEmitPromptQuestionId = postEmitState.prompt.current?.wordKey || postEmitState.currentPrompt?.wordKey || '';
+      const postEmitWaitIndex = parseSandboxWaitReplyIndex(postEmitState.flow.step);
+      if (postEmitPromptQuestionId && postEmitWaitIndex !== null && postEmitWaitIndex > 0) {
+        const expectedWaitQuestionId = postEmitState.sandboxFlow?.nextQuestionToQuestionId || postEmitPromptQuestionId;
+        if (postEmitPromptQuestionId !== expectedWaitQuestionId) {
+          console.warn('[sandbox][guard] prompt-step divergence', {
+            flowStep: postEmitState.flow.step,
+            promptQuestionId: postEmitPromptQuestionId,
+            expectedWaitQuestionId
+          });
+        }
+      }
       if (beforeAdvance >= 10) {
         sandboxModeRef.current.setSandboxFlow({ autoplayNightStatus: 'completed' });
       }
@@ -7321,6 +7421,7 @@ export default function App() {
       sandboxModeRef.current.setLastTimestamps({ lastAskAt: 0 });
       sandboxConsonantPromptNodeIdRef.current = null;
       bumpSandboxRevealTick();
+    }
     }
     return () => {
       clearSandboxRevealDoneTimer();

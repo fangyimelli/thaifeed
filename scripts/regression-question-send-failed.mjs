@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 
-const WAIT_REPLY_STEPS = new Set(['WAIT_REPLY_1', 'WAIT_REPLY_2', 'WAIT_REPLY_3']);
+const isWaitReplyStep = (step) => /^WAIT_REPLY_\d+$/.test(step);
 
 function deriveReplyGateFromSandboxFlow(flow) {
   return {
-    replyGateArmed: WAIT_REPLY_STEPS.has(flow.step),
-    replyGateType: WAIT_REPLY_STEPS.has(flow.step) ? 'consonant_wait_reply' : null,
+    replyGateArmed: isWaitReplyStep(flow.step),
+    replyGateType: isWaitReplyStep(flow.step) ? 'consonant_wait_reply' : null,
     replyTarget: flow.replyTarget
   };
 }
