@@ -1,3 +1,10 @@
+## 2026-03-11 Sandbox WAIT_REPLY_x -> ANSWER_EVAL 鏈路修復（AUDIT-BASED FIX）
+
+- 修正主因：`WAIT_REPLY_2/WAIT_REPLY_3` consume 後不再 shortcut 到 `ADVANCE_NEXT`，統一改回 `ANSWER_EVAL -> REVEAL_WORD -> POST_REVEAL_CHAT -> ADVANCE_NEXT`。
+- 修正跨題污染：`ADVANCE_NEXT` completion evidence 改為同題綁定（`questionId/postRevealCompletedQuestionId/revealCommittedQuestionId/answerEvalCompletedQuestionId`），禁止吃前題 `post_reveal_chat_done`。
+- 修正 reveal debug 殘留：新增 per-question snapshot 欄位（`revealSnapshotQuestionId/revealSnapshotWordKey`），切題/設題時重置 reveal snapshot 與 commit source，未進 reveal 顯示 `reveal.notEntered=true`。
+- 每次輸入仍保留 authoritative 判定紀錄：`lastReplyEval + consonantJudgeAudit + reply.consume*`。
+
 ## 2026-03-11 Sandbox NIGHT_01 Deadlock Fix
 
 - 修復 `POST_REVEAL_CHAT` entered-but-not-started deadlock：reveal done runner 不再只允許 `REVEAL_WORD`，改為 `REVEAL_WORD/POST_REVEAL_CHAT/ADVANCE_NEXT` 的 authoritative step allowlist。
