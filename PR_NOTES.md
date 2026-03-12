@@ -1,32 +1,31 @@
-## Summary
+## 2026-03-12 Sandbox QnA stall-timeout build fix (minimal set)
 
-### classic 為何未受影響
-- classic mode 的 prompt wording / hint wording / judge pipeline 維持現狀；本次僅把 alias/acceptedCandidates 的來源收斂到同一 SSOT，並補齊 common playable 集合至 29 子音（含 `ฬ`）。
-- classic 仍採隨機選題（common pool random + scheduler），未改 classic 出題流程與互動節奏。
+### Root Cause Report
+- `src/app/App.tsx` imported `isQnaAwaitingReplyGateOpen` and called `shouldAbortStalledAsking`, but `src/game/qna/qnaEngine.ts` does not export either symbol.
+- This created a build break from a partial refactor (App caller surface drifted from qnaEngine authoritative API).
 
-### 29 子音 SSOT
-- 新增 `src/shared/consonant-engine/consonantBank.ts`：
-  - `AUTHORITATIVE_CONSONANT_BANK`（29）
-  - 每項欄位：`consonant/revealWord/acceptedCandidates/imageMemoryHint`
-  - `SANDBOX_NIGHT_CONSONANT_POOLS`（N1/N2/N3）
-  - `HELP_REQUEST_KEYWORDS` + `isHelpRequest`
+### What changed
+- Removed dead import `isQnaAwaitingReplyGateOpen` from `App.tsx`.
+- Replaced stalled-abort precheck from legacy `shouldAbortStalledAsking(...)` to authoritative `isAskingStalled(qnaStateRef.current, undefined, now)`.
+- No fake compatibility wrapper added; authoritative source remains `qnaEngine.isAskingStalled + active.status lifecycle`.
+- Added regression guard in `scripts/sandbox-v2-regression-guards.mjs`:
+  - fail if App contains `isQnaAwaitingReplyGateOpen`
+  - fail if App contains `shouldAbortStalledAsking`
+  - fail if timer loop does not use `isAskingStalled(..., now)`
 
-### sandbox night pools
-- `src/ssot/sandbox_story/nightQuestionPools.ts` 改為由 SSOT bank + `SANDBOX_NIGHT_CONSONANT_POOLS` 建構。
-- 每夜 10 題固定集合，questionId 依 NIGHT mapping 對齊，進夜仍由 runtime `questionOrder` shuffle。
+### Flow impact check (minimal risk)
+- asking: unchanged lifecycle owner (`active.status='ASKING'`)
+- awaiting reply: unchanged owner/gate (`AWAITING_REPLY` path untouched)
+- stalled asking abort/timeout: now exclusively gated by authoritative `isAskingStalled`
+- reveal/post-reveal handoff: unchanged (sandbox reveal flow not modified)
 
-### shared judge pipeline
-- sandbox consonant gate 持續使用 `parseAndJudgeUsingClassic`。
-- `acceptedCandidates` 統一取自 authoritative consonant bank，確保泰文/英文/注音 alias resolution 一致。
+### Required docs sync
+- README updated.
+- docs/10-change-log.md updated.
+- docs/sandbox-flow-table.md updated.
+- PR_NOTES and `.github/pull_request_template.md` synchronized.
 
-### image memory hint system
-- HELP REQUEST 語意命中後：
-  - 不判錯、不 reveal、不跳題
-  - 保持 currentQuestion/gate
-  - 由 viewer 發送 image memory 提示（`hint.source=imageMemoryLibrary`）
-  - 留下 `help_requested` 判定與 telemetry
-
-## Validation results
-- `npm run test:sandbox-guards`：通過（含新增 regression guards：29 SSOT、help request、end_of_question_pool reason）。
-- `npm run build`：通過。
+### Scope
+- Sandbox/QnA integration minimal fix only.
+- No classic mode behavior changes.
 
