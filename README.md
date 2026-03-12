@@ -1,3 +1,13 @@
+## 2026-03-12 QNA helper import cleanup build validation
+
+- 確認 `src/app/App.tsx` 不再引用已移除的 qnaEngine helper：`isQnaAwaitingReplyGateOpen`、`shouldAbortStalledAsking`。
+- stalled asking timeout 只使用 authoritative API：`isAskingStalled(qnaStateRef.current, undefined, now)`，不新增 compatibility wrapper。
+- 本次僅為 build 修復與驗證，不變更 classic 出題邏輯與 qna state machine 行為。
+
+### Removed / Deprecated Log
+
+- 2026-03-12：確認 App 端舊 helper surface 已清除（無雙軌保留）。
+
 ## 2026-03-12 Sandbox QnA stall-timeout build fix (minimal set)
 
 - 移除 `src/app/App.tsx` 對 `isQnaAwaitingReplyGateOpen` 的 dead import（`qnaEngine` 無 export 且 App 未使用）。
