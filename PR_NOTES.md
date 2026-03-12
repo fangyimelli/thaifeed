@@ -1,3 +1,19 @@
+## 2026-03-12 TypeScript build fix: stale qnaEngine helper imports
+
+### Root cause
+- `src/app/App.tsx` referenced removed qnaEngine helper exports (`isQnaAwaitingReplyGateOpen`, `shouldAbortStalledAsking`) after API cleanup, causing TS import errors.
+
+### Removed helpers / callsites
+- Removed stale App-side references to `isQnaAwaitingReplyGateOpen`.
+- Removed stale App-side references to `shouldAbortStalledAsking` and kept authoritative `isAskingStalled(...)` usage.
+
+### Why classic behavior is unchanged
+- No classic mode logic path was edited.
+- No qna engine state machine/state shape changes were introduced; this patch is integration-surface cleanup only.
+
+### Build validation
+- `npm run build` passes (`tsc -b` + `vite build`).
+
 ## 2026-03-12 Sandbox QnA stall-timeout build fix (minimal set)
 
 ### Root Cause Report

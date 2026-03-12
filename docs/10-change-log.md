@@ -1,3 +1,9 @@
+## 2026-03-12 Build fix: stale qnaEngine imports removed from App.tsx
+
+- Fix: removed stale imports from `App.tsx` referencing qnaEngine helpers.
+- Validated `App.tsx` stalled asking guard uses `isAskingStalled(qnaStateRef.current, undefined, now)` as authoritative API.
+- No classic mode behavior change; no qna state machine/state schema changes.
+
 ## 2026-03-12 Sandbox QnA stall-timeout build fix (minimal set)
 
 ### Root cause
