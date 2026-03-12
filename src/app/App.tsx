@@ -132,6 +132,7 @@ const SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS = 1800;
 const SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS = 900;
 const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
 const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
+const QNA_COMMIT_TIMEOUT_MS = 8_000;
 
 
 const resolveSandboxWaitReplyConsumedReason = (waitReplyIndex: number): string => {
@@ -1073,6 +1074,17 @@ export default function App() {
     sourceType: '-'
   });
   const qnaStateRef = useRef(createInitialQnaState());
+  const qnaTxnTraceRef = useRef<{
+    txId: string;
+    lastCheckpoint: 'idle' | 'qna_started' | 'question_append_ok' | 'question_committed' | 'aborted';
+    checkpointAt: number;
+    abortReason: string | null;
+  }>({
+    txId: '',
+    lastCheckpoint: 'idle',
+    checkpointAt: 0,
+    abortReason: null
+  });
   const messageSeqRef = useRef(0);
   const eventQueueRef = useRef<{ key: StoryEventKey; source: 'qna' }[]>([]);
   const eventExclusiveStateRef = useRef<{ exclusive: boolean; currentEventId: string | null; currentLockOwner: string | null }>({
@@ -1774,6 +1786,45 @@ export default function App() {
       }
     };
   }, []);
+
+  const syncQnaTxnDebug = useCallback(() => {
+    const trace = qnaTxnTraceRef.current;
+    updateEventDebug({
+      event: {
+        ...(window.__CHAT_DEBUG__?.event ?? {}),
+        lastEvent: {
+          ...(window.__CHAT_DEBUG__?.event?.lastEvent ?? {}),
+          qnaTxId: trace.txId || '-',
+          qnaCheckpoint: trace.lastCheckpoint,
+          qnaCheckpointAt: trace.checkpointAt || null,
+          qnaAbortReason: trace.abortReason ?? '-'
+        },
+        qna: {
+          ...(window.__CHAT_DEBUG__?.event?.qna ?? {}),
+          active: {
+            ...(window.__CHAT_DEBUG__?.event?.qna as { active?: Record<string, unknown> } | undefined)?.active,
+            ...qnaStateRef.current.active,
+            id: qnaStateRef.current.active.id,
+            txId: trace.txId || '-',
+            checkpoint: trace.lastCheckpoint,
+            checkpointAt: trace.checkpointAt || null,
+            abortReason: qnaStateRef.current.active.abortReason ?? trace.abortReason ?? null
+          }
+        }
+      }
+    });
+  }, [updateEventDebug]);
+
+  const checkpointQnaTxn = useCallback((checkpoint: 'qna_started' | 'question_append_ok' | 'question_committed' | 'aborted', abortReason?: string | null) => {
+    const now = Date.now();
+    qnaTxnTraceRef.current = {
+      txId: qnaStateRef.current.active.id || qnaTxnTraceRef.current.txId,
+      lastCheckpoint: checkpoint,
+      checkpointAt: now,
+      abortReason: abortReason ?? (checkpoint === 'aborted' ? 'unknown' : null)
+    };
+    syncQnaTxnDebug();
+  }, [syncQnaTxnDebug]);
 
   const ensureSandboxRuntimeStarted = useCallback((reason: string, handleHint?: string) => {
     if (modeRef.current.id !== 'sandbox_story') return;
@@ -3131,6 +3182,13 @@ export default function App() {
     const qnaFlowId = eventDef?.qnaFlowId ?? QNA_FLOW_BY_EVENT[eventKey];
     if (qnaFlowId && activeUserForTag) {
       startQnaFlow(qnaStateRef.current, { eventKey, flowId: qnaFlowId, taggedUser: activeUserForTag, questionActor });
+      qnaTxnTraceRef.current = {
+        txId: qnaStateRef.current.active.id,
+        lastCheckpoint: 'qna_started',
+        checkpointAt: Date.now(),
+        abortReason: null
+      };
+      syncQnaTxnDebug();
     }
 
     updateEventDebug({
@@ -3157,6 +3215,7 @@ export default function App() {
               errors: effectsErrors
             }
           },
+          qnaTxId: qnaStateRef.current.active.id || '-',
           forcedByDebug,
           forceOptions: forcedByDebug ? forceOptions : null
         },
@@ -3206,6 +3265,7 @@ export default function App() {
     }
     if (qnaStateRef.current.active.status === 'AWAITING_REPLY') {
       markQnaAborted(qnaStateRef.current, 'retry', Date.now());
+      checkpointQnaTxn('aborted', 'retry');
       return false;
     }
     const asked = askCurrentQuestion(qnaStateRef.current);
@@ -3257,6 +3317,7 @@ export default function App() {
           appendFailedReason = sent.blockedReason;
           return sent;
         }
+        checkpointQnaTxn('question_append_ok');
         return { ok: true as const, messageId: sent.messageId };
       },
       forceScrollToBottom: async ({ reason }) => {
@@ -3270,6 +3331,7 @@ export default function App() {
         if (!visible) return;
         const now = Date.now();
         markQnaQuestionCommitted(qnaStateRef.current, { messageId: resolvedMessageId, askedAt: now });
+        checkpointQnaTxn('question_committed');
         lockStateRef.current = { isLocked: true, target: questionActor, startedAt: now, replyingToMessageId: resolvedMessageId };
         eventExclusiveStateRef.current.currentLockOwner = questionActor;
         const pinnedOk = setPinnedQuestionMessage({
@@ -3297,6 +3359,8 @@ export default function App() {
     }
 
     if (appendFailedReason) {
+      markQnaAborted(qnaStateRef.current, appendFailedReason ?? 'qna_question_send_failed', Date.now());
+      checkpointQnaTxn('aborted', appendFailedReason ?? 'qna_question_send_failed');
       setLastBlockedReason(appendFailedReason ?? 'qna_question_send_failed');
       return false;
     }
@@ -3305,7 +3369,24 @@ export default function App() {
     updateLastAskedPreview(qnaStateRef.current, line);
     qnaStateRef.current.history = [...qnaStateRef.current.history, `ask:${qnaStateRef.current.stepId}:${Date.now()}`].slice(-40);
     return true;
-  }, [debugEnabled, dispatchChatMessage, nextAnimationFrame, setScrollMode, sortedMessages]);
+  }, [checkpointQnaTxn, debugEnabled, dispatchChatMessage, nextAnimationFrame, setScrollMode, sortedMessages]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const active = qnaStateRef.current.active;
+      if (active.status !== 'ASKING' || active.questionMessageId) return;
+      if (!active.id) return;
+      const elapsed = active.askedAt ? Date.now() - active.askedAt : 0;
+      if (elapsed < QNA_COMMIT_TIMEOUT_MS) return;
+      markQnaAborted(qnaStateRef.current, 'handoff_timeout', Date.now());
+      qnaStateRef.current.awaitingReply = false;
+      checkpointQnaTxn('aborted', 'handoff_timeout');
+      if (debugEnabled) {
+        console.warn('[QNA] handoff timeout aborted', { txId: active.id, elapsed });
+      }
+    }, 300);
+    return () => window.clearInterval(timer);
+  }, [checkpointQnaTxn, debugEnabled]);
 
   const tryTriggerStoryEvent = useCallback((raw: string, source: 'user_input' | 'scheduler_tick' = 'user_input') => {
     const now = Date.now();
@@ -4879,6 +4960,7 @@ export default function App() {
         && questionMessage
         && questionHasTagToActiveUser
       );
+      const qnaTrace = qnaTxnTraceRef.current;
       const snapshot = {
         registry: {
           count: EVENT_REGISTRY_KEYS.length,
@@ -4919,7 +5001,11 @@ export default function App() {
           openerLineId: eventLifecycleRef.current?.openerLineId,
           followUpLineId: eventLifecycleRef.current?.followUpLineId,
           lineIds: eventLifecycleRef.current?.lineIds ?? [],
-          topic: eventLifecycleRef.current?.topic
+          topic: eventLifecycleRef.current?.topic,
+          qnaTxId: qnaStateRef.current.active.id || qnaTrace.txId || '-',
+          qnaCheckpoint: qnaTrace.lastCheckpoint,
+          qnaCheckpointAt: qnaTrace.checkpointAt || null,
+          qnaAbortReason: qnaStateRef.current.active.abortReason ?? qnaTrace.abortReason
         },
         blocking: {
           isLocked: lockStateRef.current.isLocked,
@@ -4942,6 +5028,12 @@ export default function App() {
         },
         qna: {
           ...qnaStateRef.current,
+          active: {
+            ...qnaStateRef.current.active,
+            txId: qnaStateRef.current.active.id || qnaTrace.txId || '-',
+            checkpoint: qnaTrace.lastCheckpoint,
+            checkpointAt: qnaTrace.checkpointAt || null
+          },
           questionMessageId: qnaStateRef.current.active.questionMessageId,
           questionHasTagToActiveUser,
           isTaggedQuestionActive,
