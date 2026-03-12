@@ -5,56 +5,56 @@ import { matchOptions } from './qnaKeyword';
 import { nextQnaAskAt } from './qnaSchedule';
 import type { QnaOption, QnaParseResult, QnaState } from './qnaTypes';
 
-export const QNA_STATUS_FIELD_POLICY = {
+type QnaActiveStatus = QnaState['active']['status'];
+type QnaActiveField = 'questionMessageId' | 'askedAt' | 'resolvedAt' | 'abortReason';
+
+const QNA_STATUS_FIELD_POLICY: Record<QnaActiveStatus, { allowedFields: readonly QnaActiveField[]; preserveAwaitingReply: boolean }> = {
   IDLE: {
-    allowQuestionMessageId: false,
-    awaitingReplyProjection: false
+    allowedFields: [],
+    preserveAwaitingReply: false
   },
   ASKING: {
-    allowQuestionMessageId: false,
-    awaitingReplyProjection: true
+    allowedFields: ['askedAt'],
+    preserveAwaitingReply: true
   },
   AWAITING_REPLY: {
-    allowQuestionMessageId: true,
-    awaitingReplyProjection: true
+    allowedFields: ['questionMessageId', 'askedAt'],
+    preserveAwaitingReply: true
   },
   RESOLVED: {
-    allowQuestionMessageId: true,
-    awaitingReplyProjection: false
+    allowedFields: ['questionMessageId', 'askedAt', 'resolvedAt'],
+    preserveAwaitingReply: false
   },
   ABORTED: {
-    allowQuestionMessageId: true,
-    awaitingReplyProjection: false
+    allowedFields: ['questionMessageId', 'askedAt', 'resolvedAt', 'abortReason'],
+    preserveAwaitingReply: false
   }
-} as const;
+};
+
+const applyStatusFieldPolicy = (state: QnaState, nextStatus: QnaActiveStatus) => {
+  const policy = QNA_STATUS_FIELD_POLICY[nextStatus];
+  const allowed = new Set(policy.allowedFields);
+  if (!allowed.has('questionMessageId')) state.active.questionMessageId = null;
+  if (!allowed.has('askedAt')) state.active.askedAt = null;
+  if (!allowed.has('resolvedAt')) state.active.resolvedAt = null;
+  if (!allowed.has('abortReason')) state.active.abortReason = null;
+  state.awaitingReply = policy.preserveAwaitingReply;
+};
+
+const setActiveStatus = (state: QnaState, nextStatus: QnaActiveStatus) => {
+  state.active.status = nextStatus;
+  applyStatusFieldPolicy(state, nextStatus);
+};
 
 export const QNA_ASKING_STALL_TIMEOUT_MS = 8_000;
 
-type QnaStatus = keyof typeof QNA_STATUS_FIELD_POLICY;
-
-export function projectAwaitingReplyFromActive(state: QnaState): boolean {
-  return QNA_STATUS_FIELD_POLICY[state.active.status].awaitingReplyProjection;
-}
-
-export function isQnaAwaitingReplyGateOpen(state: QnaState): boolean {
-  return state.active.status === 'AWAITING_REPLY' && Boolean(state.active.questionMessageId);
-}
-
-export function shouldAbortStalledAsking(state: QnaState, now = Date.now(), timeoutMs = QNA_ASKING_STALL_TIMEOUT_MS): boolean {
-  if (state.active.status !== 'ASKING' || state.active.questionMessageId) return false;
+export function isAskingStalled(state: QnaState, timeoutMs = QNA_ASKING_STALL_TIMEOUT_MS, now = Date.now()) {
+  if (state.active.status !== 'ASKING') return false;
+  if (state.active.questionMessageId) return false;
   if (!state.active.id) return false;
-  const anchorAskedAt = state.active.askedAt ?? state.lastAskedAt;
-  if (!anchorAskedAt || anchorAskedAt <= 0) return false;
-  return now - anchorAskedAt >= timeoutMs;
-}
-
-function syncAwaitingReplyCompatibility(state: QnaState) {
-  state.awaitingReply = projectAwaitingReplyFromActive(state);
-}
-
-function setActiveStatus(state: QnaState, status: QnaStatus) {
-  state.active.status = status;
-  syncAwaitingReplyCompatibility(state);
+  const askedAt = state.active.askedAt ?? 0;
+  if (!askedAt) return false;
+  return now - askedAt >= timeoutMs;
 }
 
 const UNKNOWN_OPTION: QnaOption = {
@@ -148,7 +148,7 @@ export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey
     resolvedAt: null,
     abortReason: null
   };
-  syncAwaitingReplyCompatibility(state);
+  applyStatusFieldPolicy(state, 'ASKING');
   return true;
 }
 

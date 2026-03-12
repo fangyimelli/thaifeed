@@ -46,6 +46,7 @@ import {
   getRetryPrompt,
   getUnknownPrompt,
   handleTimeoutPressure,
+  isAskingStalled,
   markQnaAborted,
   markQnaQuestionCommitted,
   markQnaResolved,
@@ -134,7 +135,6 @@ const SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS = 1800;
 const SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS = 900;
 const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
 const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
-
 const resolveSandboxWaitReplyConsumedReason = (waitReplyIndex: number): string => {
   if (waitReplyIndex === 1) return 'player_reply_1_consumed';
   if (waitReplyIndex === 2) return 'player_reply_2_consumed';
@@ -2488,7 +2488,7 @@ export default function App() {
       bumpSandboxRevealTick();
       return true;
     }
-    if (!isQnaAwaitingReplyGateOpen(qnaStateRef.current)) {
+    if (!(qnaStateRef.current.isActive && qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId))) {
       return false;
     }
     const stripped = raw.replace(/^(?:[\s　]*@[^\s　]+[\s　]*)+/u, '').trim();
@@ -3370,9 +3370,9 @@ export default function App() {
       const now = Date.now();
       if (!shouldAbortStalledAsking(qnaStateRef.current, now)) return;
       const active = qnaStateRef.current.active;
-      const anchorAskedAt = active.askedAt ?? qnaStateRef.current.lastAskedAt;
-      const elapsed = anchorAskedAt > 0 ? now - anchorAskedAt : 0;
-      markQnaAborted(qnaStateRef.current, 'handoff_timeout', now);
+      if (!isAskingStalled(qnaStateRef.current)) return;
+      const elapsed = active.askedAt ? Date.now() - active.askedAt : 0;
+      markQnaAborted(qnaStateRef.current, 'handoff_timeout', Date.now());
       checkpointQnaTxn('aborted', 'handoff_timeout');
       if (debugEnabled) {
         console.warn('[QNA] handoff timeout aborted', { txId: active.id, elapsed });
@@ -3394,7 +3394,7 @@ export default function App() {
 
     if (!appStarted) return;
 
-    if (source === 'user_input' && isQnaAwaitingReplyGateOpen(qnaStateRef.current)) {
+    if (source === 'user_input' && qnaStateRef.current.isActive && qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId)) {
       if (modeRef.current.id === 'sandbox_story') {
         return;
       }
@@ -3773,7 +3773,7 @@ export default function App() {
             triggerReactionBurst('ghost');
           }
         }
-        if (qnaStateRef.current.active.status !== 'AWAITING_REPLY' && Date.now() >= qnaStateRef.current.nextAskAt) {
+        if (!(qnaStateRef.current.active.status === 'ASKING' || qnaStateRef.current.active.status === 'AWAITING_REPLY') && Date.now() >= qnaStateRef.current.nextAskAt) {
           void sendQnaQuestion();
         }
       }
