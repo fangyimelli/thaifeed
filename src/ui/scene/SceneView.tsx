@@ -464,6 +464,21 @@ declare global {
           questionHasTagToActiveUser?: boolean;
           isTaggedQuestionActive?: boolean;
           lastBlockedReason?: string | null;
+          active?: {
+            id?: string;
+            eventKey?: string;
+            askerActorId?: string;
+            taggedUserId?: string;
+            taggedUserHandle?: string;
+            status?: 'IDLE' | 'ASKING' | 'AWAITING_REPLY' | 'RESOLVED' | 'ABORTED';
+            questionMessageId?: string | null;
+            askedAt?: number | null;
+            resolvedAt?: number | null;
+            abortReason?: string | null;
+            txId?: string;
+            checkpoint?: string;
+            checkpointAt?: number | null;
+          };
         };
         test?: {
           lastStartAttemptAt?: number;
@@ -502,6 +517,10 @@ declare global {
             plan?: { sfx?: string[]; videoKey?: string; blackout?: boolean };
             applied?: { sfxPlayed?: string[]; videoSwitched?: string; errors?: string[] };
           };
+          qnaTxId?: string;
+          qnaCheckpoint?: string;
+          qnaCheckpointAt?: number | null;
+          qnaAbortReason?: string | null;
         };
         lastEventCommitBlockedReason?: string;
         lastCommitBlockedReason?: string;

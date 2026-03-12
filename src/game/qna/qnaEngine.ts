@@ -102,13 +102,18 @@ export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey
 export function askCurrentQuestion(state: QnaState): { text: string; options: QnaOption[] } | null {
   const step = getStep(state);
   if (!step) return null;
+  const askedAt = Date.now();
   const question = pickVariant(step.questionVariants, state.askedQuestionHistory);
   state.askedQuestionHistory = [...state.askedQuestionHistory, question].slice(-8);
   state.awaitingReply = true;
-  state.lastAskedAt = Date.now();
+  state.lastAskedAt = askedAt;
   state.active.status = 'ASKING';
+  state.active.askedAt = askedAt;
+  state.active.questionMessageId = null;
+  state.active.resolvedAt = null;
+  state.active.abortReason = null;
   state.attempts += 1;
-  state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
+  state.nextAskAt = nextQnaAskAt(askedAt, state.attempts);
   const options = [...step.options, UNKNOWN_OPTION];
   return { text: question, options };
 }
