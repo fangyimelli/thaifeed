@@ -307,6 +307,13 @@ type SandboxReplyGateState = {
   canReply: boolean;
 };
 
+type ReplyUiAuthority = {
+  mode: 'classic' | 'sandbox';
+  canReply: boolean;
+  sourceMessageId: string | null;
+  authoritySource: 'qna_authoritative_state' | 'sandbox_reply_gate_state';
+};
+
 type BootstrapActivatedBy = 'username_submit' | 'debug' | null;
 
 type BootstrapState = {
@@ -2155,6 +2162,26 @@ export default function App() {
       canReply: authoritativeCanReply
     };
   }, []);
+
+  const selectReplyUiAuthority = useCallback((): ReplyUiAuthority => {
+    if (modeRef.current.id === 'sandbox_story') {
+      const gate = deriveSandboxReplyGateState();
+      return {
+        mode: 'sandbox',
+        canReply: gate.canReply,
+        sourceMessageId: gate.replySourceMessageId,
+        authoritySource: 'sandbox_reply_gate_state'
+      };
+    }
+    const classicAwaitingReply = qnaStateRef.current.active.status === 'AWAITING_REPLY';
+    const sourceMessageId = qnaStateRef.current.active.questionMessageId ?? null;
+    return {
+      mode: 'classic',
+      canReply: Boolean(classicAwaitingReply && sourceMessageId),
+      sourceMessageId,
+      authoritySource: 'qna_authoritative_state'
+    };
+  }, [deriveSandboxReplyGateState]);
 
   const writeSandboxLastReplyEval = useCallback((payload: {
     rawInput: string;
@@ -5086,7 +5113,8 @@ export default function App() {
           ...(window.__CHAT_DEBUG__?.ui ?? {}),
           replyPreviewSuppressed: replyPreviewSuppressedReason ?? '-',
           replyPinMounted,
-          replyBarVisible: qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId),
+          replyUiAuthority,
+          replyBarVisible: replyUiAuthority.canReply,
           replyToMessageId: lockStateRef.current.replyingToMessageId,
           freezeGuard: (window.__CHAT_DEBUG__?.event as { freezeGuard?: { hasRealTag?: boolean; replyUIReady?: boolean; freezeAllowed?: boolean } } | undefined)?.freezeGuard ?? { hasRealTag: false, replyUIReady: false, freezeAllowed: false },
           replyBarMessageFound: Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId)),
@@ -5110,12 +5138,21 @@ export default function App() {
           },
           qnaSyncAssert: (() => {
             const awaiting = qnaStateRef.current.active.status === 'AWAITING_REPLY';
-            const found = Boolean(qnaStateRef.current.active.questionMessageId && sortedMessages.some((message) => message.id === qnaStateRef.current.active.questionMessageId));
-            const tagOk = Boolean(sortedMessages.find((message) => message.id === qnaStateRef.current.active.questionMessageId)?.mentions?.includes('activeUser'));
+            const activeQuestionMessageId = qnaStateRef.current.active.questionMessageId;
+            const found = Boolean(activeQuestionMessageId && sortedMessages.some((message) => message.id === activeQuestionMessageId));
+            const tagOk = Boolean(sortedMessages.find((message) => message.id === activeQuestionMessageId)?.mentions?.includes('activeUser'));
+            const classicRegressionGuard = modeRef.current.id === 'sandbox_story'
+              ? true
+              : (!awaiting || Boolean(activeQuestionMessageId && replyUiAuthority.canReply));
             return awaiting
-              ? (found && tagOk && Boolean(qnaStateRef.current.active.questionMessageId))
+              ? (found && tagOk && Boolean(activeQuestionMessageId) && classicRegressionGuard)
               : !(qnaStateRef.current.active.status === 'AWAITING_REPLY');
-          })()
+          })(),
+          classicReplyBarRegressionGuard: modeRef.current.id === 'sandbox_story'
+            ? 'n/a'
+            : (qnaStateRef.current.active.status === 'AWAITING_REPLY' && Boolean(qnaStateRef.current.active.questionMessageId)
+              ? String(replyUiAuthority.canReply)
+              : 'n/a')
         },
         chat: {
           ...(window.__CHAT_DEBUG__?.chat ?? {}),
@@ -7674,6 +7711,7 @@ export default function App() {
   }, []);
 
   const sandboxReplyGateState = deriveSandboxReplyGateState();
+  const replyUiAuthority = selectReplyUiAuthority();
 
   return (
     <div ref={shellRef} className={`app-shell app-root-layout ${isDesktopLayout ? 'desktop-layout' : 'mobile-layout'}`}>
@@ -8258,6 +8296,7 @@ export default function App() {
             qnaStatus={qnaStateRef.current.active.status}
             replyPreviewSuppressedReason={replyPreviewSuppressedReason}
             sandboxReplyGateState={sandboxReplyGateState}
+            replyUiAuthority={replyUiAuthority}
             activeUserInitialHandle={activeUserInitialHandleRef.current}
             activeUserId={activeUserProfileRef.current?.id ?? 'activeUser'}
             onTagHighlightEvaluated={handleTagHighlightEvaluated}
