@@ -50,7 +50,9 @@ import {
   markQnaAborted,
   markQnaQuestionCommitted,
   markQnaResolved,
+  isQnaAwaitingReplyGateOpen,
   parsePlayerReplyToOption,
+  shouldAbortStalledAsking,
   setQnaQuestionActor,
   startQnaFlow,
   stopQnaFlow,
@@ -3365,6 +3367,8 @@ export default function App() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
+      const now = Date.now();
+      if (!shouldAbortStalledAsking(qnaStateRef.current, now)) return;
       const active = qnaStateRef.current.active;
       if (!isAskingStalled(qnaStateRef.current)) return;
       const elapsed = active.askedAt ? Date.now() - active.askedAt : 0;
