@@ -415,3 +415,14 @@ Smoke output now must include:
 | `currentPrompt.expectedConsonant` | string | question SSOT | Authoritative expected consonant. |
 | `currentPrompt.acceptedCandidates` | string[] | question SSOT | Thai / roman / bopomofo accepted candidates. |
 | `currentPrompt.revealWord` | string | question SSOT | Authoritative reveal word. |
+
+## 2026-03-12 State Table: Sandbox Consonant Gate + Night Pool Authority
+
+| State/Gate | Authoritative fields | Input | Transition | Notes |
+|---|---|---|---|---|
+| WAIT_REPLY_x | `round.questionOrder/currentQuestionCursor/currentQuestionId`, `replyGate.gateType=consonant_answer`, `replyGate.armed`, `replyGate.canReply` | normal answer | `ANSWER_EVAL` | judge via `parseAndJudgeUsingClassic` |
+| WAIT_REPLY_x | same as above | HELP REQUEST semantic | stay in `WAIT_REPLY_x` | no wrong/reveal/advance, emit image-memory hint |
+| ANSWER_EVAL | `currentPrompt.expectedConsonant/acceptedCandidates` | correct | `REVEAL_WORD` | keep classic judge pipeline |
+| REVEAL_WORD | `currentPrompt.revealWord` | reveal done | `POST_REVEAL_CHAT` | unchanged |
+| POST_REVEAL_CHAT | post reveal completion flags | completion | `ADVANCE_NEXT` | unchanged |
+| ADVANCE_NEXT | `round.questionOrder/currentQuestionCursor/currentQuestionId` | next exists | next `TAG_PLAYER_(x+1)` | blocked reason is `end_of_question_pool` |

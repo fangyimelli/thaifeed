@@ -1,3 +1,14 @@
+## 2026-03-12 Sandbox Night Pool Authority + 29-Consonant SSOT
+
+- 建立 29 子音 SSOT（`AUTHORITATIVE_CONSONANT_BANK`）作為 sandbox/classic alias 接受集合唯一來源，含 `consonant/revealWord/acceptedCandidates/imageMemoryHint`。
+- sandbox NIGHT 題庫改為固定 pool（N1/N2/N3 各 10 題）並在進夜時 shuffle；推進 authority 明確依 `round.questionOrder/currentQuestionCursor/currentQuestionId`。
+- sandbox HELP REQUEST（不知道/不會/help/hint/...）改為不判錯不跳題，聊天室 viewer 以 image memory library 給提示，玩家可繼續答同題。
+- debug 新增 hint observability：`hint.requested/source=imageMemoryLibrary/emitter/generatedText`。
+
+### Removed / Deprecated Log
+
+- 2026-03-12：移除 sandbox 使用 `end_of_nodes` 作為切題阻擋理由，統一為 `end_of_question_pool`。
+
 ## 2026-03-11 Sandbox WAIT_REPLY_4+ Guard Extension（Dynamic WAIT_REPLY_x）
 
 - regression guards 補強 `WAIT_REPLY_4` 與動態 `WAIT_REPLY_x` consume 契約：consume success 必須走 `ANSWER_EVAL`，不得落入 `submit_rejected` 或 shortcut `ADVANCE_NEXT`。

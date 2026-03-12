@@ -1176,3 +1176,11 @@
 - [sandbox][judge/reveal/debug] `currentPrompt` 補齊 `expectedConsonant/acceptedCandidates/revealWord`；debug panel 顯示 round + authoritative source。
 - [guard] 新增 `scripts/regression-sandbox-night-pool-ssot.mjs` regression guard。
 - [compat] classic mode 行為不變，僅擴充 shared question bank alias coverage 以支援 sandbox NIGHT2/3 作答解析。
+
+## 2026-03-12 Sandbox Night Pool Authority + 29-Consonant SSOT
+
+- 新增 authoritative 29 子音 SSOT：`AUTHORITATIVE_CONSONANT_BANK`（包含 `consonant / revealWord / acceptedCandidates / imageMemoryHint`），並由此衍生 sandbox NIGHT 題池。  
+- Sandbox 題源改為每夜固定 pool，進夜時以 `round.questionOrder` shuffle，推進 authority 仍由 `round.questionOrder/currentQuestionCursor/currentQuestionId` 決定，不再使用 `end_of_nodes`。  
+- Sandbox 子音判定持續沿用 classic pipeline：`parseAndJudgeUsingClassic` + alias resolution + acceptedCandidates。  
+- HELP REQUEST（不知道/不會/help/hint/...）在 sandbox consonant gate 不判錯不跳題；改由 viewer 以 image memory 提示，並留下 `help_requested` 判定紀錄。  
+- debug observability 擴充：hint `requested/source/emitter/generatedText`。

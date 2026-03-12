@@ -64,6 +64,7 @@ import {
   type SandboxWaitReplyStep
 } from '../modes/sandbox_story/waitReplyStep';
 import { extractConsonantAnswerPayload, parseAndJudgeUsingClassic } from '../modes/sandbox_story/classicConsonantAdapter';
+import { CONSONANT_BANK_BY_CHAR, isHelpRequest } from '../shared/consonant-engine';
 import { getAcceptedAliasCandidates, getSharedConsonantQuestionById } from '../shared/consonant-engine';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
@@ -960,7 +961,6 @@ export default function App() {
   const sandboxModeRef = useRef(createSandboxStoryMode());
   const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveInitialMode(debugEnabled));
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
-  const sandboxConsonantTagOwnerRef = useRef<string>('mod_live');
   const sandboxWaveRunningRef = useRef(false);
   const sandboxSupernaturalTimerRef = useRef<number | null>(null);
   const sandboxVipTranslateTimerRef = useRef<number | null>(null);
@@ -2309,6 +2309,31 @@ export default function App() {
         const currentPrompt = sandboxState.prompt.current;
         const node = sandboxModeRef.current.getCurrentNode();
         if (currentPrompt?.kind === 'consonant') {
+          if (isHelpRequest(extraction.stripped)) {
+            const hintEntry = CONSONANT_BANK_BY_CHAR.get(currentPrompt.consonant);
+            const helpHint = hintEntry ? `想一下${hintEntry.imageMemoryHint}那個。` : '先想一下圖像記憶那個關鍵字。';
+            showHintForCurrentPrompt({ judge: 'help', currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey }, hintText: helpHint });
+            persistJudgeAudit({
+              rawInput: raw,
+              normalizedInput: extraction.normalized,
+              parseOk: true,
+              parseKind: 'help_request',
+              matchedAlias: extraction.normalized,
+              expectedConsonant: currentPrompt.consonant,
+              acceptedCandidates: node?.acceptedCandidates ?? [],
+              compareInput: extraction.normalized,
+              compareMode: 'help_request',
+              judgeResult: 'blocked',
+              resultReason: 'help_requested',
+              sourcePromptId: currentPrompt.promptId,
+              sourceQuestionId: node?.id ?? currentPrompt.wordKey,
+              sourceWordKey: currentPrompt.wordKey,
+              gateType: gate.replyGateType,
+              consumedAt: consumeAt
+            });
+            writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: extraction.normalized, extractedAnswer: extraction.normalized, consumed: false, reason: 'help_requested', gate: evalGate, messageId: payload.messageId, authoritativeWaitReplyIndex: waitReplyIndex });
+            return false;
+          }
           const pipeline = parseAndJudgeUsingClassic(raw, {
             nodeChar: currentPrompt.consonant,
             node: node && node.id === currentPrompt.wordKey ? node : undefined,
@@ -4383,7 +4408,10 @@ export default function App() {
           count: sandboxState.hint.count,
           lastShownAt: sandboxState.hint.lastShownAt,
           lastTextPreview: (sandboxState.hint.lastText || '').slice(0, 40) || '-',
-          source: sandboxState.hint.source || '-'
+          requested: Boolean(sandboxState.hint.requested),
+          source: sandboxState.hint.source || '-',
+          emitter: sandboxState.hint.emitter || '-',
+          generatedText: sandboxState.hint.generatedText || '-'
         },
         footsteps: {
           probability: sandboxState.fearSystem.footsteps.probability,
@@ -5167,17 +5195,19 @@ export default function App() {
     bumpSandboxRevealTick();
   }, [clearChatFreeze]);
 
-  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong'; currentPrompt: { consonant: string; wordKey: string }; hintText?: string }) => {
+  const showHintForCurrentPrompt = useCallback((params: { judge: 'unknown' | 'wrong' | 'help'; currentPrompt: { consonant: string; wordKey: string }; hintText?: string }) => {
     const hintLine = params.hintText?.trim() || '';
     if (!hintLine) return;
-    sandboxModeRef.current.commitHintText(hintLine, 'classic_shared');
+    const hintViewers = ['viewer_203', 'viewer_118', 'viewer_409', 'viewer_526'];
+    const emitter = hintViewers[Math.floor(Math.random() * hintViewers.length)] || 'viewer_203';
+    sandboxModeRef.current.commitHintText(hintLine, 'imageMemoryLibrary', { requested: true, emitter, generatedText: hintLine });
     dispatchChatMessage({
       id: crypto.randomUUID(),
-      username: sandboxConsonantTagOwnerRef.current || 'mod_live',
+      username: emitter,
       text: hintLine,
       language: 'zh',
       translation: hintLine
-    }, { source: 'sandbox_consonant', sourceTag: params.judge === 'unknown' ? 'sandbox_consonant_hint_unknown' : 'sandbox_consonant_hint_wrong' });
+    }, { source: 'sandbox_consonant', sourceTag: params.judge === 'help' ? 'sandbox_consonant_hint_help' : (params.judge === 'unknown' ? 'sandbox_consonant_hint_unknown' : 'sandbox_consonant_hint_wrong') });
   }, [dispatchChatMessage]);
 
   useEffect(() => () => {
@@ -6026,7 +6056,7 @@ export default function App() {
     setInput('');
     const afterNode = sandboxModeRef.current.getCurrentNode();
     if (!advanced || !afterNode) {
-      recordSandboxDebugAction('pass_flow', { effectApplied: false, blockedReason: 'end_of_nodes', lastResult: 'blocked', sourceQuestionId: beforeQuestionId || '-', targetQuestionId: '-', resultStep: beforeState.flow.step, reconciled: false });
+      recordSandboxDebugAction('pass_flow', { effectApplied: false, blockedReason: 'end_of_question_pool', lastResult: 'blocked', sourceQuestionId: beforeQuestionId || '-', targetQuestionId: '-', resultStep: beforeState.flow.step, reconciled: false });
       return;
     }
     sandboxModeRef.current.setCurrentPrompt({
@@ -7303,7 +7333,7 @@ export default function App() {
           nextQuestionToIndex: -1,
           nextQuestionFromQuestionId: fromQuestionId,
           nextQuestionToQuestionId: '',
-          nextQuestionBlockedReason: 'advance_next_blocked:end_of_nodes',
+          nextQuestionBlockedReason: 'advance_next_blocked:end_of_question_pool',
           nextQuestionDecidedAt: decidedAt,
           nextQuestionEmittedAt: 0,
           nextQuestionConsumer: 'advance_next_effect'

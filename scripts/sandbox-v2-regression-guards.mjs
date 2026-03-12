@@ -823,3 +823,32 @@ if (!app.includes("setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')")) {
 if (!app.includes('failedStep: alignedFailedStep') || !app.includes("authoritativeFlowStep") || !app.includes("authoritativeBlockedReason")) {
   throw new Error('smoke failure label must align with authoritative flow step and blocked reason');
 }
+
+checks.push({
+  name: 'authoritative 29 consonant bank + sandbox night pools use ssot subsets',
+  run() {
+    const bank = fs.readFileSync(new URL('../src/shared/consonant-engine/consonantBank.ts', import.meta.url), 'utf8');
+    const pool = fs.readFileSync(new URL('../src/ssot/sandbox_story/nightQuestionPools.ts', import.meta.url), 'utf8');
+    if (!bank.includes('AUTHORITATIVE_CONSONANT_BANK')) throw new Error('missing authoritative consonant bank');
+    if ((bank.match(/consonant:/g) ?? []).length < 29) throw new Error('consonant bank must cover 29 consonants');
+    if (!pool.includes('SANDBOX_NIGHT_CONSONANT_POOLS')) throw new Error('night pools must be derived from authoritative bank subsets');
+  }
+});
+
+checks.push({
+  name: 'help request does not reveal or skip and emits image-memory hint',
+  run() {
+    if (!app.includes("isHelpRequest(extraction.stripped)")) throw new Error('help request semantic detector missing');
+    if (!app.includes("reason: 'help_requested'")) throw new Error('help request must be tracked in reply audit');
+    if (!app.includes("commitHintText(hintLine, 'imageMemoryLibrary'")) throw new Error('hint source must be imageMemoryLibrary');
+  }
+});
+
+checks.push({
+  name: 'advance blocking reason uses end_of_question_pool (not legacy end_of_nodes)',
+  run() {
+    if (app.includes('end_of_nodes')) throw new Error('legacy end_of_nodes reason must be removed');
+  }
+});
+
+for (const check of checks.slice(-3)) { check.run(); }
