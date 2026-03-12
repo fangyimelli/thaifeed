@@ -5,6 +5,58 @@ import { matchOptions } from './qnaKeyword';
 import { nextQnaAskAt } from './qnaSchedule';
 import type { QnaOption, QnaParseResult, QnaState } from './qnaTypes';
 
+type QnaActiveStatus = QnaState['active']['status'];
+type QnaActiveField = 'questionMessageId' | 'askedAt' | 'resolvedAt' | 'abortReason';
+
+const QNA_STATUS_FIELD_POLICY: Record<QnaActiveStatus, { allowedFields: readonly QnaActiveField[]; preserveAwaitingReply: boolean }> = {
+  IDLE: {
+    allowedFields: [],
+    preserveAwaitingReply: false
+  },
+  ASKING: {
+    allowedFields: ['askedAt'],
+    preserveAwaitingReply: true
+  },
+  AWAITING_REPLY: {
+    allowedFields: ['questionMessageId', 'askedAt'],
+    preserveAwaitingReply: true
+  },
+  RESOLVED: {
+    allowedFields: ['questionMessageId', 'askedAt', 'resolvedAt'],
+    preserveAwaitingReply: false
+  },
+  ABORTED: {
+    allowedFields: ['questionMessageId', 'askedAt', 'resolvedAt', 'abortReason'],
+    preserveAwaitingReply: false
+  }
+};
+
+const applyStatusFieldPolicy = (state: QnaState, nextStatus: QnaActiveStatus) => {
+  const policy = QNA_STATUS_FIELD_POLICY[nextStatus];
+  const allowed = new Set(policy.allowedFields);
+  if (!allowed.has('questionMessageId')) state.active.questionMessageId = null;
+  if (!allowed.has('askedAt')) state.active.askedAt = null;
+  if (!allowed.has('resolvedAt')) state.active.resolvedAt = null;
+  if (!allowed.has('abortReason')) state.active.abortReason = null;
+  state.awaitingReply = policy.preserveAwaitingReply;
+};
+
+const setActiveStatus = (state: QnaState, nextStatus: QnaActiveStatus) => {
+  state.active.status = nextStatus;
+  applyStatusFieldPolicy(state, nextStatus);
+};
+
+export const QNA_ASKING_STALL_TIMEOUT_MS = 8_000;
+
+export function isAskingStalled(state: QnaState, timeoutMs = QNA_ASKING_STALL_TIMEOUT_MS, now = Date.now()) {
+  if (state.active.status !== 'ASKING') return false;
+  if (state.active.questionMessageId) return false;
+  if (!state.active.id) return false;
+  const askedAt = state.active.askedAt ?? 0;
+  if (!askedAt) return false;
+  return now - askedAt >= timeoutMs;
+}
+
 const UNKNOWN_OPTION: QnaOption = {
   id: 'UNKNOWN',
   label: '不知道',
@@ -96,6 +148,7 @@ export function startQnaFlow(state: QnaState, payload: { eventKey: StoryEventKey
     resolvedAt: null,
     abortReason: null
   };
+  applyStatusFieldPolicy(state, 'ASKING');
   return true;
 }
 
@@ -105,9 +158,8 @@ export function askCurrentQuestion(state: QnaState): { text: string; options: Qn
   const askedAt = Date.now();
   const question = pickVariant(step.questionVariants, state.askedQuestionHistory);
   state.askedQuestionHistory = [...state.askedQuestionHistory, question].slice(-8);
-  state.awaitingReply = true;
   state.lastAskedAt = askedAt;
-  state.active.status = 'ASKING';
+  setActiveStatus(state, 'ASKING');
   state.active.askedAt = askedAt;
   state.active.questionMessageId = null;
   state.active.resolvedAt = null;
@@ -140,8 +192,7 @@ export function parsePlayerReplyToOption(state: QnaState, playerText: string): Q
 export function applyOptionResult(state: QnaState, option: QnaOption): { type: 'next' | 'retry' | 'chain' | 'end'; nextStepId?: string } {
   if (option.id === 'UNKNOWN') {
     state.history = [...state.history, `unknown:${state.stepId}:${Date.now()}`].slice(-40);
-    state.awaitingReply = false;
-    state.active.status = 'ABORTED';
+    setActiveStatus(state, 'ABORTED');
     state.active.abortReason = 'unknown_retry';
     state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
     return { type: 'retry' };
@@ -152,33 +203,29 @@ export function applyOptionResult(state: QnaState, option: QnaOption): { type: '
       fromStepId: state.stepId,
       fromOptionId: option.id
     };
-    state.awaitingReply = false;
-    state.active.status = 'RESOLVED';
+    setActiveStatus(state, 'RESOLVED');
     state.active.resolvedAt = Date.now();
     return { type: 'chain' };
   }
   if (option.nextStepId) {
     state.stepId = option.nextStepId;
-    state.awaitingReply = false;
-    state.active.status = 'RESOLVED';
+    setActiveStatus(state, 'RESOLVED');
     state.active.resolvedAt = Date.now();
     state.nextAskAt = nextQnaAskAt(Date.now(), state.attempts);
     return { type: 'next', nextStepId: option.nextStepId };
   }
   if (option.end) {
-    state.awaitingReply = false;
-    state.active.status = 'RESOLVED';
+    setActiveStatus(state, 'RESOLVED');
     state.active.resolvedAt = Date.now();
     return { type: 'end' };
   }
-  state.awaitingReply = false;
-  state.active.status = 'ABORTED';
+  setActiveStatus(state, 'ABORTED');
   state.active.abortReason = 'retry';
   return { type: 'retry' };
 }
 
 export function handleTimeoutPressure(state: QnaState): 'low_rumble' | 'ghost_ping' | null {
-  if (!state.isActive || !state.awaitingReply || !state.lastAskedAt) return null;
+  if (!state.isActive || state.active.status !== 'AWAITING_REPLY' || !state.lastAskedAt) return null;
   const elapsed = Date.now() - state.lastAskedAt;
   if (elapsed >= 60_000 && !state.pressure60Triggered) {
     state.pressure60Triggered = true;
@@ -225,27 +272,26 @@ export function getOptionById(state: QnaState, optionId: string): QnaOption | nu
 
 export function markQnaQuestionCommitted(state: QnaState, payload: { messageId: string; askedAt: number }) {
   if (!payload.messageId) {
-    state.active.status = 'ABORTED';
+    setActiveStatus(state, 'ABORTED');
     state.active.abortReason = 'missing_question_message_id';
-    state.awaitingReply = false;
     return;
   }
   state.active.questionMessageId = payload.messageId;
   state.active.askedAt = payload.askedAt;
   state.active.abortReason = null;
   state.active.resolvedAt = null;
-  state.active.status = 'AWAITING_REPLY';
+  setActiveStatus(state, 'AWAITING_REPLY');
 }
 
 export function markQnaResolved(state: QnaState, at: number) {
   if (state.active.status === 'AWAITING_REPLY' || state.active.status === 'ASKING') {
-    state.active.status = 'RESOLVED';
+    setActiveStatus(state, 'RESOLVED');
     state.active.resolvedAt = at;
   }
 }
 
 export function markQnaAborted(state: QnaState, reason: string, at: number) {
-  state.active.status = 'ABORTED';
+  setActiveStatus(state, 'ABORTED');
   state.active.abortReason = reason;
   state.active.resolvedAt = at;
 }
