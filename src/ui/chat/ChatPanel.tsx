@@ -44,6 +44,13 @@ type SandboxReplyGateState = {
   canReply: boolean;
 };
 
+type ReplyUiAuthority = {
+  mode: 'classic' | 'sandbox';
+  canReply: boolean;
+  sourceMessageId: string | null;
+  authoritySource: 'qna_authoritative_state' | 'sandbox_reply_gate_state';
+};
+
 type Props = {
   messages: ChatMessageType[];
   input: string;
@@ -85,6 +92,7 @@ type Props = {
     onAutoSend: () => void;
   };
   sandboxReplyGateState?: SandboxReplyGateState | null;
+  replyUiAuthority?: ReplyUiAuthority | null;
 };
 
 const STICK_BOTTOM_THRESHOLD = 80;
@@ -127,7 +135,8 @@ export default function ChatPanel({
   sandboxPinnedEntry = null,
   onSandboxPinnedMountedChange,
   sandboxControl,
-  sandboxReplyGateState = null
+  sandboxReplyGateState = null,
+  replyUiAuthority = null
 }: Props) {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -154,7 +163,10 @@ export default function ChatPanel({
   }));
   const renderedMessages = sanitizedMessages.slice(-MAX_RENDER_COUNT);
   const sanitizedMessagesById = new Map(sanitizedMessages.map((message) => [message.id, message]));
-  const gateSourceId = sandboxReplyGateState?.replySourceMessageId ?? questionMessageId ?? null;
+  const replyUiMode = replyUiAuthority?.mode ?? 'classic';
+  const classicSourceId = questionMessageId ?? null;
+  const sandboxSourceId = sandboxReplyGateState?.replySourceMessageId ?? null;
+  const gateSourceId = replyUiAuthority?.sourceMessageId ?? (replyUiMode === 'sandbox' ? sandboxSourceId : classicSourceId);
   const originalMessage = gateSourceId ? sanitizedMessagesById.get(gateSourceId) ?? null : null;
 
   const replyPreviewLockConsistent = Boolean(
@@ -163,15 +175,24 @@ export default function ChatPanel({
     || !originalMessage
     || lockTarget === originalMessage.username
   );
-  const shouldRenderReplyPreview = Boolean(
-    qnaStatus === 'AWAITING_REPLY'
-    &&
-    sandboxReplyGateState?.canReply
-    && sandboxReplyGateState.replyGateArmed
+  const shouldRenderClassicReplyPreview = Boolean(
+    replyUiMode === 'classic'
+    && qnaStatus === 'AWAITING_REPLY'
+    && replyUiAuthority?.canReply
     && gateSourceId
     && originalMessage
     && replyPreviewLockConsistent
   );
+  const shouldRenderSandboxReplyPreview = Boolean(
+    replyUiMode === 'sandbox'
+    && qnaStatus === 'AWAITING_REPLY'
+    && replyUiAuthority?.canReply
+    && sandboxReplyGateState?.replyGateArmed
+    && gateSourceId
+    && originalMessage
+    && replyPreviewLockConsistent
+  );
+  const shouldRenderReplyPreview = shouldRenderClassicReplyPreview || shouldRenderSandboxReplyPreview;
   const shouldRenderSandboxPinned = Boolean(sandboxControl?.enabled && sandboxPinnedEntry?.visible && !shouldRenderReplyPreview);
   const pinnedHighlightOnly = Boolean(sandboxPinnedEntry?.visible && !sandboxPinnedEntry?.linkedToReplyGate);
 
