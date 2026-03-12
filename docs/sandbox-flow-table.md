@@ -426,3 +426,10 @@ Smoke output now must include:
 | REVEAL_WORD | `currentPrompt.revealWord` | reveal done | `POST_REVEAL_CHAT` | unchanged |
 | POST_REVEAL_CHAT | post reveal completion flags | completion | `ADVANCE_NEXT` | unchanged |
 | ADVANCE_NEXT | `round.questionOrder/currentQuestionCursor/currentQuestionId` | next exists | next `TAG_PLAYER_(x+1)` | blocked reason is `end_of_question_pool` |
+
+## 2026-03-12 QnA ASKING stall-timeout authority note
+
+- Authoritative timeout gate: `src/game/qna/qnaEngine.ts:isAskingStalled(state, timeoutMs = QNA_ASKING_STALL_TIMEOUT_MS, now)`。
+- Abort only when all conditions hold: `active.status==='ASKING'`、`active.id` exists、`questionMessageId===null`、`askedAt` exists、`now-askedAt>=timeoutMs`。
+- App integration (`src/app/App.tsx`) must call the above API directly in timer loop; do not reintroduce legacy wrapper names.
+

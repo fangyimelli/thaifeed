@@ -50,9 +50,7 @@ import {
   markQnaAborted,
   markQnaQuestionCommitted,
   markQnaResolved,
-  isQnaAwaitingReplyGateOpen,
   parsePlayerReplyToOption,
-  shouldAbortStalledAsking,
   setQnaQuestionActor,
   startQnaFlow,
   stopQnaFlow,
@@ -3395,9 +3393,8 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = Date.now();
-      if (!shouldAbortStalledAsking(qnaStateRef.current, now)) return;
       const active = qnaStateRef.current.active;
-      if (!isAskingStalled(qnaStateRef.current)) return;
+      if (!isAskingStalled(qnaStateRef.current, undefined, now)) return;
       const elapsed = active.askedAt ? Date.now() - active.askedAt : 0;
       markQnaAborted(qnaStateRef.current, 'handoff_timeout', Date.now());
       checkpointQnaTxn('aborted', 'handoff_timeout');

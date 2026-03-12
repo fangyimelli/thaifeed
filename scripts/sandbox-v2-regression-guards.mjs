@@ -167,6 +167,22 @@ const checks = [
 ];
 
 
+
+checks.push({
+  name: 'App qnaEngine import/caller surface must align with authoritative API',
+  run() {
+    if (app.includes('isQnaAwaitingReplyGateOpen')) {
+      throw new Error('dead qna gate import/caller still exists in App');
+    }
+    if (app.includes('shouldAbortStalledAsking')) {
+      throw new Error('stalled asking legacy API caller still exists in App');
+    }
+    if (!app.includes('if (!isAskingStalled(qnaStateRef.current, undefined, now)) return;')) {
+      throw new Error('stalled asking timer must use authoritative isAskingStalled(state, timeoutMs, now)');
+    }
+  }
+});
+
 checks.push({
   name: 'WAIT_REPLY_x (including 4+) consume must enter ANSWER_EVAL (no direct ADVANCE_NEXT shortcut or submit_rejected fallback)',
   run() {

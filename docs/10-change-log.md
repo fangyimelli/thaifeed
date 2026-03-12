@@ -1,3 +1,21 @@
+## 2026-03-12 Sandbox QnA stall-timeout build fix (minimal set)
+
+### Root cause
+- `App.tsx` still imported/called legacy qnaEngine symbols (`isQnaAwaitingReplyGateOpen`, `shouldAbortStalledAsking`) that are not exported.
+
+### Changes
+- Removed dead import `isQnaAwaitingReplyGateOpen` from `src/app/App.tsx`.
+- Replaced `shouldAbortStalledAsking(...)` caller with authoritative `isAskingStalled(qnaStateRef.current, undefined, now)`.
+- Kept ownership boundaries unchanged (no large sandbox/qna owner refactor in this patch).
+- Added regression guard in `scripts/sandbox-v2-regression-guards.mjs` to fail if old surface reappears.
+
+### Regression guard
+- Enforce App must not contain `isQnaAwaitingReplyGateOpen` / `shouldAbortStalledAsking`.
+- Enforce stalled timeout loop uses `isAskingStalled(state, timeoutMs?, now)`.
+
+### Removed / Deprecated Log
+- Deprecated in App integration surface: legacy references to `isQnaAwaitingReplyGateOpen` and `shouldAbortStalledAsking`.
+
 ## 2026-03-11 sandbox regression guards：WAIT_REPLY_4 / dynamic WAIT_REPLY_x contract
 
 - Root cause

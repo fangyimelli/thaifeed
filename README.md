@@ -1,3 +1,14 @@
+## 2026-03-12 Sandbox QnA stall-timeout build fix (minimal set)
+
+- 移除 `src/app/App.tsx` 對 `isQnaAwaitingReplyGateOpen` 的 dead import（`qnaEngine` 無 export 且 App 未使用）。
+- `shouldAbortStalledAsking` caller 改為直接走 authoritative API：`isAskingStalled(state, timeoutMs?, now)`，避免半套舊 surface 漂移。
+- stalled asking timeout 判定以 `active.status==='ASKING'` + `active.id` + `askedAt` + timeout 為唯一依據，不新增假 wrapper。
+- 補 regression guard：禁止 App 重新引入 `isQnaAwaitingReplyGateOpen` / `shouldAbortStalledAsking`，並鎖定 timer 需使用 `isAskingStalled(..., now)`。
+
+### Removed / Deprecated Log
+
+- 2026-03-12：App 端移除對已不存在 qnaEngine surface 的依賴（`isQnaAwaitingReplyGateOpen`、`shouldAbortStalledAsking` caller）。
+
 ## 2026-03-12 Sandbox Night Pool Authority + 29-Consonant SSOT
 
 - 建立 29 子音 SSOT（`AUTHORITATIVE_CONSONANT_BANK`）作為 sandbox/classic alias 接受集合唯一來源，含 `consonant/revealWord/acceptedCandidates/imageMemoryHint`。
