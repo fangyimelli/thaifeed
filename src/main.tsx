@@ -1,8 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './app/App';
-import DebugPlayerPage from './app/DebugPlayerPage';
 import './styles.css';
+
+const DebugPlayerPage = React.lazy(() => import('./app/DebugPlayerPage'));
 
 type BootStatus = 'BOOT OK' | 'BOOT FAIL';
 
@@ -121,6 +122,16 @@ const computeDebugPlayerRoute = () => {
 
 const shouldRenderDebugPlayer = computeDebugPlayerRoute();
 
+const RouteSwitch = () => {
+  if (!shouldRenderDebugPlayer) return <App />;
+
+  return (
+    <React.Suspense fallback={null}>
+      <DebugPlayerPage />
+    </React.Suspense>
+  );
+};
+
 try {
   const root = document.getElementById('root');
   if (!root) throw new Error('#root not found');
@@ -128,7 +139,7 @@ try {
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <BootErrorBoundary>
-        {shouldRenderDebugPlayer ? <DebugPlayerPage /> : <App />}
+        <RouteSwitch />
       </BootErrorBoundary>
     </React.StrictMode>
   );
