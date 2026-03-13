@@ -326,6 +326,17 @@ npm run dev
 npm run build
 ```
 
+### Troubleshooting（Windows / PowerShell）
+
+- 如果看到 `unpm : 無法辨識 'unpm'...`，代表指令拼錯；請改用 `npm`。
+- 可直接使用以下正確指令：
+
+```powershell
+npm run dev
+npm run build
+npm audit
+```
+
 ## Required Assets（最短版）
 
 至少要有 **3 支影片 + 3 支音效**：
