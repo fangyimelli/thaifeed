@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ASSET_MANIFEST } from '../config/assetManifest';
 import { gameReducer, initialState } from '../core/state/reducer';
 import { isAnswerCorrect } from '../core/systems/answerParser';
@@ -71,9 +71,23 @@ import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
-import { playPronounce } from '../ui/audio/PronounceAudio';
 import type { GameMode } from '../modes/types';
 import { isDebugEnabled as getIsDebugEnabled, setDebugOverlayEnabled } from '../debug/debugGate';
+import {
+  buildRevealTransitionSnapshot,
+  derivePostRevealRuntimeStatus,
+  parseSandboxTagStepIndex,
+  resolveSandboxTagStepByQuestionNumber,
+  resolveSandboxWaitReplyConsumedReason,
+  SANDBOX_POSSESSION_AUTOSEND_MAX_MS,
+  SANDBOX_POSSESSION_AUTOSEND_MIN_MS,
+  SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS,
+  SANDBOX_REVEAL_VISIBLE_MIN_MS,
+  SANDBOX_WORD_RIOT_BURST_COUNT
+} from './sandboxFlowRuntime';
+import type { LastModeSwitchStatus } from './debug/DebugModeSwitcher';
+
+const DebugModeSwitcher = lazy(() => import('./debug/DebugModeSwitcher'));
 
 type EventStartBlockedReason =
   | 'locked_active'
@@ -127,33 +141,6 @@ type DebugForceExecuteOptions = {
 
 export type SendSource = 'submit' | 'debug_simulate' | 'fallback_click';
 
-const SANDBOX_WORD_RIOT_BURST_COUNT = 6;
-const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;
-const SANDBOX_REVEAL_TO_POST_REVEAL_MAX_STALL_MS = 1800;
-const SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS = 900;
-const SANDBOX_POSSESSION_AUTOSEND_MIN_MS = 300;
-const SANDBOX_POSSESSION_AUTOSEND_MAX_MS = 700;
-const resolveSandboxWaitReplyConsumedReason = (waitReplyIndex: number): string => {
-  if (waitReplyIndex === 1) return 'player_reply_1_consumed';
-  if (waitReplyIndex === 2) return 'player_reply_2_consumed';
-  if (waitReplyIndex === 3) return 'player_reply_3_consumed';
-  return `player_reply_${waitReplyIndex}_consumed`;
-};
-
-const parseSandboxTagStepIndex = (step: string | undefined): number | null => {
-  if (!step) return null;
-  if (step === 'TAG_PLAYER_1') return 1;
-  const match = /^TAG_PLAYER_(\d+)$/.exec(step);
-  if (!match) return null;
-  const parsed = Number.parseInt(match[1], 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-};
-
-const resolveSandboxTagStepByQuestionNumber = (questionNumber: number): string => {
-  if (questionNumber <= 1) return 'TAG_PLAYER_1';
-  return `TAG_PLAYER_${questionNumber}`;
-};
-
 type ChatSendSource =
   | 'player_input'
   | 'audience_idle'
@@ -168,112 +155,12 @@ type ChatSendSource =
 type ChatAutoScrollMode = 'FOLLOW' | 'COUNTDOWN' | 'FROZEN';
 const FREEZE_AFTER_MESSAGE_COUNT = 10;
 
-type RevealTransitionSnapshot = {
-  snapshotId: string;
-  sourceQuestionId: string;
-  sourceWordKey: string;
-  guardReady: boolean;
-  completionReady: boolean;
-  transitionEligible: boolean;
-  transitionBlockedBy: string;
-  hasObservableTiming: boolean;
-};
-
-type PostRevealRuntimeStatus = {
-  guardReady: boolean;
-  startEligible: boolean;
-  startBlockedBy: string;
-  completionEligible: boolean;
-  completionBlockedBy: string;
-};
-
-const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnapshot => {
-  const sourceWordKey = sandboxState.prompt.current?.wordKey || sandboxState.currentPrompt?.wordKey || '';
-  const revealWordKey = sandboxState.reveal.wordKey || '';
-  const sourceQuestionId = sourceWordKey || revealWordKey;
-  const questionMismatch = Boolean(revealWordKey && sourceWordKey && revealWordKey !== sourceWordKey);
-  const hasObservableTiming = sandboxState.reveal.startedAt > 0
-    && sandboxState.reveal.finishedAt > 0
-    && sandboxState.reveal.finishedAt >= sandboxState.reveal.startedAt;
-  const completionReady = sandboxState.reveal.phase === 'done'
-    && Boolean(sandboxState.reveal.rendered)
-    && hasObservableTiming;
-  const guardReady = completionReady;
-  const transitionEligible = sandboxState.flow.step === 'REVEAL_WORD' && guardReady && !questionMismatch;
-  const transitionBlockedBy = transitionEligible
-    ? 'none'
-    : (questionMismatch
-      ? 'question_mismatch'
-    : (sandboxState.reveal.phase !== 'done'
-      ? 'reveal_not_done'
-      : (!sandboxState.reveal.rendered
-        ? 'reveal_not_rendered'
-        : (!hasObservableTiming ? 'timing_missing' : 'unknown'))));
-  const snapshotId = [
-    sandboxState.flow.step,
-    sourceQuestionId,
-    sandboxState.reveal.phase,
-    sandboxState.reveal.rendered ? '1' : '0',
-    sandboxState.reveal.startedAt || 0,
-    sandboxState.reveal.finishedAt || 0,
-    sandboxState.reveal.doneAt || 0,
-    sandboxState.reveal.wordKey || ''
-  ].join('|');
-  return {
-    snapshotId,
-    sourceQuestionId,
-    sourceWordKey,
-    guardReady,
-    completionReady,
-    transitionEligible,
-    transitionBlockedBy,
-    hasObservableTiming
-  };
-};
-
-const derivePostRevealRuntimeStatus = (sandboxState: any): PostRevealRuntimeStatus => {
-  const isPostRevealStep = sandboxState.flow.step === 'POST_REVEAL_CHAT';
-  const enteredAt = sandboxState.sandboxFlow?.postRevealEnteredAt || 0;
-  const startedAt = sandboxState.sandboxFlow?.postRevealStartedAt || 0;
-  const postRevealState = sandboxState.sandboxFlow?.postRevealChatState ?? 'idle';
-  const hasReplyGate = Boolean(sandboxState.replyGate?.armed && sandboxState.replyGate?.gateType !== 'none');
-  const guardReady = isPostRevealStep
-    && sandboxState.reveal.phase === 'done'
-    && (Boolean(sandboxState.reveal.rendered) || sandboxState.reveal.blockedReason === 'missing_word_text');
-  const startEligible = guardReady && enteredAt > 0 && postRevealState === 'idle' && startedAt <= 0;
-  const startBlockedBy = startEligible
-    ? 'none'
-    : (!isPostRevealStep
-      ? 'not_post_reveal_step'
-      : (enteredAt <= 0
-        ? 'not_entered'
-        : (!guardReady
-          ? (sandboxState.reveal.blockedReason || 'reveal_not_ready')
-          : (postRevealState !== 'idle' || startedAt > 0 ? 'already_started' : 'unknown'))));
-  const elapsedFromStart = startedAt > 0 ? (Date.now() - startedAt) : 0;
-  const completionEligible = guardReady
-    && startedAt > 0
-    && postRevealState === 'started'
-    && !hasReplyGate
-    && elapsedFromStart >= SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS;
-  const completionBlockedBy = completionEligible
-    ? 'none'
-    : (!guardReady
-      ? (sandboxState.reveal.blockedReason || 'reveal_not_ready')
-      : (startedAt <= 0 || postRevealState === 'idle'
-        ? 'not_started'
-        : (postRevealState === 'done'
-          ? 'already_completed'
-          : (hasReplyGate
-            ? 'reply_gate_armed'
-            : 'bounded_wait_pending'))));
-  return {
-    guardReady,
-    startEligible,
-    startBlockedBy,
-    completionEligible,
-    completionBlockedBy
-  };
+type SandboxRuntimeGuardState = {
+  modeEnteredAt: number;
+  bootRecoveries: number;
+  lastRecoveryReason: string;
+  lastHydratedAt: number;
+  classicTickBlockedCount: number;
 };
 
 type ChatFreezeState = {
@@ -718,55 +605,6 @@ const EMPTY_FEAR_DEBUG_STATE: SandboxFearDebugState = {
 };
 
 
-
-type DebugModeSwitcherProps = {
-  currentMode: 'classic' | 'sandbox_story';
-  switching: boolean;
-  lastModeSwitch: LastModeSwitchStatus;
-  onSwitch: (mode: 'classic' | 'sandbox_story') => void;
-};
-
-type LastModeSwitchStatus = {
-  clickAt: number | null;
-  requestedMode: 'classic' | 'sandbox_story' | null;
-  persistedMode: string;
-  action: 'reinit' | 'reload' | 'none';
-  result: 'ok' | 'blocked' | 'error' | '-';
-  reason: string;
-};
-
-type SandboxRuntimeGuardState = {
-  modeEnteredAt: number;
-  bootRecoveries: number;
-  lastRecoveryReason: string;
-  lastHydratedAt: number;
-  classicTickBlockedCount: number;
-};
-
-function DebugModeSwitcher({ currentMode, onSwitch, switching, lastModeSwitch }: DebugModeSwitcherProps) {
-  return (
-    <div className="debug-event-tester" aria-label="Debug Mode Switcher">
-      <h4>Mode Debug</h4>
-      <div>currentMode: {currentMode}</div>
-      <div className="debug-route-controls">
-        <button type="button" disabled={currentMode === 'classic'} onClick={() => onSwitch('classic')}>
-          {currentMode === 'classic' ? 'Classic (Current)' : 'Switch to Classic'}
-        </button>
-        <button type="button" disabled={currentMode === 'sandbox_story'} onClick={() => onSwitch('sandbox_story')}>
-          {currentMode === 'sandbox_story' ? 'Sandbox (Current)' : 'Switch to Sandbox (sandbox_story)'}
-        </button>
-      </div>
-      {switching && <div>Switching…</div>}
-      <div><strong>Mode Switch Debug</strong></div>
-      <div>lastModeSwitch.clickAt: {lastModeSwitch.clickAt ?? '-'}</div>
-      <div>lastModeSwitch.requestedMode: {lastModeSwitch.requestedMode ?? '-'}</div>
-      <div>lastModeSwitch.persistedMode: {lastModeSwitch.persistedMode || '-'}</div>
-      <div>lastModeSwitch.action: {lastModeSwitch.action}</div>
-      <div>lastModeSwitch.result: {lastModeSwitch.result}</div>
-      <div>lastModeSwitch.reason: {lastModeSwitch.reason || '-'}</div>
-    </div>
-  );
-}
 
 export default function App() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -7026,7 +6864,7 @@ export default function App() {
           splitter: baseGrapheme && restText ? 'first_grapheme' : ''
         });
         if (node?.audioKey) {
-          void playPronounce(node.audioKey).then((result) => {
+          void import('../ui/audio/PronounceAudio').then(({ playPronounce }) => playPronounce(node.audioKey)).then((result) => {
             sandboxModeRef.current.setPronounceState(result === 'played' ? 'playing' : 'error', { key: node.audioKey, reason: result });
             bumpSandboxRevealTick();
           });
@@ -7793,7 +7631,9 @@ export default function App() {
           {debugOpen && (
             <aside className="video-debug-panel" aria-label="Debug Panel">
               <button type="button" className="video-debug-close" onClick={() => setDebugOpen(false)} aria-label="Close debug panel">×</button>
-              <DebugModeSwitcher currentMode={mode} switching={debugModeSwitching} lastModeSwitch={lastModeSwitch} onSwitch={switchDebugMode} />
+              <Suspense fallback={null}>
+                <DebugModeSwitcher currentMode={mode} switching={debugModeSwitching} lastModeSwitch={lastModeSwitch} onSwitch={switchDebugMode} />
+              </Suspense>
               {mode === 'classic' && (
                 <>
               <div className="debug-event-tester" aria-label="Event Tester">
