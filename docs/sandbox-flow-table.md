@@ -433,3 +433,22 @@ Smoke output now must include:
 - Abort only when all conditions hold: `active.status==='ASKING'`、`active.id` exists、`questionMessageId===null`、`askedAt` exists、`now-askedAt>=timeoutMs`。
 - App integration (`src/app/App.tsx`) must call the above API directly in timer loop; do not reintroduce legacy wrapper names.
 
+
+## 2026-03-20 Sandbox pinned reply / submit transition SSOT table
+
+| Transition | Single authoritative owner | Required writes in same turn | UI/debug consumption | Forbidden legacy pattern |
+| --- | --- | --- | --- | --- |
+| player input submitted | `submitChat -> consumePlayerReply` | append player message | chat list uses committed message | submit 後靠 effect 再補 append |
+| reply evaluation created | `consumePlayerReply` | `lastReplyEval` with current `messageId/gateType/reason/consumed` | debug 直接讀 `lastReplyEval` | 第二輪才補寫前一輪 eval |
+| lastReplyEval persisted | `sandboxStoryMode.state.lastReplyEval` | every submit path must write | debug mirrors only | blocked path 不寫 eval |
+| gate state changed | `sandboxStoryMode.state.replyGate` | `armed/canReply/gateConsumed/sourceMessageId/targetPlayerId` | input enabled + preview gate 共讀 | component 各自另外判斷 |
+| pinned reply visibility resolved | `sandboxStoryMode.state.pinnedReply` | create/update/clear pinned in same authoritative transition | ChatPanel + debug 共讀 `pinnedReply` | local state / deferredPinned / previous message effect |
+| chat render state resolved | `replyUiAuthority + sandboxReplyGateState + pinnedReply` | no extra writes | UI reads SSOT directly | sandbox preview 依賴 classic `qnaStatus` |
+
+### 2026-03-20 audit decision log
+
+- `pinnedReply` is now the sandbox SSOT for pinned visibility/source/reason.
+- `lastReplyEval`, `replyGate`, and `pinnedReply` must all be committed before the same-turn `bumpSandboxRevealTick()` wakeup completes.
+- debug can only reflect `replyGate / canReply / blockReason / lastReplyEval / pinnedReply(source/id/visibilityReason)`.
+- removed conflict: sandbox local pinned state as authority.
+- removed conflict: sandbox preview gated by classic `qnaStatus`.

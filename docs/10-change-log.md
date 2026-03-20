@@ -1208,3 +1208,11 @@
 - Sandbox 子音判定持續沿用 classic pipeline：`parseAndJudgeUsingClassic` + alias resolution + acceptedCandidates。  
 - HELP REQUEST（不知道/不會/help/hint/...）在 sandbox consonant gate 不判錯不跳題；改由 viewer 以 image memory 提示，並留下 `help_requested` 判定紀錄。  
 - debug observability 擴充：hint `requested/source/emitter/generatedText`。
+
+## 2026-03-20 sandbox pinned reply first-submit SSOT repair
+
+- [sandbox][ssot][pinned] 新增 `sandboxStoryMode.state.pinnedReply`，將 sandbox pinned reply 收斂為單一正式 state；App/ChatPanel/debug 皆改讀同源資料。
+- [sandbox][ui gate] 移除 sandbox reply preview 對 classic `qnaStatus` 的依賴，改由 `replyUiAuthority + sandboxReplyGateState + sourceMessageId` 決定顯示，避免首次有效送出後 pinned reply 延到下一輪才出現。
+- [sandbox][cleanup] `clearReplyUi()`、question advance、bootstrap reset 皆同步清空 authoritative pinned reply，移除 local pinned/deferred 殘留干擾。
+- [sandbox][debug] pinned reason / source / summary 優先讀 `pinnedReply.visibilityReason`，debug 與正式 UI 對齊，不再各算一套。
+- [guard] `scripts/sandbox-v2-regression-guards.mjs` 新增檢查：sandbox pinned reply 必須走 SSOT、App 不可保留 local authoritative pinned state、sandbox preview 不可再被 classic `qnaStatus` gate 阻擋。
