@@ -33,6 +33,7 @@ type SandboxPinnedEntry = {
   linkedToReplyGate: boolean;
   pinnedSourceId: string | null;
   pinnedSourceType: string | null;
+  visibilityReason?: string;
 };
 
 type SandboxReplyGateState = {
@@ -185,7 +186,6 @@ export default function ChatPanel({
   );
   const shouldRenderSandboxReplyPreview = Boolean(
     replyUiMode === 'sandbox'
-    && qnaStatus === 'AWAITING_REPLY'
     && replyUiAuthority?.canReply
     && sandboxReplyGateState?.replyGateArmed
     && gateSourceId

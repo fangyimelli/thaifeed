@@ -181,6 +181,7 @@ type SandboxPinnedEntry = {
   linkedToReplyGate: boolean;
   pinnedSourceId: string | null;
   pinnedSourceType: string | null;
+  visibilityReason?: string;
 };
 
 type SandboxReplyGateState = {
@@ -637,7 +638,6 @@ export default function App() {
   const [qnaQuestionMessageIdRendered, setQnaQuestionMessageIdRendered] = useState(false);
   const [replyPinMounted, setReplyPinMounted] = useState(false);
   const [sandboxPinnedMounted, setSandboxPinnedMounted] = useState(false);
-  const [sandboxPinnedEntry, setSandboxPinnedEntry] = useState<SandboxPinnedEntry | null>(null);
   const [lastForceToBottomReason, setLastForceToBottomReason] = useState<string | null>(null);
   const [lastForceToBottomAt, setLastForceToBottomAt] = useState<number | null>(null);
   const [lastForceScrollMetrics, setLastForceScrollMetrics] = useState<{ top: number; height: number; client: number } | null>(null);
@@ -1970,6 +1970,20 @@ export default function App() {
     setReplyPreviewSuppressedReason(null);
   }, []);
 
+  const getSandboxPinnedEntry = useCallback((): SandboxPinnedEntry | null => {
+    if (modeRef.current.id !== 'sandbox_story') return null;
+    return sandboxModeRef.current.getState().pinnedReply ?? null;
+  }, []);
+
+  const commitSandboxPinnedEntry = useCallback((entry: SandboxPinnedEntry | null) => {
+    if (modeRef.current.id !== 'sandbox_story') return;
+    sandboxModeRef.current.setPinnedReply?.(entry);
+    bumpSandboxRevealTick(entry?.createdAt ?? Date.now());
+  }, [bumpSandboxRevealTick]);
+  const sandboxPinnedEntry = modeRef.current.id === 'sandbox_story'
+    ? (sandboxModeRef.current.getState().pinnedReply as SandboxPinnedEntry | null)
+    : null;
+
   const deriveSandboxReplyGateState = useCallback((): SandboxReplyGateState => {
     if (modeRef.current.id !== 'sandbox_story') {
       return {
@@ -2077,13 +2091,12 @@ export default function App() {
       replyingToMessageId: null
     };
     qnaStateRef.current.active.questionMessageId = null;
-    setSandboxPinnedEntry((prev) => {
-      if (!prev) return prev;
+    if (getSandboxPinnedEntry()) {
       sandboxAutoPinFreezeRef.current.lastPinnedDroppedReason = `clearReplyUi:${reason}`;
       sandboxAutoPinFreezeRef.current.lastPinnedDroppedAt = now;
       sandboxAutoPinFreezeRef.current.cleanupClearedPinned = true;
-      return null;
-    });
+      commitSandboxPinnedEntry(null);
+    }
     setLastQuestionMessageId(null);
     setLastQuestionMessageHasTag(false);
     resetQnaUiState();
@@ -2097,7 +2110,7 @@ export default function App() {
     }
     sandboxQnaDebugRef.current.lastClearReplyUiAt = now;
     sandboxQnaDebugRef.current.lastClearReplyUiReason = reason;
-  }, [resetQnaUiState]);
+  }, [commitSandboxPinnedEntry, getSandboxPinnedEntry, resetQnaUiState]);
 
   const resolveQna = useCallback((reason: string) => {
     const now = Date.now();
@@ -2398,19 +2411,25 @@ export default function App() {
     setLastQuestionMessageId(payload.messageId);
     setLastQuestionMessageHasTag(payload.hasTagToActiveUser);
     setReplyPreviewSuppressedReason(null);
-    setSandboxPinnedEntry((prev) => {
-      if (!prev || prev.messageId !== payload.messageId) return prev;
-      return {
-        ...prev,
-        linkedToReplyGate: true,
-        pinnedSourceId: payload.messageId,
-        pinnedSourceType: prev.sourceType
-      };
+    const body = resolveSandboxPinnedBody(sourceMessage);
+    const existingPinned = getSandboxPinnedEntry();
+    commitSandboxPinnedEntry({
+      id: existingPinned?.id ?? `sandbox-pin:${payload.messageId}`,
+      messageId: payload.messageId,
+      createdAt: existingPinned?.createdAt ?? Date.now(),
+      expiresAt: existingPinned?.expiresAt ?? 0,
+      visible: true,
+      author: sourceMessage.username,
+      body,
+      sourceType: existingPinned?.sourceType ?? 'prompt_preview',
+      linkedToReplyGate: true,
+      pinnedSourceId: payload.messageId,
+      pinnedSourceType: existingPinned?.sourceType ?? 'prompt_preview'
     });
     sandboxModeRef.current.commitPromptPinnedRendered(payload.messageId);
     sandboxModeRef.current.commitPinnedWriter({ source: payload.source === 'autoPinFreeze' ? 'eventEngine' : payload.source, writerBlocked: false, blockedReason: '' });
     return true;
-  }, [state.messages]);
+  }, [commitSandboxPinnedEntry, getSandboxPinnedEntry, state.messages]);
 
 
 
@@ -2492,15 +2511,14 @@ export default function App() {
       pinnedSourceId: payload.messageId,
       pinnedSourceType: 'auto_pin_freeze'
     };
-    setSandboxPinnedEntry((prev) => {
-      if (prev?.visible && prev.messageId !== payload.messageId) {
-        setSandboxDebugAutoPinFreeze({
-          pinnedOverwrittenByMessageId: payload.messageId,
-          lastPinnedOverwriteAt: now
-        });
-      }
-      return nextPinned;
-    });
+    const previousPinned = getSandboxPinnedEntry();
+    if (previousPinned?.visible && previousPinned.messageId !== payload.messageId) {
+      setSandboxDebugAutoPinFreeze({
+        pinnedOverwrittenByMessageId: payload.messageId,
+        lastPinnedOverwriteAt: now
+      });
+    }
+    commitSandboxPinnedEntry({ ...nextPinned, visibilityReason: payload.reason });
     lockStateRef.current = normalizedActor
       ? {
           isLocked: true,
@@ -2574,30 +2592,28 @@ export default function App() {
       clearReplyUi(`sandbox_auto_pin_timeout:${payload.reason}`);
       clearChatFreeze(`sandbox_auto_pin_timeout:${payload.reason}`);
       setChatAutoPaused(false);
-      setSandboxPinnedEntry((prev) => {
-        if (!prev || prev.messageId !== payload.messageId) return prev;
-        setSandboxDebugAutoPinFreeze({
-          lastPinnedAutoClearAt: Date.now(),
-          lastPinnedAutoClearReason: `timeout:${payload.reason}`,
-          cleanupClearedPinned: true
-        });
-        return null;
+      const currentPinned = getSandboxPinnedEntry();
+      if (!currentPinned || currentPinned.messageId !== payload.messageId) return;
+      commitSandboxPinnedEntry(null);
+      setSandboxDebugAutoPinFreeze({
+        lastPinnedAutoClearAt: Date.now(),
+        lastPinnedAutoClearReason: `timeout:${payload.reason}`,
+        cleanupClearedPinned: true
       });
     }, freezeMs + 120);
     window.setTimeout(() => {
-      setSandboxPinnedEntry((prev) => {
-        if (!prev || prev.messageId !== payload.messageId) return prev;
-        if (Date.now() < prev.expiresAt) return prev;
-        setSandboxDebugAutoPinFreeze({
-          lastPinnedAutoClearAt: Date.now(),
-          lastPinnedAutoClearReason: `expiresAt:${payload.reason}`,
-          cleanupClearedPinned: true
-        });
-        return null;
+      const currentPinned = getSandboxPinnedEntry();
+      if (!currentPinned || currentPinned.messageId !== payload.messageId) return;
+      if (Date.now() < currentPinned.expiresAt) return;
+      commitSandboxPinnedEntry(null);
+      setSandboxDebugAutoPinFreeze({
+        lastPinnedAutoClearAt: Date.now(),
+        lastPinnedAutoClearReason: `expiresAt:${payload.reason}`,
+        cleanupClearedPinned: true
       });
     }, freezeMs + 3200);
     return true;
-  }, [activeUserInitialHandleRef, clearChatFreeze, clearReplyUi, sandboxPinnedMounted, setPinnedQuestionMessage, setSandboxDebugAutoPinFreeze, setScrollMode, state.messages]);
+  }, [activeUserInitialHandleRef, clearChatFreeze, clearReplyUi, commitSandboxPinnedEntry, getSandboxPinnedEntry, sandboxPinnedMounted, setPinnedQuestionMessage, setSandboxDebugAutoPinFreeze, setScrollMode, state.messages]);
 
   const rollbackEventCooldown = useCallback((eventKey: StoryEventKey) => {
     eventCooldownsRef.current[eventKey] = 0;
@@ -4923,9 +4939,9 @@ export default function App() {
               lastPinnedRenderVisible: Boolean(sandboxPinnedEntry?.visible),
               pinnedStateKey: 'sandboxPinnedEntry',
               pinnedStateSummary: sandboxPinnedEntry
-                ? `${sandboxPinnedEntry.id}:${sandboxAutoPinFreezeRef.current.pinnedSourceReason}:${sandboxPinnedEntry.messageId}`
+                ? `${sandboxPinnedEntry.id}:${sandboxPinnedEntry.visibilityReason ?? sandboxAutoPinFreezeRef.current.pinnedSourceReason}:${sandboxPinnedEntry.messageId}`
                 : 'null',
-              pinnedSourceReason: sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
+              pinnedSourceReason: sandboxPinnedEntry?.visibilityReason ?? sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
               pinnedSourceType: sandboxPinnedEntry?.pinnedSourceType ?? '-',
               pinnedSourceId: sandboxPinnedEntry?.pinnedSourceId ?? '-',
               linkedToReplyGate: Boolean(sandboxPinnedEntry?.linkedToReplyGate),
@@ -4965,7 +4981,7 @@ export default function App() {
           sandboxPinned: {
             mounted: sandboxPinnedMounted,
             visible: Boolean(sandboxPinnedEntry?.visible),
-            reason: sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
+            reason: sandboxPinnedEntry?.visibilityReason ?? sandboxAutoPinFreezeRef.current.pinnedSourceReason ?? '-',
             sourceType: sandboxPinnedEntry?.sourceType ?? '-',
             sourceMessageId: sandboxPinnedEntry?.messageId ?? '-',
             expiresAt: sandboxPinnedEntry?.expiresAt ?? 0,

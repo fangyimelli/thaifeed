@@ -2157,3 +2157,17 @@ Console（debug 模式）可觀察：
 - [sandbox][debug] 新增 round/debug 欄位可觀察：`round.nightId/questionOrder/currentQuestionCursor/currentQuestionId/remainingQuestionCount/authoritativeQuestionSource`。
 - [guard] 新增 `scripts/regression-sandbox-night-pool-ssot.mjs` 檢查 NIGHT pool 固定題量、必要 acceptedCandidates、round cursor 推進與 end_of_question_pool guard。
 - [classic] classic mode 未改邏輯路徑（僅 sandbox 導向資料與 flow authority 調整）。
+
+## 2026-03-20 Sandbox pinned reply SSOT audit fix
+
+- 僅調整 sandbox integration mode；classic mode 未改動。
+- 針對「第一次有效 submit 後 pinned reply 要到第二次才出現」做完整 audit，確認衝突點包含：sandbox pinned UI 仍混用 App local state、sandbox reply preview 還被 classic `qnaStatus` gate 阻擋、debug pinned reason 與正式 UI 不是同一份 state。
+- 新增 sandbox authoritative pinned reply SSOT：`sandboxStoryMode.state.pinnedReply`，由 App 只做 projection，不再以 `useState(sandboxPinnedEntry)` 當權威來源。
+- `setPinnedQuestionMessage()` 與 auto-pin/freeze 現在都寫回同一份 `pinnedReply`；`clearReplyUi()` 與 question advance 也同步清空，避免 pending/deferred pinned 殘留到下一輪。
+- `ChatPanel` 的 sandbox reply preview 不再依賴 classic `qnaStatus === 'AWAITING_REPLY'`；改由 `replyUiAuthority + sandboxReplyGateState + sourceMessageId` 直接決定顯示，確保首輪/首題/首個有效 submit 不會因 classic gate 條件少一拍而延後。
+- debug pinned reason / source / visibility summary 改為優先讀正式 `pinnedReply.visibilityReason`，debug 不再自行補算另一套 pinned 來源。
+
+### README Removed/Deprecated Log
+
+- 移除 sandbox `useState(sandboxPinnedEntry)` 作為 pinned reply 權威來源；改由 `sandboxStoryMode.state.pinnedReply` 單一事實來源。
+- 移除 sandbox reply preview 對 classic `qnaStatus` 的隱性相依，避免新舊 gate 判斷雙軌互打。

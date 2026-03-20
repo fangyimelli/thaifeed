@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 
 const app = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
+const chatPanel = fs.readFileSync(new URL('../src/ui/chat/ChatPanel.tsx', import.meta.url), 'utf8');
 const mode = fs.readFileSync(new URL('../src/modes/sandbox_story/sandboxStoryMode.ts', import.meta.url), 'utf8');
+const sandboxFlowRuntime = fs.readFileSync(new URL('../src/app/sandboxFlowRuntime.ts', import.meta.url), 'utf8');
 const adapter = fs.readFileSync(new URL('../src/modes/sandbox_story/classicConsonantAdapter.ts', import.meta.url), 'utf8');
 const sharedEngine = fs.readFileSync(new URL('../src/shared/consonant-engine/engine.ts', import.meta.url), 'utf8');
 const sharedQuestionBank = fs.readFileSync(new URL('../src/shared/consonant-engine/questionBank.ts', import.meta.url), 'utf8');
@@ -198,7 +200,7 @@ checks.push({
     if (!app.includes("setFlowStep('ANSWER_EVAL', resolveSandboxWaitReplyConsumedReason(waitReplyIndex!))")) {
       throw new Error('dynamic WAIT_REPLY_x consume must enter ANSWER_EVAL');
     }
-    if (!app.includes("// legacy guard reference: setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)") || !app.includes('return `player_reply_${waitReplyIndex}_consumed`;')) {
+    if (!app.includes("// legacy guard reference: setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)") || !sandboxFlowRuntime.includes('return `player_reply_${waitReplyIndex}_consumed`;')) {
       throw new Error('dynamic WAIT_REPLY_x authoritative consume mapping missing');
     }
     if (app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_2_consumed')") || app.includes("setFlowStep('ADVANCE_NEXT', 'player_reply_3_consumed')")) {
@@ -206,6 +208,43 @@ checks.push({
     }
     if (app.includes("setFlowStep('ADVANCE_NEXT', resolveSandboxWaitReplyConsumedReason(waitReplyIndex!))")) {
       throw new Error('dynamic WAIT_REPLY_x must not shortcut from consume to ADVANCE_NEXT');
+    }
+  }
+});
+
+checks.push({
+  name: 'sandbox pinned reply uses SSOT and does not depend on classic qnaStatus gate',
+  run() {
+    if (!mode.includes('pinnedReply: null')) {
+      throw new Error('sandbox pinned reply SSOT root field missing');
+    }
+    if (!mode.includes('setPinnedReply: (entry: SandboxPinnedReplyState | null) => {')) {
+      throw new Error('sandbox pinned reply setter missing');
+    }
+    if (!app.includes('const commitSandboxPinnedEntry = useCallback((entry: SandboxPinnedEntry | null) => {')) {
+      throw new Error('App does not project sandbox pinned reply from authoritative state');
+    }
+    if (!app.includes('sandboxModeRef.current.setPinnedReply?.(entry);')) {
+      throw new Error('App pinned reply writes are not routed through sandbox SSOT');
+    }
+    if (app.includes('const [sandboxPinnedEntry, setSandboxPinnedEntry] = useState')) {
+      throw new Error('local sandboxPinnedEntry state must not remain authoritative');
+    }
+    const sandboxPreviewBlock = /const shouldRenderSandboxReplyPreview = Boolean\(([\s\S]*?)\);/.exec(chatPanel)?.[1] ?? '';
+    if (sandboxPreviewBlock.includes("qnaStatus === 'AWAITING_REPLY'")) {
+      throw new Error('sandbox reply preview still depends on classic qnaStatus gate');
+    }
+  }
+});
+
+checks.push({
+  name: 'consume success keeps lastReplyEval and wakes same-turn flow for pinned reply emission',
+  run() {
+    if (!app.includes("writeSandboxLastReplyEval({ rawInput: raw, normalizedInput: consonantParsed, extractedAnswer: consonantParsed, consumed: true, reason: 'consume_success'")) {
+      throw new Error('consume success must persist lastReplyEval');
+    }
+    if (!app.includes('bumpSandboxRevealTick();\n      return true;')) {
+      throw new Error('consume success must wake same-turn sandbox flow processing');
     }
   }
 });
@@ -258,7 +297,7 @@ checks.push({
     if (!app.includes('revealSnapshotQuestionId') || !app.includes('revealSnapshotWordKey')) {
       throw new Error('reveal snapshot question/word observability missing');
     }
-    if (!app.includes("'question_mismatch'")) {
+    if (!sandboxFlowRuntime.includes("'question_mismatch'")) {
       throw new Error('reveal snapshot question mismatch guard missing');
     }
   }
@@ -621,7 +660,7 @@ if (!app.includes("scene_not_synced_warning")) {
 }
 
 
-if (!app.includes('const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
+if (!sandboxFlowRuntime.includes('export const SANDBOX_REVEAL_VISIBLE_MIN_MS = 2500;')) {
   throw new Error('reveal duration guard missing minimum visible duration constant');
 }
 if (!app.includes("if (sandboxState.flow.step === 'REVEAL_WORD') {") || !app.includes('const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);')) {
@@ -726,7 +765,7 @@ if (!app.includes("setReveal?.({ startedAt: repairedStartedAt, finishedAt: repai
 if (!app.includes("if (sandboxState.flow.step === 'POST_REVEAL_CHAT') {") || !app.includes("setFlowStep('ADVANCE_NEXT', 'post_reveal_chat_done')")) {
   throw new Error('POST_REVEAL_CHAT must stably advance to ADVANCE_NEXT');
 }
-if (!app.includes('SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS')) {
+if (!sandboxFlowRuntime.includes('SANDBOX_POST_REVEAL_AUTO_COMPLETE_MS')) {
   throw new Error('POST_REVEAL_CHAT should auto-complete in bounded time');
 }
 if (!app.includes("postRevealCompletionReason: 'auto_complete_bounded'")) {
@@ -789,7 +828,7 @@ if (!app.includes('const reconcileSandboxDebugState = useCallback((params: {')) 
 }
 
 
-if (!app.includes('const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnapshot => {')) {
+if (!sandboxFlowRuntime.includes('export const buildRevealTransitionSnapshot = (sandboxState: any): RevealTransitionSnapshot => {')) {
   throw new Error('REVEAL transition must derive eligibility/blockedBy from a single authoritative snapshot helper');
 }
 if (!app.includes('const revealTransitionSnapshot = buildRevealTransitionSnapshot(sandboxState);')) {
@@ -809,7 +848,7 @@ if (!app.includes('revealCompletionReady: true') || !app.includes('revealGuardRe
 }
 
 
-if (!app.includes('const derivePostRevealRuntimeStatus = (sandboxState: any): PostRevealRuntimeStatus => {')) {
+if (!sandboxFlowRuntime.includes('export const derivePostRevealRuntimeStatus = (sandboxState: any): PostRevealRuntimeStatus => {')) {
   throw new Error('POST_REVEAL_CHAT must use a single authoritative runtime helper');
 }
 if (!app.includes("setFlowStep('ANSWER_EVAL', `player_reply_${waitReplyIndex}_consumed`)")) {
