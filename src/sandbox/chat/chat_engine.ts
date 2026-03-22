@@ -1,4 +1,9 @@
-type SandboxChatMessage = { user: string; text: string; thai?: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown'; chatType?: 'sandbox_story_critical_hint_followup'; hintEventName?: string };
+export type SandboxChatMessage = { user: string; text: string; thai?: string; translation?: string; vip?: boolean; role?: 'viewer' | 'vip' | 'mod'; badge?: 'crown'; chatType?: 'sandbox_story_critical_hint_followup'; hintEventName?: string };
+
+export const SANDBOX_CHAT_ENGINE_STUB_LINES = {
+  crowdReactWord: '???',
+  reasoningWave: '我覺得不對勁'
+} as const;
 
 type AuditDebugState = {
   lastEmitKey: string;
@@ -23,6 +28,6 @@ export class ChatEngine {
   shouldEmitJoin(_: any = null) { return true; }
   markPlayerReply(_: any) {}
   registerFootstepsRoll(_: any) { return { chance: 0 }; }
-  emitCrowdReactWord(_: any, cb?: (m: SandboxChatMessage) => void) { const m = { user: 'viewer', text: '???' }; this.onMessage(m); cb?.(m); this.onWaveResolved(1); }
-  emitReasoningWave(_: any, cb?: (m: SandboxChatMessage) => void) { const m = { user: 'viewer', text: '我覺得不對勁' }; this.onMessage(m); cb?.(m); this.onWaveResolved(1); }
+  emitCrowdReactWord(_: any, cb?: (m: SandboxChatMessage) => void) { const m = { user: 'viewer', text: SANDBOX_CHAT_ENGINE_STUB_LINES.crowdReactWord }; this.onMessage(m); cb?.(m); this.onWaveResolved(1); }
+  emitReasoningWave(_: any, cb?: (m: SandboxChatMessage) => void) { const m = { user: 'viewer', text: SANDBOX_CHAT_ENGINE_STUB_LINES.reasoningWave }; this.onMessage(m); cb?.(m); this.onWaveResolved(1); }
 }

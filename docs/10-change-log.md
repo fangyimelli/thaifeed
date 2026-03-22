@@ -1216,3 +1216,24 @@
 - [sandbox][cleanup] `clearReplyUi()`、question advance、bootstrap reset 皆同步清空 authoritative pinned reply，移除 local pinned/deferred 殘留干擾。
 - [sandbox][debug] pinned reason / source / summary 優先讀 `pinnedReply.visibilityReason`，debug 與正式 UI 對齊，不再各算一套。
 - [guard] `scripts/sandbox-v2-regression-guards.mjs` 新增檢查：sandbox pinned reply 必須走 SSOT、App 不可保留 local authoritative pinned state、sandbox preview 不可再被 classic `qnaStatus` gate 阻擋。
+
+## 2026-03-22 Chat content manifest extraction (classic + sandbox)
+
+- Added shared chat-content schema: `src/content/chat-content/schema.ts`.
+- Added content registry: `src/content/chat-content/chatContentManifest.ts`.
+- Added App-owned runtime content extraction file: `src/content/chat-content/appRuntimeContent.ts`.
+- Extracted sandbox fixed chat strings from `App.tsx` into content-layer constants/templates:
+  - PREHEAT sequence
+  - VIP summary lines
+  - ANSWER_EVAL glitch burst
+  - tag question template
+  - reveal prompt template
+  - help-hint fallback/template
+  - debug smoke text
+- Extracted shared ChatPanel UI strings into the same content layer (`UI_TEXT`).
+- Added generated verification artifacts:
+  - `src/content/chat-content/chatContentManifest.generated.json`
+  - `docs/chat-content-audit-manifest.md`
+- Added regression guard `scripts/chat-content-regression-guards.mjs` and artifact generator `scripts/generate-chat-content-artifacts.mjs`.
+- Existing sandbox regression guard updated to accept extracted preheat content living in the content layer while still enforcing the same flow invariants.
+- No intentional classic/sandbox flow-order change; change is content-layer extraction + verification only.

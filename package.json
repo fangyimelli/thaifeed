@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:sandbox-guards": "node scripts/sandbox-v2-regression-guards.mjs"
+    "test:sandbox-guards": "node scripts/sandbox-v2-regression-guards.mjs",
+    "test:chat-content-guards": "node scripts/chat-content-regression-guards.mjs",
+    "generate:chat-content-artifacts": "node scripts/generate-chat-content-artifacts.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

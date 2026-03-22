@@ -2,6 +2,7 @@ import type { GameMode } from '../types';
 import { NIGHT1 } from '../../ssot/sandbox_story/night1';
 import type { NightScript } from '../../ssot/sandbox_story/types';
 import { isSandboxWaitReplyStep } from './waitReplyStep';
+import { SANDBOX_PROMPT_TEMPLATES, renderSandboxPromptTemplate } from '../../content/chat-content/appRuntimeContent';
 
 export type SandboxPrompt = {
   kind: 'consonant' | 'theory' | 'final';
@@ -683,7 +684,7 @@ export function createSandboxStoryMode(): GameMode & Record<string, any> {
         promptId,
         consonant: nextNode.char,
         wordKey: nextNode.id,
-        pinnedText: `請讀出剛剛閃過的字：${nextNode.char}`,
+        pinnedText: renderSandboxPromptTemplate(SANDBOX_PROMPT_TEMPLATES.revealPrompt, { consonant: nextNode.char }),
         correctKeywords: nextNode.correctKeywords ?? [nextNode.char],
         unknownKeywords: nextNode.unknownKeywords ?? ['不知道']
       };

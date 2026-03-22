@@ -1,7 +1,7 @@
 import { pickWithoutRecent } from './dedupe';
 import type { EventTopic } from './eventTypes';
 
-const reactionPool: Record<EventTopic, Array<{ id: string; text: string }>> = {
+export const EVENT_REACTION_POOL: Record<EventTopic, Array<{ id: string; text: string }>> = {
   ghost: [
     { id: 'ghost_react_1', text: '我耳朵整個麻掉' },
     { id: 'ghost_react_2', text: '剛剛那聲超近' },
@@ -41,7 +41,7 @@ const reactionPool: Record<EventTopic, Array<{ id: string; text: string }>> = {
 };
 
 export function pickReactionLines(topic: EventTopic, count: number, recentIds: string[]): Array<{ id: string; text: string }> {
-  const pool = reactionPool[topic];
+  const pool = EVENT_REACTION_POOL[topic];
   const picked: Array<{ id: string; text: string }> = [];
   const localRecent = [...recentIds];
   for (let i = 0; i < count; i += 1) {

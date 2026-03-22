@@ -69,6 +69,7 @@ import { CONSONANT_BANK_BY_CHAR, isHelpRequest } from '../shared/consonant-engin
 import { getAcceptedAliasCandidates, getSharedConsonantQuestionById } from '../shared/consonant-engine';
 import { ChatEngine as SandboxChatEngine } from '../sandbox/chat/chat_engine';
 import { SANDBOX_VIP } from '../sandbox/chat/vip_identity';
+import { SANDBOX_PREHEAT_JOIN_CAP, SANDBOX_PREHEAT_CHAT_SEQUENCE, SANDBOX_GLITCH_BURST_LINES, SANDBOX_VIP_SUMMARY_LINES, SANDBOX_PROMPT_TEMPLATES, SANDBOX_DEBUG_TEXT, renderSandboxPromptTemplate } from '../content/chat-content/appRuntimeContent';
 import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import type { GameMode } from '../modes/types';
@@ -423,19 +424,6 @@ function mapSandboxSchedulerPhase(phase: string): 'boot' | 'preheat' | 'intro' |
 function nextJoinDelayMs() {
   return 8_000 + Math.floor(Math.random() * 7_001);
 }
-
-const SANDBOX_PREHEAT_JOIN_CAP = 4;
-const SANDBOX_PREHEAT_CHAT_SEQUENCE: Array<{ user: string; text: string; role?: 'viewer' | 'vip' | 'mod'; vip?: boolean; badge?: 'crown'; kind: 'chat' | 'join' }> = [
-  { user: 'viewer_118', text: '今天怎麼這麼多人一起在線？', role: 'viewer', kind: 'chat' },
-  { user: 'system', text: 'viewer_721 加入聊天室', kind: 'join' },
-  { user: 'viewer_203', text: '我有點懷疑這台是真的假的直播…', role: 'viewer', kind: 'chat' },
-  { user: SANDBOX_VIP.handle, text: '上次這間真的很多人說看到鬼影。', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
-  { user: 'system', text: 'viewer_823 加入聊天室', kind: 'join' },
-  { user: SANDBOX_VIP.handle, text: '@activeUser 你是第一次看這個台嗎？', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
-  { user: 'viewer_409', text: '剛剛鏡頭邊緣是不是有東西飄過去？', role: 'viewer', kind: 'chat' },
-  { user: 'system', text: 'viewer_477 加入聊天室', kind: 'join' },
-  { user: 'mod_live', text: '先暖場聊天，等等再看後面有沒有異常。', role: 'mod', kind: 'chat' }
-];
 
 function pickSafeFallbackText() {
   for (let i = 0; i < SAFE_FALLBACK_POOL.length; i += 1) {
@@ -2235,7 +2223,7 @@ export default function App() {
         if (currentPrompt?.kind === 'consonant') {
           if (isHelpRequest(extraction.stripped)) {
             const hintEntry = CONSONANT_BANK_BY_CHAR.get(currentPrompt.consonant);
-            const helpHint = hintEntry ? `想一下${hintEntry.imageMemoryHint}那個。` : '先想一下圖像記憶那個關鍵字。';
+            const helpHint = hintEntry ? renderSandboxPromptTemplate(SANDBOX_PROMPT_TEMPLATES.helpHintWithMemory, { imageMemoryHint: hintEntry.imageMemoryHint }) : SANDBOX_PROMPT_TEMPLATES.helpHintFallback;
             showHintForCurrentPrompt({ judge: 'help', currentPrompt: { consonant: currentPrompt.consonant, wordKey: currentPrompt.wordKey }, hintText: helpHint });
             persistJudgeAudit({
               rawInput: raw,
@@ -3785,11 +3773,12 @@ export default function App() {
               }
             } else {
               const resolvedText = next.text.replace('@activeUser', `@${actorState.activeUser || 'player'}`);
-              const preheatFingerprint = `${next.user}:${resolvedText.trim().toLowerCase()}`;
+              const resolvedUser = next.user === '{sandboxVipHandle}' ? SANDBOX_VIP.handle : next.user;
+              const preheatFingerprint = `${resolvedUser}:${resolvedText.trim().toLowerCase()}`;
               if (!sandboxPreheatDedupRef.current.emittedFingerprints.has(preheatFingerprint)) {
                 dispatchChatMessage({
                   id: crypto.randomUUID(),
-                  username: next.user,
+                  username: resolvedUser,
                   type: 'chat',
                   text: resolvedText,
                   language: 'zh',
@@ -6035,7 +6024,7 @@ export default function App() {
       promptId: crypto.randomUUID(),
       consonant: afterNode.char,
       wordKey: afterNode.id,
-      pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
+      pinnedText: renderSandboxPromptTemplate(SANDBOX_PROMPT_TEMPLATES.revealPrompt, { consonant: afterNode.char }),
       correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
       unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
     });
@@ -6154,7 +6143,7 @@ export default function App() {
       promptId: crypto.randomUUID(),
       consonant: afterNode.char,
       wordKey: afterNode.id,
-      pinnedText: `請讀出剛剛閃過的字：${afterNode.char}`,
+      pinnedText: renderSandboxPromptTemplate(SANDBOX_PROMPT_TEMPLATES.revealPrompt, { consonant: afterNode.char }),
       correctKeywords: afterNode.correctKeywords ?? [afterNode.char],
       unknownKeywords: afterNode.unknownKeywords ?? ['不知道']
     });
@@ -6384,7 +6373,7 @@ export default function App() {
     setRunning({ lastPassedStep: 'vip_tag_player' });
 
     setRunning({ currentStep: 'warmup_reply' });
-    const warmupReply = await submitChat('暖場測試回覆', 'debug_simulate');
+    const warmupReply = await submitChat(SANDBOX_DEBUG_TEXT.warmupReply, 'debug_simulate');
     if (!warmupReply.ok) {
       fail('warmup_reply', `send_failed:${warmupReply.reason ?? 'unknown'}`);
       return;
@@ -6659,7 +6648,7 @@ export default function App() {
           promptId,
           consonant: node.char,
           wordKey: node.id,
-          pinnedText: `請讀出剛剛閃過的字：${node.char}`,
+          pinnedText: renderSandboxPromptTemplate(SANDBOX_PROMPT_TEMPLATES.revealPrompt, { consonant: node.char }),
           correctKeywords: node.correctKeywords ?? [node.char],
           unknownKeywords: node.unknownKeywords ?? ['不知道']
         });
@@ -6823,11 +6812,7 @@ export default function App() {
       bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'ANSWER_EVAL') {
-      const glitchBurst = [
-        { username: 'viewer_118', line: '我這邊送出一直失敗' },
-        { username: 'viewer_203', line: '聊天室是不是延遲了' },
-        { username: 'viewer_409', line: '網路怪怪的，剛剛卡一下' }
-      ];
+      const glitchBurst = SANDBOX_GLITCH_BURST_LINES;
       glitchBurst.forEach(({ username, line }) => {
         dispatchChatMessage({ id: crypto.randomUUID(), username, type: 'chat', text: line, language: 'zh', translation: line }, { source: 'sandbox_consonant', sourceTag: 'sandbox_post_answer_glitch_pool' });
       });
@@ -7134,7 +7119,7 @@ export default function App() {
       bumpSandboxRevealTick();
     }
     if (sandboxState.flow.step === 'VIP_SUMMARY_1') {
-      const line = 'VIP 總結：先把剛剛那個單字記住，下一步確認發音。';
+      const line = SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1;
       dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: line, language: 'zh', translation: line, isVip: 'VIP_NORMAL', role: 'vip', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_summary_1' });
       sandboxModeRef.current.setFlowStep('DISCUSS_PRONOUNCE', 'vip_summary_1_done', Date.now());
       bumpSandboxRevealTick();
@@ -7155,7 +7140,7 @@ export default function App() {
     }
 
     if (sandboxState.flow.step === 'VIP_SUMMARY_2') {
-      const line = 'VIP 總結：發音方向差不多了，最後確認這個詞在指誰。';
+      const line = SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_2;
       dispatchChatMessage({ id: crypto.randomUUID(), username: SANDBOX_VIP.handle, type: 'chat', text: line, language: 'zh', translation: line, isVip: 'VIP_NORMAL', role: 'vip', badge: 'crown' }, { source: 'sandbox_consonant', sourceTag: 'sandbox_vip_summary_2' });
       sandboxModeRef.current.setFlowStep('TAG_PLAYER_3', 'vip_summary_2_done', Date.now());
       bumpSandboxRevealTick();
@@ -7166,7 +7151,7 @@ export default function App() {
       if (sandboxState.flow.tagAskedThisStep) return () => { clearSandboxRevealDoneTimer(); };
       const taggedUser = normalizeHandle(activeUserInitialHandleRef.current || 'player') || 'player';
       const speaker = 'mod_live';
-      const line = `@${taggedUser} 第 ${dynamicTagQuestionNumber} 題，請直接回答你看到的子音。`;
+      const line = renderSandboxPromptTemplate(SANDBOX_PROMPT_TEMPLATES.tagQuestion, { activeUser: taggedUser, index: dynamicTagQuestionNumber });
       const sourceTag = `sandbox_tag_player_${dynamicTagQuestionNumber}`;
       void runTagStartFlow({
         tagMessage: {

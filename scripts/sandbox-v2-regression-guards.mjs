@@ -8,6 +8,7 @@ const adapter = fs.readFileSync(new URL('../src/modes/sandbox_story/classicConso
 const sharedEngine = fs.readFileSync(new URL('../src/shared/consonant-engine/engine.ts', import.meta.url), 'utf8');
 const sharedQuestionBank = fs.readFileSync(new URL('../src/shared/consonant-engine/questionBank.ts', import.meta.url), 'utf8');
 const sandboxWordMap = fs.readFileSync(new URL('../src/modes/sandbox_story/sandboxConsonantWordMap.ts', import.meta.url), 'utf8');
+const appRuntimeContent = fs.readFileSync(new URL('../src/content/chat-content/appRuntimeContent.ts', import.meta.url), 'utf8');
 
 const checks = [
   {
@@ -52,7 +53,7 @@ const checks = [
   {
     name: 'PREHEAT_CHAT join spam cap',
     run() {
-      if (!app.includes('const SANDBOX_PREHEAT_JOIN_CAP = 4;')) {
+      if (!(app.includes('SANDBOX_PREHEAT_JOIN_CAP') && appRuntimeContent.includes('export const SANDBOX_PREHEAT_JOIN_CAP = 4;'))) {
         throw new Error('preheat join cap is missing');
       }
       if (!app.includes('joinEmitted >= SANDBOX_PREHEAT_JOIN_CAP')) {
@@ -88,7 +89,7 @@ const checks = [
       if (!app.includes("sourceTag: 'sandbox_preheat_chat'")) {
         throw new Error('preheat chat sourceTag missing');
       }
-      if (!app.includes("kind: 'chat'")) {
+      if (!appRuntimeContent.includes("kind: 'chat'")) {
         throw new Error('natural preheat chat entries missing');
       }
     }
