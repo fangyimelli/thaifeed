@@ -1,3 +1,9 @@
+## 2026-03-22 Content-layer editable ownership note
+
+- `sandbox_preheat` / `sandbox_prompt.reveal_prompt` / `sandbox_vip_summary` / `sandbox_glitch` / `sandbox_tag_question` / `sandbox_help_hint` 的文案文字層，現由 `src/content/chat-content/editable/authoredChatContent.json` 擁有。
+- `App.tsx` 與 `sandboxStoryMode.ts` 仍經由 `appRuntimeContent.ts` adapter 取值，flow / gate / state authority 不變。
+- draft / import 只更新文字 payload，不可直接改 `TAG_PLAYER_x`、`WAIT_REPLY_x`、reply gate 結構、或其他 runtime wrapper contract。
+
 ## 2026-03-11 WAIT_REPLY_4+ / Dynamic WAIT_REPLY_x Guard Contract
 
 | Contract | Required behavior | Forbidden |

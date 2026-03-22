@@ -1,0 +1,595 @@
+{
+  "mode": "sandbox",
+  "generatedAt": "2026-03-22T03:07:17.464Z",
+  "summary": {
+    "totalEntries": 31,
+    "editableEntries": 19,
+    "lockedEntries": 12
+  },
+  "categories": [
+    {
+      "category": "debug_text",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "debug_text",
+          "key": "sandbox.debug.warmup_reply",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.debug.warmup_reply\"]",
+          "text": "暖場測試回覆",
+          "flowStep": "WAIT_WARMUP_REPLY",
+          "status": "active",
+          "notes": "Debug smoke-test text for sandbox warmup reply simulation.",
+          "currentText": "暖場測試回覆",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        }
+      ]
+    },
+    {
+      "category": "sandbox_glitch",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "sandbox_glitch",
+          "key": "sandbox.glitch.answer_eval.1",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.glitch.answer_eval.1\"]",
+          "text": "我這邊送出一直失敗",
+          "flowStep": "ANSWER_EVAL",
+          "status": "active",
+          "notes": "Glitch burst line emitted by viewer_118 during ANSWER_EVAL.",
+          "currentText": "我這邊送出一直失敗",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_glitch",
+          "key": "sandbox.glitch.answer_eval.2",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.glitch.answer_eval.2\"]",
+          "text": "聊天室是不是延遲了",
+          "flowStep": "ANSWER_EVAL",
+          "status": "active",
+          "notes": "Glitch burst line emitted by viewer_203 during ANSWER_EVAL.",
+          "currentText": "聊天室是不是延遲了",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_glitch",
+          "key": "sandbox.glitch.answer_eval.3",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.glitch.answer_eval.3\"]",
+          "text": "網路怪怪的，剛剛卡一下",
+          "flowStep": "ANSWER_EVAL",
+          "status": "active",
+          "notes": "Glitch burst line emitted by viewer_409 during ANSWER_EVAL.",
+          "currentText": "網路怪怪的，剛剛卡一下",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        }
+      ]
+    },
+    {
+      "category": "sandbox_help_hint",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "sandbox_help_hint",
+          "key": "sandbox.hint.help_fallback",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.hint.help_fallback\"]",
+          "text": "先想一下圖像記憶那個關鍵字。",
+          "gateType": "consonant_answer",
+          "status": "active",
+          "notes": "Fallback help hint when shared memory hint is unavailable.",
+          "currentText": "先想一下圖像記憶那個關鍵字。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_help_hint",
+          "key": "sandbox.hint.help_memory",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.hint.help_memory\"]",
+          "text": "想一下{imageMemoryHint}那個。",
+          "tokens": [
+            {
+              "token": "{imageMemoryHint}",
+              "description": "Shared consonant image-memory hint from consonant bank.",
+              "runtimeSource": "CONSONANT_BANK_BY_CHAR.get(currentPrompt.consonant)?.imageMemoryHint"
+            }
+          ],
+          "gateType": "consonant_answer",
+          "status": "active",
+          "notes": "Help hint template using shared image-memory hint token.",
+          "currentText": "想一下{imageMemoryHint}那個。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        }
+      ]
+    },
+    {
+      "category": "sandbox_preheat",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.1",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.1\"]",
+          "text": "今天怎麼這麼多人一起在線？",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat ambient chat line owned by editable content layer.",
+          "currentText": "今天怎麼這麼多人一起在線？",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.2",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.2\"]",
+          "text": "viewer_721 加入聊天室",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat system join line owned by editable content layer.",
+          "currentText": "viewer_721 加入聊天室",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.3",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.3\"]",
+          "text": "我有點懷疑這台是真的假的直播…",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat ambient chat line owned by editable content layer.",
+          "currentText": "我有點懷疑這台是真的假的直播…",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.4",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.4\"]",
+          "text": "上次這間真的很多人說看到鬼影。",
+          "tokens": [
+            {
+              "token": "{sandboxVipHandle}",
+              "description": "Resolved sandbox VIP handle.",
+              "runtimeSource": "SANDBOX_VIP.handle"
+            }
+          ],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat ambient chat line owned by editable content layer.",
+          "currentText": "上次這間真的很多人說看到鬼影。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.5",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.5\"]",
+          "text": "viewer_823 加入聊天室",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat system join line owned by editable content layer.",
+          "currentText": "viewer_823 加入聊天室",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.6",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.6\"]",
+          "text": "@activeUser 你是第一次看這個台嗎？",
+          "tokens": [
+            {
+              "token": "@activeUser",
+              "description": "Active player handle mention injected at runtime.",
+              "runtimeSource": "separateChatActorState(...).activeUser"
+            },
+            {
+              "token": "{sandboxVipHandle}",
+              "description": "Resolved sandbox VIP handle.",
+              "runtimeSource": "SANDBOX_VIP.handle"
+            }
+          ],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat ambient chat line owned by editable content layer.",
+          "currentText": "@activeUser 你是第一次看這個台嗎？",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.7",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.7\"]",
+          "text": "剛剛鏡頭邊緣是不是有東西飄過去？",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat ambient chat line owned by editable content layer.",
+          "currentText": "剛剛鏡頭邊緣是不是有東西飄過去？",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.8",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.8\"]",
+          "text": "viewer_477 加入聊天室",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat system join line owned by editable content layer.",
+          "currentText": "viewer_477 加入聊天室",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_preheat",
+          "key": "sandbox.preheat.9",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.preheat.9\"]",
+          "text": "先暖場聊天，等等再看後面有沒有異常。",
+          "tokens": [],
+          "flowStep": "PREHEAT_CHAT",
+          "status": "active",
+          "notes": "Preheat ambient chat line owned by editable content layer.",
+          "currentText": "先暖場聊天，等等再看後面有沒有異常。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        }
+      ]
+    },
+    {
+      "category": "sandbox_prompt",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.prompt.reveal_prompt",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.prompt.reveal_prompt\"]",
+          "text": "請讀出剛剛閃過的字：{consonant}",
+          "tokens": [
+            {
+              "token": "{consonant}",
+              "description": "Current consonant/prompt character.",
+              "runtimeSource": "nextNode.char / node.char"
+            }
+          ],
+          "gateType": "consonant_answer",
+          "status": "active",
+          "notes": "Prompt template shown before sandbox consonant reply gate opens.",
+          "currentText": "請讀出剛剛閃過的字：{consonant}",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.prompt.stub.crowd_react_word",
+          "sourceFile": "src/sandbox/chat/chat_engine.ts",
+          "sourceSymbol": "SANDBOX_CHAT_ENGINE_STUB_LINES.crowdReactWord",
+          "text": "???",
+          "flowStep": "CROWD_REACT_WORD",
+          "status": "parallel",
+          "notes": "Sandbox chat engine stub line; placeholder until full crowd-react registry exists.",
+          "currentText": "???",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.prompt.stub.reasoning_wave",
+          "sourceFile": "src/sandbox/chat/chat_engine.ts",
+          "sourceSymbol": "SANDBOX_CHAT_ENGINE_STUB_LINES.reasoningWave",
+          "text": "我覺得不對勁",
+          "flowStep": "DISCUSS_PRONOUNCE",
+          "status": "parallel",
+          "notes": "Sandbox chat engine stub reasoning line.",
+          "currentText": "我覺得不對勁",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q01_wait",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "รอ / 等",
+          "questionId": "n01_q01_wait",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "รอ / 等",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q02_house",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "บ้าน / 房子",
+          "questionId": "n01_q02_house",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "บ้าน / 房子",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q03_child",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "เด็ก / 孩子",
+          "questionId": "n01_q03_child",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "เด็ก / 孩子",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q04_night",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "กลางคืน / 夜晚",
+          "questionId": "n01_q04_night",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "กลางคืน / 夜晚",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q05_door",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "ประตู / 門",
+          "questionId": "n01_q05_door",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "ประตู / 門",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q06_sound",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "เสียง / 聲音",
+          "questionId": "n01_q06_sound",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "เสียง / 聲音",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q07_wind",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "ลม / 風",
+          "questionId": "n01_q07_wind",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "ลม / 風",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q08_return",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "กลับ / 回來",
+          "questionId": "n01_q08_return",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "กลับ / 回來",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q09_why",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "ทำไม / 為什麼",
+          "questionId": "n01_q09_why",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "ทำไม / 為什麼",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_prompt",
+          "key": "sandbox.word_map.n01_q10_turn",
+          "sourceFile": "src/modes/sandbox_story/sandboxConsonantWordMap.ts",
+          "sourceSymbol": "SANDBOX_CONSONANT_WORD_MAP",
+          "text": "หัน / 轉頭",
+          "questionId": "n01_q10_turn",
+          "status": "parallel",
+          "notes": "Legacy/parallel sandbox word map retained for compatibility with night content.",
+          "currentText": "หัน / 轉頭",
+          "editable": false,
+          "sourceOfTruth": "parallel",
+          "importTarget": "parallel_reference_only",
+          "reviewStatus": "locked"
+        }
+      ]
+    },
+    {
+      "category": "sandbox_tag_question",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "sandbox_tag_question",
+          "key": "sandbox.prompt.tag_question",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.prompt.tag_question\"]",
+          "text": "@{activeUser} 第 {index} 題，請直接回答你看到的子音。",
+          "tokens": [
+            {
+              "token": "@activeUser",
+              "description": "Active player handle mention injected at runtime.",
+              "runtimeSource": "separateChatActorState(...).activeUser"
+            },
+            {
+              "token": "{index}",
+              "description": "Dynamic sandbox tag question number.",
+              "runtimeSource": "parseSandboxTagStepIndex(flow.step)"
+            }
+          ],
+          "flowStep": "TAG_PLAYER_{index}",
+          "gateType": "consonant_answer",
+          "status": "active",
+          "notes": "Dynamic tag question template owned by editable content layer; wrapper shape still runtime-bound.",
+          "currentText": "@{activeUser} 第 {index} 題，請直接回答你看到的子音。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        }
+      ]
+    },
+    {
+      "category": "sandbox_vip_summary",
+      "entries": [
+        {
+          "mode": "sandbox",
+          "category": "sandbox_vip_summary",
+          "key": "sandbox.vip_summary.1",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.vip_summary.1\"]",
+          "text": "VIP 總結：先把剛剛那個單字記住，下一步確認發音。",
+          "flowStep": "VIP_SUMMARY_1",
+          "status": "active",
+          "notes": "VIP summary line dispatched during sandbox word-reveal sequence.",
+          "currentText": "VIP 總結：先把剛剛那個單字記住，下一步確認發音。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        },
+        {
+          "mode": "sandbox",
+          "category": "sandbox_vip_summary",
+          "key": "sandbox.vip_summary.2",
+          "sourceFile": "src/content/chat-content/editable/authoredChatContent.json",
+          "sourceSymbol": "authoredChatContent[\"sandbox.vip_summary.2\"]",
+          "text": "VIP 總結：發音方向差不多了，最後確認這個詞在指誰。",
+          "flowStep": "VIP_SUMMARY_2",
+          "status": "active",
+          "notes": "Second VIP summary line dispatched during sandbox word-reveal sequence.",
+          "currentText": "VIP 總結：發音方向差不多了，最後確認這個詞在指誰。",
+          "editable": true,
+          "sourceOfTruth": "registry",
+          "importTarget": "src/content/chat-content/editable/authoredChatContent.json",
+          "reviewStatus": "approved"
+        }
+      ]
+    }
+  ]
+}

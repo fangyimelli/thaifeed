@@ -45,3 +45,41 @@ export type ChatContentEntry = {
   status: ChatContentStatus;
   notes?: string;
 };
+
+
+export type ChatContentSourceOfTruth = 'registry' | 'runtime_wrapper' | 'legacy' | 'parallel';
+
+export type ChatContentReviewStatus = 'draft' | 'approved' | 'locked';
+
+export type ChatContentImportTarget =
+  | 'src/content/chat-content/editable/authoredChatContent.json'
+  | 'manual_review_required'
+  | 'runtime_wrapper_only'
+  | 'legacy_reference_only'
+  | 'parallel_reference_only'
+  | (string & {});
+
+export type EditableChatDraftEntry = ChatContentEntry & {
+  currentText?: string;
+  currentVariants?: string[];
+  editable: boolean;
+  sourceOfTruth: ChatContentSourceOfTruth;
+  importTarget: ChatContentImportTarget;
+  reviewStatus: ChatContentReviewStatus;
+};
+
+export type EditableChatDraftCategory = {
+  category: ChatContentCategory;
+  entries: EditableChatDraftEntry[];
+};
+
+export type EditableChatDraftDocument = {
+  mode: ChatContentMode;
+  generatedAt: string;
+  summary: {
+    totalEntries: number;
+    editableEntries: number;
+    lockedEntries: number;
+  };
+  categories: EditableChatDraftCategory[];
+};
