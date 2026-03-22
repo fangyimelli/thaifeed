@@ -132,6 +132,7 @@ assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editing-guide.md')),
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-import-policy.md')), 'missing import policy guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md')), 'missing editable preview');
 assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md')), 'missing writer workspace doc');
+assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-shared-message-review.md')), 'missing per-message review packet');
 
 execFileSync('node', ['scripts/sync-chat-content-writer-workspace.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 execFileSync('node', ['scripts/import-chat-content-editable.mjs'], { cwd: repoRoot, stdio: 'inherit' });

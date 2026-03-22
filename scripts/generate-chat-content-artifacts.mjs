@@ -15,6 +15,7 @@ const authoredContent = JSON.parse(fs.readFileSync(authoredContentPath, 'utf8'))
 const directEditableKeys = new Set(Object.keys(authoredContent));
 const modes = ['classic', 'sandbox', 'shared'];
 const writerDocPath = path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md');
+const reviewDocPath = path.join(repoRoot, 'docs/sandbox-shared-message-review.md');
 
 function sourceOfTruthFor(entry) {
   if (entry.status === 'inferred_runtime_wrapper') return 'runtime_wrapper';
@@ -239,5 +240,59 @@ for (const batch of workspace.batches) {
 }
 fs.writeFileSync(writerDocPath, writerDoc);
 
+const reviewEntries = workspace.batches.flatMap((batch) => batch.entries.map((entry) => ({ batch, entry })));
+const proposedCount = reviewEntries.filter(({ entry }) => typeof entry.proposedRewrite === 'string' && entry.proposedRewrite.trim().length > 0).length;
+let reviewDoc = '# Sandbox / Shared Message Review Packet\n\n';
+reviewDoc += 'This document is generated for per-message review only. It does **not** sync or import rewrites into runtime content. Approved changes should still go through `workspace -> draft sync -> import` after review.\n\n';
+reviewDoc += '## Review boundary\n\n';
+reviewDoc += '- Scope: sandbox mode + shared content layer only.\n';
+reviewDoc += '- Classic mode remains review-first and is intentionally excluded from this packet.\n';
+reviewDoc += '- When `proposedRewrite` is empty, the review packet shows `(pending rewrite)` so you can review the slot without accidentally treating current text as approved new copy.\n';
+reviewDoc += '- `reviewCandidate` below is for human review readability only; it is not an import source.\n\n';
+reviewDoc += '## Totals\n\n';
+reviewDoc += `- total messages in packet: ${reviewEntries.length}\n`;
+reviewDoc += `- sandbox messages: ${workspace.summary.sandboxEditableEntries}\n`;
+reviewDoc += `- shared messages: ${workspace.summary.sharedEditableEntries}\n`;
+reviewDoc += `- messages with proposed rewrite filled: ${proposedCount}\n`;
+reviewDoc += `- messages still pending rewrite: ${reviewEntries.length - proposedCount}\n\n`;
+for (const batch of workspace.batches) {
+  reviewDoc += `## ${batch.batchId}\n\n`;
+  reviewDoc += `- Trigger window: ${batch.triggerWindow}\n`;
+  reviewDoc += `- Player activity: ${batch.playerActivity}\n`;
+  reviewDoc += `- Tone function: ${batch.toneFunction}\n`;
+  reviewDoc += `- Must keep tokens: ${(batch.mustKeepTokens || []).join(', ') || 'none'}\n`;
+  reviewDoc += `- Length caution: ${batch.lengthCaution}\n\n`;
+  for (const [index, entry] of batch.entries.entries()) {
+    const currentText = entry.currentText || (entry.currentVariants?.join(' / ') ?? '');
+    const proposedRewrite = typeof entry.proposedRewrite === 'string' && entry.proposedRewrite.trim().length > 0
+      ? entry.proposedRewrite
+      : '(pending rewrite)';
+    const tokenSummary = (entry.tokens || []).map((token) => `\`${token.token}\``).join(', ') || 'none';
+    const tokenDetails = (entry.tokens || []).map((token) => `  - ${token.token}: ${token.description} (${token.runtimeSource})`).join('\n');
+    reviewDoc += `### ${batch.batchId}.${index + 1} — \`${entry.key}\`\n\n`;
+    reviewDoc += `- Mode / category: ${entry.mode} / ${entry.category}\n`;
+    reviewDoc += `- Flow location: ${entry.relatedFlowStep}\n`;
+    reviewDoc += `- Gate type: ${entry.relatedGateType}\n`;
+    reviewDoc += `- UI surface: ${entry.relatedUiSurface}\n`;
+    reviewDoc += `- Purpose: ${entry.scenePurpose}\n`;
+    reviewDoc += `- Usage context: ${entry.usageContext}\n`;
+    reviewDoc += `- Token summary: ${tokenSummary}\n`;
+    reviewDoc += `- Suggested length: ${entry.suggestedLength}\n`;
+    reviewDoc += `- Old copy: ${currentText ? `\`${currentText}\`` : '(empty)'}\n`;
+    reviewDoc += `- New copy: ${proposedRewrite === '(pending rewrite)' ? proposedRewrite : `\`${proposedRewrite}\``}\n`;
+    reviewDoc += `- Review candidate status: ${proposedRewrite === '(pending rewrite)' ? 'pending_writer_input' : 'ready_for_line_review'}\n`;
+    reviewDoc += `- Tone goal: ${entry.toneGoal}\n`;
+    reviewDoc += `- Constraints: ${entry.constraints}\n`;
+    reviewDoc += `- Writer notes: ${entry.notesForWriter}\n`;
+    reviewDoc += `- Alt ideas: ${(entry.altRewriteIdeas || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n`;
+    reviewDoc += `- Banned patterns: ${(entry.bannedPatterns || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n`;
+    reviewDoc += `- Source of truth: ${entry.sourceOfTruth}\n`;
+    reviewDoc += `- Import target after approval: ${entry.importTarget}\n`;
+    if (tokenDetails) reviewDoc += `- Token details:\n${tokenDetails}\n`;
+    reviewDoc += '\n';
+  }
+}
+fs.writeFileSync(reviewDocPath, reviewDoc);
+
 console.log(`generated ${generatedManifestPath}`);
-console.log('generated editable drafts, preview docs, and writer workspace doc');
+console.log('generated editable drafts, preview docs, writer workspace doc, and per-message review packet');

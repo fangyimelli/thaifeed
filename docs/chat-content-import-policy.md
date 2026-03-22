@@ -4,6 +4,7 @@
 - `sandbox-chat-writer-workspace.json` is **not** an import source. It stores context, scene notes, proposals, and writer-only guidance.
 - `sandbox-chat-draft.json` and `shared-chat-draft.json` remain the only automated import inputs for sandbox/shared editable content.
 - `scripts/sync-chat-content-writer-workspace.mjs` is the explicit conversion step from writer proposals -> editable drafts.
+- `docs/sandbox-shared-message-review.md` is review-only output and must never be treated as an import source.
 - `scripts/import-chat-content-editable.mjs` still writes only keys that are `editable=true` and point to `authoredChatContent.json`.
 
 ## Guard expectations

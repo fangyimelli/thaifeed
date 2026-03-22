@@ -4,14 +4,16 @@
 1. Run `npm run generate:chat-content-artifacts` to refresh manifest, drafts, preview, and writer workspace docs.
 2. Edit `src/content/chat-content/editable/sandbox-chat-writer-workspace.json` instead of guessing directly inside the drafts.
 3. Fill `proposedRewrite` on the keys you want to change; keep `currentText` as shipped baseline reference.
-4. Preserve every token and every flow/gate/UI constraint listed in the workspace.
-5. Run `npm run sync:chat-writer-workspace` to copy `proposedRewrite` (or fallback `currentText`) into `sandbox-chat-draft.json` / `shared-chat-draft.json`.
-6. Review the synced draft files and run `npm run import:chat-content-editable` to write approved text back into `authoredChatContent.json`.
-7. Re-run `npm run test:chat-content-guards` and `npm run build`.
+4. Run `npm run generate:chat-content-artifacts` and review `docs/sandbox-shared-message-review.md` line by line before any sync/import.
+5. Preserve every token and every flow/gate/UI constraint listed in the workspace and review packet.
+6. Run `npm run sync:chat-writer-workspace` only after the per-message review is approved, to copy `proposedRewrite` (or fallback `currentText`) into `sandbox-chat-draft.json` / `shared-chat-draft.json`.
+7. Review the synced draft files and run `npm run import:chat-content-editable` to write approved text back into `authoredChatContent.json`.
+8. Re-run `npm run test:chat-content-guards` and `npm run build`.
 
 ## Writer workspace rules
 - Workspace only contains sandbox/shared keys that are `editable=true` and directly importable.
 - Workspace is planning metadata + proposal storage; runtime import must never read it directly.
+- `docs/sandbox-shared-message-review.md` is the human-readable per-message review packet for old/new copy comparison, purpose, tokens, and flow location.
 - `currentText` is the current shipped text; write new copy into `proposedRewrite` to avoid losing baseline context.
 - Use `altRewriteIdeas`, `notesForWriter`, `constraints`, and `bannedPatterns` as your creative checklist.
 
