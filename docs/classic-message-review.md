@@ -1026,7 +1026,7 @@ This document is generated for classic **source/category review**. It is a revie
 - sourceSymbol: EVENT_DIALOGS.GHOST_PING.followUp
 - sourceOfTruth: registry
 - ownership: mode_specific / ownerMode: classic
-- currentVariants: @${activeUser} 你剛剛有聽到我說話嗎, @${activeUser} 我剛剛到底講了什麼, @${activeUser} 我聽到的聲音不像我自己, @${activeUser} 你那邊聽起來正常嗎, @${activeUser} 這一段我整個不敢回頭, @${activeUser} 你有聽到第二個聲音嗎
+- currentVariants: @${activeUser} 你剛剛也有聽到吧, @${activeUser} 那句是不是不是我講的, 不是只有我覺得剛剛多一個聲音吧, @${activeUser} 你那邊聽起來也怪怪的嗎, 有吧 我剛剛也愣了一下, 剛剛那句真的有點不對
 - tokens: ${activeUser} (Injected active user handle.)
 - runtimeWrapper: none
 - reviewSlot: pending

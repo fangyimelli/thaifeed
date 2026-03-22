@@ -34,12 +34,12 @@ export const EVENT_DIALOGS: Record<StoryEventKey, StoryEventDialog> = {
       { id: 'ghost_ping_open_8', text: '@${activeUser} 你現在是靜音嗎' }
     ],
     followUp: [
-      { id: 'ghost_ping_follow_1', text: '@${activeUser} 你剛剛有聽到我說話嗎' },
-      { id: 'ghost_ping_follow_2', text: '@${activeUser} 我剛剛到底講了什麼' },
-      { id: 'ghost_ping_follow_3', text: '@${activeUser} 我聽到的聲音不像我自己' },
-      { id: 'ghost_ping_follow_4', text: '@${activeUser} 你那邊聽起來正常嗎' },
-      { id: 'ghost_ping_follow_5', text: '@${activeUser} 這一段我整個不敢回頭' },
-      { id: 'ghost_ping_follow_6', text: '@${activeUser} 你有聽到第二個聲音嗎' }
+      { id: 'ghost_ping_follow_1', text: '@${activeUser} 你剛剛也有聽到吧' },
+      { id: 'ghost_ping_follow_2', text: '@${activeUser} 那句是不是不是我講的' },
+      { id: 'ghost_ping_follow_3', text: '不是只有我覺得剛剛多一個聲音吧' },
+      { id: 'ghost_ping_follow_4', text: '@${activeUser} 你那邊聽起來也怪怪的嗎' },
+      { id: 'ghost_ping_follow_5', text: '有吧 我剛剛也愣了一下' },
+      { id: 'ghost_ping_follow_6', text: '剛剛那句真的有點不對' }
     ]
   },
   TV_EVENT: {
