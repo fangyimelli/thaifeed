@@ -1,39 +1,20 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+import {
+  authoredContentPath,
+  editableDir,
+  generatedManifestPath,
+  loadManifest,
+  repoRoot,
+  writerWorkspacePath
+} from './chat-content-artifacts-lib.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..');
-const outDir = path.join(repoRoot, '.tmp-chat-content-build');
-const entry = path.join(repoRoot, 'src/content/chat-content/chatContentManifest.ts');
-const editableDir = path.join(repoRoot, 'src/content/chat-content/editable');
-const authoredContentPath = path.join(editableDir, 'authoredChatContent.json');
-
-fs.rmSync(outDir, { recursive: true, force: true });
-execFileSync('npx', [
-  'tsc',
-  entry,
-  '--module', 'commonjs',
-  '--target', 'es2022',
-  '--moduleResolution', 'node',
-  '--resolveJsonModule',
-  '--esModuleInterop',
-  '--skipLibCheck',
-  '--outDir', outDir
-], { cwd: repoRoot, stdio: 'inherit' });
-fs.writeFileSync(path.join(outDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
-
-const compiledEntry = path.join(outDir, 'content/chat-content/chatContentManifest.js');
-const require = createRequire(import.meta.url);
-const mod = require(compiledEntry);
-const manifest = mod.CHAT_CONTENT_MANIFEST;
-if (!Array.isArray(manifest)) throw new Error('CHAT_CONTENT_MANIFEST missing');
-
+const manifest = loadManifest();
 const authoredContent = JSON.parse(fs.readFileSync(authoredContentPath, 'utf8'));
 const directEditableKeys = new Set(Object.keys(authoredContent));
 const modes = ['classic', 'sandbox', 'shared'];
+const writerDocPath = path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md');
 
 function sourceOfTruthFor(entry) {
   if (entry.status === 'inferred_runtime_wrapper') return 'runtime_wrapper';
@@ -105,8 +86,7 @@ for (const mode of modes) {
   });
 }
 
-const snapshotPath = path.join(repoRoot, 'src/content/chat-content/chatContentManifest.generated.json');
-fs.writeFileSync(snapshotPath, `${JSON.stringify(manifest, null, 2)}\n`);
+fs.writeFileSync(generatedManifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 for (const mode of modes) {
   fs.writeFileSync(path.join(editableDir, `${mode}-chat-draft.json`), `${JSON.stringify(drafts.get(mode), null, 2)}\n`);
 }
@@ -161,5 +141,103 @@ for (const mode of modes) {
 }
 fs.writeFileSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md'), preview);
 
-console.log(`generated ${snapshotPath}`);
-console.log('generated editable drafts and preview docs');
+const workspace = JSON.parse(fs.readFileSync(writerWorkspacePath, 'utf8'));
+assert.equal(workspace.importBoundary?.workspaceImportsDirectly, false, 'writer workspace must not import directly');
+assert.equal(workspace.importBoundary?.runtimeImportReadsWorkspace, false, 'runtime import boundary drifted');
+assert.equal(workspace.importBoundary?.requiresDraftSync, true, 'writer workspace must sync through drafts');
+
+const manifestByKey = new Map(manifest.map((entry) => [entry.key, entry]));
+const editableDraftEntries = ['sandbox', 'shared']
+  .flatMap((mode) => drafts.get(mode).categories.flatMap((category) => category.entries))
+  .filter((entry) => entry.editable && entry.importTarget === 'src/content/chat-content/editable/authoredChatContent.json');
+const editableDraftByKey = new Map(editableDraftEntries.map((entry) => [entry.key, entry]));
+const workspaceEntries = workspace.batches.flatMap((batch) => batch.entries.map((entry) => ({ batch, entry })));
+const workspaceKeys = new Set();
+const workspaceCountsByMode = {};
+
+for (const { batch, entry } of workspaceEntries) {
+  assert(!workspaceKeys.has(entry.key), `duplicate workspace key ${entry.key}`);
+  workspaceKeys.add(entry.key);
+  const draftEntry = editableDraftByKey.get(entry.key);
+  const manifestEntry = manifestByKey.get(entry.key);
+  assert(draftEntry, `workspace key missing from editable drafts: ${entry.key}`);
+  assert(manifestEntry, `workspace key missing from manifest: ${entry.key}`);
+  assert.equal(entry.mode, draftEntry.mode, `workspace mode mismatch for ${entry.key}`);
+  assert.notEqual(entry.mode, 'classic', `workspace must not include classic keys: ${entry.key}`);
+  assert.equal(entry.category, draftEntry.category, `workspace category mismatch for ${entry.key}`);
+  assert.equal(entry.sourceOfTruth, draftEntry.sourceOfTruth, `workspace sourceOfTruth drift for ${entry.key}`);
+  assert.equal(entry.importTarget, draftEntry.importTarget, `workspace importTarget drift for ${entry.key}`);
+  assert.equal(entry.reviewStatus, draftEntry.reviewStatus, `workspace reviewStatus drift for ${entry.key}`);
+  assert.equal(entry.currentText, authoredContent[entry.key], `workspace currentText drift for ${entry.key}`);
+  assert.deepEqual((entry.tokens || []).map((token) => token.token), (draftEntry.tokens || []).map((token) => token.token), `workspace token drift for ${entry.key}`);
+  assert.equal(entry.batchId, batch.batchId, `workspace batchId mismatch for ${entry.key}`);
+  assert(typeof entry.usageContext === 'string' && entry.usageContext.trim().length > 0, `workspace usageContext missing for ${entry.key}`);
+  assert(typeof entry.scenePurpose === 'string' && entry.scenePurpose.trim().length > 0, `workspace scenePurpose missing for ${entry.key}`);
+  assert(typeof entry.constraints === 'string' && entry.constraints.trim().length > 0, `workspace constraints missing for ${entry.key}`);
+  assert(Array.isArray(entry.altRewriteIdeas), `workspace altRewriteIdeas missing for ${entry.key}`);
+  assert(Array.isArray(entry.bannedPatterns), `workspace bannedPatterns missing for ${entry.key}`);
+  workspaceCountsByMode[entry.mode] = (workspaceCountsByMode[entry.mode] || 0) + 1;
+}
+
+assert.equal(workspaceKeys.size, editableDraftEntries.length, 'workspace editable totals must match editable drafts');
+for (const entry of editableDraftEntries) {
+  assert(workspaceKeys.has(entry.key), `editable draft key missing from workspace: ${entry.key}`);
+}
+assert.deepEqual(workspace.summary.editableEntriesByMode, workspaceCountsByMode, 'workspace mode totals drift');
+assert.equal(workspace.summary.totalEditableEntries, editableDraftEntries.length, 'workspace totalEditableEntries drift');
+assert.equal(workspace.summary.sandboxEditableEntries, editableDraftEntries.filter((entry) => entry.mode === 'sandbox').length, 'workspace sandbox total drift');
+assert.equal(workspace.summary.sharedEditableEntries, editableDraftEntries.filter((entry) => entry.mode === 'shared').length, 'workspace shared total drift');
+
+let writerDoc = '# Sandbox / Shared Chat Writer Workspace\n\n';
+writerDoc += 'This document is generated from `src/content/chat-content/editable/sandbox-chat-writer-workspace.json`. Edit the workspace JSON for creative planning, then sync approved rewrites into the editable drafts before import.\n\n';
+writerDoc += '## Import boundary\n\n';
+writerDoc += '- Writer workspace is planning-only metadata and proposal storage.\n';
+writerDoc += '- Runtime import still reads `sandbox-chat-draft.json` / `shared-chat-draft.json`, never this workspace file.\n';
+writerDoc += '- Preserve all listed tokens, flow order hints, and UI limits when drafting rewrites.\n\n';
+writerDoc += '## Totals\n\n';
+writerDoc += `- totalEditableEntries: ${workspace.summary.totalEditableEntries}\n`;
+writerDoc += `- sandboxEditableEntries: ${workspace.summary.sandboxEditableEntries}\n`;
+writerDoc += `- sharedEditableEntries: ${workspace.summary.sharedEditableEntries}\n\n`;
+writerDoc += '## Batch grouping\n\n';
+for (const batch of workspace.batches) {
+  writerDoc += `### ${batch.batchId}\n\n`;
+  writerDoc += `- Trigger window: ${batch.triggerWindow}\n`;
+  writerDoc += `- Player activity: ${batch.playerActivity}\n`;
+  writerDoc += `- Tone function: ${batch.toneFunction}\n`;
+  writerDoc += `- Must keep tokens: ${(batch.mustKeepTokens || []).join(', ') || 'none'}\n`;
+  writerDoc += `- Length caution: ${batch.lengthCaution}\n`;
+  writerDoc += `- Keys: ${batch.entries.map((entry) => `\`${entry.key}\``).join(', ')}\n\n`;
+  writerDoc += '| key | current text | tokens | flow step / gate | UI surface | editable | writer notes | suggested direction | hard limits |\n';
+  writerDoc += '| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
+  for (const entry of batch.entries) {
+    const flowGate = [entry.relatedFlowStep, entry.relatedGateType].filter(Boolean).join(' / ');
+    const tokens = (entry.tokens || []).map((token) => token.token).join(', ');
+    const currentText = entry.currentText || (entry.currentVariants?.join(' / ') ?? '');
+    writerDoc += `| ${escapePipes(entry.key)} | ${escapePipes(currentText)} | ${escapePipes(tokens)} | ${escapePipes(flowGate)} | ${escapePipes(entry.relatedUiSurface)} | ${entry.reviewStatus === 'approved' ? 'yes' : 'no'} | ${escapePipes(entry.notesForWriter)} | ${escapePipes(entry.toneGoal)} | ${escapePipes(entry.constraints)} |\n`;
+  }
+  writerDoc += '\n';
+  for (const entry of batch.entries) {
+    writerDoc += `#### ${entry.key}\n\n`;
+    writerDoc += `- Current text: ${entry.currentText ? `\`${entry.currentText}\`` : escapePipes(entry.currentVariants?.join(' / ') ?? '')}\n`;
+    writerDoc += `- Tokens: ${(entry.tokens || []).map((token) => `\`${token.token}\``).join(', ') || 'none'}\n`;
+    writerDoc += `- Flow step: ${entry.relatedFlowStep}\n`;
+    writerDoc += `- Gate type: ${entry.relatedGateType}\n`;
+    writerDoc += `- UI surface: ${entry.relatedUiSurface}\n`;
+    writerDoc += `- Text function: ${entry.textFunction}\n`;
+    writerDoc += `- Sentence shape: ${entry.sentenceShape}\n`;
+    writerDoc += `- Atmosphere focus: ${entry.atmosphereFocus.join(' / ')}\n`;
+    writerDoc += `- Usage context: ${entry.usageContext}\n`;
+    writerDoc += `- Scene purpose: ${entry.scenePurpose}\n`;
+    writerDoc += `- Writer notes: ${entry.notesForWriter}\n`;
+    writerDoc += `- Suggested writing direction: ${entry.toneGoal}\n`;
+    writerDoc += `- Non-negotiable constraints: ${entry.constraints}\n`;
+    writerDoc += `- Suggested length: ${entry.suggestedLength}\n`;
+    writerDoc += `- Proposed rewrite slot: ${entry.proposedRewrite ? `\`${entry.proposedRewrite}\`` : '(empty)' }\n`;
+    writerDoc += `- Alt rewrite ideas: ${(entry.altRewriteIdeas || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n`;
+    writerDoc += `- Avoid / banned patterns: ${(entry.bannedPatterns || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n\n`;
+  }
+}
+fs.writeFileSync(writerDocPath, writerDoc);
+
+console.log(`generated ${generatedManifestPath}`);
+console.log('generated editable drafts, preview docs, and writer workspace doc');

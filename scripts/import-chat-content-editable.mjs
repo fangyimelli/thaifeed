@@ -2,18 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import {
+  authoredContentPath,
+  editableDir,
+  loadManifest,
+  repoRoot
+} from './chat-content-artifacts-lib.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..');
-const editableDir = path.join(repoRoot, 'src/content/chat-content/editable');
-const authoredContentPath = path.join(editableDir, 'authoredChatContent.json');
-const manifestPath = path.join(repoRoot, 'src/content/chat-content/chatContentManifest.generated.json');
 const modes = ['classic', 'sandbox', 'shared'];
-
-execFileSync('node', ['scripts/generate-chat-content-artifacts.mjs'], { cwd: repoRoot, stdio: 'inherit' });
-
-const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const manifest = loadManifest();
 const manifestByKey = new Map(manifest.map((entry) => [entry.key, entry]));
 const authoredContent = JSON.parse(fs.readFileSync(authoredContentPath, 'utf8'));
 const nextAuthoredContent = { ...authoredContent };

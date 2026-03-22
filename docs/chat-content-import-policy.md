@@ -1,3 +1,17 @@
+# Writer workspace import boundary update (2026-03-22)
+
+## Safe boundary
+- `sandbox-chat-writer-workspace.json` is **not** an import source. It stores context, scene notes, proposals, and writer-only guidance.
+- `sandbox-chat-draft.json` and `shared-chat-draft.json` remain the only automated import inputs for sandbox/shared editable content.
+- `scripts/sync-chat-content-writer-workspace.mjs` is the explicit conversion step from writer proposals -> editable drafts.
+- `scripts/import-chat-content-editable.mjs` still writes only keys that are `editable=true` and point to `authoredChatContent.json`.
+
+## Guard expectations
+- Workspace must contain only editable/importable sandbox/shared keys.
+- Workspace tokens, mode/category, and `importTarget` must stay aligned with manifest/drafts.
+- Classic review-first keys must not appear in workspace or sync output.
+- Writer notes / context fields must never be written into runtime content.
+
 # Chat Content Import Policy
 
 ## Ownership rules

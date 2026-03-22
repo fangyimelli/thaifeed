@@ -1,3 +1,15 @@
+## 2026-03-22 Writer workspace flow ownership note
+
+| Batch | Main flow window | Player state | Writer constraint summary |
+| --- | --- | --- | --- |
+| `sandbox_preheat` | `PREHEAT_CHAT` | 玩家剛進房、尚未被點名 | 維持聊天室暖場 / join 節奏；不得提前改寫正式答題指令或 gate。 |
+| `sandbox_prompt_and_help` | `TAG_PLAYER_x` / `WAIT_REPLY_x` / help reply | 玩家正在答題或求助 | 保留 `{consonant}` / `{imageMemoryHint}` 等 token，提示功能不可模糊。 |
+| `sandbox_vip_summary` | `VIP_SUMMARY_1/2` | 玩家剛完成上一段確認 | 必須保留流程順序（記住 -> 發音 -> 指涉），不可跳步。 |
+| `sandbox_glitch` | `ANSWER_EVAL` | 玩家剛送出答案、等待判定 | 維持極短 glitch burst；不可擴寫成長篇錯誤說明。 |
+| `sandbox_tag_question` | `TAG_PLAYER_{index}` | 玩家被正式點名 | `@activeUser` / `{index}` 不可消失；仍屬聊天室 tag，不是系統 HUD。 |
+| `sandbox_debug_text` | `WAIT_WARMUP_REPLY` smoke/debug | 測試流程 | 以穩定可辨識為主，不追求敘事。 |
+| `shared_ui_text` | ChatPanel shared UI surfaces | 玩家輸入/送出/跳到最新 | 以清晰、短字串為主；不可因創作破壞按鈕/標籤寬度。 |
+
 ## 2026-03-22 Content-layer editable ownership note
 
 - `sandbox_preheat` / `sandbox_prompt.reveal_prompt` / `sandbox_vip_summary` / `sandbox_glitch` / `sandbox_tag_question` / `sandbox_help_hint` 的文案文字層，現由 `src/content/chat-content/editable/authoredChatContent.json` 擁有。

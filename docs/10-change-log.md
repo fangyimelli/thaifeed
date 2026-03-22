@@ -1,3 +1,14 @@
+## 2026-03-22 Sandbox/shared writer workspace round 1
+
+- 新增 sandbox/shared writer workspace：`src/content/chat-content/editable/sandbox-chat-writer-workspace.json`，只包含 `editable=true` 且 `importTarget=authoredChatContent.json` 的 key。
+- 依創作情境分成 `sandbox_preheat`、`sandbox_prompt_and_help`、`sandbox_vip_summary`、`sandbox_glitch`、`sandbox_tag_question`、`sandbox_debug_text`、`shared_ui_text` 七批，並補齊 human-facing context / scene / tone / constraints / UI surface。
+- 新增 `docs/sandbox-chat-writer-workspace.md` 與 `scripts/sync-chat-content-writer-workspace.mjs`，讓文案先在 workspace 填 `proposedRewrite`，再安全同步到 editable drafts；import script 仍只吃 drafts，不直接吃 workspace。
+- `scripts/import-chat-content-editable.mjs` 修正為直接驗證現有 drafts 後再回寫 authored content，避免 import 前重生 draft 導致提案遺失。
+- regression guard 新增 writer workspace coverage / token drift / import target drift / totals / classic review-only exclusion / docs regenerate 檢查。
+
+### Removed / Deprecated Log
+- 2026-03-22：writer workflow 不再鼓勵直接手改 runtime adapter 或跳過 draft sync。
+
 ## 2026-03-22 Chat content editable draft + import pipeline
 
 - 新增 `src/content/chat-content/editable/authoredChatContent.json` 作為 sandbox/shared 已抽離文案的可回填內容層來源。
