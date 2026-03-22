@@ -149,7 +149,8 @@ Generated from the manifest plus editable ownership classification.
 
 | category | key | current editable text | tokens | sourceOfTruth | importTarget | editable | reviewStatus |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| debug_text | sandbox.debug.warmup_reply | 暖場測試回覆 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
+| sandbox_crowd_reaction | sandbox.prompt.stub.crowd_react_word | ??? |  | parallel | parallel_reference_only | no | locked |
+| sandbox_debug_text | sandbox.debug.warmup_reply | 暖場測試回覆 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_glitch | sandbox.glitch.answer_eval.1 | 我這邊送出一直失敗 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_glitch | sandbox.glitch.answer_eval.2 | 聊天室是不是延遲了 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_glitch | sandbox.glitch.answer_eval.3 | 網路怪怪的，剛剛卡一下 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
@@ -165,8 +166,6 @@ Generated from the manifest plus editable ownership classification.
 | sandbox_preheat | sandbox.preheat.8 | viewer_477 加入聊天室 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_preheat | sandbox.preheat.9 | 先暖場聊天，等等再看後面有沒有異常。 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_prompt | sandbox.prompt.reveal_prompt | 請讀出剛剛閃過的字：{consonant} | {consonant} | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
-| sandbox_prompt | sandbox.prompt.stub.crowd_react_word | ??? |  | parallel | parallel_reference_only | no | locked |
-| sandbox_prompt | sandbox.prompt.stub.reasoning_wave | 我覺得不對勁 |  | parallel | parallel_reference_only | no | locked |
 | sandbox_prompt | sandbox.word_map.n01_q01_wait | รอ / 等 |  | parallel | parallel_reference_only | no | locked |
 | sandbox_prompt | sandbox.word_map.n01_q02_house | บ้าน / 房子 |  | parallel | parallel_reference_only | no | locked |
 | sandbox_prompt | sandbox.word_map.n01_q03_child | เด็ก / 孩子 |  | parallel | parallel_reference_only | no | locked |
@@ -177,6 +176,7 @@ Generated from the manifest plus editable ownership classification.
 | sandbox_prompt | sandbox.word_map.n01_q08_return | กลับ / 回來 |  | parallel | parallel_reference_only | no | locked |
 | sandbox_prompt | sandbox.word_map.n01_q09_why | ทำไม / 為什麼 |  | parallel | parallel_reference_only | no | locked |
 | sandbox_prompt | sandbox.word_map.n01_q10_turn | หัน / 轉頭 |  | parallel | parallel_reference_only | no | locked |
+| sandbox_stub | sandbox.prompt.stub.reasoning_wave | 我覺得不對勁 |  | parallel | parallel_reference_only | no | locked |
 | sandbox_tag_question | sandbox.prompt.tag_question | @{activeUser} 第 {index} 題，請直接回答你看到的子音。 | @activeUser, {index} | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_vip_summary | sandbox.vip_summary.1 | VIP 總結：先把剛剛那個單字記住，下一步確認發音。 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |
 | sandbox_vip_summary | sandbox.vip_summary.2 | VIP 總結：發音方向差不多了，最後確認這個詞在指誰。 |  | registry | src/content/chat-content/editable/authoredChatContent.json | yes | approved |

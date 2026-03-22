@@ -131,6 +131,9 @@ assert(app.includes('SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1'), 'App should use 
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editing-guide.md')), 'missing editing guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-import-policy.md')), 'missing import policy guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md')), 'missing editable preview');
+assert(fs.existsSync(path.join(repoRoot, 'docs/classic-flow-table.md')), 'missing classic flow table');
+assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-flow-table.md')), 'missing sandbox flow table');
+assert(fs.existsSync(path.join(repoRoot, 'docs/mode-ownership-map.md')), 'missing mode ownership map');
 assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md')), 'missing writer workspace doc');
 assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-shared-message-review.md')), 'missing per-message review packet');
 
@@ -139,3 +142,30 @@ execFileSync('node', ['scripts/import-chat-content-editable.mjs'], { cwd: repoRo
 execFileSync('node', ['scripts/generate-chat-content-artifacts.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 
 console.log('chat content regression guards passed');
+
+
+const classicFlowDefinitionPath = path.join(repoRoot, 'src/modes/classic/flow/classicFlowDefinition.ts');
+const sandboxFlowDefinitionPath = path.join(repoRoot, 'src/modes/sandbox/flow/sandboxFlowDefinition.ts');
+const classicContentMapPath = path.join(repoRoot, 'src/content/chat-content/maps/classicContentMap.ts');
+const sandboxContentMapPath = path.join(repoRoot, 'src/content/chat-content/maps/sandboxContentMap.ts');
+assert(fs.existsSync(classicFlowDefinitionPath), 'classic flow definition file missing');
+assert(fs.existsSync(sandboxFlowDefinitionPath), 'sandbox flow definition file missing');
+assert(fs.existsSync(classicContentMapPath), 'classic content map file missing');
+assert(fs.existsSync(sandboxContentMapPath), 'sandbox content map file missing');
+const classicFlowDefinition = fs.readFileSync(classicFlowDefinitionPath, 'utf8');
+const sandboxFlowDefinition = fs.readFileSync(sandboxFlowDefinitionPath, 'utf8');
+const classicContentMapSource = fs.readFileSync(classicContentMapPath, 'utf8');
+const sandboxContentMapSource = fs.readFileSync(sandboxContentMapPath, 'utf8');
+for (const stepId of ['EVENT_OPENER','EVENT_REACTION_WINDOW','QNA_ASKING','QNA_AWAITING_REPLY','QNA_RETRY_OR_UNKNOWN','QNA_RESOLVED','QNA_ABORTED','FALLBACK_ONLY']) {
+  assert(classicFlowDefinition.includes(`stepId: '${stepId}'`), `classic step missing: ${stepId}`);
+}
+for (const stepId of ['PREHEAT_CHAT','REVEAL_PROMPT','WAIT_REPLY_x','HELP_HINT','ANSWER_EVAL','VIP_SUMMARY_POST_REVEAL','TAG_QUESTION','DEBUG_SMOKE']) {
+  assert(sandboxFlowDefinition.includes(`stepId: '${stepId}'`), `sandbox step missing: ${stepId}`);
+}
+assert(classicFlowDefinition.includes("category: 'event_dialog'"), 'classic content map missing event_dialog');
+assert(classicFlowDefinition.includes("category: 'fallback'"), 'classic content map missing fallback');
+assert(sandboxFlowDefinition.includes("category: 'sandbox_preheat'"), 'sandbox content map missing sandbox_preheat');
+assert(sandboxFlowDefinition.includes("category: 'sandbox_stub'"), 'sandbox content map missing sandbox_stub');
+assert(!classicFlowDefinition.includes('sandbox_preheat'), 'classic flow definition must not own sandbox category');
+assert(!sandboxFlowDefinition.includes("'event_dialog'"), 'sandbox flow definition must not own classic event_dialog');
+assert(!sandboxContentMapSource.includes("category: 'ui_placeholder'"), 'sandbox content map must not claim shared ui_placeholder');

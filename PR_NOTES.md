@@ -1,3 +1,22 @@
+## 2026-03-22 Mode ownership split blueprint (phase 1)
+
+### Scope
+- Establish classic/sandbox mode-owned flow definitions and content maps without full runtime rewrite.
+- Preserve shared schema/tooling/UI shell/review-import-export workflow.
+
+### Implemented
+- Added classic/sandbox flow definition files with step purpose, enter/exit conditions, gateType, uiSurface, blocked reasons, next-step candidates, messagePurpose, tone/tonePack placeholders, and allowed message categories.
+- Added classic/sandbox content maps and mode ownership metadata for active/shared/legacy/runtime_wrapper boundaries.
+- Extended artifact generation to publish classic flow table, sandbox flow table, and mode ownership map.
+- Updated manifest/schema metadata so runtime/docs/review tooling can see ownerMode/ownership/messagePurpose/selectionPolicy fields.
+- Added phase-1 App adapter usage: reply UI authority now consults mode flow metadata rather than treating App as sole flow ownership source.
+- Added regression guards for definition/map existence, step/category ownership separation, and generated docs presence.
+
+### Boundary notes
+- Classic review-first import boundary remains unchanged.
+- Sandbox/shared import path remains `writer workspace -> draft sync -> import`.
+- Legacy/parallel/runtime-wrapper sources stay explicitly marked; no fake full migration.
+
 ## 2026-03-22 Sandbox/shared writer workspace round 1
 
 ### Root Cause Report

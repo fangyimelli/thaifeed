@@ -50,3 +50,9 @@ Import must fail when:
 - If a key is marked `manual_review_required`, edit the draft first, then use the draft as the review packet for a later migration of the original registry file.
 - If a key is marked `runtime_wrapper_only`, only edit the underlying prompt/template keys, not the wrapper record itself.
 - `legacy` and `parallel` entries may be annotated in the draft but cannot become the sole source of truth without a dedicated migration.
+
+## Mode ownership import rules (phase 1)
+- `docs/classic-flow-table.md` / `docs/sandbox-flow-table.md` / `docs/mode-ownership-map.md` 為可重建 ownership 視圖，不是 import source。
+- 新增 flow step 或 category 前，先在 mode-specific definition/content map 建立 ownership，再決定是否需要 editable draft / writer workspace。
+- `shared` 只可承載 schema、tooling、UI shell、review/import/export workflow；shared 類別不可被標成 classic/sandbox experiential content owner。
+- `runtime_wrapper` / `legacy` / `parallel` 條目必須保留明確標記，不能假裝已 migrated。

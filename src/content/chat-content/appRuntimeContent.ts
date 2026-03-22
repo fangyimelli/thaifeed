@@ -200,7 +200,7 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
   },
   {
     mode: 'sandbox',
-    category: 'debug_text',
+    category: 'sandbox_debug_text',
     key: 'sandbox.debug.warmup_reply',
     sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
     sourceSymbol: 'authoredChatContent["sandbox.debug.warmup_reply"]',

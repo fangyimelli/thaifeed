@@ -13,6 +13,29 @@ export const generatedManifestPath = path.join(repoRoot, 'src/content/chat-conte
 const outDir = path.join(repoRoot, '.tmp-chat-content-build');
 const entry = path.join(repoRoot, 'src/content/chat-content/chatContentManifest.ts');
 
+
+export function loadTsModule(entryFile) {
+  fs.rmSync(outDir, { recursive: true, force: true });
+  execFileSync('npx', [
+    'tsc',
+    entryFile,
+    '--module', 'commonjs',
+    '--target', 'es2022',
+    '--moduleResolution', 'node',
+    '--resolveJsonModule',
+    '--esModuleInterop',
+    '--skipLibCheck',
+    '--outDir', outDir
+  ], { cwd: repoRoot, stdio: 'inherit' });
+  fs.writeFileSync(path.join(outDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
+  const expectedBase = path.basename(entryFile).replace(/\.ts$/, '.js');
+  const compiledCandidates = fs.readdirSync(outDir, { recursive: true }).filter((file) => String(file).endsWith(`/${expectedBase}`) || String(file) === expectedBase);
+  if (!compiledCandidates.length) throw new Error(`Compiled module not found for ${entryFile}`);
+  const compiledEntry = path.join(outDir, String(compiledCandidates[0]));
+  const require = createRequire(import.meta.url);
+  return require(compiledEntry);
+}
+
 export function loadManifest() {
   fs.rmSync(outDir, { recursive: true, force: true });
   execFileSync('npx', [

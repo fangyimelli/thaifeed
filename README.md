@@ -1,3 +1,11 @@
+## 2026-03-22 Mode ownership split blueprint (phase 1)
+
+- Added mode-specific flow definitions under `src/modes/classic/flow/classicFlowDefinition.ts` and `src/modes/sandbox/flow/sandboxFlowDefinition.ts`.
+- Added mode-specific content maps under `src/content/chat-content/maps/` plus `src/content/chat-content/modeOwnership.ts` for shared/classic/sandbox/legacy boundaries.
+- Generator/docs now emit `docs/classic-flow-table.md`, `docs/sandbox-flow-table.md`, and `docs/mode-ownership-map.md`.
+- Runtime integration is phase-1 only: App reply authority now reads mode flow metadata, while schema/tooling/UI shell/review workflow remain shared.
+- Classic remains review-first; sandbox/shared editable import boundary is unchanged.
+
 ## 2026-03-22 Sandbox / shared writer workspace round 1
 
 - 新增 `src/content/chat-content/editable/sandbox-chat-writer-workspace.json`：只收錄目前可直接編修且可 import 的 sandbox / shared key，並依 `sandbox_preheat`、`sandbox_prompt_and_help`、`sandbox_vip_summary`、`sandbox_glitch`、`sandbox_tag_question`、`sandbox_debug_text`、`shared_ui_text` 分批整理。
