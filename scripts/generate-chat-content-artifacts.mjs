@@ -17,6 +17,8 @@ const directEditableKeys = new Set(Object.keys(authoredContent));
 const modes = ['classic', 'sandbox', 'shared'];
 const writerDocPath = path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md');
 const reviewDocPath = path.join(repoRoot, 'docs/sandbox-shared-message-review.md');
+const classicCategoryReviewDocPath = path.join(repoRoot, 'docs/classic-message-review.md');
+const classicFlowReviewDocPath = path.join(repoRoot, 'docs/classic-flow-message-review.md');
 
 const { CLASSIC_FLOW_DEFINITION, CLASSIC_FLOW_CONTENT_ROUTES, CLASSIC_CONTENT_OWNERSHIP } = loadTsModule(path.join(repoRoot, 'src/modes/classic/flow/classicFlowDefinition.ts'));
 const { SANDBOX_FLOW_DEFINITION, SANDBOX_FLOW_CONTENT_ROUTES, SANDBOX_CONTENT_OWNERSHIP } = loadTsModule(path.join(repoRoot, 'src/modes/sandbox/flow/sandboxFlowDefinition.ts'));
@@ -51,6 +53,43 @@ function previewText(entry) {
   if (entry.text) return entry.text;
   if (entry.textVariants?.length) return entry.textVariants.join(' / ');
   return '';
+}
+
+function formatList(items) {
+  return items?.length ? items.join(', ') : 'none';
+}
+
+function formatTokens(tokens) {
+  return tokens?.length ? tokens.map((token) => `${token.token} (${token.description})`).join('; ') : 'none';
+}
+
+function reviewImportabilityFor(entry) {
+  return entry.mode === 'classic'
+    ? 'classic review-only / not importable'
+    : editableFor(entry)
+      ? 'editable / importable via authoredChatContent.json'
+      : 'review-only / not importable';
+}
+
+function reviewRuntimeWrapperFor(entry) {
+  if (entry.status !== 'inferred_runtime_wrapper') return 'none';
+  return `inferred_runtime_wrapper :: ${entry.sourceSymbol}`;
+}
+
+function stepUsageContext(step, route, entry) {
+  const scope = entry.status === 'inferred_runtime_wrapper' ? 'runtime adapter visibility' : 'player-facing message content';
+  return `${step.stepId} (${route.primaryCategory} primary; allowed ${formatList(route.allowedCategories)}) → ${scope}.`;
+}
+
+function stepConstraints(step, route, entry) {
+  const constraints = [
+    ...(step.styleConstraints || []).map((item) => typeof item === 'string' ? item : item.description),
+    ...(route.styleConstraints || []),
+    entry.status === 'inferred_runtime_wrapper'
+      ? 'Review template tone + token framing only; do not treat wrapper as editable import source.'
+      : 'Keep flow intent, category ownership, and existing runtime selection assumptions intact.'
+  ];
+  return Array.from(new Set(constraints)).join(' | ');
 }
 
 function buildDraftEntry(entry) {
@@ -147,6 +186,8 @@ fs.writeFileSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md'), p
 function buildFlowDoc({ title, mode, definition, routes, ownership }) {
   let out = `# ${title}\n\n`;
   out += `Generated from mode-specific flow definition and content map for **${mode}** mode.\n\n`;
+  if (mode === 'classic') out += '- Companion review packet: `docs/classic-flow-message-review.md` (flow-first) and `docs/classic-message-review.md` (category-first).\n\n';
+  if (mode === 'sandbox') out += '- Companion review packet: `docs/sandbox-shared-message-review.md` for editable sandbox/shared review.\n\n';
   out += '## Flow definition\n\n';
   out += '| stepId | purpose | canReply | gateType | uiSurface | allowed categories | next steps | blocked reasons | notes |\n';
   out += '| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
@@ -168,6 +209,211 @@ function buildFlowDoc({ title, mode, definition, routes, ownership }) {
   return out;
 }
 
+const CLASSIC_STEP_REVIEW_GUIDANCE = {
+  EVENT_OPENER: {
+    playerExperienceSummary: '玩家通常先看到事件開場白，以被點名或被針對的方式進入事件主題。主聲音是 NPC / 系統導向的事件台詞，目的是立刻建立情境與壓力。',
+    reviewNotesForStep: '最不能破壞的是事件鉤子、被點名感與短聊天節奏；若 opener 不清楚，後續 reaction / QnA 會失去上下文。'
+  },
+  EVENT_REACTION_WINDOW: {
+    playerExperienceSummary: '玩家看到的是事件開場後的群眾回應波，可能混入環境聊天、贊助或假 AI 的陪襯聲音，但主聲音仍是觀眾反應。',
+    reviewNotesForStep: '最不能破壞的是「這是開場後的反應窗」而不是新事件；核心 reaction 要短、快、能補強剛剛發生的事。'
+  },
+  QNA_ASKING: {
+    playerExperienceSummary: '玩家在這一步會看到題目被正式送進聊天室，常帶有 @taggedUser 與選項包裝。主聲音是題目提示 / 系統引導，有時會被 fake AI 陪襯。',
+    reviewNotesForStep: '最不能破壞的是提問本體、選項包裝與 tagged-user 結構；這一步定義玩家接下來要回答什麼。'
+  },
+  QNA_AWAITING_REPLY: {
+    playerExperienceSummary: '玩家已看到問題並且能回覆。主聲音仍是題目提示，但背景可穿插環境聊天或 donate，以維持聊天室仍在流動。',
+    reviewNotesForStep: '最不能破壞的是「玩家仍在回答同一題」的專注感；任何陪襯內容都不能蓋過 active QnA prompt。'
+  },
+  QNA_RETRY_OR_UNKNOWN: {
+    playerExperienceSummary: '玩家剛給了模糊、錯誤或需要重試的回答，因此看到 retry / unknown 類的提醒。主聲音是題目提示的糾正或引導。',
+    reviewNotesForStep: '最不能破壞的是重試導向與問題範圍；文案必須把玩家帶回原題，而不是開新話題。'
+  },
+  QNA_RESOLVED: {
+    playerExperienceSummary: '玩家完成回答後，聊天室回到收束與放鬆狀態。主聲音多半回到觀眾 / 環境 / donate / fake AI 的後續餘波，而不是正式題目提示。',
+    reviewNotesForStep: '最不能破壞的是「題目已結束」的感受；不得讓玩家誤以為 reply gate 仍然開著。若目前只有 wrapper-level runtime 收束，也要明說缺少顯式池。'
+  },
+  QNA_ABORTED: {
+    playerExperienceSummary: '玩家這一步感受到題目被中止、超時或放棄，聊天室應迅速回到安全 fallback 或環境聊天。主聲音是短恢復語氣，不再繼續考問。',
+    reviewNotesForStep: '最不能破壞的是快速脫離失敗分支；不能留下半題、半包裝、半開啟的 reply gate 錯覺。'
+  },
+  AMBIENT_ONLY: {
+    playerExperienceSummary: '玩家只看到自由流動的聊天室，主聲音是觀眾 / 假 AI / donate 等背景 chatter，沒有事件或題目主線搶焦點。',
+    reviewNotesForStep: '最不能破壞的是「純環境」感；內容可以豐富，但不能像新事件 opener 或新題目 prompt。'
+  },
+  FALLBACK_ONLY: {
+    playerExperienceSummary: '玩家看到的是安全保底訊息，通常發生在其他來源不可用或被 guard 擋下時。主聲音偏系統安全網，不追求戲劇性。',
+    reviewNotesForStep: '最不能破壞的是安全、簡短、可無縫接回正常流程；此處不應承擔事件或 QnA 的主要敘事工作。'
+  }
+};
+
+const CLASSIC_WRAPPER_STEP_LINKS = {
+  QNA_ASKING: true,
+  QNA_AWAITING_REPLY: true,
+  QNA_RETRY_OR_UNKNOWN: true,
+  QNA_RESOLVED: true,
+  QNA_ABORTED: true
+};
+
+function buildClassicReviewEntry(step, route, entry) {
+  const currentField = entry.currentText
+    ? `- currentText: ${entry.currentText}`
+    : `- currentVariants: ${formatList(entry.currentVariants)}`;
+  return [
+    `#### ${entry.key}`,
+    '',
+    `- key: ${entry.key}`,
+    `- category: ${entry.category}`,
+    currentField,
+    `- sourceFile: ${entry.sourceFile}`,
+    `- sourceSymbol: ${entry.sourceSymbol}`,
+    `- sourceOfTruth: ${entry.sourceOfTruth}`,
+    `- ownership: ${entry.ownership ?? 'unset'}`,
+    `- ownerMode: ${entry.ownerMode ?? entry.mode}`,
+    `- status: ${entry.status}`,
+    `- eventKey: ${entry.eventKey ?? 'n/a'}`,
+    `- qnaFlowId: ${entry.qnaFlowId ?? 'n/a'}`,
+    `- questionId: ${entry.questionId ?? 'n/a'}`,
+    `- tokens: ${formatTokens(entry.tokens)}`,
+    `- messagePurpose: ${entry.messagePurpose ?? 'unset'}`,
+    `- tonePack: ${entry.tonePack ?? '未設定'}`,
+    `- runtimeWrapper: ${reviewRuntimeWrapperFor(entry)}`,
+    `- importability: ${reviewImportabilityFor(entry)}`,
+    `- usageContext: ${stepUsageContext(step, route, entry)}`,
+    `- constraints: ${stepConstraints(step, route, entry)}`,
+    `- reviewSlot: pending`,
+    ''
+  ].join('\n');
+}
+
+function buildClassicCategoryReviewDoc(classicDraft) {
+  let out = '# Classic Message Review Packet\n\n';
+  out += 'This document is generated for classic **source/category review**. It is a review packet only and is **not** an import source.\n\n';
+  out += '## Purpose split\n\n';
+  out += '- `docs/classic-message-review.md`: source/category-first review for auditors who want to inspect content pools by category.\n';
+  out += '- `docs/classic-flow-message-review.md`: flow/player-experience-first review for auditors who want to inspect what the player sees step by step.\n';
+  out += '- Classic remains review-first; neither packet creates an editable import path.\n\n';
+  for (const category of classicDraft.categories) {
+    out += `## ${category.category}\n\n`;
+    out += `- totalEntries: ${category.entries.length}\n`;
+    out += `- importability: classic review-only / not importable\n\n`;
+    for (const entry of category.entries) {
+      out += `### ${entry.key}\n\n`;
+      out += `- status: ${entry.status}\n`;
+      out += `- sourceFile: ${entry.sourceFile}\n`;
+      out += `- sourceSymbol: ${entry.sourceSymbol}\n`;
+      out += `- sourceOfTruth: ${entry.sourceOfTruth}\n`;
+      out += `- ownership: ${entry.ownership ?? 'unset'} / ownerMode: ${entry.ownerMode ?? entry.mode}\n`;
+      out += entry.currentText
+        ? `- currentText: ${entry.currentText}\n`
+        : `- currentVariants: ${formatList(entry.currentVariants)}\n`;
+      out += `- tokens: ${formatTokens(entry.tokens)}\n`;
+      out += `- runtimeWrapper: ${reviewRuntimeWrapperFor(entry)}\n`;
+      out += `- reviewSlot: pending\n\n`;
+    }
+  }
+  return out;
+}
+
+function buildClassicFlowReviewDoc({ classicDraft, manifest, definition, routes, ownership }) {
+  const classicEntries = manifest
+    .filter((entry) => entry.mode === 'classic')
+    .map(buildDraftEntry);
+  const routeByStepId = new Map(routes.map((route) => [route.stepId, route]));
+  const ownershipByCategory = new Map(ownership.map((row) => [row.category, row]));
+  const qnaWrappers = classicEntries.filter((entry) => entry.status === 'inferred_runtime_wrapper');
+
+  let out = '# Classic Flow Message Review Packet\n\n';
+  out += 'This document is generated for **flow-first classic review**. It is for human review only, follows player-facing step order, and must **not** be used as an import source.\n\n';
+  out += '## Review boundary\n\n';
+  out += '- Classic mode remains review-first.\n';
+  out += '- Importability for every classic entry is locked to `classic review-only / not importable`.\n';
+  out += '- Step grouping comes from `classicFlowDefinition.ts` + `classicContentMap.ts`; this packet does not redefine runtime ownership.\n';
+  out += '- Runtime wrappers are shown explicitly when present or when a step depends on them, but they remain non-editable runtime/inferred references.\n\n';
+  out += '## Purpose split\n\n';
+  out += '- `docs/classic-flow-message-review.md`: flow/player-experience-first packet.\n';
+  out += '- `docs/classic-message-review.md`: source/category-first packet.\n\n';
+  out += '## Totals\n\n';
+  out += `- classic draft entries: ${classicEntries.length}\n`;
+  out += `- classic runtime wrapper entries: ${qnaWrappers.length}\n`;
+  out += `- classic editable entries: 0\n`;
+  out += `- import boundary: classic review-only / not importable\n\n`;
+
+  for (const step of definition) {
+    const route = routeByStepId.get(step.stepId);
+    assert(route, `missing classic route for ${step.stepId}`);
+    const baseEntries = classicEntries.filter((entry) => route.allowedCategories.includes(entry.category));
+    const relatedWrappers = CLASSIC_WRAPPER_STEP_LINKS[step.stepId] ? qnaWrappers : [];
+    const stepEntries = Array.from(new Map([...baseEntries, ...relatedWrappers].map((entry) => [entry.key, entry])).values())
+      .sort((a, b) => a.category.localeCompare(b.category) || a.key.localeCompare(b.key));
+    const sourceFiles = Array.from(new Set(stepEntries.map((entry) => entry.sourceFile))).sort();
+    const stepStatuses = Array.from(new Set(stepEntries.map((entry) => entry.status))).sort();
+    const guidance = CLASSIC_STEP_REVIEW_GUIDANCE[step.stepId] ?? {
+      playerExperienceSummary: step.stepPurpose,
+      reviewNotesForStep: step.notes || 'Keep flow semantics intact.'
+    };
+
+    out += `## ${step.stepId}\n\n`;
+    out += `- stepId: ${step.stepId}\n`;
+    out += `- stepPurpose: ${step.stepPurpose}\n`;
+    out += `- canReply: ${step.canReply ? 'yes' : 'no'}\n`;
+    out += `- gateType: ${step.gateType}\n`;
+    out += `- allowedCategories: ${formatList(route.allowedCategories)}\n`;
+    out += `- primaryCategory: ${route.primaryCategory}\n`;
+    out += `- optionalCategories: ${formatList(route.optionalCategories)}\n`;
+    out += `- runtimeSelectionPolicy: ${route.runtimeSelectionPolicy}\n`;
+    out += `- playerExperienceSummary: ${guidance.playerExperienceSummary}\n`;
+    out += `- reviewNotesForStep: ${guidance.reviewNotesForStep}\n`;
+    out += `- sourceFilesInStep: ${formatList(sourceFiles)}\n`;
+    out += `- stepEntryCount: ${stepEntries.length}\n`;
+    out += `- stepStatuses: ${formatList(stepStatuses)}\n`;
+    out += `- categoryOwnershipSummary:\n`;
+    for (const category of route.allowedCategories) {
+      const ownershipRow = ownershipByCategory.get(category);
+      out += `  - ${category}: ${ownershipRow ? `${ownershipRow.ownership} / ${ownershipRow.sourceStatus} / allowedStepIds=${formatList(ownershipRow.allowedStepIds)}` : 'missing ownership metadata'}\n`;
+    }
+    if (CLASSIC_WRAPPER_STEP_LINKS[step.stepId]) {
+      out += `- runtimeWrapperVisibility: related qna prompt wrappers stay visible because this step either emits, reuses, or exits a wrapped classic prompt.\n`;
+    } else {
+      out += `- runtimeWrapperVisibility: no inferred wrapper is primary for this step.\n`;
+    }
+    out += '\n';
+
+    out += '### Review framing\n\n';
+    out += `- 玩家通常看到什麼：${guidance.playerExperienceSummary}\n`;
+    out += `- 主要聲音：${route.primaryCategory === 'event_dialog' ? '事件 / NPC / 系統事件台詞' : route.primaryCategory === 'event_reaction' ? '觀眾反應' : route.primaryCategory.startsWith('qna_') ? '題目提示 / 引導' : route.primaryCategory === 'ambient_chat' ? '觀眾 / 環境聊天' : '安全 fallback / 系統保底'}\n`;
+    out += `- 體驗目的：${route.messagePurpose}\n`;
+    out += `- 最不能破壞：${guidance.reviewNotesForStep}\n\n`;
+
+    out += '### Message entries\n\n';
+    if (!stepEntries.length) {
+      out += '- No explicit manifest entries map to this step yet. Reviewers should treat this as runtime-wrapper-only / ownership-only metadata.\n\n';
+    } else {
+      for (const entry of stepEntries) out += `${buildClassicReviewEntry(step, route, entry)}\n`;
+    }
+
+    const wrappersForStep = stepEntries.filter((entry) => entry.status === 'inferred_runtime_wrapper');
+    out += '### Runtime wrapper review\n\n';
+    if (!wrappersForStep.length) {
+      out += '- No dedicated inferred runtime wrapper entry is emitted directly in this step. If the runtime still assembles a closing / abort / resolved line, that behavior remains runtime-owned and non-importable.\n\n';
+    } else {
+      for (const wrapper of wrappersForStep) {
+        const baseKey = wrapper.key.replace(/\.runtime_wrapper$/, '.prompt');
+        out += `- wrapper key: ${wrapper.key}\n`;
+        out += `  - wraps base content: ${baseKey}\n`;
+        out += `  - fixed template: @{taggedUser} {question}（選項：{optionLabels}）\n`;
+        out += `  - dynamic tokens / options / labels: ${formatTokens(wrapper.tokens)}\n`;
+        out += `  - review focus: template tone + token framing, then confirm the base prompt content still reads correctly.\n`;
+        out += `  - importability: classic review-only / not importable\n`;
+        out += `  - why not importable: actual line is assembled at runtime in App.tsx, so the packet is documentation/audit only and cannot safely override the runtime template.\n`;
+      }
+      out += '\n';
+    }
+  }
+  return out;
+}
+
 fs.writeFileSync(path.join(repoRoot, 'docs/classic-flow-table.md'), buildFlowDoc({
   title: 'Classic Flow Table',
   mode: 'classic',
@@ -182,6 +428,16 @@ fs.writeFileSync(path.join(repoRoot, 'docs/sandbox-flow-table.md'), buildFlowDoc
   definition: SANDBOX_FLOW_DEFINITION,
   routes: SANDBOX_FLOW_CONTENT_ROUTES,
   ownership: SANDBOX_CONTENT_OWNERSHIP
+}));
+
+const classicDraft = drafts.get('classic');
+fs.writeFileSync(classicCategoryReviewDocPath, buildClassicCategoryReviewDoc(classicDraft));
+fs.writeFileSync(classicFlowReviewDocPath, buildClassicFlowReviewDoc({
+  classicDraft,
+  manifest,
+  definition: CLASSIC_FLOW_DEFINITION,
+  routes: CLASSIC_FLOW_CONTENT_ROUTES,
+  ownership: CLASSIC_CONTENT_OWNERSHIP
 }));
 
 let ownershipDoc = '# Mode Ownership Map\n\n';

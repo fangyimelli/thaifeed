@@ -1,3 +1,24 @@
+## 2026-03-22 Classic flow-first review packet
+
+### Scope
+- Classic review workflow only.
+- No classic runtime text rewrite.
+- No editable/importable promotion for classic entries.
+- Sandbox/shared review packet, writer workspace, and import workflow stay intact.
+
+### Implemented
+- Extended `scripts/generate-chat-content-artifacts.mjs` to emit:
+  - `docs/classic-flow-message-review.md` for flow/player-experience-first classic review.
+  - `docs/classic-message-review.md` for source/category-first classic review.
+- Each classic flow step now exposes allowed categories, primary/optional category, selection policy, player-facing review notes, message entry metadata, ownership, status, runtime wrapper visibility, and explicit `classic review-only / not importable` labeling.
+- Classic inferred runtime wrappers are now called out in a dedicated runtime-wrapper section with wrapped base key, fixed template, dynamic tokens, review focus, and reason they cannot be imported.
+- Regression guards now fail if classic flow review docs disappear, major steps are omitted, wrapper visibility is lost, or classic review-only boundaries drift.
+
+### Boundary notes
+- Classic remains review-first and non-importable.
+- No new classic editable path was added.
+- Sandbox/shared writer workspace and `docs/sandbox-shared-message-review.md` remain unchanged in role and import boundary.
+
 ## 2026-03-22 Mode ownership split blueprint (phase 1)
 
 ### Scope

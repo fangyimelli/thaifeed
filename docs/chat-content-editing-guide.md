@@ -2,13 +2,14 @@
 
 ## Recommended workflow
 1. Run `npm run generate:chat-content-artifacts` to refresh manifest, drafts, preview, and writer workspace docs.
-2. Edit `src/content/chat-content/editable/sandbox-chat-writer-workspace.json` instead of guessing directly inside the drafts.
-3. Fill `proposedRewrite` on the keys you want to change; keep `currentText` as shipped baseline reference.
-4. Run `npm run generate:chat-content-artifacts` and review `docs/sandbox-shared-message-review.md` line by line before any sync/import.
-5. Preserve every token and every flow/gate/UI constraint listed in the workspace and review packet.
-6. Run `npm run sync:chat-writer-workspace` only after the per-message review is approved, to copy `proposedRewrite` (or fallback `currentText`) into `sandbox-chat-draft.json` / `shared-chat-draft.json`.
-7. Review the synced draft files and run `npm run import:chat-content-editable` to write approved text back into `authoredChatContent.json`.
-8. Re-run `npm run test:chat-content-guards` and `npm run build`.
+2. If you are reviewing classic mode, read `docs/classic-flow-message-review.md` first for player-flow order, then `docs/classic-message-review.md` for source/category cross-check.
+3. Edit `src/content/chat-content/editable/sandbox-chat-writer-workspace.json` instead of guessing directly inside the drafts.
+4. Fill `proposedRewrite` on the keys you want to change; keep `currentText` as shipped baseline reference.
+5. Run `npm run generate:chat-content-artifacts` and review `docs/sandbox-shared-message-review.md` line by line before any sync/import.
+6. Preserve every token and every flow/gate/UI constraint listed in the workspace and review packet.
+7. Run `npm run sync:chat-writer-workspace` only after the per-message review is approved, to copy `proposedRewrite` (or fallback `currentText`) into `sandbox-chat-draft.json` / `shared-chat-draft.json`.
+8. Review the synced draft files and run `npm run import:chat-content-editable` to write approved text back into `authoredChatContent.json`.
+9. Re-run `npm run test:chat-content-guards` and `npm run build`.
 
 ## Writer workspace rules
 - Workspace only contains sandbox/shared keys that are `editable=true` and directly importable.
@@ -59,6 +60,8 @@ Each draft is grouped by `mode -> category -> entries[]` and every entry exposes
 
 ## Review-only for now
 - Classic `event_dialog`, `event_reaction`, `qna_prompt`, `qna_retry`, `qna_unknown`, `ambient_chat`, `fallback` are visible in the draft for single-key review, but they still point to their existing runtime registries and require manual migration review before automated import.
+- Classic step-by-step review now lives in `docs/classic-flow-message-review.md`; use it when the audit question is “what does the player see at this step?” rather than “which category owns this key?”.
+- Classic category/source cross-check lives in `docs/classic-message-review.md`; use it after the flow-first pass to inspect original registries and category buckets.
 - `sourceOfTruth=runtime_wrapper` entries describe wrapper templates only and must stay structurally aligned with runtime code.
 - `sourceOfTruth=legacy|parallel` entries are reference-only and cannot be imported.
 

@@ -5,6 +5,7 @@
 - `sandbox-chat-draft.json` and `shared-chat-draft.json` remain the only automated import inputs for sandbox/shared editable content.
 - `scripts/sync-chat-content-writer-workspace.mjs` is the explicit conversion step from writer proposals -> editable drafts.
 - `docs/sandbox-shared-message-review.md` is review-only output and must never be treated as an import source.
+- `docs/classic-flow-message-review.md` and `docs/classic-message-review.md` are classic review packets only; they exist for audit visibility and must never become import sources.
 - `scripts/import-chat-content-editable.mjs` still writes only keys that are `editable=true` and point to `authoredChatContent.json`.
 
 ## Guard expectations
@@ -50,6 +51,7 @@ Import must fail when:
 - If a key is marked `manual_review_required`, edit the draft first, then use the draft as the review packet for a later migration of the original registry file.
 - If a key is marked `runtime_wrapper_only`, only edit the underlying prompt/template keys, not the wrapper record itself.
 - `legacy` and `parallel` entries may be annotated in the draft but cannot become the sole source of truth without a dedicated migration.
+- For classic mode, review in two passes: `docs/classic-flow-message-review.md` for player-flow sequencing, then `docs/classic-message-review.md` for registry/category verification. Neither file is importable.
 
 ## Mode ownership import rules (phase 1)
 - `docs/classic-flow-table.md` / `docs/sandbox-flow-table.md` / `docs/mode-ownership-map.md` 為可重建 ownership 視圖，不是 import source。
