@@ -2,7 +2,7 @@
 
 - 新增 `src/content/chat-content/editable/sandbox-chat-writer-workspace.json`：只收錄目前可直接編修且可 import 的 sandbox / shared key，並依 `sandbox_preheat`、`sandbox_prompt_and_help`、`sandbox_vip_summary`、`sandbox_glitch`、`sandbox_tag_question`、`sandbox_debug_text`、`shared_ui_text` 分批整理。
 - 每個 writer workspace entry 現在補齊 `usageContext`、`scenePurpose`、`toneGoal`、`constraints`、`suggestedLength`、`notesForWriter`、`relatedFlowStep`、`relatedGateType`、`relatedUiSurface`、`proposedRewrite`、`altRewriteIdeas`、`bannedPatterns`，讓人類創作不必回頭猜用途。
-- 新增 `docs/sandbox-chat-writer-workspace.md` 與 `npm run sync:chat-writer-workspace`；workspace 只作創作／提案，仍必須先同步回 editable drafts，再走既有 `npm run import:chat-content-editable`。
+- 新增 `docs/sandbox-chat-writer-workspace.md`、`docs/sandbox-shared-message-review.md` 與 `npm run sync:chat-writer-workspace`；workspace 只作創作／提案，先逐則 review，再同步回 editable drafts，最後才走既有 `npm run import:chat-content-editable`。
 - `scripts/import-chat-content-editable.mjs` 改為直接驗證目前 draft，不會在 import 前重生 draft 導致人工修改被洗掉；classic review-first 邊界維持不變。
 - regression guard 補強 writer workspace totals / token drift / import target drift / classic review-only 混入檢查，並要求 docs 可重建。
 
