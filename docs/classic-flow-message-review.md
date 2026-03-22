@@ -352,7 +352,7 @@ This document is generated for **flow-first classic review**. It is for human re
 
 - key: classic.event_dialog.voice_confirm.followUp
 - category: event_dialog
-- currentVariants: @${activeUser} 你再聽一下 看還會不會有, @${activeUser} 那聲音你剛剛也有聽到吧, @${activeUser} 不是我在鬧你 剛剛真的有一聲, 聊天室剛剛是不是也有人聽到了, 那個真的不像風, 我剛剛背直接涼一下
+- currentVariants: @${activeUser} 你再聽一下 看還會不會有, @${activeUser} 那聲音你剛剛也有聽到吧, @${activeUser} 不是我在鬧你 剛剛真的有一聲, 不是只有我聽到吧, 那個真的不像風, 我剛剛背直接涼一下
 - sourceFile: src/core/events/eventDialogs.ts
 - sourceSymbol: EVENT_DIALOGS.VOICE_CONFIRM.followUp
 - sourceOfTruth: registry
@@ -375,7 +375,7 @@ This document is generated for **flow-first classic review**. It is for human re
 
 - key: classic.event_dialog.voice_confirm.opener
 - category: event_dialog
-- currentVariants: @${activeUser} 你剛剛那一下有聽到嗎, @${activeUser} 你那邊也有一聲嗎, @${activeUser} 你先別講話 再聽一下, @${activeUser} 你耳機裡剛剛是不是有聲音, 等一下 不是只有我聽到吧, 那個不像背景音耶, 聊天室有人也有注意到嗎, 剛剛那一下有點怪
+- currentVariants: @${activeUser} 你剛剛那一下有聽到嗎, @${activeUser} 你那邊也有一聲嗎, @${activeUser} 你先別講話 再聽一下, @${activeUser} 你耳機裡剛剛是不是有聲音, 等一下 不是只有我聽到吧, 那個不像背景音耶, 不是只有我注意到吧, 剛剛那一下有點怪
 - sourceFile: src/core/events/eventDialogs.ts
 - sourceSymbol: EVENT_DIALOGS.VOICE_CONFIRM.opener
 - sourceOfTruth: registry
