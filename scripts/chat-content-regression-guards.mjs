@@ -131,11 +131,15 @@ assert(app.includes('SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1'), 'App should use 
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editing-guide.md')), 'missing editing guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-import-policy.md')), 'missing import policy guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md')), 'missing editable preview');
+assert(fs.existsSync(path.join(repoRoot, 'docs/classic-message-review.md')), 'missing classic category review packet');
+assert(fs.existsSync(path.join(repoRoot, 'docs/classic-flow-message-review.md')), 'missing classic flow-first review packet');
 assert(fs.existsSync(path.join(repoRoot, 'docs/classic-flow-table.md')), 'missing classic flow table');
 assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-flow-table.md')), 'missing sandbox flow table');
 assert(fs.existsSync(path.join(repoRoot, 'docs/mode-ownership-map.md')), 'missing mode ownership map');
 assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md')), 'missing writer workspace doc');
 assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-shared-message-review.md')), 'missing per-message review packet');
+assert(fs.existsSync(path.join(repoRoot, '.github/pull_request_template.md')), 'missing pull request template');
+assert(fs.existsSync(path.join(repoRoot, 'PR_NOTES.md')), 'missing PR_NOTES');
 
 execFileSync('node', ['scripts/sync-chat-content-writer-workspace.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 execFileSync('node', ['scripts/import-chat-content-editable.mjs'], { cwd: repoRoot, stdio: 'inherit' });
@@ -148,16 +152,27 @@ const classicFlowDefinitionPath = path.join(repoRoot, 'src/modes/classic/flow/cl
 const sandboxFlowDefinitionPath = path.join(repoRoot, 'src/modes/sandbox/flow/sandboxFlowDefinition.ts');
 const classicContentMapPath = path.join(repoRoot, 'src/content/chat-content/maps/classicContentMap.ts');
 const sandboxContentMapPath = path.join(repoRoot, 'src/content/chat-content/maps/sandboxContentMap.ts');
+const classicFlowReviewPath = path.join(repoRoot, 'docs/classic-flow-message-review.md');
+const classicCategoryReviewPath = path.join(repoRoot, 'docs/classic-message-review.md');
+const sandboxReviewPath = path.join(repoRoot, 'docs/sandbox-shared-message-review.md');
 assert(fs.existsSync(classicFlowDefinitionPath), 'classic flow definition file missing');
 assert(fs.existsSync(sandboxFlowDefinitionPath), 'sandbox flow definition file missing');
 assert(fs.existsSync(classicContentMapPath), 'classic content map file missing');
 assert(fs.existsSync(sandboxContentMapPath), 'sandbox content map file missing');
+assert(fs.existsSync(classicFlowReviewPath), 'classic flow review doc missing after artifact generation');
+assert(fs.existsSync(classicCategoryReviewPath), 'classic category review doc missing after artifact generation');
+assert(fs.existsSync(sandboxReviewPath), 'sandbox/shared review doc missing after artifact generation');
 const classicFlowDefinition = fs.readFileSync(classicFlowDefinitionPath, 'utf8');
 const sandboxFlowDefinition = fs.readFileSync(sandboxFlowDefinitionPath, 'utf8');
 const classicContentMapSource = fs.readFileSync(classicContentMapPath, 'utf8');
 const sandboxContentMapSource = fs.readFileSync(sandboxContentMapPath, 'utf8');
-for (const stepId of ['EVENT_OPENER','EVENT_REACTION_WINDOW','QNA_ASKING','QNA_AWAITING_REPLY','QNA_RETRY_OR_UNKNOWN','QNA_RESOLVED','QNA_ABORTED','FALLBACK_ONLY']) {
+const classicFlowReview = fs.readFileSync(classicFlowReviewPath, 'utf8');
+const classicCategoryReview = fs.readFileSync(classicCategoryReviewPath, 'utf8');
+const sandboxReview = fs.readFileSync(sandboxReviewPath, 'utf8');
+for (const stepId of ['EVENT_OPENER','EVENT_REACTION_WINDOW','QNA_ASKING','QNA_AWAITING_REPLY','QNA_RETRY_OR_UNKNOWN','QNA_RESOLVED','QNA_ABORTED','AMBIENT_ONLY','FALLBACK_ONLY']) {
   assert(classicFlowDefinition.includes(`stepId: '${stepId}'`), `classic step missing: ${stepId}`);
+  const stepSectionPattern = new RegExp(`## ${stepId}[\\s\\S]*?- stepId: ${stepId}[\\s\\S]*?- allowedCategories: .+`, 'm');
+  assert(stepSectionPattern.test(classicFlowReview), `classic flow review missing required metadata for ${stepId}`);
 }
 for (const stepId of ['PREHEAT_CHAT','REVEAL_PROMPT','WAIT_REPLY_x','HELP_HINT','ANSWER_EVAL','VIP_SUMMARY_POST_REVEAL','TAG_QUESTION','DEBUG_SMOKE']) {
   assert(sandboxFlowDefinition.includes(`stepId: '${stepId}'`), `sandbox step missing: ${stepId}`);
@@ -169,3 +184,8 @@ assert(sandboxFlowDefinition.includes("category: 'sandbox_stub'"), 'sandbox cont
 assert(!classicFlowDefinition.includes('sandbox_preheat'), 'classic flow definition must not own sandbox category');
 assert(!sandboxFlowDefinition.includes("'event_dialog'"), 'sandbox flow definition must not own classic event_dialog');
 assert(!sandboxContentMapSource.includes("category: 'ui_placeholder'"), 'sandbox content map must not claim shared ui_placeholder');
+assert(classicFlowReview.includes('classic review-only / not importable'), 'classic flow review must keep review-only import boundary');
+assert(classicCategoryReview.includes('classic review-only / not importable'), 'classic category review must keep review-only import boundary');
+assert(classicFlowReview.includes('inferred_runtime_wrapper'), 'classic flow review must expose inferred runtime wrappers');
+assert(classicFlowReview.includes('### Runtime wrapper review'), 'classic flow review must contain runtime wrapper section');
+assert(sandboxReview.includes('Classic mode remains review-first'), 'sandbox/shared review packet must preserve classic exclusion boundary');

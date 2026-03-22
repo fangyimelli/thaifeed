@@ -2,6 +2,8 @@
 
 Generated from mode-specific flow definition and content map for **classic** mode.
 
+- Companion review packet: `docs/classic-flow-message-review.md` (flow-first) and `docs/classic-message-review.md` (category-first).
+
 ## Flow definition
 
 | stepId | purpose | canReply | gateType | uiSurface | allowed categories | next steps | blocked reasons | notes |

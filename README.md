@@ -3,6 +3,7 @@
 - Added mode-specific flow definitions under `src/modes/classic/flow/classicFlowDefinition.ts` and `src/modes/sandbox/flow/sandboxFlowDefinition.ts`.
 - Added mode-specific content maps under `src/content/chat-content/maps/` plus `src/content/chat-content/modeOwnership.ts` for shared/classic/sandbox/legacy boundaries.
 - Generator/docs now emit `docs/classic-flow-table.md`, `docs/sandbox-flow-table.md`, and `docs/mode-ownership-map.md`.
+- Generator/docs now also emit `docs/classic-flow-message-review.md` (flow-first classic review) and `docs/classic-message-review.md` (category-first classic review) without creating any classic import path.
 - Runtime integration is phase-1 only: App reply authority now reads mode flow metadata, while schema/tooling/UI shell/review workflow remain shared.
 - Classic remains review-first; sandbox/shared editable import boundary is unchanged.
 

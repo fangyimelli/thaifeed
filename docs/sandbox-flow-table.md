@@ -2,6 +2,8 @@
 
 Generated from mode-specific flow definition and content map for **sandbox** mode.
 
+- Companion review packet: `docs/sandbox-shared-message-review.md` for editable sandbox/shared review.
+
 ## Flow definition
 
 | stepId | purpose | canReply | gateType | uiSurface | allowed categories | next steps | blocked reasons | notes |

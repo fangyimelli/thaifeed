@@ -1,3 +1,13 @@
+## 2026-03-22 Classic flow-first review packet
+
+- `scripts/generate-chat-content-artifacts.mjs` 新增 classic flow-first / category-first review packet 生成：`docs/classic-flow-message-review.md` 以 player flow step 為主視角，`docs/classic-message-review.md` 以 source/category 為主視角。
+- classic flow review 逐步列出 `stepId / allowedCategories / primaryCategory / optionalCategories / runtimeSelectionPolicy / playerExperienceSummary / reviewNotesForStep`，並將對應 message entries、ownership、status、runtime wrapper、importability 一次展開。
+- inferred runtime wrapper（例如 classic QnA `@taggedUser ...（選項：...）`）現在在 review packet 中獨立可見，且明確標示 review-only / not importable。
+- regression guard 補強：classic flow review doc 必須存在、主要 steps 必須覆蓋、wrapper 必須可見、classic 不得被誤標成 importable，sandbox/shared review packet 仍需保留。
+
+### Removed / Deprecated Log
+- 2026-03-22：deprecated 只靠 category draft 審 classic 流程；後續 classic 審稿請優先查看 flow-first packet，再回 category-first packet 做來源交叉比對。
+
 ## 2026-03-22 Mode ownership split blueprint (phase 1)
 
 - 新增 `src/modes/classic/flow/classicFlowDefinition.ts`、`src/modes/sandbox/flow/sandboxFlowDefinition.ts`：將 classic / sandbox flow ownership 明確分流，覆蓋主流程 step、gateType、blockedReasons、uiSurface、allowedMessageCategories、tone/intensity 預留欄位。
