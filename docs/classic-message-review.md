@@ -1146,7 +1146,7 @@ This document is generated for classic **source/category review**. It is a revie
 - sourceSymbol: EVENT_DIALOGS.VOICE_CONFIRM.followUp
 - sourceOfTruth: registry
 - ownership: mode_specific / ownerMode: classic
-- currentVariants: @${activeUser} 我剛剛真的聽到一聲, @${activeUser} 那聲音不像風耶, @${activeUser} 聊天室有人也聽到了, @${activeUser} 不是我在鬧你啦, @${activeUser} 你再聽一次看看, @${activeUser} 我雞皮疙瘩直接起來
+- currentVariants: @${activeUser} 你再聽一下 看還會不會有, @${activeUser} 那聲音你剛剛也有聽到吧, @${activeUser} 不是我在鬧你 剛剛真的有一聲, 聊天室剛剛是不是也有人聽到了, 那個真的不像風, 我剛剛背直接涼一下
 - tokens: ${activeUser} (Injected active user handle.)
 - runtimeWrapper: none
 - reviewSlot: pending
@@ -1158,7 +1158,7 @@ This document is generated for classic **source/category review**. It is a revie
 - sourceSymbol: EVENT_DIALOGS.VOICE_CONFIRM.opener
 - sourceOfTruth: registry
 - ownership: mode_specific / ownerMode: classic
-- currentVariants: @${activeUser} 你那邊現在有開聲音嗎, @${activeUser} 你有聽到一點怪聲嗎, @${activeUser} 你耳機現在是開著的嗎, @${activeUser} 你那邊是不是有聲音飄過去, @${activeUser} 你剛剛有聽見嗎, @${activeUser} 你先聽一下有沒有異音, @${activeUser} 你那邊喇叭有開吧, @${activeUser} 你是不是也聽到了
+- currentVariants: @${activeUser} 你剛剛那一下有聽到嗎, @${activeUser} 你那邊也有一聲嗎, @${activeUser} 你先別講話 再聽一下, @${activeUser} 你耳機裡剛剛是不是有聲音, 等一下 不是只有我聽到吧, 那個不像背景音耶, 聊天室有人也有注意到嗎, 剛剛那一下有點怪
 - tokens: ${activeUser} (Injected active user handle.)
 - runtimeWrapper: none
 - reviewSlot: pending

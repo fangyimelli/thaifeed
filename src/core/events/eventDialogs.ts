@@ -4,22 +4,22 @@ import type { EventLinePhase, StoryEventDialog, StoryEventKey } from './eventTyp
 export const EVENT_DIALOGS: Record<StoryEventKey, StoryEventDialog> = {
   VOICE_CONFIRM: {
     opener: [
-      { id: 'voice_open_1', text: '@${activeUser} 你那邊現在有開聲音嗎' },
-      { id: 'voice_open_2', text: '@${activeUser} 你有聽到一點怪聲嗎' },
-      { id: 'voice_open_3', text: '@${activeUser} 你耳機現在是開著的嗎' },
-      { id: 'voice_open_4', text: '@${activeUser} 你那邊是不是有聲音飄過去' },
-      { id: 'voice_open_5', text: '@${activeUser} 你剛剛有聽見嗎' },
-      { id: 'voice_open_6', text: '@${activeUser} 你先聽一下有沒有異音' },
-      { id: 'voice_open_7', text: '@${activeUser} 你那邊喇叭有開吧' },
-      { id: 'voice_open_8', text: '@${activeUser} 你是不是也聽到了' }
+      { id: 'voice_open_1', text: '@${activeUser} 你剛剛那一下有聽到嗎' },
+      { id: 'voice_open_2', text: '@${activeUser} 你那邊也有一聲嗎' },
+      { id: 'voice_open_3', text: '@${activeUser} 你先別講話 再聽一下' },
+      { id: 'voice_open_4', text: '@${activeUser} 你耳機裡剛剛是不是有聲音' },
+      { id: 'voice_open_5', text: '等一下 不是只有我聽到吧' },
+      { id: 'voice_open_6', text: '那個不像背景音耶' },
+      { id: 'voice_open_7', text: '聊天室有人也有注意到嗎' },
+      { id: 'voice_open_8', text: '剛剛那一下有點怪' }
     ],
     followUp: [
-      { id: 'voice_follow_1', text: '@${activeUser} 我剛剛真的聽到一聲' },
-      { id: 'voice_follow_2', text: '@${activeUser} 那聲音不像風耶' },
-      { id: 'voice_follow_3', text: '@${activeUser} 聊天室有人也聽到了' },
-      { id: 'voice_follow_4', text: '@${activeUser} 不是我在鬧你啦' },
-      { id: 'voice_follow_5', text: '@${activeUser} 你再聽一次看看' },
-      { id: 'voice_follow_6', text: '@${activeUser} 我雞皮疙瘩直接起來' }
+      { id: 'voice_follow_1', text: '@${activeUser} 你再聽一下 看還會不會有' },
+      { id: 'voice_follow_2', text: '@${activeUser} 那聲音你剛剛也有聽到吧' },
+      { id: 'voice_follow_3', text: '@${activeUser} 不是我在鬧你 剛剛真的有一聲' },
+      { id: 'voice_follow_4', text: '聊天室剛剛是不是也有人聽到了' },
+      { id: 'voice_follow_5', text: '那個真的不像風' },
+      { id: 'voice_follow_6', text: '我剛剛背直接涼一下' }
     ]
   },
   GHOST_PING: {
