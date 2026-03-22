@@ -1,3 +1,14 @@
+## 2026-03-22 Sandbox / shared writer workspace round 1
+
+- 新增 `src/content/chat-content/editable/sandbox-chat-writer-workspace.json`：只收錄目前可直接編修且可 import 的 sandbox / shared key，並依 `sandbox_preheat`、`sandbox_prompt_and_help`、`sandbox_vip_summary`、`sandbox_glitch`、`sandbox_tag_question`、`sandbox_debug_text`、`shared_ui_text` 分批整理。
+- 每個 writer workspace entry 現在補齊 `usageContext`、`scenePurpose`、`toneGoal`、`constraints`、`suggestedLength`、`notesForWriter`、`relatedFlowStep`、`relatedGateType`、`relatedUiSurface`、`proposedRewrite`、`altRewriteIdeas`、`bannedPatterns`，讓人類創作不必回頭猜用途。
+- 新增 `docs/sandbox-chat-writer-workspace.md` 與 `npm run sync:chat-writer-workspace`；workspace 只作創作／提案，仍必須先同步回 editable drafts，再走既有 `npm run import:chat-content-editable`。
+- `scripts/import-chat-content-editable.mjs` 改為直接驗證目前 draft，不會在 import 前重生 draft 導致人工修改被洗掉；classic review-first 邊界維持不變。
+- regression guard 補強 writer workspace totals / token drift / import target drift / classic review-only 混入檢查，並要求 docs 可重建。
+
+### Removed / Deprecated Log
+- 2026-03-22：deprecated 直接在 writer workspace 以外憑記憶改 sandbox/shared 文案用途說明；後續請以 workspace context 欄位與 sync/import workflow 為準。
+
 ## 2026-03-22 Chat content editable draft / import workflow
 
 - 新增正式內容工作流：manifest -> editable draft (`classic` / `sandbox` / `shared`) -> import 回 `src/content/chat-content/editable/authoredChatContent.json`。

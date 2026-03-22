@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const editableDir = path.join(repoRoot, 'src/content/chat-content/editable');
+const writerWorkspacePath = path.join(editableDir, 'sandbox-chat-writer-workspace.json');
 
 execFileSync('node', ['scripts/generate-chat-content-artifacts.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 
@@ -17,8 +18,14 @@ const sandboxMode = fs.readFileSync(path.join(repoRoot, 'src/modes/sandbox_story
 const authored = JSON.parse(fs.readFileSync(path.join(editableDir, 'authoredChatContent.json'), 'utf8'));
 const drafts = ['classic', 'sandbox', 'shared'].map((mode) => JSON.parse(fs.readFileSync(path.join(editableDir, `${mode}-chat-draft.json`), 'utf8')));
 const draftEntries = drafts.flatMap((draft) => draft.categories.flatMap((category) => category.entries));
+const editableImportableDraftEntries = drafts
+  .flatMap((draft) => draft.categories.flatMap((category) => category.entries))
+  .filter((entry) => entry.editable && entry.importTarget === 'src/content/chat-content/editable/authoredChatContent.json');
 const manifestByKey = new Map(manifest.map((entry) => [entry.key, entry]));
 const draftByKey = new Map(draftEntries.map((entry) => [entry.key, entry]));
+const writerWorkspace = JSON.parse(fs.readFileSync(writerWorkspacePath, 'utf8'));
+const workspaceEntries = writerWorkspace.batches.flatMap((batch) => batch.entries.map((entry) => ({ batch, entry })));
+const workspaceKeys = new Set();
 
 const mustHaveKeys = [
   'classic.pool.safe_fallback',
@@ -71,6 +78,42 @@ for (const draft of drafts) {
   assert.equal(total, manifestTotalsByMode[draft.mode], `draft total mismatch for mode ${draft.mode}`);
 }
 
+assert.equal(writerWorkspace.importBoundary.workspaceImportsDirectly, false, 'workspace must not import directly');
+assert.equal(writerWorkspace.importBoundary.runtimeImportReadsWorkspace, false, 'runtime import boundary drifted to workspace');
+assert.equal(writerWorkspace.importBoundary.requiresDraftSync, true, 'workspace should require draft sync step');
+assert(fs.existsSync(path.join(repoRoot, 'scripts/sync-chat-content-writer-workspace.mjs')), 'missing writer workspace sync script');
+for (const { batch, entry } of workspaceEntries) {
+  assert(!workspaceKeys.has(entry.key), `duplicate workspace key ${entry.key}`);
+  workspaceKeys.add(entry.key);
+  const draftEntry = draftByKey.get(entry.key);
+  assert(draftEntry, `workspace key missing from drafts: ${entry.key}`);
+  assert.equal(draftEntry.editable, true, `workspace must only include editable entries: ${entry.key}`);
+  assert.equal(draftEntry.importTarget, 'src/content/chat-content/editable/authoredChatContent.json', `workspace entry must stay importable: ${entry.key}`);
+  assert.notEqual(entry.mode, 'classic', `workspace cannot mix classic review-only entry: ${entry.key}`);
+  assert.equal(entry.batchId, batch.batchId, `workspace batch mismatch: ${entry.key}`);
+  assert.equal(entry.sourceOfTruth, draftEntry.sourceOfTruth, `workspace sourceOfTruth drift: ${entry.key}`);
+  assert.equal(entry.importTarget, draftEntry.importTarget, `workspace importTarget drift: ${entry.key}`);
+  assert.equal(entry.reviewStatus, draftEntry.reviewStatus, `workspace reviewStatus drift: ${entry.key}`);
+  assert.equal(entry.currentText, authored[entry.key], `workspace currentText drift: ${entry.key}`);
+  assert.deepEqual((entry.tokens || []).map((token) => token.token), (draftEntry.tokens || []).map((token) => token.token), `workspace token drift: ${entry.key}`);
+  assert(typeof entry.usageContext === 'string' && entry.usageContext.trim(), `workspace usageContext missing: ${entry.key}`);
+  assert(typeof entry.scenePurpose === 'string' && entry.scenePurpose.trim(), `workspace scenePurpose missing: ${entry.key}`);
+  assert(typeof entry.constraints === 'string' && entry.constraints.trim(), `workspace constraints missing: ${entry.key}`);
+  assert(Array.isArray(entry.altRewriteIdeas), `workspace altRewriteIdeas missing: ${entry.key}`);
+  assert(Array.isArray(entry.bannedPatterns), `workspace bannedPatterns missing: ${entry.key}`);
+}
+assert.equal(workspaceKeys.size, editableImportableDraftEntries.length, 'workspace totals must match editable importable totals');
+for (const entry of editableImportableDraftEntries) {
+  assert(workspaceKeys.has(entry.key), `editable importable draft missing from workspace: ${entry.key}`);
+}
+assert.equal(writerWorkspace.summary.totalEditableEntries, editableImportableDraftEntries.length, 'workspace total editable mismatch');
+assert.equal(writerWorkspace.summary.sandboxEditableEntries, editableImportableDraftEntries.filter((entry) => entry.mode === 'sandbox').length, 'workspace sandbox editable mismatch');
+assert.equal(writerWorkspace.summary.sharedEditableEntries, editableImportableDraftEntries.filter((entry) => entry.mode === 'shared').length, 'workspace shared editable mismatch');
+assert.deepEqual(writerWorkspace.summary.editableEntriesByMode, {
+  sandbox: editableImportableDraftEntries.filter((entry) => entry.mode === 'sandbox').length,
+  shared: editableImportableDraftEntries.filter((entry) => entry.mode === 'shared').length
+}, 'workspace editableEntriesByMode mismatch');
+
 const extractedStrings = [
   '今天怎麼這麼多人一起在線？',
   'VIP 總結：先把剛剛那個單字記住，下一步確認發音。',
@@ -88,7 +131,9 @@ assert(app.includes('SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1'), 'App should use 
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editing-guide.md')), 'missing editing guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-import-policy.md')), 'missing import policy guide');
 assert(fs.existsSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md')), 'missing editable preview');
+assert(fs.existsSync(path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md')), 'missing writer workspace doc');
 
+execFileSync('node', ['scripts/sync-chat-content-writer-workspace.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 execFileSync('node', ['scripts/import-chat-content-editable.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 execFileSync('node', ['scripts/generate-chat-content-artifacts.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 
