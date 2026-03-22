@@ -2171,3 +2171,24 @@ Console（debug 模式）可觀察：
 
 - 移除 sandbox `useState(sandboxPinnedEntry)` 作為 pinned reply 權威來源；改由 `sandboxStoryMode.state.pinnedReply` 單一事實來源。
 - 移除 sandbox reply preview 對 classic `qnaStatus` 的隱性相依，避免新舊 gate 判斷雙軌互打。
+
+## 2026-03-22 Chat Content Manifest Extraction
+
+- Added `src/content/chat-content/schema.ts` as the shared schema for editable chat-content inventory entries.
+- Added `src/content/chat-content/chatContentManifest.ts` as the structured registry that maps classic, sandbox, and shared chat text sources into one manifest.
+- Added `src/content/chat-content/appRuntimeContent.ts` to extract App-owned sandbox/runtime/UI chat strings out of `App.tsx`/`ChatPanel.tsx`/`sandboxStoryMode.ts` without changing flow order or gate behavior.
+- Added generated artifacts:
+  - `src/content/chat-content/chatContentManifest.generated.json`
+  - `docs/chat-content-audit-manifest.md`
+- Added regression/tooling scripts:
+  - `npm run generate:chat-content-artifacts`
+  - `npm run test:chat-content-guards`
+
+### README Removed/Deprecated Log
+
+- Deprecated direct hardcoded ownership of sandbox preheat / VIP summary / glitch / tag question / help-hint fallback chat text inside `src/app/App.tsx`; these now resolve from `src/content/chat-content/appRuntimeContent.ts`.
+- Deprecated direct hardcoded chat UI placeholder/button labels inside `src/ui/chat/ChatPanel.tsx`; these now resolve from `UI_TEXT` in the content layer.
+- Legacy/parallel content sources intentionally retained and explicitly labeled in the manifest:
+  - `src/modes/sandbox_story/sandboxConsonantWordMap.ts`
+  - `src/sandbox/chat/chat_engine.ts`
+  - classic runtime wrapper lines assembled in `App.tsx`

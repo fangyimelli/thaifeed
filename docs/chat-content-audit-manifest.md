@@ -1,0 +1,275 @@
+# Chat Content Audit Manifest
+
+This document is generated from `src/content/chat-content/chatContentManifest.ts`.
+
+## Counts by mode
+
+- classic: 130
+- sandbox: 31
+- shared: 70
+
+## Counts by category
+
+- ambient_chat: 70
+- debug_text: 2
+- donate: 10
+- event_dialog: 15
+- event_reaction: 3
+- fake_ai: 7
+- fallback: 3
+- qna_prompt: 20
+- qna_retry: 1
+- qna_unknown: 1
+- sandbox_glitch: 3
+- sandbox_help_hint: 32
+- sandbox_preheat: 9
+- sandbox_prompt: 44
+- sandbox_tag_question: 1
+- sandbox_vip_summary: 2
+- ui_placeholder: 8
+
+## classic
+
+| key | category | status | source | flow/gate | text / variants | notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| classic.donate.1 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 很厲害，繼續加油！ | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.10 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 收下我的愛心星星。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.2 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 欸 那邊真的亮了一點，整體順很多。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.3 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 聊天室為你感到驕傲。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.4 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 謝謝你沒有放棄。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.5 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 這個節奏必須斗內。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.6 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 超穩，這題答得漂亮。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.7 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 後排送上應援。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.8 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 房間氣氛真的變好了。 | Donate pool entry with Thai/Chinese variants. |
+| classic.donate.9 | donate | active | src/content/pools/donatePools.json#donatePools.messages |  | 再撐一下，感覺整個空間會更穩。 | Donate pool entry with Thai/Chinese variants. |
+| classic.event_dialog.fear_challenge.closer | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.FEAR_CHALLENGE.closer | FEAR_CHALLENGE | @${activeUser} 我先下線一下 你自己小心 / @${activeUser} 我撐不住了 我先退 / @${activeUser} 我先離開一下 你別單看太久 / @${activeUser} 我先關掉一會 你撐住 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.fear_challenge.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.FEAR_CHALLENGE.followUp | FEAR_CHALLENGE | @${activeUser} 你剛剛說不怕我有聽到 / @${activeUser} 那你再盯住這裡 / @${activeUser} 我看你真的很敢 / @${activeUser} 你先不要眨眼 / @${activeUser} 等下別突然關掉喔 / @${activeUser} 我們再撐一下 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.fear_challenge.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.FEAR_CHALLENGE.opener | FEAR_CHALLENGE | @${activeUser} 你現在真的不怕嗎 / @${activeUser} 你敢說你現在很穩嗎 / @${activeUser} 你心跳有加快嗎 / @${activeUser} 你敢不敢再看一分鐘 / @${activeUser} 你現在還能撐住嗎 / @${activeUser} 你真的不會怕嗎 / @${activeUser} 你要不要先深呼吸 / @${activeUser} 你看起來有點硬撐耶 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.ghost_ping.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.GHOST_PING.followUp | GHOST_PING | @${activeUser} 你剛剛有聽到我說話嗎 / @${activeUser} 我剛剛到底講了什麼 / @${activeUser} 我聽到的聲音不像我自己 / @${activeUser} 你那邊聽起來正常嗎 / @${activeUser} 這一段我整個不敢回頭 / @${activeUser} 你有聽到第二個聲音嗎 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.ghost_ping.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.GHOST_PING.opener | GHOST_PING | @${activeUser} 你還在嗎 / @${activeUser} 你有在看嗎 / @${activeUser} 你現在有聽到我嗎 / @${activeUser} 你是不是離開螢幕了 / @${activeUser} 你回我一下好嗎 / @${activeUser} 你在不在聊天室 / @${activeUser} 你有沒有看到這裡 / @${activeUser} 你現在是靜音嗎 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.light_glitch.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.LIGHT_GLITCH.followUp | LIGHT_GLITCH | @${activeUser} 我真的不想在這時候停電 / @${activeUser} 你有看到它又閃一下嗎 / @${activeUser} 這種光線我超不安 / @${activeUser} 燈一跳我心跳就跟著跳 / @${activeUser} 感覺有人在旁邊看著 / @${activeUser} 你先別離開畫面 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.light_glitch.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.LIGHT_GLITCH.opener | LIGHT_GLITCH | @${activeUser} 你看燈是不是又閃了 / @${activeUser} 那盞燈剛剛抖一下 / @${activeUser} 你有看到亮度在跳嗎 / @${activeUser} 那個燈真的很不穩 / @${activeUser} 你那邊也看到忽明忽暗嗎 / @${activeUser} 我覺得有人在碰開關 / @${activeUser} 你盯一下那個燈 / @${activeUser} 這燈光變化太怪了吧 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.name_call.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.NAME_CALL.followUp | NAME_CALL | @${activeUser} 那聲音離你超近 / @${activeUser} 我不確定那是不是人聲 / @${activeUser} 你先別回頭 / @${activeUser} 我耳朵直接麻掉 / @${activeUser} 我剛剛真的有聽到你名字 / @${activeUser} 你有沒有聽見第二次 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.name_call.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.NAME_CALL.opener | NAME_CALL | @${activeUser} 剛剛有人叫你名字嗎 / @${activeUser} 你有聽到有人喊你嗎 / @${activeUser} 我好像聽到有人叫你 / @${activeUser} 你名字剛剛是不是被叫了 / @${activeUser} 聊天室有人聽到叫名嗎 / @${activeUser} 你剛剛有回頭嗎 / @${activeUser} 我怎麼聽到有人喊你 / @${activeUser} 你那邊是不是也聽到了 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.tv_event.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.TV_EVENT.followUp | TV_EVENT | @${activeUser} 你真的沒看到我嗎 / @${activeUser} 我剛剛就在你後面耶 / @${activeUser} 你不要嚇我說你沒看見 / @${activeUser} 我剛剛真的看到有影子 / @${activeUser} 你再看一次拜託 / @${activeUser} 這樣我更不敢看了 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.tv_event.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.TV_EVENT.opener | TV_EVENT | @${activeUser} 你有看到畫面抖一下嗎 / @${activeUser} 你剛剛有看到亮一下嗎 / @${activeUser} 你那邊畫面有跳嗎 / @${activeUser} 你看電視是不是動了一下 / @${activeUser} 你有沒有看到那個閃動 / @${activeUser} 你那邊畫面有怪怪的嗎 / @${activeUser} 你是不是也看到它在動 / @${activeUser} 你剛那下有看到吧 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.viewer_spike.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.VIEWER_SPIKE.followUp | VIEWER_SPIKE | @${activeUser} 這波人潮有點不對勁 / @${activeUser} 我心裡反而更毛了 / @${activeUser} 大家好像都在等什麼 / @${activeUser} 這時候暴增很怪耶 / @${activeUser} 你有看到彈幕忽然變快嗎 / @${activeUser} 我感覺有人在靠近 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.viewer_spike.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.VIEWER_SPIKE.opener | VIEWER_SPIKE | @${activeUser} 你看人數是不是突然跳了 / @${activeUser} 人數剛剛衝上去你有看到嗎 / @${activeUser} 你那邊人數也暴增嗎 / @${activeUser} 聊天室剛剛突然塞滿了耶 / @${activeUser} 你看一下人數欄好怪 / @${activeUser} 你有發現人數在跳嗎 / @${activeUser} 這波人數上升太快了吧 / @${activeUser} 人怎麼突然湧進來了 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.voice_confirm.followUp | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.VOICE_CONFIRM.followUp | VOICE_CONFIRM | @${activeUser} 我剛剛真的聽到一聲 / @${activeUser} 那聲音不像風耶 / @${activeUser} 聊天室有人也聽到了 / @${activeUser} 不是我在鬧你啦 / @${activeUser} 你再聽一次看看 / @${activeUser} 我雞皮疙瘩直接起來 | Classic event dialogue variants selected by event phase. |
+| classic.event_dialog.voice_confirm.opener | event_dialog | active | src/core/events/eventDialogs.ts#EVENT_DIALOGS.VOICE_CONFIRM.opener | VOICE_CONFIRM | @${activeUser} 你那邊現在有開聲音嗎 / @${activeUser} 你有聽到一點怪聲嗎 / @${activeUser} 你耳機現在是開著的嗎 / @${activeUser} 你那邊是不是有聲音飄過去 / @${activeUser} 你剛剛有聽見嗎 / @${activeUser} 你先聽一下有沒有異音 / @${activeUser} 你那邊喇叭有開吧 / @${activeUser} 你是不是也聽到了 | Classic event dialogue variants selected by event phase. |
+| classic.event_reaction.footsteps | event_reaction | active | src/core/events/eventReactions.ts#EVENT_REACTION_POOL.footsteps | FOOTSTEPS | 腳步聲越來越近了 / 我聽到有人在走 / 那個節奏超像在靠近 / 這下我完全不敢眨眼 / 是不是停在門口了 / 我雞皮疙瘩整排起來 / 這聲音太真了吧 / 感覺下一步就進來 / 我先把音量調低一點 / 別突然衝出來拜託 | Classic event reaction wave lines. |
+| classic.event_reaction.ghost | event_reaction | active | src/core/events/eventReactions.ts#EVENT_REACTION_POOL.ghost | GHOST | 我耳朵整個麻掉 / 剛剛那聲超近 / 我真的不敢回頭了 / 這不是錯覺吧 / 背後一陣涼 / 有人也聽到了嗎 / 聊天室先別亂跑 / 這波我心跳直接爆掉 / 太貼臉了吧 / 我手都在抖了 | Classic event reaction wave lines. |
+| classic.event_reaction.light | event_reaction | active | src/core/events/eventReactions.ts#EVENT_REACTION_POOL.light | LIGHT | 燈又跳了 我頭皮發麻 / 那個亮暗切換太怪 / 我盯著看又閃一下 / 這種光線超不舒服 / 像有人在摸開關 / 畫面整個變得更冷了 / 聊天室先別刷太快 / 這裡真的越看越毛 / 我現在超怕突然全黑 / 燈一抖我心也跟著抖 | Classic event reaction wave lines. |
+| classic.fake_ai.anchor.corner | fake_ai | active | src/content/fakeAI/replies.json#replies.anchors.corner.zhOnly |  | 角落那邊怎麼那麼暗 / 你是不是一直避開看角落 / 角落那裡不太對 | Anchor-specific fake AI zh-only lines. |
+| classic.fake_ai.anchor.door | fake_ai | active | src/content/fakeAI/replies.json#replies.anchors.door.zhOnly |  | 門縫那邊好像有動靜 / 不要一直看門那裡 / 門後面很暗 | Anchor-specific fake AI zh-only lines. |
+| classic.fake_ai.anchor.under_table | fake_ai | active | src/content/fakeAI/replies.json#replies.anchors.under_table.zhOnly |  | 桌子下面是不是有聲音 / 你剛剛是不是往桌子那邊看 / 桌子那邊太安靜了 / 不要一直盯著桌腳 | Anchor-specific fake AI zh-only lines. |
+| classic.fake_ai.anchor.window | fake_ai | active | src/content/fakeAI/replies.json#replies.anchors.window.zhOnly |  | 窗邊的光怪怪的 / 你有聽到窗那邊的聲音嗎 / 不要靠窗太近 | Anchor-specific fake AI zh-only lines. |
+| classic.fake_ai.thai_flood | fake_ai | active | src/content/fakeAI/replies.json#replies.thaiFlood |  | ฉันกำลังมองคุณอยู่ / ฉันอยู่ข้างหลังคุณ / คุณเห็นฉันไหม / ข้างหลัง ข้างหลัง ข้างหลัง / อย่าหันกลับมา / คุณไม่ได้อยู่คนเดียว / ฉันเห็นคุณ / เงาอยู่ตรงนั้น / มันใกล้ขึ้นเรื่อยๆ / คุณแน่ใจเหรอ | Thai flood fake AI lines. |
+| classic.fake_ai.urban_legend.th | fake_ai | active | src/content/fakeAI/replies.json#replies.urbanLegend_th |  | เขาว่ากันว่าที่นี่ไม่ว่าง / เงาไม่เคยหายไป / มันเคยเกิดขึ้นมาก่อน / อย่ามองนานเกินไป | Urban legend Thai fake AI lines. |
+| classic.fake_ai.urban_legend.zh | fake_ai | active | src/content/fakeAI/replies.json#replies.urbanLegend_zh |  | 有人說這間老屋的傳聞都從那個位置開始 / 你知道嗎 以前有人在這裡失蹤過 / 這個地方有個很老的說法 | Urban legend Chinese fake AI lines. |
+| classic.persona.caretaker.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.caretaker.DREAD_BUILDUP |  | 這裡壓力真的高 | Classic persona-specific chat pool. |
+| classic.persona.caretaker.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.caretaker.IDLE_BORING |  | 太緊就先喝口水 / 先別硬撐 | Classic persona-specific chat pool. |
+| classic.persona.caretaker.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.caretaker.SOCIAL_REPLY |  | @{tag} 你先休息一下 | Classic persona-specific chat pool. |
+| classic.persona.chaotic.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.chaotic.DREAD_BUILDUP |  | 這氣氛邪到爆 | Classic persona-specific chat pool. |
+| classic.persona.chaotic.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.chaotic.IDLE_BORING |  | 我腦內警報狂叫 / 不行我要先尖叫 | Classic persona-specific chat pool. |
+| classic.persona.chaotic.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.chaotic.SOCIAL_REPLY |  | @{tag} 我跟你一起崩潰 | Classic persona-specific chat pool. |
+| classic.persona.chill.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.chill.DREAD_BUILDUP |  | 安靜到我背脊發涼 | Classic persona-specific chat pool. |
+| classic.persona.chill.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.chill.IDLE_BORING |  | 我先慢慢盯著看 / 這氣氛越靜越怪 | Classic persona-specific chat pool. |
+| classic.persona.chill.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.chill.SOCIAL_REPLY |  | @{tag} 先別慌 我也在看 | Classic persona-specific chat pool. |
+| classic.persona.detective.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.detective.DREAD_BUILDUP |  | 像有人從暗處經過 | Classic persona-specific chat pool. |
+| classic.persona.detective.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.detective.IDLE_BORING |  | 先記這個位置 / 這裡有可疑陰影 | Classic persona-specific chat pool. |
+| classic.persona.detective.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.detective.SOCIAL_REPLY |  | @{tag} 你的線索有用 | Classic persona-specific chat pool. |
+| classic.persona.empath.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.empath.DREAD_BUILDUP |  | 我知道這裡很壓 | Classic persona-specific chat pool. |
+| classic.persona.empath.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.empath.IDLE_BORING |  | 大家先放慢呼吸 / 看不下去就休息一下 | Classic persona-specific chat pool. |
+| classic.persona.empath.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.empath.SOCIAL_REPLY |  | @{tag} 你先穩住 我在 | Classic persona-specific chat pool. |
+| classic.persona.foodie.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.foodie.DREAD_BUILDUP |  | 胃突然縮一下 | Classic persona-specific chat pool. |
+| classic.persona.foodie.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.foodie.IDLE_BORING |  | 我零食差點掉地上 / 這氣氛比辣鍋還衝 | Classic persona-specific chat pool. |
+| classic.persona.foodie.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.foodie.SOCIAL_REPLY |  | @{tag} 我連水都不敢喝 | Classic persona-specific chat pool. |
+| classic.persona.gamer.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.gamer.DREAD_BUILDUP |  | 感覺要觸發事件 | Classic persona-specific chat pool. |
+| classic.persona.gamer.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.gamer.IDLE_BORING |  | 這像王前前搖 / 警戒條快滿了 | Classic persona-specific chat pool. |
+| classic.persona.gamer.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.gamer.SOCIAL_REPLY |  | @{tag} 我也覺得是陷阱 | Classic persona-specific chat pool. |
+| classic.persona.hype.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.hype.DREAD_BUILDUP |  | 感覺等等要爆開 | Classic persona-specific chat pool. |
+| classic.persona.hype.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.hype.IDLE_BORING |  | 欸我現在超清醒 / 這氣氛直接拉滿 | Classic persona-specific chat pool. |
+| classic.persona.hype.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.hype.SOCIAL_REPLY |  | @{tag} 別走 感覺要來了 | Classic persona-specific chat pool. |
+| classic.persona.impatient.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.impatient.DREAD_BUILDUP |  | 別拖 真的快出事 | Classic persona-specific chat pool. |
+| classic.persona.impatient.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.impatient.IDLE_BORING |  | 快回放剛剛那下 / 我想直接看重點 | Classic persona-specific chat pool. |
+| classic.persona.impatient.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.impatient.SOCIAL_REPLY |  | @{tag} 對 就是那裡 | Classic persona-specific chat pool. |
+| classic.persona.latecomer.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.latecomer.DREAD_BUILDUP |  | 我是不是錯過關鍵 | Classic persona-specific chat pool. |
+| classic.persona.latecomer.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.latecomer.IDLE_BORING |  | 我剛進來就這麼硬 / 有人補前情嗎 | Classic persona-specific chat pool. |
+| classic.persona.latecomer.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.latecomer.SOCIAL_REPLY |  | @{tag} 可以幫我補一下嗎 | Classic persona-specific chat pool. |
+| classic.persona.meme.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.meme.DREAD_BUILDUP |  | 這裡很像恐怖梗開場 | Classic persona-specific chat pool. |
+| classic.persona.meme.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.meme.IDLE_BORING |  | 我腦內已經自動配音 / 聊天室等下要炸 | Classic persona-specific chat pool. |
+| classic.persona.meme.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.meme.SOCIAL_REPLY |  | @{tag} 你這句太真了 | Classic persona-specific chat pool. |
+| classic.persona.minimalist.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.minimalist.DREAD_BUILDUP |  | 不妙 | Classic persona-specific chat pool. |
+| classic.persona.minimalist.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.minimalist.IDLE_BORING |  | 怪 / 有感 | Classic persona-specific chat pool. |
+| classic.persona.minimalist.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.minimalist.SOCIAL_REPLY |  | @{tag} 懂 | Classic persona-specific chat pool. |
+| classic.persona.nervous.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.nervous.DREAD_BUILDUP |  | 我腦袋一直補畫面 | Classic persona-specific chat pool. |
+| classic.persona.nervous.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.nervous.IDLE_BORING |  | 我手心又出汗了 / 現在這種沒事最可怕 | Classic persona-specific chat pool. |
+| classic.persona.nervous.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.nervous.SOCIAL_REPLY |  | @{tag} 你有看到剛剛那下嗎 | Classic persona-specific chat pool. |
+| classic.persona.observer.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.observer.DREAD_BUILDUP |  | 前後看起來有落差 | Classic persona-specific chat pool. |
+| classic.persona.observer.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.observer.IDLE_BORING |  | 畫面邊緣有點飄 / 亮度剛剛掉一拍 | Classic persona-specific chat pool. |
+| classic.persona.observer.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.observer.SOCIAL_REPLY |  | @{tag} 你講的點有對上 | Classic persona-specific chat pool. |
+| classic.persona.polite.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.polite.DREAD_BUILDUP |  | 失禮了 但真的怪 | Classic persona-specific chat pool. |
+| classic.persona.polite.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.polite.IDLE_BORING |  | 借過我補一句 這裡很冷 / 請大家留意右下角 | Classic persona-specific chat pool. |
+| classic.persona.polite.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.polite.SOCIAL_REPLY |  | @{tag} 感謝提醒 我有看到 | Classic persona-specific chat pool. |
+| classic.persona.quiet.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.quiet.DREAD_BUILDUP |  | 這裡不太對勁 | Classic persona-specific chat pool. |
+| classic.persona.quiet.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.quiet.IDLE_BORING |  | 嗯 我有感 / 我會一直看著這裡 | Classic persona-specific chat pool. |
+| classic.persona.quiet.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.quiet.SOCIAL_REPLY |  | @{tag} 我也聽到了 | Classic persona-specific chat pool. |
+| classic.persona.skeptical.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.skeptical.DREAD_BUILDUP |  | 這感覺不像單純錯覺 | Classic persona-specific chat pool. |
+| classic.persona.skeptical.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.skeptical.IDLE_BORING |  | 先不要太快下結論 / 我想再看一次 | Classic persona-specific chat pool. |
+| classic.persona.skeptical.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.skeptical.SOCIAL_REPLY |  | @{tag} 先看前後反應再說 | Classic persona-specific chat pool. |
+| classic.persona.sleepy.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.sleepy.DREAD_BUILDUP |  | 這下把我嚇醒 | Classic persona-specific chat pool. |
+| classic.persona.sleepy.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.sleepy.IDLE_BORING |  | 我本來快睡著了 / 現在眼睛直接張開 | Classic persona-specific chat pool. |
+| classic.persona.sleepy.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.sleepy.SOCIAL_REPLY |  | @{tag} 我剛剛也抖一下 | Classic persona-specific chat pool. |
+| classic.persona.storyteller.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.storyteller.DREAD_BUILDUP |  | 節奏像在等人回頭 | Classic persona-specific chat pool. |
+| classic.persona.storyteller.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.storyteller.IDLE_BORING |  | 這房間像在憋氣 / 畫面像有人貼牆走 | Classic persona-specific chat pool. |
+| classic.persona.storyteller.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.storyteller.SOCIAL_REPLY |  | @{tag} 你那句很像前兆 | Classic persona-specific chat pool. |
+| classic.persona.troll.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.troll.DREAD_BUILDUP |  | 我看等等一定有事 | Classic persona-specific chat pool. |
+| classic.persona.troll.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.troll.IDLE_BORING |  | 這鏡頭很會折磨人 / 欸這畫面是在釣人吧 | Classic persona-specific chat pool. |
+| classic.persona.troll.social_reply | ambient_chat | active | src/chat/ChatPools.ts#PERSONA_POOLS.troll.SOCIAL_REPLY |  | @{tag} 先深呼吸 不然先關彈幕 | Classic persona-specific chat pool. |
+| classic.pool.dread_buildup | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.DREAD_BUILDUP |  | 我背後開始發涼了 / 這感覺越來越不對 | Classic fallback pool by chat message type. |
+| classic.pool.fear_self_doubt | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.FEAR_SELF_DOUBT |  | 我是不是自己嚇自己 / 越看越懷疑是我腦補 | Classic fallback pool by chat message type. |
+| classic.pool.idle_boring | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.IDLE_BORING |  | 今天這裡就是一直吊著人 / 我一直在等下一個動靜 | Classic fallback pool by chat message type. |
+| classic.pool.safe_fallback | fallback | active | src/chat/ChatPools.ts#SAFE_FALLBACK_POOL |  | 先等一下 我雞皮疙瘩起來了 / 這氣氛讓我不敢眨眼 / 我整個人僵住了 / 有人也覺得心裡發毛嗎 / 先別刷太快 我還在抖 / 我剛剛差點把手機丟出去 / 這種安靜最可怕 / 我耳機戴著整個不舒服 / 你們先講話 我有點不敢看 / 我現在只想先深呼吸 / 這畫面越看越不對 / 我真的有被嚇到 | Shared safe fallback pool used by classic engine and App lint rerolls. |
+| classic.pool.scene_flicker_react | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.SCENE_FLICKER_REACT |  | 亮度變了 / 剛剛是不是暗一下 / 那個光怪怪的 / 我看到閃一下 / 那個角落有動 / 不是我眼花吧 / 是不是燈壞了 / 怎麼忽明忽暗 / 那個影子怪怪的 / 有東西動 | Classic fallback pool by chat message type. |
+| classic.pool.sfx_react_fan | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.SFX_REACT_FAN |  | 風扇聲是不是怪怪的 / 剛剛風扇聲好像變重了 / 你們有沒有覺得聲音不太一樣 / 可能我錯覺 但我聽了不舒服 / 我戴耳機整個毛起來 / 那個聲音忽然壓過來 我好不舒服 / 剛剛那陣聲音讓我背脊發緊 / 我怎麼聽到一種越靠越近的感覺 / 這個嗡嗡聲讓我心裡一直發毛 / 你們也有聽到那種悶悶的變化嗎 / 那聲音一下輕一下重 我快不敢聽 / 我耳機裡那股聲音怪到不行 | Classic fallback pool by chat message type. |
+| classic.pool.sfx_react_footsteps | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.SFX_REACT_FOOTSTEPS |  | 有腳步聲吧 / 你們有聽到走路聲嗎 / 剛剛那個是踩地板嗎 / 好像有人在走 / 不是風聲 / 那個不是錯覺吧 / 我有聽到 / 有人走過去 / 那聲音靠近了 / 好像在旁邊 / 不要嚇我 / 這太怪了 | Classic fallback pool by chat message type. |
+| classic.pool.sfx_react_ghost | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.SFX_REACT_GHOST |  | 不對勁 / 有點怪 / 你們有聽到嗎 / 那不是我 / 我起雞皮疙瘩了 / 等一下 / 剛剛那個是什麼 / 我不敢看了 / 有點毛 / 那聲音不正常 / 你們不要亂講 / 我覺得怪怪的 / 是不是有人 / 這樣不太對 / 好像有東西 | Classic fallback pool by chat message type. |
+| classic.pool.social_reply | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.SOCIAL_REPLY |  | @{tag} 我也有同感 / @{tag} 你這句太關鍵 | Classic fallback pool by chat message type. |
+| classic.pool.system_prompt | ambient_chat | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.SYSTEM_PROMPT |  | 先穩住 / 大家慢慢看 | Classic fallback pool by chat message type. |
+| classic.pool.ui_status | ui_placeholder | active | src/chat/ChatPools.ts#TYPE_FALLBACK_POOLS.UI_STATUS |  | 系統已就緒 | Classic fallback pool by chat message type. |
+| classic.qna.fear_challenge_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.fear_challenge_flow.steps.s1.questionVariants | FEAR_CHALLENGE · fear_challenge_flow · s1 | 你要硬撐還是先退一步？ / 要不要先保守一點？ | Classic QnA question variants. |
+| classic.qna.fear_challenge_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | FEAR_CHALLENGE · fear_challenge_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.ghost_ping_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.ghost_ping_flow.steps.s1.questionVariants | GHOST_PING · ghost_ping_flow · s1 | 你要我現在回頭看畫面嗎？ / 要不要立刻回看剛剛那一段？ | Classic QnA question variants. |
+| classic.qna.ghost_ping_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | GHOST_PING · ghost_ping_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.light_glitch_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.light_glitch_flow.steps.s1.questionVariants | LIGHT_GLITCH · light_glitch_flow · s1 | 你要我追一下光源位置嗎？ / 要不要先查燈光來源？ | Classic QnA question variants. |
+| classic.qna.light_glitch_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | LIGHT_GLITCH · light_glitch_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.name_call_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.name_call_flow.steps.s1.questionVariants | NAME_CALL · name_call_flow · s1 | 你要我直接喊回去嗎？ / 要不要回應那個叫名聲？ | Classic QnA question variants. |
+| classic.qna.name_call_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | NAME_CALL · name_call_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.tv_event_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.tv_event_flow.steps.s1.questionVariants | TV_EVENT · tv_event_flow · s1 | 你剛剛有看到螢幕閃爍嗎？ / 那一下你有看到畫面閃一下嗎？ | Classic QnA question variants. |
+| classic.qna.tv_event_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | TV_EVENT · tv_event_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.tv_event_flow.s2.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.tv_event_flow.steps.s2.questionVariants | TV_EVENT · tv_event_flow · s2 | 要不要把燈光異常事件也叫出來？ / 要不要連鎖觸發燈光事件？ | Classic QnA question variants. |
+| classic.qna.tv_event_flow.s2.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | TV_EVENT · tv_event_flow · s2 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.viewer_spike_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.viewer_spike_flow.steps.s1.questionVariants | VIEWER_SPIKE · viewer_spike_flow · s1 | 你要我先穩住聊天室節奏嗎？ / 現在先控一下聊天室嗎？ | Classic QnA question variants. |
+| classic.qna.viewer_spike_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | VIEWER_SPIKE · viewer_spike_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.viewer_spike_flow.s2.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.viewer_spike_flow.steps.s2.questionVariants | VIEWER_SPIKE · viewer_spike_flow · s2 | 要順便做恐懼挑戰嗎？ / 要不要接續恐懼挑戰事件？ | Classic QnA question variants. |
+| classic.qna.viewer_spike_flow.s2.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | VIEWER_SPIKE · viewer_spike_flow · s2 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.voice_confirm_flow.s1.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.voice_confirm_flow.steps.s1.questionVariants | VOICE_CONFIRM · voice_confirm_flow · s1 | 你覺得那聲音是從門邊還是窗邊來的？ / 你剛聽到的聲音比較像門口還是窗邊？ | Classic QnA question variants. |
+| classic.qna.voice_confirm_flow.s1.retry | qna_retry | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.voice_confirm_flow.steps.s1.retryPromptVariants | VOICE_CONFIRM · voice_confirm_flow · s1 | 再選一次：門邊 或 窗邊。 | Classic QnA retry prompt variants. |
+| classic.qna.voice_confirm_flow.s1.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | VOICE_CONFIRM · voice_confirm_flow · s1 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.qna.voice_confirm_flow.s1.unknown | qna_unknown | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.voice_confirm_flow.steps.s1.unknownPromptVariants | VOICE_CONFIRM · voice_confirm_flow · s1 | 先不用急，想一下聲音比較靠哪邊。 | Classic QnA unknown/help prompt variants. |
+| classic.qna.voice_confirm_flow.s2.prompt | qna_prompt | active | src/game/qna/qnaFlows.ts#QNA_FLOWS.voice_confirm_flow.steps.s2.questionVariants | VOICE_CONFIRM · voice_confirm_flow · s2 | 你要我先追這條線索嗎？ / 這條線索要繼續追嗎？ | Classic QnA question variants. |
+| classic.qna.voice_confirm_flow.s2.runtime_wrapper | qna_prompt | inferred_runtime_wrapper | src/app/App.tsx#line = `@${taggedUser} ${asked.text}（選項：${optionLabels}）` | VOICE_CONFIRM · voice_confirm_flow · s2 | @{taggedUser} {question}（選項：{optionLabels}） | Actual classic chat line wrapper assembled in App before dispatch. |
+| classic.system.system_prompt | ambient_chat | active | src/chat/ChatPools.ts#SYSTEM_POOLS.system_prompt |  | 先穩住 這間房的節奏又變了 / 大家先別急 我們慢慢盯 / 聊天室先安靜一下看畫面 | Classic system/UI pool stored in ChatPools. |
+| classic.system.ui_status | ui_placeholder | active | src/chat/ChatPools.ts#SYSTEM_POOLS.ui_status |  | 聲音已啟用 / 畫面已準備完成 / 初始化完成 / 部分非必要素材載入失敗 遊戲可正常進行 | Classic system/UI pool stored in ChatPools. |
+
+## sandbox
+
+| key | category | status | source | flow/gate | text / variants | notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| sandbox.debug.warmup_reply | debug_text | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_DEBUG_TEXT.warmupReply | WAIT_WARMUP_REPLY | 暖場測試回覆 | Debug smoke-test text for sandbox warmup reply simulation. |
+| sandbox.glitch.answer_eval.1 | sandbox_glitch | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_GLITCH_BURST_LINES | ANSWER_EVAL | 我這邊送出一直失敗 | Glitch burst line emitted by viewer_118 during ANSWER_EVAL. |
+| sandbox.glitch.answer_eval.2 | sandbox_glitch | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_GLITCH_BURST_LINES | ANSWER_EVAL | 聊天室是不是延遲了 | Glitch burst line emitted by viewer_203 during ANSWER_EVAL. |
+| sandbox.glitch.answer_eval.3 | sandbox_glitch | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_GLITCH_BURST_LINES | ANSWER_EVAL | 網路怪怪的，剛剛卡一下 | Glitch burst line emitted by viewer_409 during ANSWER_EVAL. |
+| sandbox.hint.help_fallback | sandbox_help_hint | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.helpHintFallback | consonant_answer | 先想一下圖像記憶那個關鍵字。 | Fallback help hint when shared memory hint is unavailable. |
+| sandbox.hint.help_memory | sandbox_help_hint | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.helpHintWithMemory | consonant_answer | 想一下{imageMemoryHint}那個。 | Help hint template using shared image-memory hint token. |
+| sandbox.preheat.1 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | 今天怎麼這麼多人一起在線？ | Preheat ambient chat line dispatched from App runtime. |
+| sandbox.preheat.2 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | viewer_721 加入聊天室 | Preheat system join line dispatched from App runtime. |
+| sandbox.preheat.3 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | 我有點懷疑這台是真的假的直播… | Preheat ambient chat line dispatched from App runtime. |
+| sandbox.preheat.4 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | 上次這間真的很多人說看到鬼影。 | Preheat ambient chat line dispatched from App runtime. |
+| sandbox.preheat.5 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | viewer_823 加入聊天室 | Preheat system join line dispatched from App runtime. |
+| sandbox.preheat.6 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | @activeUser 你是第一次看這個台嗎？ | Preheat ambient chat line dispatched from App runtime. |
+| sandbox.preheat.7 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | 剛剛鏡頭邊緣是不是有東西飄過去？ | Preheat ambient chat line dispatched from App runtime. |
+| sandbox.preheat.8 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | viewer_477 加入聊天室 | Preheat system join line dispatched from App runtime. |
+| sandbox.preheat.9 | sandbox_preheat | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE | PREHEAT_CHAT | 先暖場聊天，等等再看後面有沒有異常。 | Preheat ambient chat line dispatched from App runtime. |
+| sandbox.prompt.reveal_prompt | sandbox_prompt | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.revealPrompt | consonant_answer | 請讀出剛剛閃過的字：{consonant} | Prompt template shown before sandbox consonant reply gate opens. |
+| sandbox.prompt.stub.crowd_react_word | sandbox_prompt | parallel | src/sandbox/chat/chat_engine.ts#SANDBOX_CHAT_ENGINE_STUB_LINES.crowdReactWord | CROWD_REACT_WORD | ??? | Sandbox chat engine stub line; placeholder until full crowd-react registry exists. |
+| sandbox.prompt.stub.reasoning_wave | sandbox_prompt | parallel | src/sandbox/chat/chat_engine.ts#SANDBOX_CHAT_ENGINE_STUB_LINES.reasoningWave | DISCUSS_PRONOUNCE | 我覺得不對勁 | Sandbox chat engine stub reasoning line. |
+| sandbox.prompt.tag_question | sandbox_tag_question | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.tagQuestion | TAG_PLAYER_{index} · consonant_answer | @{activeUser} 第 {index} 題，請直接回答你看到的子音。 | Runtime wrapper for dynamic tag question lines emitted by App. |
+| sandbox.vip_summary.1 | sandbox_vip_summary | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1 | VIP_SUMMARY_1 | VIP 總結：先把剛剛那個單字記住，下一步確認發音。 | VIP summary line dispatched during sandbox word-reveal sequence. |
+| sandbox.vip_summary.2 | sandbox_vip_summary | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_2 | VIP_SUMMARY_2 | VIP 總結：發音方向差不多了，最後確認這個詞在指誰。 | Second VIP summary line dispatched during sandbox word-reveal sequence. |
+| sandbox.word_map.n01_q01_wait | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q01_wait | รอ / 等 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q02_house | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q02_house | บ้าน / 房子 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q03_child | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q03_child | เด็ก / 孩子 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q04_night | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q04_night | กลางคืน / 夜晚 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q05_door | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q05_door | ประตู / 門 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q06_sound | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q06_sound | เสียง / 聲音 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q07_wind | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q07_wind | ลม / 風 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q08_return | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q08_return | กลับ / 回來 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q09_why | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q09_why | ทำไม / 為什麼 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+| sandbox.word_map.n01_q10_turn | sandbox_prompt | parallel | src/modes/sandbox_story/sandboxConsonantWordMap.ts#SANDBOX_CONSONANT_WORD_MAP | n01_q10_turn | หัน / 轉頭 | Legacy/parallel sandbox word map retained for compatibility with night content. |
+
+## shared
+
+| key | category | status | source | flow/gate | text / variants | notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| shared.classic.safe_fallback | fallback | parallel | src/chat/ChatPools.ts#SAFE_FALLBACK_POOL |  | 先等一下 我雞皮疙瘩起來了 / 這氣氛讓我不敢眨眼 / 我整個人僵住了 / 有人也覺得心裡發毛嗎 / 先別刷太快 我還在抖 / 我剛剛差點把手機丟出去 / 這種安靜最可怕 / 我耳機戴著整個不舒服 / 你們先講話 我有點不敢看 / 我現在只想先深呼吸 / 這畫面越看越不對 / 我真的有被嚇到 | Fallback pool remains shared across classic runtime, App lint reroll, and legacy v2 engine. |
+| shared.consonant.ก | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ก | 雞的台語 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ข | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ข | 「恐」龍 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ค | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ค | 空洞 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ง | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ง | ng /ŋ/ | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.จ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | จ | 英文 J | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ฉ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ฉ | 敲小鈸噴氣 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ช | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ช | 醜龍 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ซ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ซ | S | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ด | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ด | 豆芽 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ต | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ต | 坍塌 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ถ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ถ | 雞躺蛋 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ท | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ท | 駱駝 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.น | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | น | N | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.บ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | บ | 葉子 B | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ป | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ป | 魚憋氣 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ผ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ผ | 蜜蜂噴氣 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ฝ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ฝ | 掀蓋子 ffff | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.พ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | พ | PP | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ฟ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ฟ | ffff | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ม | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ม | mmm | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ย | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ย | Y | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ร | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ร | rrr | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ล | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ล | L 香蕉 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ว | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ว | W 戒指 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ส | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ส | 雞脖子 S | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ห | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ห | 箱子哈氣 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ฬ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ฬ | l 音 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.อ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | อ | 空水盆喉塞 | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.consonant.ฮ | sandbox_help_hint | active | src/shared/consonant-engine/consonantBank.ts#AUTHORITATIVE_CONSONANT_BANK | ฮ | ha | Shared consonant memory hint used by sandbox help hint composition. |
+| shared.hint.consonant_template | sandbox_help_hint | active | src/shared/hints/consonantHint.ts#buildConsonantHint |  | 提示：這題子音是「{expected}」（可用：{alias1} / {alias2}），請直接輸入子音；不確定可以回「不知道」。 | Shared hint template builder rendered with placeholder tokens for audit visibility. |
+| shared.question.n01_q01_wait | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q01_wait | 子音題：ร | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q02_house | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q02_house | 子音題：บ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q03_child | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q03_child | 子音題：ด | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q04_night | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q04_night | 子音題：ก | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q05_door | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q05_door | 子音題：ป | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q06_sound | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q06_sound | 子音題：ส | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q07_wind | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q07_wind | 子音題：ล | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q08_return | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q08_return | 子音題：ก | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q09_why | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q09_why | 子音題：ท | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n01_q10_turn | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n01_q10_turn | 子音題：ห | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q01_side | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q01_side | 子音題：ข | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q02_i | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q02_i | 子音題：ฉ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q03_cave | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q03_cave | 子音題：ถ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q04_ghost | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q04_ghost | 子音題：ผ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q05_rain | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q05_rain | 子音題：ฝ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q06_meet | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q06_meet | 子音題：จ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q07_eye | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q07_eye | 子音題：ต | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q08_out | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q08_out | 子音題：อ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q09_person | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q09_person | 子音題：ค | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n02_q10_snake | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n02_q10_snake | 子音題：ง | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q01_slow | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q01_slow | 子音題：ช | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q02_hide | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q02_hide | 子音題：ซ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q03_sleep | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q03_sleep | 子音題：น | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q04_take | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q04_take | 子音題：พ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q05_listen | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q05_listen | 子音題：ฟ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q06_look | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q06_look | 子音題：ม | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q07_stay | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q07_stay | 子音題：ย | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q08_run | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q08_run | 子音題：ว | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q09_room | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q09_room | 子音題：ฮ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.question.n03_q10_lula | sandbox_prompt | active | src/shared/consonant-engine/questionBank.ts#SHARED_CONSONANT_QUESTION_BANK | n03_q10_lula | 子音題：ฬ | Shared consonant prompt bank used by classic adapter and import audit. |
+| shared.runtime.sandbox_prompt_template | sandbox_prompt | active | src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.revealPrompt |  | 請讀出剛剛閃過的字：{consonant} | Shared prompt template consumed by sandboxStoryMode and App. |
+| ui.chat.latest.default | ui_placeholder | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.latestMessage |  | 最新訊息 | Jump-to-latest button label. |
+| ui.chat.latest.mention | ui_placeholder | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.latestMentionMessage |  | @你・跳到最新 | Jump-to-latest mention button label. |
+| ui.chat.pinned.highlight_only | debug_text | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.pinnedHighlightOnly |  | （highlight only：未 armed，不能正式回覆） | Debug note when pinned sandbox content is highlight-only. |
+| ui.chat.pinned.missing_source | fallback | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.pinnedMissingSource |  | （原始訊息已不存在） | Pinned preview fallback when original source message is gone. |
+| ui.chat.placeholder | ui_placeholder | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.chatInputPlaceholder |  | 傳送訊息 | Chat input placeholder shown in ChatPanel. |
+| ui.chat.send.initializing | ui_placeholder | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.sendInitializing |  | 初始化中… | Chat send button label while app is booting. |
+| ui.chat.send.ready | ui_placeholder | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.sendReady |  | 送出 | Default chat send button label. |
+| ui.chat.send.sending | ui_placeholder | active | src/content/chat-content/appRuntimeContent.ts#UI_TEXT.sendSending |  | 送出中… | Chat send button label while sending. |

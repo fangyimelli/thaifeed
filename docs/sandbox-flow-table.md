@@ -452,3 +452,16 @@ Smoke output now must include:
 - debug can only reflect `replyGate / canReply / blockReason / lastReplyEval / pinnedReply(source/id/visibilityReason)`.
 - removed conflict: sandbox local pinned state as authority.
 - removed conflict: sandbox preview gated by classic `qnaStatus`.
+
+## 2026-03-22 Sandbox chat-content extraction notes
+
+| Content area | Runtime owner | Content owner | Status |
+| --- | --- | --- | --- |
+| PREHEAT chat/join sequence | `src/app/App.tsx` orchestration loop | `src/content/chat-content/appRuntimeContent.ts#SANDBOX_PREHEAT_CHAT_SEQUENCE` | active |
+| Reveal prompt template | `sandboxStoryMode` / `App.tsx` | `src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.revealPrompt` | active |
+| Help hint template/fallback | `consumePlayerReply` in `App.tsx` | `src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.helpHint*` + shared consonant bank | active |
+| VIP summary lines | `App.tsx` sandbox step runner | `src/content/chat-content/appRuntimeContent.ts#SANDBOX_VIP_SUMMARY_LINES` | active |
+| ANSWER_EVAL glitch burst | `App.tsx` sandbox step runner | `src/content/chat-content/appRuntimeContent.ts#SANDBOX_GLITCH_BURST_LINES` | active |
+| Tag question wrapper | `App.tsx` sandbox step runner | `src/content/chat-content/appRuntimeContent.ts#SANDBOX_PROMPT_TEMPLATES.tagQuestion` | active |
+| Stub chat-engine lines | `src/sandbox/chat/chat_engine.ts` | same file + manifest status tagging | parallel |
+| Legacy word map | `src/modes/sandbox_story/sandboxConsonantWordMap.ts` | same file + manifest status tagging | parallel |

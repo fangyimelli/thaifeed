@@ -1,7 +1,7 @@
 import { pickWithoutRecent } from './dedupe';
 import type { EventLinePhase, StoryEventDialog, StoryEventKey } from './eventTypes';
 
-const dialogs: Record<StoryEventKey, StoryEventDialog> = {
+export const EVENT_DIALOGS: Record<StoryEventKey, StoryEventDialog> = {
   VOICE_CONFIRM: {
     opener: [
       { id: 'voice_open_1', text: '@${activeUser} 你那邊現在有開聲音嗎' },
@@ -160,7 +160,7 @@ export function pickDialog(
   activeUser: string,
   recentIds: string[]
 ): { id: string; text: string; repeatBlocked: boolean } {
-  const bucket = dialogs[key][phase] ?? dialogs[key].followUp;
+  const bucket = EVENT_DIALOGS[key][phase] ?? EVENT_DIALOGS[key].followUp;
   const { option, repeatBlocked } = pickWithoutRecent(bucket, recentIds, phase === 'opener' ? 5 : 4);
   return {
     id: option.id,

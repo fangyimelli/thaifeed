@@ -1,25 +1,41 @@
-## 2026-03-20 Sandbox pinned reply first-submit repair
+## 2026-03-22 Chat content manifest extraction
 
 ### Scope
-- Sandbox integration mode only.
-- No classic mode changes.
+- Classic mode + sandbox mode.
+- No intentional flow/gate/state behavior change.
+- Goal: create an editable, backfillable, verifiable content layer for real chat-visible text.
 
-### Audit summary
-1. sandbox pinned reply authority was split between `App.tsx` local state and sandbox runtime state.
-2. sandbox reply preview was still gated by classic `qnaStatus`, so first-turn sandbox prompts could miss the same-turn pinned render.
-3. debug pinned reason/source used a different derivation path than the formal UI.
+### Implemented
+- Added `src/content/chat-content/schema.ts` shared schema.
+- Added `src/content/chat-content/chatContentManifest.ts` registry covering classic, sandbox, and shared chat sources.
+- Added `src/content/chat-content/appRuntimeContent.ts` for App-owned runtime templates and fixed strings.
+- Rewired extracted sandbox/App strings to use the content layer:
+  - preheat sequence
+  - VIP summary lines
+  - glitch burst lines
+  - tag question template
+  - reveal prompt template
+  - help-hint template/fallback
+  - sandbox debug smoke text
+- Rewired ChatPanel UI text to use the shared content layer.
+- Added generated artifacts:
+  - `src/content/chat-content/chatContentManifest.generated.json`
+  - `docs/chat-content-audit-manifest.md`
+- Added regression guard + artifact generation scripts.
 
-### Implemented fix
-- Added authoritative sandbox `pinnedReply` SSOT in `sandboxStoryMode`.
-- Routed prompt pin / auto-pin / clear / advance cleanup through that SSOT.
-- Updated ChatPanel sandbox preview gating to use sandbox authority instead of classic `qnaStatus`.
-- Synced debug pinned reason/source/summary with authoritative pinned state.
-- Added regression guards for pinned SSOT and sandbox preview gating.
+### Runtime/source classification added
+- `active`
+- `legacy`
+- `parallel`
+- `inferred_runtime_wrapper`
 
 ### Verification
+- `npm run generate:chat-content-artifacts`
+- `npm run test:chat-content-guards`
+- `npm run test:sandbox-guards`
 - `npm run build`
-- `node scripts/sandbox-v2-regression-guards.mjs`
 
-### Deprecated/Removed
-- Removed sandbox local `useState(sandboxPinnedEntry)` as the authoritative pinned source.
-- Removed sandbox preview dependence on classic `qnaStatus`.
+### Deprecated/Removed ownership
+- Removed direct ownership of extracted sandbox fixed strings from `src/app/App.tsx`.
+- Removed direct ownership of shared chat UI text from `src/ui/chat/ChatPanel.tsx`.
+- Retained but explicitly marked legacy/parallel sources in the manifest where dual-track content still exists.

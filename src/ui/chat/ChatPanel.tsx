@@ -6,6 +6,7 @@ import { isMobileDevice } from '../../utils/isMobile';
 import type { SendResult, SendSource } from '../../app/App';
 import { getChatScrollContainer, registerChatScrollContainer } from '../../chat/scrollController';
 import { isDebugEnabled } from '../../debug/debugGate';
+import { UI_TEXT } from '../../content/chat-content/appRuntimeContent';
 
 type ScrollMetrics = {
   top: number;
@@ -524,7 +525,7 @@ export default function ChatPanel({
             clearMentionJumpHintPulse();
           }}
         >
-          {mentionJumpHintActive ? '@你・跳到最新' : '最新訊息'}
+          {mentionJumpHintActive ? UI_TEXT.latestMentionMessage : UI_TEXT.latestMessage}
         </button>
       )}
 
@@ -536,8 +537,8 @@ export default function ChatPanel({
           aria-live="polite"
         >
           <div className="replyPinHeader">{sandboxPinnedEntry.sourceType === 'auto_pin_freeze' ? `⭐ 高亮提示 · ${sandboxPinnedEntry.author}` : `📌 👑 ${sandboxPinnedEntry.author}`}</div>
-          <div className="replyPinText">{sandboxPinnedEntry.body.trim() || '（原始訊息已不存在）'}</div>
-          {pinnedHighlightOnly && <div className="replyPinText">（highlight only：未 armed，不能正式回覆）</div>}
+          <div className="replyPinText">{sandboxPinnedEntry.body.trim() || UI_TEXT.pinnedMissingSource}</div>
+          {pinnedHighlightOnly && <div className="replyPinText">{UI_TEXT.pinnedHighlightOnly}</div>}
         </div>
       )}
 
@@ -579,7 +580,7 @@ export default function ChatPanel({
               event.preventDefault();
             }
           }}
-          placeholder="傳送訊息"
+          placeholder={UI_TEXT.chatInputPlaceholder}
         />
         <button
           type="submit"
@@ -588,7 +589,7 @@ export default function ChatPanel({
             onSendButtonClick?.();
           }}
         >
-          {!isReady ? '初始化中…' : isSending ? '送出中…' : '送出'}
+          {!isReady ? UI_TEXT.sendInitializing : isSending ? UI_TEXT.sendSending : UI_TEXT.sendReady}
         </button>
         <button
           ref={keyboardSinkRef}
