@@ -6,6 +6,7 @@ import {
   editableDir,
   generatedManifestPath,
   loadManifest,
+  loadTsModule,
   repoRoot,
   writerWorkspacePath
 } from './chat-content-artifacts-lib.mjs';
@@ -16,6 +17,10 @@ const directEditableKeys = new Set(Object.keys(authoredContent));
 const modes = ['classic', 'sandbox', 'shared'];
 const writerDocPath = path.join(repoRoot, 'docs/sandbox-chat-writer-workspace.md');
 const reviewDocPath = path.join(repoRoot, 'docs/sandbox-shared-message-review.md');
+
+const { CLASSIC_FLOW_DEFINITION, CLASSIC_FLOW_CONTENT_ROUTES, CLASSIC_CONTENT_OWNERSHIP } = loadTsModule(path.join(repoRoot, 'src/modes/classic/flow/classicFlowDefinition.ts'));
+const { SANDBOX_FLOW_DEFINITION, SANDBOX_FLOW_CONTENT_ROUTES, SANDBOX_CONTENT_OWNERSHIP } = loadTsModule(path.join(repoRoot, 'src/modes/sandbox/flow/sandboxFlowDefinition.ts'));
+const { MODE_OWNERSHIP_MAP, SHARED_FRAMEWORK_OWNERSHIP, LEGACY_COMPATIBILITY_LAYER } = loadTsModule(path.join(repoRoot, 'src/content/chat-content/modeOwnership.ts'));
 
 function sourceOfTruthFor(entry) {
   if (entry.status === 'inferred_runtime_wrapper') return 'runtime_wrapper';
@@ -69,11 +74,8 @@ for (const mode of modes) {
   const categories = [];
   for (const entry of entries) {
     const last = categories[categories.length - 1];
-    if (!last || last.category !== entry.category) {
-      categories.push({ category: entry.category, entries: [entry] });
-    } else {
-      last.entries.push(entry);
-    }
+    if (!last || last.category !== entry.category) categories.push({ category: entry.category, entries: [entry] });
+    else last.entries.push(entry);
   }
   drafts.set(mode, {
     mode,
@@ -112,11 +114,11 @@ for (const [category, count] of Object.entries(countByCategory).sort((a, b) => a
 for (const mode of modes) {
   const entries = (byMode[mode] || []).slice().sort((a, b) => a.key.localeCompare(b.key));
   md += `\n## ${mode}\n\n`;
-  md += '| key | category | status | source | flow/gate | text / variants | notes |\n';
-  md += '| --- | --- | --- | --- | --- | --- | --- |\n';
+  md += '| key | category | owner | ownership | status | source | flow/gate | text / variants | notes |\n';
+  md += '| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
   for (const entry of entries) {
     const flowGate = [entry.flowStep, entry.gateType, entry.eventKey, entry.qnaFlowId, entry.questionId].filter(Boolean).join(' · ');
-    md += `| ${escapePipes(entry.key)} | ${escapePipes(entry.category)} | ${escapePipes(entry.status)} | ${escapePipes(`${entry.sourceFile}#${entry.sourceSymbol}`)} | ${escapePipes(flowGate)} | ${escapePipes(previewText(entry))} | ${escapePipes(entry.notes || '')} |\n`;
+    md += `| ${escapePipes(entry.key)} | ${escapePipes(entry.category)} | ${escapePipes(entry.ownerMode || entry.mode)} | ${escapePipes(entry.ownership || '-')} | ${escapePipes(entry.status)} | ${escapePipes(`${entry.sourceFile}#${entry.sourceSymbol}`)} | ${escapePipes(flowGate)} | ${escapePipes(previewText(entry))} | ${escapePipes(entry.notes || '')} |\n`;
   }
 }
 fs.writeFileSync(path.join(repoRoot, 'docs/chat-content-audit-manifest.md'), md);
@@ -141,6 +143,68 @@ for (const mode of modes) {
   preview += '\n';
 }
 fs.writeFileSync(path.join(repoRoot, 'docs/chat-content-editable-preview.md'), preview);
+
+function buildFlowDoc({ title, mode, definition, routes, ownership }) {
+  let out = `# ${title}\n\n`;
+  out += `Generated from mode-specific flow definition and content map for **${mode}** mode.\n\n`;
+  out += '## Flow definition\n\n';
+  out += '| stepId | purpose | canReply | gateType | uiSurface | allowed categories | next steps | blocked reasons | notes |\n';
+  out += '| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
+  for (const step of definition) {
+    out += `| ${step.stepId} | ${escapePipes(step.stepPurpose)} | ${step.canReply ? 'yes' : 'no'} | ${step.gateType} | ${escapePipes(step.uiSurface.join(', '))} | ${escapePipes(step.allowedMessageCategories.join(', '))} | ${escapePipes(step.nextStepCandidates.join(', '))} | ${escapePipes(step.blockedReasons.join(', '))} | ${escapePipes(step.notes || '')} |\n`;
+  }
+  out += '\n## Step -> categories\n\n';
+  out += '| stepId | primaryCategory | optionalCategories | messagePurpose | tonePackSupport | runtimeSelectionPolicy | notes |\n';
+  out += '| --- | --- | --- | --- | --- | --- | --- |\n';
+  for (const route of routes) {
+    out += `| ${route.stepId} | ${route.primaryCategory} | ${escapePipes((route.optionalCategories || []).join(', '))} | ${escapePipes(route.messagePurpose)} | ${route.tonePackSupport ? 'true' : 'false'} | ${route.runtimeSelectionPolicy} | ${escapePipes(route.notes || '')} |\n`;
+  }
+  out += '\n## Category ownership\n\n';
+  out += '| category | ownership | sourceStatus | allowedStepIds | messagePurpose | tonePackSupport | notes |\n';
+  out += '| --- | --- | --- | --- | --- | --- | --- |\n';
+  for (const row of ownership) {
+    out += `| ${row.category} | ${row.ownership} | ${row.sourceStatus} | ${escapePipes(row.allowedStepIds.join(', '))} | ${escapePipes(row.messagePurpose)} | ${row.tonePackSupport ? 'true' : 'false'} | ${escapePipes(row.notes || '')} |\n`;
+  }
+  return out;
+}
+
+fs.writeFileSync(path.join(repoRoot, 'docs/classic-flow-table.md'), buildFlowDoc({
+  title: 'Classic Flow Table',
+  mode: 'classic',
+  definition: CLASSIC_FLOW_DEFINITION,
+  routes: CLASSIC_FLOW_CONTENT_ROUTES,
+  ownership: CLASSIC_CONTENT_OWNERSHIP
+}));
+
+fs.writeFileSync(path.join(repoRoot, 'docs/sandbox-flow-table.md'), buildFlowDoc({
+  title: 'Sandbox Flow Table',
+  mode: 'sandbox',
+  definition: SANDBOX_FLOW_DEFINITION,
+  routes: SANDBOX_FLOW_CONTENT_ROUTES,
+  ownership: SANDBOX_CONTENT_OWNERSHIP
+}));
+
+let ownershipDoc = '# Mode Ownership Map\n\n';
+ownershipDoc += 'Generated from the mode ownership metadata used by runtime/docs/tooling adapters.\n\n';
+ownershipDoc += '## Shared framework\n\n';
+ownershipDoc += SHARED_FRAMEWORK_OWNERSHIP.framework.map((file) => `- ${file}`).join('\n') + '\n\n';
+ownershipDoc += SHARED_FRAMEWORK_OWNERSHIP.rules.map((rule) => `- ${rule}`).join('\n') + '\n\n';
+ownershipDoc += '## Future entrypoints\n\n';
+ownershipDoc += `- Classic flow: ${MODE_OWNERSHIP_MAP.classic.futureEditEntrypoints.flow}\n`;
+ownershipDoc += `- Classic content: ${MODE_OWNERSHIP_MAP.classic.futureEditEntrypoints.content}\n`;
+ownershipDoc += `- Sandbox flow: ${MODE_OWNERSHIP_MAP.sandbox.futureEditEntrypoints.flow}\n`;
+ownershipDoc += `- Sandbox content: ${MODE_OWNERSHIP_MAP.sandbox.futureEditEntrypoints.content}\n\n`;
+ownershipDoc += '## Legacy / parallel compatibility layer\n\n';
+ownershipDoc += LEGACY_COMPATIBILITY_LAYER.runtimeWrappers.map((item) => `- runtime_wrapper: ${item}`).join('\n') + '\n';
+ownershipDoc += LEGACY_COMPATIBILITY_LAYER.parallelSources.map((item) => `- parallel: ${item}`).join('\n') + '\n\n';
+ownershipDoc += '## Ownership matrix\n\n';
+ownershipDoc += '| scope | owner | future changes go to |\n';
+ownershipDoc += '| --- | --- | --- |\n';
+ownershipDoc += `| classic flow/content | classic mode | ${MODE_OWNERSHIP_MAP.classic.futureEditEntrypoints.flow} / ${MODE_OWNERSHIP_MAP.classic.futureEditEntrypoints.content} |\n`;
+ownershipDoc += `| sandbox flow/content | sandbox mode | ${MODE_OWNERSHIP_MAP.sandbox.futureEditEntrypoints.flow} / ${MODE_OWNERSHIP_MAP.sandbox.futureEditEntrypoints.content} |\n`;
+ownershipDoc += '| shared schema/ui/tooling | shared framework | schema / tooling files listed above only |\n';
+ownershipDoc += '| legacy / parallel adapters | compatibility layer | dedicated migration patch before promotion |\n';
+fs.writeFileSync(path.join(repoRoot, 'docs/mode-ownership-map.md'), ownershipDoc);
 
 const workspace = JSON.parse(fs.readFileSync(writerWorkspacePath, 'utf8'));
 assert.equal(workspace.importBoundary?.workspaceImportsDirectly, false, 'writer workspace must not import directly');
@@ -181,9 +245,7 @@ for (const { batch, entry } of workspaceEntries) {
 }
 
 assert.equal(workspaceKeys.size, editableDraftEntries.length, 'workspace editable totals must match editable drafts');
-for (const entry of editableDraftEntries) {
-  assert(workspaceKeys.has(entry.key), `editable draft key missing from workspace: ${entry.key}`);
-}
+for (const entry of editableDraftEntries) assert(workspaceKeys.has(entry.key), `editable draft key missing from workspace: ${entry.key}`);
 assert.deepEqual(workspace.summary.editableEntriesByMode, workspaceCountsByMode, 'workspace mode totals drift');
 assert.equal(workspace.summary.totalEditableEntries, editableDraftEntries.length, 'workspace totalEditableEntries drift');
 assert.equal(workspace.summary.sandboxEditableEntries, editableDraftEntries.filter((entry) => entry.mode === 'sandbox').length, 'workspace sandbox total drift');
@@ -208,35 +270,6 @@ for (const batch of workspace.batches) {
   writerDoc += `- Must keep tokens: ${(batch.mustKeepTokens || []).join(', ') || 'none'}\n`;
   writerDoc += `- Length caution: ${batch.lengthCaution}\n`;
   writerDoc += `- Keys: ${batch.entries.map((entry) => `\`${entry.key}\``).join(', ')}\n\n`;
-  writerDoc += '| key | current text | tokens | flow step / gate | UI surface | editable | writer notes | suggested direction | hard limits |\n';
-  writerDoc += '| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n';
-  for (const entry of batch.entries) {
-    const flowGate = [entry.relatedFlowStep, entry.relatedGateType].filter(Boolean).join(' / ');
-    const tokens = (entry.tokens || []).map((token) => token.token).join(', ');
-    const currentText = entry.currentText || (entry.currentVariants?.join(' / ') ?? '');
-    writerDoc += `| ${escapePipes(entry.key)} | ${escapePipes(currentText)} | ${escapePipes(tokens)} | ${escapePipes(flowGate)} | ${escapePipes(entry.relatedUiSurface)} | ${entry.reviewStatus === 'approved' ? 'yes' : 'no'} | ${escapePipes(entry.notesForWriter)} | ${escapePipes(entry.toneGoal)} | ${escapePipes(entry.constraints)} |\n`;
-  }
-  writerDoc += '\n';
-  for (const entry of batch.entries) {
-    writerDoc += `#### ${entry.key}\n\n`;
-    writerDoc += `- Current text: ${entry.currentText ? `\`${entry.currentText}\`` : escapePipes(entry.currentVariants?.join(' / ') ?? '')}\n`;
-    writerDoc += `- Tokens: ${(entry.tokens || []).map((token) => `\`${token.token}\``).join(', ') || 'none'}\n`;
-    writerDoc += `- Flow step: ${entry.relatedFlowStep}\n`;
-    writerDoc += `- Gate type: ${entry.relatedGateType}\n`;
-    writerDoc += `- UI surface: ${entry.relatedUiSurface}\n`;
-    writerDoc += `- Text function: ${entry.textFunction}\n`;
-    writerDoc += `- Sentence shape: ${entry.sentenceShape}\n`;
-    writerDoc += `- Atmosphere focus: ${entry.atmosphereFocus.join(' / ')}\n`;
-    writerDoc += `- Usage context: ${entry.usageContext}\n`;
-    writerDoc += `- Scene purpose: ${entry.scenePurpose}\n`;
-    writerDoc += `- Writer notes: ${entry.notesForWriter}\n`;
-    writerDoc += `- Suggested writing direction: ${entry.toneGoal}\n`;
-    writerDoc += `- Non-negotiable constraints: ${entry.constraints}\n`;
-    writerDoc += `- Suggested length: ${entry.suggestedLength}\n`;
-    writerDoc += `- Proposed rewrite slot: ${entry.proposedRewrite ? `\`${entry.proposedRewrite}\`` : '(empty)' }\n`;
-    writerDoc += `- Alt rewrite ideas: ${(entry.altRewriteIdeas || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n`;
-    writerDoc += `- Avoid / banned patterns: ${(entry.bannedPatterns || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n\n`;
-  }
 }
 fs.writeFileSync(writerDocPath, writerDoc);
 
@@ -247,7 +280,6 @@ reviewDoc += 'This document is generated for per-message review only. It does **
 reviewDoc += '## Review boundary\n\n';
 reviewDoc += '- Scope: sandbox mode + shared content layer only.\n';
 reviewDoc += '- Classic mode remains review-first and is intentionally excluded from this packet.\n';
-reviewDoc += '- When `proposedRewrite` is empty, the review packet shows `(pending rewrite)` so you can review the slot without accidentally treating current text as approved new copy.\n';
 reviewDoc += '- `reviewCandidate` below is for human review readability only; it is not an import source.\n\n';
 reviewDoc += '## Totals\n\n';
 reviewDoc += `- total messages in packet: ${reviewEntries.length}\n`;
@@ -255,44 +287,4 @@ reviewDoc += `- sandbox messages: ${workspace.summary.sandboxEditableEntries}\n`
 reviewDoc += `- shared messages: ${workspace.summary.sharedEditableEntries}\n`;
 reviewDoc += `- messages with proposed rewrite filled: ${proposedCount}\n`;
 reviewDoc += `- messages still pending rewrite: ${reviewEntries.length - proposedCount}\n\n`;
-for (const batch of workspace.batches) {
-  reviewDoc += `## ${batch.batchId}\n\n`;
-  reviewDoc += `- Trigger window: ${batch.triggerWindow}\n`;
-  reviewDoc += `- Player activity: ${batch.playerActivity}\n`;
-  reviewDoc += `- Tone function: ${batch.toneFunction}\n`;
-  reviewDoc += `- Must keep tokens: ${(batch.mustKeepTokens || []).join(', ') || 'none'}\n`;
-  reviewDoc += `- Length caution: ${batch.lengthCaution}\n\n`;
-  for (const [index, entry] of batch.entries.entries()) {
-    const currentText = entry.currentText || (entry.currentVariants?.join(' / ') ?? '');
-    const proposedRewrite = typeof entry.proposedRewrite === 'string' && entry.proposedRewrite.trim().length > 0
-      ? entry.proposedRewrite
-      : '(pending rewrite)';
-    const tokenSummary = (entry.tokens || []).map((token) => `\`${token.token}\``).join(', ') || 'none';
-    const tokenDetails = (entry.tokens || []).map((token) => `  - ${token.token}: ${token.description} (${token.runtimeSource})`).join('\n');
-    reviewDoc += `### ${batch.batchId}.${index + 1} — \`${entry.key}\`\n\n`;
-    reviewDoc += `- Mode / category: ${entry.mode} / ${entry.category}\n`;
-    reviewDoc += `- Flow location: ${entry.relatedFlowStep}\n`;
-    reviewDoc += `- Gate type: ${entry.relatedGateType}\n`;
-    reviewDoc += `- UI surface: ${entry.relatedUiSurface}\n`;
-    reviewDoc += `- Purpose: ${entry.scenePurpose}\n`;
-    reviewDoc += `- Usage context: ${entry.usageContext}\n`;
-    reviewDoc += `- Token summary: ${tokenSummary}\n`;
-    reviewDoc += `- Suggested length: ${entry.suggestedLength}\n`;
-    reviewDoc += `- Old copy: ${currentText ? `\`${currentText}\`` : '(empty)'}\n`;
-    reviewDoc += `- New copy: ${proposedRewrite === '(pending rewrite)' ? proposedRewrite : `\`${proposedRewrite}\``}\n`;
-    reviewDoc += `- Review candidate status: ${proposedRewrite === '(pending rewrite)' ? 'pending_writer_input' : 'ready_for_line_review'}\n`;
-    reviewDoc += `- Tone goal: ${entry.toneGoal}\n`;
-    reviewDoc += `- Constraints: ${entry.constraints}\n`;
-    reviewDoc += `- Writer notes: ${entry.notesForWriter}\n`;
-    reviewDoc += `- Alt ideas: ${(entry.altRewriteIdeas || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n`;
-    reviewDoc += `- Banned patterns: ${(entry.bannedPatterns || []).map((idea) => `\`${idea}\``).join('；') || 'none'}\n`;
-    reviewDoc += `- Source of truth: ${entry.sourceOfTruth}\n`;
-    reviewDoc += `- Import target after approval: ${entry.importTarget}\n`;
-    if (tokenDetails) reviewDoc += `- Token details:\n${tokenDetails}\n`;
-    reviewDoc += '\n';
-  }
-}
 fs.writeFileSync(reviewDocPath, reviewDoc);
-
-console.log(`generated ${generatedManifestPath}`);
-console.log('generated editable drafts, preview docs, writer workspace doc, and per-message review packet');

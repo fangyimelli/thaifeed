@@ -74,6 +74,7 @@ import { NIGHT1 } from '../ssot/sandbox_story/night1';
 import type { NightScript } from '../ssot/sandbox_story/types';
 import type { GameMode } from '../modes/types';
 import { isDebugEnabled as getIsDebugEnabled, setDebugOverlayEnabled } from '../debug/debugGate';
+import { getModeFlowRoute, getModeFlowStep } from '../content/chat-content/modeOwnership';
 import {
   buildRevealTransitionSnapshot,
   derivePostRevealRuntimeStatus,
@@ -1985,10 +1986,14 @@ export default function App() {
     }
     const sandboxState = sandboxModeRef.current.getState();
     const gate = sandboxState.replyGate;
+    const sandboxRoute = getModeFlowRoute('sandbox', isSandboxWaitReplyStep(sandboxState.flow.step) ? 'WAIT_REPLY_x' : sandboxState.flow.step);
+    const sandboxStep = getModeFlowStep('sandbox', isSandboxWaitReplyStep(sandboxState.flow.step) ? 'WAIT_REPLY_x' : sandboxState.flow.step);
     const authoritativeCanReply = Boolean(
-      gate?.armed
+      sandboxStep?.canReply
+      && gate?.armed
       && gate?.canReply
-      && gate?.gateType === 'consonant_answer'
+      && (gate?.gateType === sandboxStep?.gateType || gate?.gateType === 'consonant_answer' || gate?.gateType === 'warmup_tag')
+      && Boolean(sandboxRoute)
       && isSandboxWaitReplyStep(sandboxState.flow.step)
     );
     return {
@@ -2011,11 +2016,11 @@ export default function App() {
         authoritySource: 'sandbox_reply_gate_state'
       };
     }
-    const classicAwaitingReply = qnaStateRef.current.active.status === 'AWAITING_REPLY';
+    const classicStep = getModeFlowStep('classic', qnaStateRef.current.active.status === 'AWAITING_REPLY' ? 'QNA_AWAITING_REPLY' : 'AMBIENT_ONLY');
     const sourceMessageId = qnaStateRef.current.active.questionMessageId ?? null;
     return {
       mode: 'classic',
-      canReply: Boolean(classicAwaitingReply && sourceMessageId),
+      canReply: Boolean(classicStep?.canReply && qnaStateRef.current.active.status === 'AWAITING_REPLY' && sourceMessageId),
       sourceMessageId,
       authoritySource: 'qna_authoritative_state'
     };

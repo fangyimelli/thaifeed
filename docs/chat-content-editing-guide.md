@@ -67,3 +67,9 @@ Each draft is grouped by `mode -> category -> entries[]` and every entry exposes
 - Category and token list are unchanged.
 - Non-editable entries stay locked.
 - Import regenerates `chatContentManifest.generated.json`, draft JSONs, and `docs/chat-content-editable-preview.md`.
+
+## Mode-owned editing entrypoints (phase 1)
+- 新增 flow step：優先修改 `src/modes/classic/flow/classicFlowDefinition.ts` 或 `src/modes/sandbox/flow/sandboxFlowDefinition.ts`。
+- 新增 category / 語氣 / selection policy：優先修改 `src/content/chat-content/maps/classicContentMap.ts` 或 `src/content/chat-content/maps/sandboxContentMap.ts`，再重跑 artifact generator。
+- shared 檔只可更新 schema / tooling / UI shell / import policy；不要把 mode-specific 體驗文案塞回 shared。
+- classic 仍是 review-first；sandbox/shared writer workflow 不變。

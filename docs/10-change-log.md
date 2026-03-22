@@ -1,3 +1,15 @@
+## 2026-03-22 Mode ownership split blueprint (phase 1)
+
+- 新增 `src/modes/classic/flow/classicFlowDefinition.ts`、`src/modes/sandbox/flow/sandboxFlowDefinition.ts`：將 classic / sandbox flow ownership 明確分流，覆蓋主流程 step、gateType、blockedReasons、uiSurface、allowedMessageCategories、tone/intensity 預留欄位。
+- 新增 `src/content/chat-content/maps/classicContentMap.ts`、`src/content/chat-content/maps/sandboxContentMap.ts`、`src/content/chat-content/modeOwnership.ts`：建立 step -> category route、category ownership、shared framework 邊界、legacy/parallel/runtime_wrapper 標示。
+- `src/content/chat-content/schema.ts` 與 manifest metadata 擴充 `ownerMode/ownership/messagePurpose/tonePack/intensity/styleConstraints/selectionPolicy`，讓 runtime / generator / review workflow 可見 mode-specific 結構。
+- `scripts/generate-chat-content-artifacts.mjs` 現在可重建 `docs/classic-flow-table.md`、`docs/sandbox-flow-table.md`、`docs/mode-ownership-map.md`，並把 owner/ownership 顯示到 audit manifest。
+- `src/app/App.tsx` phase-1 對接 mode ownership metadata：reply UI authority 改為讀 mode flow definition，不再讓 App 成為唯一 flow ownership 來源。
+- regression guards 補強：definition/map 檔存在、主要 steps 覆蓋、classic/sandbox category 不混掛、shared UI 不被誤標成 mode-specific content、docs 可重建。
+
+### Removed / Deprecated Log
+- 2026-03-22：deprecated 以 `App.tsx` 作為 classic/sandbox flow ownership 唯一入口；後續新增流程請優先改 mode-specific definition / content map。
+
 ## 2026-03-22 Sandbox/shared writer workspace round 1
 
 - 新增 sandbox/shared writer workspace：`src/content/chat-content/editable/sandbox-chat-writer-workspace.json`，只包含 `editable=true` 且 `importTarget=authoredChatContent.json` 的 key。

@@ -11,7 +11,29 @@ import { SHARED_CONSONANT_QUESTION_BANK } from '../../shared/consonant-engine/qu
 import { buildConsonantHint } from '../../shared/hints/consonantHint';
 import { SANDBOX_CHAT_ENGINE_STUB_LINES } from '../../sandbox/chat/chat_engine';
 import { APP_RUNTIME_CHAT_CONTENT, SANDBOX_PROMPT_TEMPLATES } from './appRuntimeContent';
+import { CLASSIC_CONTENT_MAP } from './maps/classicContentMap';
+import { SANDBOX_CONTENT_MAP } from './maps/sandboxContentMap';
 import type { ChatContentEntry } from './schema';
+
+
+const CATEGORY_OWNERSHIP = new Map(
+  [...CLASSIC_CONTENT_MAP.categories, ...SANDBOX_CONTENT_MAP.categories].map((entry) => [entry.category, entry])
+);
+
+function withOwnership(entry: ChatContentEntry): ChatContentEntry {
+  const ownership = CATEGORY_OWNERSHIP.get(entry.category);
+  if (!ownership) return entry;
+  return {
+    ...entry,
+    ownerMode: ownership.mode,
+    ownership: ownership.ownership,
+    messagePurpose: entry.messagePurpose ?? ownership.messagePurpose,
+    tonePack: entry.tonePack ?? ownership.tonePack?.[0] ?? null,
+    intensity: entry.intensity ?? ownership.intensity?.[0] ?? null,
+    styleConstraints: entry.styleConstraints ?? ownership.styleConstraints,
+    selectionPolicy: entry.selectionPolicy ?? ownership.selectionPolicy ?? null
+  };
+}
 
 const typeCategoryMap: Partial<Record<ChatMessageType, ChatContentEntry['category']>> = {
   [ChatMessageType.SYSTEM_PROMPT]: 'ambient_chat',
@@ -229,7 +251,7 @@ const sandboxEntries: ChatContentEntry[] = [
   ...APP_RUNTIME_CHAT_CONTENT,
   {
     mode: 'sandbox',
-    category: 'sandbox_prompt',
+    category: 'sandbox_crowd_reaction',
     key: 'sandbox.prompt.stub.crowd_react_word',
     sourceFile: 'src/sandbox/chat/chat_engine.ts',
     sourceSymbol: 'SANDBOX_CHAT_ENGINE_STUB_LINES.crowdReactWord',
@@ -240,7 +262,7 @@ const sandboxEntries: ChatContentEntry[] = [
   },
   {
     mode: 'sandbox',
-    category: 'sandbox_prompt',
+    category: 'sandbox_stub',
     key: 'sandbox.prompt.stub.reasoning_wave',
     sourceFile: 'src/sandbox/chat/chat_engine.ts',
     sourceSymbol: 'SANDBOX_CHAT_ENGINE_STUB_LINES.reasoningWave',
@@ -331,7 +353,7 @@ export const CHAT_CONTENT_MANIFEST: ChatContentEntry[] = [
   ...fakeAiEntries,
   ...sandboxEntries,
   ...sharedEntries
-];
+].map(withOwnership).sort((a, b) => a.key.localeCompare(b.key));
 
 export function getChatContentEntriesByMode(mode: ChatContentEntry['mode']) {
   return CHAT_CONTENT_MANIFEST.filter((entry) => entry.mode === mode);

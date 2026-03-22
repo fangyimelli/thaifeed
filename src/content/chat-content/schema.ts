@@ -15,6 +15,9 @@ export type ChatContentCategory =
   | 'sandbox_glitch'
   | 'sandbox_tag_question'
   | 'sandbox_help_hint'
+  | 'sandbox_debug_text'
+  | 'sandbox_crowd_reaction'
+  | 'sandbox_stub'
   | 'debug_text'
   | 'ui_placeholder'
   | 'fallback'
@@ -29,6 +32,8 @@ export type ChatContentToken = {
 };
 
 export type ChatContentEntry = {
+  ownerMode?: 'classic' | 'sandbox' | 'shared' | 'legacy';
+  ownership?: 'mode_specific' | 'shared_ui' | 'shared_tooling' | 'legacy_adapter' | 'runtime_wrapper';
   mode: ChatContentMode;
   category: ChatContentCategory;
   key: string;
@@ -43,6 +48,11 @@ export type ChatContentEntry = {
   qnaFlowId?: string;
   questionId?: string;
   status: ChatContentStatus;
+  messagePurpose?: string;
+  tonePack?: string | null;
+  intensity?: string | null;
+  styleConstraints?: string[];
+  selectionPolicy?: string | null;
   notes?: string;
 };
 

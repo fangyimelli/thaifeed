@@ -805,7 +805,7 @@
           "batchId": "sandbox_debug_text",
           "key": "sandbox.debug.warmup_reply",
           "mode": "sandbox",
-          "category": "debug_text",
+          "category": "sandbox_debug_text",
           "currentText": "暖場測試回覆",
           "tokens": [],
           "sourceOfTruth": "registry",
