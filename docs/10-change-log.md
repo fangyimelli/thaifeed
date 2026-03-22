@@ -1,3 +1,14 @@
+## 2026-03-22 Chat content editable draft + import pipeline
+
+- 新增 `src/content/chat-content/editable/authoredChatContent.json` 作為 sandbox/shared 已抽離文案的可回填內容層來源。
+- 新增 `classic-chat-draft.json`、`sandbox-chat-draft.json`、`shared-chat-draft.json` 與 `docs/chat-content-editable-preview.md`，提供創作友善編修/審稿視角。
+- `scripts/generate-chat-content-artifacts.mjs` 現在同時生成 manifest snapshot、editable drafts、preview docs。
+- 新增 `scripts/import-chat-content-editable.mjs`：驗證 key/category/token/importTarget 後，安全回填到 authored content layer，且禁止覆寫 locked/runtime-wrapper/legacy/parallel 項目。
+- `src/content/chat-content/appRuntimeContent.ts` 改為讀取 content layer authored source，不再要求後續文案直接手改 adapter 本身。
+
+### Removed / Deprecated Log
+- 2026-03-22：對於已抽離的 sandbox/shared 文案，直接編輯 adapter TS 常數改為 deprecated；正式路徑改為 editable draft -> import。
+
 ## 2026-03-12 Build fix: stale qnaEngine imports removed from App.tsx
 
 - Fix: removed stale imports from `App.tsx` referencing qnaEngine helpers.

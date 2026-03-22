@@ -1,3 +1,4 @@
+import authoredChatContent from './editable/authoredChatContent.json';
 import type { ChatContentEntry, ChatContentToken } from './schema';
 
 export type SandboxPreheatSequenceEntry = {
@@ -8,6 +9,16 @@ export type SandboxPreheatSequenceEntry = {
   badge?: 'crown';
   kind: 'chat' | 'join';
 };
+
+const AUTHORED_TEXT = authoredChatContent as Record<string, string>;
+
+function getAuthoredText(key: string) {
+  const value = AUTHORED_TEXT[key];
+  if (typeof value !== 'string') {
+    throw new Error(`Missing authored chat content for key: ${key}`);
+  }
+  return value;
+}
 
 const ACTIVE_USER_TOKEN: ChatContentToken = {
   token: '@activeUser',
@@ -35,49 +46,59 @@ const MEMORY_HINT_TOKEN: ChatContentToken = {
 
 export const SANDBOX_PREHEAT_JOIN_CAP = 4;
 
-export const SANDBOX_PREHEAT_CHAT_SEQUENCE: SandboxPreheatSequenceEntry[] = [
-  { user: 'viewer_118', text: '今天怎麼這麼多人一起在線？', role: 'viewer', kind: 'chat' },
-  { user: 'system', text: 'viewer_721 加入聊天室', kind: 'join' },
-  { user: 'viewer_203', text: '我有點懷疑這台是真的假的直播…', role: 'viewer', kind: 'chat' },
-  { user: '{sandboxVipHandle}', text: '上次這間真的很多人說看到鬼影。', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
-  { user: 'system', text: 'viewer_823 加入聊天室', kind: 'join' },
-  { user: '{sandboxVipHandle}', text: '@activeUser 你是第一次看這個台嗎？', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
-  { user: 'viewer_409', text: '剛剛鏡頭邊緣是不是有東西飄過去？', role: 'viewer', kind: 'chat' },
-  { user: 'system', text: 'viewer_477 加入聊天室', kind: 'join' },
-  { user: 'mod_live', text: '先暖場聊天，等等再看後面有沒有異常。', role: 'mod', kind: 'chat' }
-];
-
-export const SANDBOX_GLITCH_BURST_LINES = [
-  { username: 'viewer_118', line: '我這邊送出一直失敗' },
-  { username: 'viewer_203', line: '聊天室是不是延遲了' },
-  { username: 'viewer_409', line: '網路怪怪的，剛剛卡一下' }
+const SANDBOX_PREHEAT_META = [
+  { key: 'sandbox.preheat.1', user: 'viewer_118', role: 'viewer', kind: 'chat' },
+  { key: 'sandbox.preheat.2', user: 'system', kind: 'join' },
+  { key: 'sandbox.preheat.3', user: 'viewer_203', role: 'viewer', kind: 'chat' },
+  { key: 'sandbox.preheat.4', user: '{sandboxVipHandle}', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
+  { key: 'sandbox.preheat.5', user: 'system', kind: 'join' },
+  { key: 'sandbox.preheat.6', user: '{sandboxVipHandle}', role: 'vip', vip: true, badge: 'crown', kind: 'chat' },
+  { key: 'sandbox.preheat.7', user: 'viewer_409', role: 'viewer', kind: 'chat' },
+  { key: 'sandbox.preheat.8', user: 'system', kind: 'join' },
+  { key: 'sandbox.preheat.9', user: 'mod_live', role: 'mod', kind: 'chat' }
 ] as const;
 
+export const SANDBOX_PREHEAT_CHAT_SEQUENCE: SandboxPreheatSequenceEntry[] = SANDBOX_PREHEAT_META.map((entry) => ({
+  ...entry,
+  text: getAuthoredText(entry.key)
+}));
+
+const SANDBOX_GLITCH_META = [
+  { key: 'sandbox.glitch.answer_eval.1', username: 'viewer_118' },
+  { key: 'sandbox.glitch.answer_eval.2', username: 'viewer_203' },
+  { key: 'sandbox.glitch.answer_eval.3', username: 'viewer_409' }
+] as const;
+
+export const SANDBOX_GLITCH_BURST_LINES = SANDBOX_GLITCH_META.map((entry) => ({
+  username: entry.username,
+  line: getAuthoredText(entry.key)
+})) as ReadonlyArray<{ username: string; line: string }>;
+
 export const SANDBOX_VIP_SUMMARY_LINES = {
-  VIP_SUMMARY_1: 'VIP 總結：先把剛剛那個單字記住，下一步確認發音。',
-  VIP_SUMMARY_2: 'VIP 總結：發音方向差不多了，最後確認這個詞在指誰。'
+  VIP_SUMMARY_1: getAuthoredText('sandbox.vip_summary.1'),
+  VIP_SUMMARY_2: getAuthoredText('sandbox.vip_summary.2')
 } as const;
 
 export const SANDBOX_PROMPT_TEMPLATES = {
-  revealPrompt: '請讀出剛剛閃過的字：{consonant}',
-  tagQuestion: '@{activeUser} 第 {index} 題，請直接回答你看到的子音。',
-  helpHintWithMemory: '想一下{imageMemoryHint}那個。',
-  helpHintFallback: '先想一下圖像記憶那個關鍵字。'
+  revealPrompt: getAuthoredText('sandbox.prompt.reveal_prompt'),
+  tagQuestion: getAuthoredText('sandbox.prompt.tag_question'),
+  helpHintWithMemory: getAuthoredText('sandbox.hint.help_memory'),
+  helpHintFallback: getAuthoredText('sandbox.hint.help_fallback')
 } as const;
 
 export const SANDBOX_DEBUG_TEXT = {
-  warmupReply: '暖場測試回覆'
+  warmupReply: getAuthoredText('sandbox.debug.warmup_reply')
 } as const;
 
 export const UI_TEXT = {
-  chatInputPlaceholder: '傳送訊息',
-  sendInitializing: '初始化中…',
-  sendSending: '送出中…',
-  sendReady: '送出',
-  latestMessage: '最新訊息',
-  latestMentionMessage: '@你・跳到最新',
-  pinnedMissingSource: '（原始訊息已不存在）',
-  pinnedHighlightOnly: '（highlight only：未 armed，不能正式回覆）'
+  chatInputPlaceholder: getAuthoredText('ui.chat.placeholder'),
+  sendInitializing: getAuthoredText('ui.chat.send.initializing'),
+  sendSending: getAuthoredText('ui.chat.send.sending'),
+  sendReady: getAuthoredText('ui.chat.send.ready'),
+  latestMessage: getAuthoredText('ui.chat.latest.default'),
+  latestMentionMessage: getAuthoredText('ui.chat.latest.mention'),
+  pinnedMissingSource: getAuthoredText('ui.chat.pinned.missing_source'),
+  pinnedHighlightOnly: getAuthoredText('ui.chat.pinned.highlight_only')
 } as const;
 
 export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
@@ -85,8 +106,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'sandbox_preheat',
     key: `sandbox.preheat.${index + 1}`,
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_PREHEAT_CHAT_SEQUENCE',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: `authoredChatContent["sandbox.preheat.${index + 1}"]`,
     text: entry.text,
     tokens: [
       ...(entry.text.includes('@activeUser') ? [ACTIVE_USER_TOKEN] : []),
@@ -94,14 +115,14 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     ],
     flowStep: 'PREHEAT_CHAT',
     status: 'active',
-    notes: entry.kind === 'join' ? 'Preheat system join line dispatched from App runtime.' : 'Preheat ambient chat line dispatched from App runtime.'
+    notes: entry.kind === 'join' ? 'Preheat system join line owned by editable content layer.' : 'Preheat ambient chat line owned by editable content layer.'
   })),
   ...SANDBOX_GLITCH_BURST_LINES.map((entry, index) => ({
     mode: 'sandbox',
     category: 'sandbox_glitch',
     key: `sandbox.glitch.answer_eval.${index + 1}`,
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_GLITCH_BURST_LINES',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: `authoredChatContent["sandbox.glitch.answer_eval.${index + 1}"]`,
     text: entry.line,
     flowStep: 'ANSWER_EVAL',
     status: 'active',
@@ -111,8 +132,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'sandbox_vip_summary',
     key: 'sandbox.vip_summary.1',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.vip_summary.1"]',
     text: SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_1,
     flowStep: 'VIP_SUMMARY_1',
     status: 'active',
@@ -122,8 +143,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'sandbox_vip_summary',
     key: 'sandbox.vip_summary.2',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_2',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.vip_summary.2"]',
     text: SANDBOX_VIP_SUMMARY_LINES.VIP_SUMMARY_2,
     flowStep: 'VIP_SUMMARY_2',
     status: 'active',
@@ -133,8 +154,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'sandbox_prompt',
     key: 'sandbox.prompt.reveal_prompt',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_PROMPT_TEMPLATES.revealPrompt',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.prompt.reveal_prompt"]',
     text: SANDBOX_PROMPT_TEMPLATES.revealPrompt,
     tokens: [DYNAMIC_CONSONANT_TOKEN],
     gateType: 'consonant_answer',
@@ -145,21 +166,21 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'sandbox_tag_question',
     key: 'sandbox.prompt.tag_question',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_PROMPT_TEMPLATES.tagQuestion',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.prompt.tag_question"]',
     text: SANDBOX_PROMPT_TEMPLATES.tagQuestion,
     tokens: [ACTIVE_USER_TOKEN, DYNAMIC_INDEX_TOKEN],
     flowStep: 'TAG_PLAYER_{index}',
     gateType: 'consonant_answer',
     status: 'active',
-    notes: 'Runtime wrapper for dynamic tag question lines emitted by App.'
+    notes: 'Dynamic tag question template owned by editable content layer; wrapper shape still runtime-bound.'
   },
   {
     mode: 'sandbox',
     category: 'sandbox_help_hint',
     key: 'sandbox.hint.help_memory',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_PROMPT_TEMPLATES.helpHintWithMemory',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.hint.help_memory"]',
     text: SANDBOX_PROMPT_TEMPLATES.helpHintWithMemory,
     tokens: [MEMORY_HINT_TOKEN],
     gateType: 'consonant_answer',
@@ -170,8 +191,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'sandbox_help_hint',
     key: 'sandbox.hint.help_fallback',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_PROMPT_TEMPLATES.helpHintFallback',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.hint.help_fallback"]',
     text: SANDBOX_PROMPT_TEMPLATES.helpHintFallback,
     gateType: 'consonant_answer',
     status: 'active',
@@ -181,8 +202,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'sandbox',
     category: 'debug_text',
     key: 'sandbox.debug.warmup_reply',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'SANDBOX_DEBUG_TEXT.warmupReply',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["sandbox.debug.warmup_reply"]',
     text: SANDBOX_DEBUG_TEXT.warmupReply,
     flowStep: 'WAIT_WARMUP_REPLY',
     status: 'active',
@@ -192,8 +213,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'ui_placeholder',
     key: 'ui.chat.placeholder',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.chatInputPlaceholder',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.placeholder"]',
     text: UI_TEXT.chatInputPlaceholder,
     status: 'active',
     notes: 'Chat input placeholder shown in ChatPanel.'
@@ -202,8 +223,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'ui_placeholder',
     key: 'ui.chat.send.initializing',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.sendInitializing',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.send.initializing"]',
     text: UI_TEXT.sendInitializing,
     status: 'active',
     notes: 'Chat send button label while app is booting.'
@@ -212,8 +233,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'ui_placeholder',
     key: 'ui.chat.send.sending',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.sendSending',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.send.sending"]',
     text: UI_TEXT.sendSending,
     status: 'active',
     notes: 'Chat send button label while sending.'
@@ -222,8 +243,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'ui_placeholder',
     key: 'ui.chat.send.ready',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.sendReady',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.send.ready"]',
     text: UI_TEXT.sendReady,
     status: 'active',
     notes: 'Default chat send button label.'
@@ -232,8 +253,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'ui_placeholder',
     key: 'ui.chat.latest.default',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.latestMessage',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.latest.default"]',
     text: UI_TEXT.latestMessage,
     status: 'active',
     notes: 'Jump-to-latest button label.'
@@ -242,8 +263,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'ui_placeholder',
     key: 'ui.chat.latest.mention',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.latestMentionMessage',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.latest.mention"]',
     text: UI_TEXT.latestMentionMessage,
     status: 'active',
     notes: 'Jump-to-latest mention button label.'
@@ -252,8 +273,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'fallback',
     key: 'ui.chat.pinned.missing_source',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.pinnedMissingSource',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.pinned.missing_source"]',
     text: UI_TEXT.pinnedMissingSource,
     status: 'active',
     notes: 'Pinned preview fallback when original source message is gone.'
@@ -262,8 +283,8 @@ export const APP_RUNTIME_CHAT_CONTENT: ChatContentEntry[] = [
     mode: 'shared',
     category: 'debug_text',
     key: 'ui.chat.pinned.highlight_only',
-    sourceFile: 'src/content/chat-content/appRuntimeContent.ts',
-    sourceSymbol: 'UI_TEXT.pinnedHighlightOnly',
+    sourceFile: 'src/content/chat-content/editable/authoredChatContent.json',
+    sourceSymbol: 'authoredChatContent["ui.chat.pinned.highlight_only"]',
     text: UI_TEXT.pinnedHighlightOnly,
     status: 'active',
     notes: 'Debug note when pinned sandbox content is highlight-only.'

@@ -1,3 +1,13 @@
+## 2026-03-22 Chat content editable draft / import workflow
+
+- 新增正式內容工作流：manifest -> editable draft (`classic` / `sandbox` / `shared`) -> import 回 `src/content/chat-content/editable/authoredChatContent.json`。
+- sandbox 與 shared 已抽離文案改由 content layer editable source 擁有；classic 先維持 review-first，不破壞既有 flow / gate / state。
+- 新指令：`npm run generate:chat-content-artifacts`、`npm run import:chat-content-editable`、`npm run test:chat-content-guards`。
+- 新文件：`docs/chat-content-editing-guide.md`、`docs/chat-content-import-policy.md`、`docs/chat-content-editable-preview.md`。
+
+### Removed / Deprecated Log
+- 2026-03-22：deprecated 直接手改 `src/content/chat-content/appRuntimeContent.ts` 內已抽離的 sandbox/UI 文案；後續優先走 editable draft + import workflow。
+
 ## 2026-03-12 QNA helper import cleanup build validation
 
 - 確認 `src/app/App.tsx` 不再引用已移除的 qnaEngine helper：`isQnaAwaitingReplyGateOpen`、`shouldAbortStalledAsking`。
