@@ -2202,6 +2202,14 @@ Console（debug 模式）可觀察：
 - 移除 sandbox `useState(sandboxPinnedEntry)` 作為 pinned reply 權威來源；改由 `sandboxStoryMode.state.pinnedReply` 單一事實來源。
 - 移除 sandbox reply preview 對 classic `qnaStatus` 的隱性相依，避免新舊 gate 判斷雙軌互打。
 
+## 2026-03-23 Sandbox 360 test mode
+
+- 新增 `sandbox_360_test` 模式，直接複製 `sandbox_story` runtime 作為隔離測試殼，避免動到既有 `sandbox_story` 與 classic mode。
+- `src/modes/sandbox_360_test/chatCommandAdapter.ts` 新增聊天室視角指令解析，支援 `左/右/上/下`、`←/→/↑/↓`、`left/right/up/down`。
+- `App.tsx` 的 `submitChat()` 僅在 `sandbox_360_test` 時攔截視角指令：命中後只更新 `sandbox.viewer.yaw/pitch/lastCommandAt` 並直接 return，不走 `consumePlayerReply` / `replyGate` / flow step。
+- `SceneView` 僅在 `sandbox_360_test` 讀取 `viewerState` 並套用 `rotateY/rotateX`，debug overlay 另顯示 `viewer yaw/pitch`；其他 mode 行為不變。
+- Debug Mode Switcher 新增 `sandbox_360_test` 入口，方便按需求切換驗證。
+
 ## 2026-03-22 Chat Content Manifest Extraction
 
 - Added `src/content/chat-content/schema.ts` as the shared schema for editable chat-content inventory entries.

@@ -20,6 +20,10 @@
 
 ## 模組責任分離
 
+### Sandbox integration note
+- `sandbox_story` 維持既有 authoritative flow / reply gate / reveal 邏輯。
+- `sandbox_360_test` 僅作為 sandbox 專用視角指令測試模式：聊天室命中方向指令時，只更新 viewer state，並由 `SceneView` 讀取 yaw/pitch 套用旋轉，不接管 classic 或 sandbox_story 的 reply pipeline。
+
 ### Player
 - 唯一目標：場景切換穩定、僅 active video 出聲。
 - 不負責決定聊天內容。
