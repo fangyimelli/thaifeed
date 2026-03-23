@@ -680,6 +680,13 @@ export default function App() {
       return candidate > prev ? candidate : prev + 1;
     });
   }, []);
+  const [sandbox360ViewerState, setSandbox360ViewerState] = useState({
+    yaw: 0,
+    pitch: 0,
+    lastCommandAt: 0,
+    lastCommand: '-' as string,
+    lastParseMatched: false
+  });
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
@@ -1710,6 +1717,15 @@ export default function App() {
     if (selectedMode === 'sandbox_story') {
       sandboxRuntimeGuardRef.current.modeEnteredAt = Date.now();
       ensureSandboxRuntimeStarted('mode_switch_bootstrap');
+    } else if (selectedMode === 'sandbox_360_test') {
+      const sandbox360State = sandbox360ModeRef.current.getState();
+      setSandbox360ViewerState({
+        yaw: sandbox360State.viewer?.yaw ?? 0,
+        pitch: sandbox360State.viewer?.pitch ?? 0,
+        lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
+        lastCommand: '-',
+        lastParseMatched: false
+      });
     } else {
       sandboxModeRef.current.setPlayerIdentity({ handle: normalizeHandle(activeUserInitialHandleRef.current || '000') || '000', id: 'activeUser' });
     }
@@ -4780,6 +4796,16 @@ export default function App() {
       }
     };
   }, []);
+  useEffect(() => {
+    const base = (window.__CHAT_DEBUG__ ?? {}) as any;
+    window.__CHAT_DEBUG__ = {
+      ...base,
+      sandbox: {
+        ...(base.sandbox ?? {}),
+        sandbox360ViewerState
+      }
+    };
+  }, [sandbox360ViewerState]);
 
   const blockRenameAttempt = useCallback((_nextHandle: string): false => {
     updateChatDebug({ ui: { send: { blockedReason: 'rename_disabled' } } });
@@ -5231,6 +5257,17 @@ export default function App() {
     if (isComposing) return markBlocked('is_composing');
     if (modeRef.current.id === 'sandbox_360_test') {
       const viewerCommand = parseViewerCommand(raw);
+      updateChatDebug({
+        sandbox: {
+          ...(((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}) as Record<string, unknown>),
+          sandbox360ViewerCommand: {
+            raw,
+            parsedCommand: viewerCommand?.type ?? 'MISS',
+            matched: Boolean(viewerCommand),
+            at: now
+          }
+        }
+      } as any);
       if (viewerCommand) {
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? { yaw: 0, pitch: 0, lastCommandAt: 0 };
@@ -5241,6 +5278,13 @@ export default function App() {
         if (viewerCommand.type === 'UP') nextViewer.pitch -= delta;
         if (viewerCommand.type === 'DOWN') nextViewer.pitch += delta;
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
+        setSandbox360ViewerState({
+          yaw: nextViewer.yaw,
+          pitch: nextViewer.pitch,
+          lastCommandAt: nextViewer.lastCommandAt,
+          lastCommand: viewerCommand.type,
+          lastParseMatched: true
+        });
         const next = {
           ...sendDebug,
           lastAttemptAt: now,
@@ -5251,13 +5295,22 @@ export default function App() {
         setSendDebug(next);
         setSendFeedback(null);
         updateChatDebug({
+          sandbox: {
+            ...(((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}) as Record<string, unknown>),
+            sandbox360ViewerState: {
+              yaw: nextViewer.yaw,
+              pitch: nextViewer.pitch,
+              lastCommandAt: nextViewer.lastCommandAt,
+              lastCommand: viewerCommand.type
+            }
+          },
           ui: {
             send: {
               ...next,
               blockedAt: 0
             }
           }
-        });
+        } as any);
         setInput('');
         sendCooldownUntil.current = Date.now() + 150;
         tagSlowActiveRef.current = false;
@@ -7627,13 +7680,7 @@ export default function App() {
               appStarted={appStarted}
               blackoutState={blackoutState}
               mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : modeIdRef.current === 'sandbox_360_test' ? 'sandbox_360_test' : 'classic'}
-              viewerState={modeIdRef.current === 'sandbox_360_test' ? (() => {
-                const st = sandbox360ModeRef.current.getState();
-                return {
-                  yaw: st.viewer?.yaw ?? 0,
-                  pitch: st.viewer?.pitch ?? 0
-                };
-              })() : undefined}
+              viewerState={modeIdRef.current === 'sandbox_360_test' ? sandbox360ViewerState : undefined}
               wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
                 const st = sandboxModeRef.current.getState();
                 return {

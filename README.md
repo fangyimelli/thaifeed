@@ -53,6 +53,7 @@
 
 - 建立 29 子音 SSOT（`AUTHORITATIVE_CONSONANT_BANK`）作為 sandbox/classic alias 接受集合唯一來源，含 `consonant/revealWord/acceptedCandidates/imageMemoryHint`。
 - sandbox NIGHT 題庫改為固定 pool（N1/N2/N3 各 10 題）並在進夜時 shuffle；推進 authority 明確依 `round.questionOrder/currentQuestionCursor/currentQuestionId`。
+- [sandbox_360_test][viewer-command-audit] 修正 sandbox_360_test 聊天室方向指令鏈路：補上 `sandbox360Mode.setState()` 讓 `submitChat("左")` 命中後能真正寫入 `viewer.yaw/pitch/lastCommandAt`，並以 React state 單一路徑把最新 viewer state 傳給 `SceneView`，避免只改 ref mode state 但未 re-render；debug 另外暴露 command hit、viewer yaw/pitch 與實際套用的 transform。
 - sandbox HELP REQUEST（不知道/不會/help/hint/...）改為不判錯不跳題，聊天室 viewer 以 image memory library 給提示，玩家可繼續答同題。
 - debug 新增 hint observability：`hint.requested/source=imageMemoryLibrary/emitter/generatedText`。
 

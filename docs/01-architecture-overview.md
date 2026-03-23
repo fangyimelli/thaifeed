@@ -23,6 +23,7 @@
 ### Sandbox integration note
 - `sandbox_story` 維持既有 authoritative flow / reply gate / reveal 邏輯。
 - `sandbox_360_test` 僅作為 sandbox 專用視角指令測試模式：聊天室命中方向指令時，只更新 viewer state，並由 `SceneView` 讀取 yaw/pitch 套用旋轉，不接管 classic 或 sandbox_story 的 reply pipeline。
+- `sandbox_360_test` viewer control 採單一路徑：`App.submitChat()` 命中 `parseViewerCommand()` 後，同步寫入 `sandbox360Mode.viewer` 與 React `sandbox360ViewerState`，再把同一份 state 傳給 `SceneView`；避免 mode ref state 與畫面 props 雙軌。
 
 ### Player
 - 唯一目標：場景切換穩定、僅 active video 出聲。

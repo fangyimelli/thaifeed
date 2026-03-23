@@ -1,3 +1,10 @@
+## 2026-03-23 Sandbox 360 viewer command audit fix
+
+- Audit 結論：原本 `sandbox_360_test` 的 command path 雖在 `submitChat()` 呼叫 `parseViewerCommand()`，但命中後只嘗試寫入 mode ref state，缺少可用的 `setState()` 與 React re-render publish，導致 `SceneView` 常停在舊 props，看起來聊天室有訊息但畫面不旋轉。
+- `src/modes/sandbox_360_test/sandbox360Mode.ts` 補上最小 `setState()`，確保 `viewer.yaw/pitch/lastCommandAt` 能 authoritative 寫回 mode state。
+- `src/app/App.tsx` 新增 `sandbox360ViewerState` 作為 sandbox_360_test 唯一 viewer props publish；command 命中時同步更新 debug 資訊與 React state，讓 `SceneView` 立即收到最新 yaw/pitch。
+- `src/ui/scene/SceneView.tsx` 新增 sandbox_360_test 最小 debug 顯示：最後命中的 command、最新 yaw/pitch、`lastCommandAt`、實際套用的 transform，並把 yaw/pitch/transform 掛到 data attribute 便於驗證。
+
 ## 2026-03-23 Sandbox 360 viewer command test mode
 
 - 新增 `src/modes/sandbox_360_test/sandbox360Mode.ts`，以 `sandbox_story` runtime 複製出 `sandbox_360_test`，只補 `viewer.yaw/pitch/lastCommandAt` state，不改動原 `sandbox_story` 檔。
