@@ -1,3 +1,15 @@
+## 2026-03-23 Sandbox 360 viewer command test mode
+
+- 新增 `src/modes/sandbox_360_test/sandbox360Mode.ts`，以 `sandbox_story` runtime 複製出 `sandbox_360_test`，只補 `viewer.yaw/pitch/lastCommandAt` state，不改動原 `sandbox_story` 檔。
+- 新增 `src/modes/sandbox_360_test/chatCommandAdapter.ts`，統一解析 `左/右/上/下`、方向箭頭、`left/right/up/down`。
+- `src/app/App.tsx` 的 `submitChat()` 新增 sandbox_360_test 專用短路：命中 viewer command 時只寫入 viewer state，且不進 `consumePlayerReply` / `replyGate` / flow step。
+- `src/ui/scene/SceneView.tsx` 新增 sandbox_360_test 視角 transform 與 debug overlay yaw/pitch 顯示；classic 與 sandbox_story 保持原路徑。
+- `src/app/debug/DebugModeSwitcher.tsx` 新增 `sandbox_360_test` 切換按鈕，便於依指定流程驗證。
+- `src/app/DebugPlayerPage.tsx` 新增 `Open sandbox_360_test` / `Open sandbox_story` / `Open classic` 快捷入口，讓 `/debug/player` 也能直接跳到正確的 debug app mode。
+
+### Removed / Deprecated Log
+- 2026-03-23：sandbox_360_test 不建立第二套 classic/reply-gate/chat-panel 流程；聊天室指令只做 viewer control，避免與既有 sandbox_story 雙軌並存。
+
 ## 2026-03-22 Classic flow-first review packet
 
 - `scripts/generate-chat-content-artifacts.mjs` 新增 classic flow-first / category-first review packet 生成：`docs/classic-flow-message-review.md` 以 player flow step 為主視角，`docs/classic-message-review.md` 以 source/category 為主視角。

@@ -3,6 +3,15 @@ import { createPlayerCore } from '../core/player/playerCore';
 import { VIDEO_PATH_BY_KEY, type OldhouseLoopKey } from '../config/oldhousePlayback';
 
 const KEYS: OldhouseLoopKey[] = ['oldhouse_room_loop3', 'oldhouse_room_loop', 'oldhouse_room_loop2'];
+const DEBUG_APP_MODES = ['classic', 'sandbox_story', 'sandbox_360_test'] as const;
+
+function buildAppDebugUrl(mode: typeof DEBUG_APP_MODES[number]) {
+  const base = import.meta.env.BASE_URL || '/';
+  const url = new URL(base, window.location.origin);
+  url.searchParams.set('debug', '1');
+  url.searchParams.set('mode', mode);
+  return url.toString();
+}
 
 export default function DebugPlayerPage() {
   const videoARef = useRef<HTMLVideoElement>(null);
@@ -49,10 +58,24 @@ export default function DebugPlayerPage() {
   };
 
   const debug = core.getDebugState();
+  const [appModeUrl] = useState(() => ({
+    classic: buildAppDebugUrl('classic'),
+    sandbox_story: buildAppDebugUrl('sandbox_story'),
+    sandbox_360_test: buildAppDebugUrl('sandbox_360_test')
+  }));
 
   return (
     <main className="debug-player-page">
       <h1>/debug/player</h1>
+      <div className="debug-player-controls">
+        <strong>Open app in debug mode</strong>
+        {DEBUG_APP_MODES.map((mode) => (
+          <button key={mode} onClick={() => window.location.assign(appModeUrl[mode])}>
+            Open {mode}
+          </button>
+        ))}
+      </div>
+      <pre className="debug-player-panel">{JSON.stringify({ appModeUrl }, null, 2)}</pre>
       <div className="debug-player-stage">
         <video ref={videoARef} className="scene-video" playsInline autoPlay preload="auto" />
         <video ref={videoBRef} className="scene-video" playsInline autoPlay preload="auto" />

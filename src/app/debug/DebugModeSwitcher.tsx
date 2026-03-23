@@ -1,6 +1,6 @@
 export type LastModeSwitchStatus = {
   clickAt: number | null;
-  requestedMode: 'classic' | 'sandbox_story' | null;
+  requestedMode: 'classic' | 'sandbox_story' | 'sandbox_360_test' | null;
   persistedMode: string;
   action: 'reinit' | 'reload' | 'none';
   result: 'ok' | 'blocked' | 'error' | '-';
@@ -8,10 +8,10 @@ export type LastModeSwitchStatus = {
 };
 
 type DebugModeSwitcherProps = {
-  currentMode: 'classic' | 'sandbox_story';
+  currentMode: 'classic' | 'sandbox_story' | 'sandbox_360_test';
   switching: boolean;
   lastModeSwitch: LastModeSwitchStatus;
-  onSwitch: (mode: 'classic' | 'sandbox_story') => void;
+  onSwitch: (mode: 'classic' | 'sandbox_story' | 'sandbox_360_test') => void;
 };
 
 export default function DebugModeSwitcher({ currentMode, onSwitch, switching, lastModeSwitch }: DebugModeSwitcherProps) {
@@ -25,6 +25,9 @@ export default function DebugModeSwitcher({ currentMode, onSwitch, switching, la
         </button>
         <button type="button" disabled={currentMode === 'sandbox_story'} onClick={() => onSwitch('sandbox_story')}>
           {currentMode === 'sandbox_story' ? 'Sandbox (Current)' : 'Switch to Sandbox (sandbox_story)'}
+        </button>
+        <button type="button" disabled={currentMode === 'sandbox_360_test'} onClick={() => onSwitch('sandbox_360_test')}>
+          {currentMode === 'sandbox_360_test' ? 'Sandbox 360 Test (Current)' : 'Switch to Sandbox 360 Test'}
         </button>
       </div>
       {switching && <div>Switching…</div>}

@@ -58,6 +58,8 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
+import { createSandbox360Mode } from '../modes/sandbox_360_test/sandbox360Mode';
+import { parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
 import {
   isSandboxWaitReplyStep,
   parseSandboxWaitReplyIndex,
@@ -335,19 +337,19 @@ function isPassCommand(raw: string) {
 }
 
 
-function resolveModeFromQuery(): 'classic' | 'sandbox_story' | null {
+function resolveModeFromQuery(): 'classic' | 'sandbox_story' | 'sandbox_360_test' | null {
   const mode = new URLSearchParams(window.location.search).get('mode');
-  if (mode === 'classic' || mode === 'sandbox_story') return mode;
+  if (mode === 'classic' || mode === 'sandbox_story' || mode === 'sandbox_360_test') return mode;
   return null;
 }
 
-function resolveModeFromStorage(): 'classic' | 'sandbox_story' | null {
+function resolveModeFromStorage(): 'classic' | 'sandbox_story' | 'sandbox_360_test' | null {
   const mode = window.localStorage.getItem(DEBUG_MODE_STORAGE_KEY);
-  if (mode === 'classic' || mode === 'sandbox_story') return mode;
+  if (mode === 'classic' || mode === 'sandbox_story' || mode === 'sandbox_360_test') return mode;
   return null;
 }
 
-function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' {
+function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' | 'sandbox_360_test' {
   const modeFromQuery = resolveModeFromQuery();
   if (modeFromQuery) return modeFromQuery;
   if (debugEnabled) {
@@ -792,7 +794,8 @@ export default function App() {
   }, [debugOpen]);
   const modeRef = useRef<GameMode>(createClassicMode());
   const sandboxModeRef = useRef(createSandboxStoryMode());
-  const modeIdRef = useRef<'classic' | 'sandbox_story'>(resolveInitialMode(debugEnabled));
+  const sandbox360ModeRef = useRef(createSandbox360Mode());
+  const modeIdRef = useRef<'classic' | 'sandbox_story' | 'sandbox_360_test'>(resolveInitialMode(debugEnabled));
   const sandboxConsonantPromptNodeIdRef = useRef<string | null>(null);
   const sandboxWaveRunningRef = useRef(false);
   const sandboxSupernaturalTimerRef = useRef<number | null>(null);
@@ -1697,7 +1700,11 @@ export default function App() {
 
   useEffect(() => {
     const selectedMode = modeIdRef.current;
-    const mode = selectedMode === 'sandbox_story' ? sandboxModeRef.current : createClassicMode();
+    const mode = selectedMode === 'sandbox_story'
+      ? sandboxModeRef.current
+      : selectedMode === 'sandbox_360_test'
+        ? sandbox360ModeRef.current
+        : createClassicMode();
     modeRef.current = mode;
     mode.init();
     if (selectedMode === 'sandbox_story') {
@@ -5222,6 +5229,42 @@ export default function App() {
     const raw = rawText.trim();
     if (!raw) return markBlocked('empty_input');
     if (isComposing) return markBlocked('is_composing');
+    if (modeRef.current.id === 'sandbox_360_test') {
+      const viewerCommand = parseViewerCommand(raw);
+      if (viewerCommand) {
+        const sandbox360State = sandbox360ModeRef.current.getState();
+        const currentViewer = sandbox360State.viewer ?? { yaw: 0, pitch: 0, lastCommandAt: 0 };
+        const delta = 12;
+        const nextViewer = { ...currentViewer, lastCommandAt: now };
+        if (viewerCommand.type === 'LEFT') nextViewer.yaw -= delta;
+        if (viewerCommand.type === 'RIGHT') nextViewer.yaw += delta;
+        if (viewerCommand.type === 'UP') nextViewer.pitch -= delta;
+        if (viewerCommand.type === 'DOWN') nextViewer.pitch += delta;
+        sandbox360ModeRef.current.setState({ viewer: nextViewer });
+        const next = {
+          ...sendDebug,
+          lastAttemptAt: now,
+          lastResult: 'sent' as const,
+          blockedReason: '',
+          errorMessage: ''
+        };
+        setSendDebug(next);
+        setSendFeedback(null);
+        updateChatDebug({
+          ui: {
+            send: {
+              ...next,
+              blockedAt: 0
+            }
+          }
+        });
+        setInput('');
+        sendCooldownUntil.current = Date.now() + 150;
+        tagSlowActiveRef.current = false;
+        logSendDebug('sent', { source, mode: 'sandbox_360_test_viewer_command', command: viewerCommand.type });
+        return { ok: true, status: 'sent' };
+      }
+    }
     const normalizeHandleToken = (value: string | null | undefined) => {
       const normalized = normalizeHandle(value || '');
       return normalized ? normalized.toLowerCase() : '';
@@ -7371,7 +7414,7 @@ export default function App() {
 
   const mode = modeIdRef.current;
 
-  const readModePersistenceDebug = useCallback((storeMode?: 'classic' | 'sandbox_story') => {
+  const readModePersistenceDebug = useCallback((storeMode?: 'classic' | 'sandbox_story' | 'sandbox_360_test') => {
     const queryMode = resolveModeFromQuery() ?? '-';
     const storageMode = window.localStorage.getItem(DEBUG_MODE_STORAGE_KEY) ?? '-';
     return `query=${queryMode} | storage=${storageMode} | store=${storeMode ?? modeIdRef.current}`;
@@ -7382,7 +7425,7 @@ export default function App() {
     window.sessionStorage.setItem(DEBUG_MODE_SWITCH_STATUS_KEY, JSON.stringify(next));
   }, []);
 
-  const switchDebugMode = useCallback((nextMode: 'classic' | 'sandbox_story') => {
+  const switchDebugMode = useCallback((nextMode: 'classic' | 'sandbox_story' | 'sandbox_360_test') => {
     const clickAt = Date.now();
     pushModeSwitchDebug({
       clickAt,
@@ -7403,7 +7446,7 @@ export default function App() {
       });
       return;
     }
-    if (nextMode !== 'classic' && nextMode !== 'sandbox_story') {
+    if (nextMode !== 'classic' && nextMode !== 'sandbox_story' && nextMode !== 'sandbox_360_test') {
       pushModeSwitchDebug({
         clickAt,
         requestedMode: nextMode,
@@ -7570,7 +7613,7 @@ export default function App() {
             <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
           </div>
         </header>
-        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'} ${mode === 'sandbox_story' ? 'sandbox-story-mode' : ''}`}>
+        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'} ${mode === 'sandbox_story' || mode === 'sandbox_360_test' ? 'sandbox-story-mode' : ''}`}>
           <button type="button" className="video-debug-toggle" onClick={() => setDebugOpen((prev) => !prev)} aria-expanded={debugOpen}>
             Debug
           </button>
@@ -7583,7 +7626,14 @@ export default function App() {
               isDesktopLayout={isDesktopLayout}
               appStarted={appStarted}
               blackoutState={blackoutState}
-              mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : 'classic'}
+              mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : modeIdRef.current === 'sandbox_360_test' ? 'sandbox_360_test' : 'classic'}
+              viewerState={modeIdRef.current === 'sandbox_360_test' ? (() => {
+                const st = sandbox360ModeRef.current.getState();
+                return {
+                  yaw: st.viewer?.yaw ?? 0,
+                  pitch: st.viewer?.pitch ?? 0
+                };
+              })() : undefined}
               wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
                 const st = sandboxModeRef.current.getState();
                 return {
