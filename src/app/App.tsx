@@ -359,6 +359,15 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
   return 'classic';
 }
 
+const SANDBOX_360_VIEWER_STEP = 12;
+const SANDBOX_360_VIEWER_MAX_YAW = 72;
+const SANDBOX_360_VIEWER_MAX_PITCH = 36;
+
+function clampSandbox360Viewer(value: number, axis: 'yaw' | 'pitch') {
+  const limit = axis === 'yaw' ? SANDBOX_360_VIEWER_MAX_YAW : SANDBOX_360_VIEWER_MAX_PITCH;
+  return Math.min(Math.max(value, -limit), limit);
+}
+
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
 }
@@ -5271,12 +5280,11 @@ export default function App() {
       if (viewerCommand) {
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? { yaw: 0, pitch: 0, lastCommandAt: 0 };
-        const delta = 12;
         const nextViewer = { ...currentViewer, lastCommandAt: now };
-        if (viewerCommand.type === 'LEFT') nextViewer.yaw -= delta;
-        if (viewerCommand.type === 'RIGHT') nextViewer.yaw += delta;
-        if (viewerCommand.type === 'UP') nextViewer.pitch -= delta;
-        if (viewerCommand.type === 'DOWN') nextViewer.pitch += delta;
+        if (viewerCommand.type === 'LEFT') nextViewer.yaw = clampSandbox360Viewer(nextViewer.yaw - SANDBOX_360_VIEWER_STEP, 'yaw');
+        if (viewerCommand.type === 'RIGHT') nextViewer.yaw = clampSandbox360Viewer(nextViewer.yaw + SANDBOX_360_VIEWER_STEP, 'yaw');
+        if (viewerCommand.type === 'UP') nextViewer.pitch = clampSandbox360Viewer(nextViewer.pitch - SANDBOX_360_VIEWER_STEP, 'pitch');
+        if (viewerCommand.type === 'DOWN') nextViewer.pitch = clampSandbox360Viewer(nextViewer.pitch + SANDBOX_360_VIEWER_STEP, 'pitch');
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
         setSandbox360ViewerState({
           yaw: nextViewer.yaw,

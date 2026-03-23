@@ -2208,7 +2208,7 @@ Console（debug 模式）可觀察：
 - 新增 `sandbox_360_test` 模式，直接複製 `sandbox_story` runtime 作為隔離測試殼，避免動到既有 `sandbox_story` 與 classic mode。
 - `src/modes/sandbox_360_test/chatCommandAdapter.ts` 新增聊天室視角指令解析，支援 `左/右/上/下`、`←/→/↑/↓`、`left/right/up/down`。
 - `App.tsx` 的 `submitChat()` 僅在 `sandbox_360_test` 時攔截視角指令：命中後只更新 `sandbox.viewer.yaw/pitch/lastCommandAt` 並直接 return，不走 `consumePlayerReply` / `replyGate` / flow step。
-- `SceneView` 僅在 `sandbox_360_test` 讀取 `viewerState` 並套用 `rotateY/rotateX`，debug overlay 另顯示 `viewer yaw/pitch`；其他 mode 行為不變。
+- `SceneView` 僅在 `sandbox_360_test` 讀取 `viewerState`，改為 viewport + oversized scene pan 結構，把 `yaw/pitch` 映射成 `translateX/translateY`，避免平面卡片旋轉與黑邊；debug overlay 額外顯示 yaw/pitch/translate。
 - Debug Mode Switcher 新增 `sandbox_360_test` 入口，方便按需求切換驗證。
 - `/debug/player` 也新增 `Open sandbox_360_test` 快捷按鈕，避免只進 debug page 時找不到切換入口。
 
