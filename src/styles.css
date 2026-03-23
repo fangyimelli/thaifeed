@@ -288,8 +288,11 @@ body {
 .scene-view { position: relative; isolation: isolate; overflow: hidden; border-radius: 12px; border: 1px solid #2b3140; background: #05070c; width: 100%; height: 100%; }
 .video-layer-wrapper { position: relative; width: 100%; height: 100%; overflow: hidden; }
 .scene-video-layer { position: absolute; inset: 0; }
+.scene-video-layer-sandbox360 { overflow: hidden; }
+.scene-pan-surface { position: absolute; }
 .scene-video, .overlay { position: absolute; width: 100%; height: 100%; inset: 0; }
 .scene-video { object-fit: contain; display: block; transition: opacity 420ms ease-in-out; opacity: 0; pointer-events: none; }
+.scene-video-layer-sandbox360 .scene-video { object-fit: cover; }
 .debug-player-page { padding: 16px; color: #dbe6ff; }
 .debug-player-stage { position: relative; width: min(960px, 100%); aspect-ratio: 16/9; background: #05070c; border: 1px solid #2b3140; overflow: hidden; }
 .debug-player-stage .scene-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
@@ -508,6 +511,10 @@ body {
 
   .scene-view-mobile .scene-video {
     object-fit: contain;
+  }
+
+  .scene-view-mobile .scene-video-layer-sandbox360 .scene-video {
+    object-fit: cover;
   }
 
   .scene-view-mobile .filter-layer.curse-mid,

@@ -112,6 +112,13 @@ const randomMs = (min: number, max: number) => {
 };
 
 const clampCurse = (c: number) => Math.min(Math.max(c, 0), 100);
+const clampValue = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+const SANDBOX_360_VIEWER_MAX_YAW = 72;
+const SANDBOX_360_VIEWER_MAX_PITCH = 36;
+const SANDBOX_360_PAN_RANGE_X = 12;
+const SANDBOX_360_PAN_RANGE_Y = 5;
+const SANDBOX_360_SCENE_OVERSCAN_X = 24;
+const SANDBOX_360_SCENE_OVERSCAN_Y = 10;
 
 const randomPick = <T,>(items: T[]): T => {
   const index = Math.floor(Math.random() * items.length);
@@ -1987,10 +1994,24 @@ export default function SceneView({
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
   const revealPromptSuppressed = Boolean(wordReveal?.phase === 'word' || wordReveal?.phase === 'done');
   const consonantBubbleVisible = Boolean(promptVisible) && !revealPromptSuppressed;
-  const viewerYaw = mode === 'sandbox_360_test' ? (viewerState?.yaw ?? 0) : 0;
-  const viewerPitch = mode === 'sandbox_360_test' ? (viewerState?.pitch ?? 0) : 0;
+  const viewerYaw = mode === 'sandbox_360_test' ? clampValue(viewerState?.yaw ?? 0, -SANDBOX_360_VIEWER_MAX_YAW, SANDBOX_360_VIEWER_MAX_YAW) : 0;
+  const viewerPitch = mode === 'sandbox_360_test' ? clampValue(viewerState?.pitch ?? 0, -SANDBOX_360_VIEWER_MAX_PITCH, SANDBOX_360_VIEWER_MAX_PITCH) : 0;
+  const viewerTranslateX = mode === 'sandbox_360_test'
+    ? Number((viewerYaw / SANDBOX_360_VIEWER_MAX_YAW * SANDBOX_360_PAN_RANGE_X).toFixed(2))
+    : 0;
+  const viewerTranslateY = mode === 'sandbox_360_test'
+    ? Number((viewerPitch / SANDBOX_360_VIEWER_MAX_PITCH * SANDBOX_360_PAN_RANGE_Y).toFixed(2))
+    : 0;
   const sceneTransform = mode === 'sandbox_360_test'
-    ? `perspective(1600px) rotateY(${viewerYaw}deg) rotateX(${viewerPitch}deg)`
+    ? `translate3d(${viewerTranslateX}%, ${viewerTranslateY}%, 0)`
+    : undefined;
+  const sandbox360PanStyle = mode === 'sandbox_360_test'
+    ? {
+        position: 'absolute' as const,
+        inset: `${-SANDBOX_360_SCENE_OVERSCAN_Y / 2}% ${-SANDBOX_360_SCENE_OVERSCAN_X / 2}%`,
+        transform: sceneTransform,
+        willChange: 'transform' as const
+      }
     : undefined;
   const viewerLastCommandAt = mode === 'sandbox_360_test' ? (viewerState?.lastCommandAt ?? 0) : 0;
   const viewerLastCommand = mode === 'sandbox_360_test' ? (viewerState?.lastCommand ?? '-') : '-';
@@ -2001,12 +2022,14 @@ export default function SceneView({
       <div className={`video-layer-wrapper ${isDesktopLayout ? 'video-layer-wrapper-desktop' : 'video-layer-wrapper-mobile'}`}>
         <div
           ref={videoLayerRef}
-          className={`scene-video-layer filter-layer ${curseVisualClass(curse)}`}
+          className={`scene-video-layer filter-layer ${curseVisualClass(curse)} ${mode === 'sandbox_360_test' ? 'scene-video-layer-sandbox360' : ''}`.trim()}
           data-viewer-yaw={viewerYaw}
           data-viewer-pitch={viewerPitch}
+          data-viewer-translate-x={viewerTranslateX}
+          data-viewer-translate-y={viewerTranslateY}
           data-viewer-transform={sceneTransform ?? 'none'}
-          style={sceneTransform ? { transform: sceneTransform, transformStyle: 'preserve-3d' } : undefined}
         >
+          <div className={mode === 'sandbox_360_test' ? 'scene-pan-surface' : undefined} style={sandbox360PanStyle}>
           <video
             id="videoA"
             className="scene-video"
@@ -2136,6 +2159,7 @@ export default function SceneView({
             onRenderStateChange={wordReveal?.onRenderStateChange}
           />
           <div id="blackoutOverlay" className="overlay blackout-overlay" style={{ opacity: blackoutOpacity }} />
+          </div>
         </div>
 
         {assets.noiseOk && (
@@ -2177,6 +2201,8 @@ export default function SceneView({
               <div>viewer lastCommandAt: {viewerLastCommandAt || '-'}</div>
               <div>viewer yaw: {viewerYaw}</div>
               <div>viewer pitch: {viewerPitch}</div>
+              <div>viewer translateX: {viewerTranslateX}%</div>
+              <div>viewer translateY: {viewerTranslateY}%</div>
               <div>viewer transform: {sceneTransform ?? 'none'}</div>
             </>
           )}

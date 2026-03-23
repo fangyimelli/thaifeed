@@ -1,3 +1,11 @@
+## 2026-03-23 Sandbox 360 fake first-person pan viewer
+
+- 問題根因：`sandbox_360_test` 原本直接把整個 `SceneView` 主畫面套 `rotateY/rotateX`，因此視覺效果像被翻轉的平面海報，而不是第一人稱在同一場景內平移視角。
+- `src/ui/scene/SceneView.tsx` 改為 `viewport + oversized scene surface`：外層固定 viewer 尺寸並裁切，內層 scene surface 以 overscan 放大，渲染時把 `yaw -> translateX`、`pitch -> translateY`，並輸出最小 debug：`yaw / pitch / translateX / translateY`。
+- `src/styles.css` 為 `sandbox_360_test` 新增 cover + hidden overflow 規則，確保平移時仍填滿 viewer、避免露出黑邊；classic 與 sandbox_story 保持原樣。
+- `src/app/App.tsx` 針對 sandbox_360_test command update 加入 yaw/pitch clamp，限制 viewer state 不會推到素材邊界外；左右位移保留較大幅度、上下較小幅度。
+- 驗證基準：連續送出 `左/右/上/下` 時，debug overlay 與 `data-viewer-translate-x/y` 會同步變化，且不再輸出 rotate transform。
+
 ## 2026-03-23 Sandbox 360 viewer command audit fix
 
 - Audit 結論：原本 `sandbox_360_test` 的 command path 雖在 `submitChat()` 呼叫 `parseViewerCommand()`，但命中後只嘗試寫入 mode ref state，缺少可用的 `setState()` 與 React re-render publish，導致 `SceneView` 常停在舊 props，看起來聊天室有訊息但畫面不旋轉。
