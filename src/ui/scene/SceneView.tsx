@@ -50,7 +50,11 @@ type Props = {
   onNeedUserGestureChange?: (value: boolean) => void;
   onSceneRunning?: () => void;
   onSceneError?: (error: SceneInitError) => void;
-  mode?: 'classic' | 'sandbox_story';
+  mode?: 'classic' | 'sandbox_story' | 'sandbox_360_test';
+  viewerState?: {
+    yaw: number;
+    pitch: number;
+  };
   promptVisible?: boolean;
   wordReveal?: {
     visible: boolean;
@@ -588,6 +592,7 @@ export default function SceneView({
   onSceneRunning,
   onSceneError,
   mode = 'classic',
+  viewerState,
   promptVisible = true,
   wordReveal
 }: Props) {
@@ -1979,6 +1984,11 @@ export default function SceneView({
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
   const revealPromptSuppressed = Boolean(wordReveal?.phase === 'word' || wordReveal?.phase === 'done');
   const consonantBubbleVisible = Boolean(promptVisible) && !revealPromptSuppressed;
+  const viewerYaw = mode === 'sandbox_360_test' ? (viewerState?.yaw ?? 0) : 0;
+  const viewerPitch = mode === 'sandbox_360_test' ? (viewerState?.pitch ?? 0) : 0;
+  const sceneTransform = mode === 'sandbox_360_test'
+    ? `perspective(1600px) rotateY(${viewerYaw}deg) rotateX(${viewerPitch}deg)`
+    : undefined;
 
   return (
     <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
@@ -1986,6 +1996,7 @@ export default function SceneView({
         <div
           ref={videoLayerRef}
           className={`scene-video-layer filter-layer ${curseVisualClass(curse)}`}
+          style={sceneTransform ? { transform: sceneTransform, transformStyle: 'preserve-3d' } : undefined}
         >
           <video
             id="videoA"
@@ -2151,6 +2162,12 @@ export default function SceneView({
           <div>lastSwapResult: {videoDebug?.lastSwapResult ? `${videoDebug.lastSwapResult.ok ? 'ok' : 'fail'} ${videoDebug.lastSwapResult.fromKey ?? '-'} -> ${videoDebug.lastSwapResult.toKey ?? '-'} (${videoDebug.lastSwapResult.reason})` : '-'}</div>
           <div>currentActive/bufferActive: {String(videoDebug?.currentActive ?? false)} / {String(videoDebug?.bufferActive ?? false)}</div>
           <div>isSwitching / isInJump: {String(videoDebug?.isSwitching ?? false)} / {String(videoDebug?.isInJump ?? false)}</div>
+          {mode === 'sandbox_360_test' && (
+            <>
+              <div>viewer yaw: {viewerYaw}</div>
+              <div>viewer pitch: {viewerPitch}</div>
+            </>
+          )}
           <div>nextJumpDueIn: {nextJumpDueInSec}s</div>
           <div>now/dueAt/diffMs: {videoDebug?.nowMs ?? '-'} / {videoDebug?.plannedJump?.dueAt ?? '-'} / {videoDebug?.dueInMs ?? '-'}</div>
           <div>
