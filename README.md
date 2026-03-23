@@ -2209,6 +2209,7 @@ Console（debug 模式）可觀察：
 - `App.tsx` 的 `submitChat()` 僅在 `sandbox_360_test` 時攔截視角指令：命中後只更新 `sandbox.viewer.yaw/pitch/lastCommandAt` 並直接 return，不走 `consumePlayerReply` / `replyGate` / flow step。
 - `SceneView` 僅在 `sandbox_360_test` 讀取 `viewerState` 並套用 `rotateY/rotateX`，debug overlay 另顯示 `viewer yaw/pitch`；其他 mode 行為不變。
 - Debug Mode Switcher 新增 `sandbox_360_test` 入口，方便按需求切換驗證。
+- `/debug/player` 也新增 `Open sandbox_360_test` 快捷按鈕，避免只進 debug page 時找不到切換入口。
 
 ## 2026-03-22 Chat Content Manifest Extraction
 

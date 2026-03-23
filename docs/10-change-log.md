@@ -5,6 +5,7 @@
 - `src/app/App.tsx` 的 `submitChat()` 新增 sandbox_360_test 專用短路：命中 viewer command 時只寫入 viewer state，且不進 `consumePlayerReply` / `replyGate` / flow step。
 - `src/ui/scene/SceneView.tsx` 新增 sandbox_360_test 視角 transform 與 debug overlay yaw/pitch 顯示；classic 與 sandbox_story 保持原路徑。
 - `src/app/debug/DebugModeSwitcher.tsx` 新增 `sandbox_360_test` 切換按鈕，便於依指定流程驗證。
+- `src/app/DebugPlayerPage.tsx` 新增 `Open sandbox_360_test` / `Open sandbox_story` / `Open classic` 快捷入口，讓 `/debug/player` 也能直接跳到正確的 debug app mode。
 
 ### Removed / Deprecated Log
 - 2026-03-23：sandbox_360_test 不建立第二套 classic/reply-gate/chat-panel 流程；聊天室指令只做 viewer control，避免與既有 sandbox_story 雙軌並存。
