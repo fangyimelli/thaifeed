@@ -346,6 +346,21 @@ export function createSandbox360Mode(): GameMode & Record<string, any> {
     tick() {},
     dispose() {},
     getState: () => ensureSandbox360StateShape(state),
+    setState: (patch: any) => {
+      if (!patch || typeof patch !== 'object') return ensureSandbox360StateShape(state);
+      const nextPatch = { ...patch };
+      if (patch.viewer) {
+        nextPatch.viewer = {
+          ...state.viewer,
+          ...patch.viewer
+        };
+      }
+      state = ensureSandbox360StateShape({
+        ...state,
+        ...nextPatch
+      });
+      return ensureSandbox360StateShape(state);
+    },
     getFearDebugState: () => fear,
     getCurrentNode: () => resolveRoundNode(state, ssot).node,
     getCurrentPrompt: () => state.prompt.current,

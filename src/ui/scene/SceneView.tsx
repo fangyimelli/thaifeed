@@ -54,6 +54,9 @@ type Props = {
   viewerState?: {
     yaw: number;
     pitch: number;
+    lastCommandAt?: number;
+    lastCommand?: string;
+    lastParseMatched?: boolean;
   };
   promptVisible?: boolean;
   wordReveal?: {
@@ -1989,6 +1992,9 @@ export default function SceneView({
   const sceneTransform = mode === 'sandbox_360_test'
     ? `perspective(1600px) rotateY(${viewerYaw}deg) rotateX(${viewerPitch}deg)`
     : undefined;
+  const viewerLastCommandAt = mode === 'sandbox_360_test' ? (viewerState?.lastCommandAt ?? 0) : 0;
+  const viewerLastCommand = mode === 'sandbox_360_test' ? (viewerState?.lastCommand ?? '-') : '-';
+  const viewerParseMatched = mode === 'sandbox_360_test' ? Boolean(viewerState?.lastParseMatched) : false;
 
   return (
     <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
@@ -1996,6 +2002,9 @@ export default function SceneView({
         <div
           ref={videoLayerRef}
           className={`scene-video-layer filter-layer ${curseVisualClass(curse)}`}
+          data-viewer-yaw={viewerYaw}
+          data-viewer-pitch={viewerPitch}
+          data-viewer-transform={sceneTransform ?? 'none'}
           style={sceneTransform ? { transform: sceneTransform, transformStyle: 'preserve-3d' } : undefined}
         >
           <video
@@ -2164,8 +2173,11 @@ export default function SceneView({
           <div>isSwitching / isInJump: {String(videoDebug?.isSwitching ?? false)} / {String(videoDebug?.isInJump ?? false)}</div>
           {mode === 'sandbox_360_test' && (
             <>
+              <div>viewer command: {viewerLastCommand} | matched: {String(viewerParseMatched)}</div>
+              <div>viewer lastCommandAt: {viewerLastCommandAt || '-'}</div>
               <div>viewer yaw: {viewerYaw}</div>
               <div>viewer pitch: {viewerPitch}</div>
+              <div>viewer transform: {sceneTransform ?? 'none'}</div>
             </>
           )}
           <div>nextJumpDueIn: {nextJumpDueInSec}s</div>
