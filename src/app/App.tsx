@@ -366,8 +366,8 @@ const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_HANDHELD_WOBBLE_X = 0;
 const SANDBOX_360_FIXED_VERTICAL_OFFSET = -1.2;
 const SANDBOX_360_BASE_SCALE = 1.01;
-const SANDBOX_360_BREATHING_SCALE_AMPLITUDE = 0.0012;
-const SANDBOX_360_SHOT_SAFE_RANGE_RATIO = 0.75;
+const SANDBOX_360_BREATHING_SCALE_AMPLITUDE = 0;
+const SANDBOX_360_SHOT_SAFE_RANGE_RATIO = 0.88;
 const SANDBOX_360_CENTER_SHOT_X = 0;
 
 function normalizeHandle(raw: string): string {
@@ -7912,16 +7912,16 @@ export default function App() {
             <div className="sandbox360-debug-overlay" aria-live="polite">
               <div>currentShot: {sandbox360ViewerState.currentShot}</div>
               <div>targetShot: {sandbox360ViewerState.targetShot}</div>
-              <div>leftShotX: {sandbox360ViewerState.leftShotX.toFixed(2)}</div>
-              <div>centerShotX: {sandbox360ViewerState.centerShotX.toFixed(2)}</div>
-              <div>rightShotX: {sandbox360ViewerState.rightShotX.toFixed(2)}</div>
+              <div>leftShot: {sandbox360ViewerState.leftShotX.toFixed(2)}</div>
+              <div>centerShot: {sandbox360ViewerState.centerShotX.toFixed(2)}</div>
+              <div>rightShot: {sandbox360ViewerState.rightShotX.toFixed(2)}</div>
               <div>currentX: {sandbox360ViewerState.currentX.toFixed(2)}</div>
               <div>targetX: {sandbox360ViewerState.targetX.toFixed(2)}</div>
               <div>scale: {sandbox360ViewerState.scale.toFixed(4)}</div>
               <div>renderedVideoWidth: {sandbox360ViewerState.renderedVideoWidth.toFixed(2)}</div>
               <div>viewportWidth: {sandbox360ViewerState.viewportWidth.toFixed(2)}</div>
-              <div>safeLeftX: {sandbox360ViewerState.safeLeftX.toFixed(2)}</div>
-              <div>safeRightX: {sandbox360ViewerState.safeRightX.toFixed(2)}</div>
+              <div>safeLeft: {sandbox360ViewerState.safeLeftX.toFixed(2)}</div>
+              <div>safeRight: {sandbox360ViewerState.safeRightX.toFixed(2)}</div>
             </div>
           )}
           {!appStarted && (
