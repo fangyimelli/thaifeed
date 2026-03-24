@@ -367,9 +367,8 @@ const SANDBOX_360_HANDHELD_WOBBLE_X = 0;
 const SANDBOX_360_FIXED_VERTICAL_OFFSET = -1.2;
 const SANDBOX_360_BASE_SCALE = 1.01;
 const SANDBOX_360_BREATHING_SCALE_AMPLITUDE = 0.0012;
-const SANDBOX_360_LEFT_SHOT_X = -300;
+const SANDBOX_360_SHOT_SAFE_RANGE_RATIO = 0.75;
 const SANDBOX_360_CENTER_SHOT_X = 0;
-const SANDBOX_360_RIGHT_SHOT_X = 300;
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
@@ -709,9 +708,9 @@ export default function App() {
     maxOffsetY: 0,
     safeLeftX: 0,
     safeRightX: 0,
-    leftShotX: SANDBOX_360_LEFT_SHOT_X,
+    leftShotX: 0,
     centerShotX: SANDBOX_360_CENTER_SHOT_X,
-    rightShotX: SANDBOX_360_RIGHT_SHOT_X,
+    rightShotX: 0,
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1765,9 +1764,9 @@ export default function App() {
         maxOffsetY: 0,
         safeLeftX: 0,
         safeRightX: 0,
-        leftShotX: SANDBOX_360_LEFT_SHOT_X,
+        leftShotX: 0,
         centerShotX: SANDBOX_360_CENTER_SHOT_X,
-        rightShotX: SANDBOX_360_RIGHT_SHOT_X,
+        rightShotX: 0,
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
@@ -4890,9 +4889,9 @@ export default function App() {
         const maxOffsetY = Math.max(0, (renderedVideoHeight - viewportHeight) / 2);
         const safeLeftX = -maxOffsetX;
         const safeRightX = maxOffsetX;
-        const leftShotX = SANDBOX_360_LEFT_SHOT_X;
+        const leftShotX = safeLeftX * SANDBOX_360_SHOT_SAFE_RANGE_RATIO;
         const centerShotX = SANDBOX_360_CENTER_SHOT_X;
-        const rightShotX = SANDBOX_360_RIGHT_SHOT_X;
+        const rightShotX = safeRightX * SANDBOX_360_SHOT_SAFE_RANGE_RATIO;
         const shotXMap = {
           left: leftShotX,
           center: centerShotX,
@@ -4901,7 +4900,7 @@ export default function App() {
         const resolvedTargetShot = currentViewer.targetShot in shotXMap ? currentViewer.targetShot : 'center';
         const targetX = shotXMap[resolvedTargetShot as keyof typeof shotXMap];
         const currentX = currentViewer.currentX + (targetX - currentViewer.currentX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
-        const txRaw = currentX + wobbleX;
+        const txRaw = -currentX + wobbleX;
         const tyRaw = SANDBOX_360_FIXED_VERTICAL_OFFSET;
         const tx = Math.min(Math.max(txRaw, safeLeftX), safeRightX);
         const ty = Math.min(Math.max(tyRaw, -maxOffsetY), maxOffsetY);
