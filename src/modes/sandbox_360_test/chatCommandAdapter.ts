@@ -1,18 +1,9 @@
-export type ViewerCommand = { type: 'LEFT' | 'RIGHT' | 'UP' | 'DOWN' };
+export type ViewerCommand = { type: 'LEFT' | 'CENTER' | 'RIGHT' };
 
 const COMMAND_MAP: Record<string, ViewerCommand['type']> = {
   左: 'LEFT',
-  右: 'RIGHT',
-  上: 'UP',
-  下: 'DOWN',
-  '←': 'LEFT',
-  '→': 'RIGHT',
-  '↑': 'UP',
-  '↓': 'DOWN',
-  left: 'LEFT',
-  right: 'RIGHT',
-  up: 'UP',
-  down: 'DOWN'
+  中: 'CENTER',
+  右: 'RIGHT'
 };
 
 export function parseViewerCommand(text: string): ViewerCommand | null {

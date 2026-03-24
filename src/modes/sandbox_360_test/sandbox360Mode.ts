@@ -160,7 +160,7 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
-  viewer: { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0, time: 0, tx: 0, ty: 0, scale: 1.06, lastCommandAt: 0 }
+  viewer: { currentShot: 'center', targetShot: 'center', currentX: 0, targetX: 0, time: 0, tx: 0, ty: 0, scale: 1.08, lastCommandAt: 0 }
   };
 };
 
@@ -231,6 +231,18 @@ export function ensureSandbox360StateShape(raw: any) {
   next.round = { ...base.round, ...(raw?.round ?? {}) };
   next.blockedReason = raw?.blockedReason ?? raw?.blocked?.reason ?? base.blockedReason;
   next.viewer = { ...base.viewer, ...(raw?.viewer ?? {}) };
+  if (!next.viewer.currentShot || typeof next.viewer.currentShot !== 'string') {
+    next.viewer.currentShot = 'center';
+  }
+  if (!next.viewer.targetShot || typeof next.viewer.targetShot !== 'string') {
+    next.viewer.targetShot = next.viewer.currentShot;
+  }
+  if (!Number.isFinite(next.viewer.currentX)) {
+    next.viewer.currentX = Number.isFinite(raw?.viewer?.tx) ? Number(raw.viewer.tx) : 0;
+  }
+  if (!Number.isFinite(next.viewer.targetX)) {
+    next.viewer.targetX = next.viewer.currentX;
+  }
   return next;
 }
 

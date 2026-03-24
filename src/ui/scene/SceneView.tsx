@@ -52,8 +52,16 @@ type Props = {
   onSceneError?: (error: SceneInitError) => void;
   mode?: 'classic' | 'sandbox_story' | 'sandbox_360_test';
   viewerState?: {
-    yaw: number;
-    pitch: number;
+    currentShot?: 'left' | 'center' | 'right';
+    targetShot?: 'left' | 'center' | 'right';
+    currentX?: number;
+    targetX?: number;
+    tx?: number;
+    ty?: number;
+    renderedVideoWidth?: number;
+    viewportWidth?: number;
+    safeLeftX?: number;
+    safeRightX?: number;
     lastCommandAt?: number;
     lastCommand?: string;
     lastParseMatched?: boolean;
@@ -112,11 +120,6 @@ const randomMs = (min: number, max: number) => {
 };
 
 const clampCurse = (c: number) => Math.min(Math.max(c, 0), 100);
-const clampValue = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-const SANDBOX_360_VIEWER_MAX_YAW = 72;
-const SANDBOX_360_VIEWER_MAX_PITCH = 36;
-const SANDBOX_360_PAN_RANGE_X = 12;
-const SANDBOX_360_PAN_RANGE_Y = 5;
 const SANDBOX_360_SCENE_OVERSCAN_X = 24;
 const SANDBOX_360_SCENE_OVERSCAN_Y = 10;
 
@@ -1994,16 +1997,18 @@ export default function SceneView({
   const pulseOpacity = Math.min(1, 0.35 + curse / 120);
   const revealPromptSuppressed = Boolean(wordReveal?.phase === 'word' || wordReveal?.phase === 'done');
   const consonantBubbleVisible = Boolean(promptVisible) && !revealPromptSuppressed;
-  const viewerYaw = mode === 'sandbox_360_test' ? clampValue(viewerState?.yaw ?? 0, -SANDBOX_360_VIEWER_MAX_YAW, SANDBOX_360_VIEWER_MAX_YAW) : 0;
-  const viewerPitch = mode === 'sandbox_360_test' ? clampValue(viewerState?.pitch ?? 0, -SANDBOX_360_VIEWER_MAX_PITCH, SANDBOX_360_VIEWER_MAX_PITCH) : 0;
-  const viewerTranslateX = mode === 'sandbox_360_test'
-    ? Number((viewerYaw / SANDBOX_360_VIEWER_MAX_YAW * SANDBOX_360_PAN_RANGE_X).toFixed(2))
-    : 0;
-  const viewerTranslateY = mode === 'sandbox_360_test'
-    ? Number((viewerPitch / SANDBOX_360_VIEWER_MAX_PITCH * SANDBOX_360_PAN_RANGE_Y).toFixed(2))
-    : 0;
+  const viewerCurrentShot = mode === 'sandbox_360_test' ? (viewerState?.currentShot ?? 'center') : 'center';
+  const viewerTargetShot = mode === 'sandbox_360_test' ? (viewerState?.targetShot ?? 'center') : 'center';
+  const viewerCurrentX = mode === 'sandbox_360_test' ? Number(viewerState?.currentX ?? 0) : 0;
+  const viewerTargetX = mode === 'sandbox_360_test' ? Number(viewerState?.targetX ?? 0) : 0;
+  const viewerTranslateX = mode === 'sandbox_360_test' ? Number(viewerState?.tx ?? 0) : 0;
+  const viewerTranslateY = mode === 'sandbox_360_test' ? Number(viewerState?.ty ?? 0) : 0;
+  const viewerRenderedVideoWidth = mode === 'sandbox_360_test' ? Number(viewerState?.renderedVideoWidth ?? 0) : 0;
+  const viewerViewportWidth = mode === 'sandbox_360_test' ? Number(viewerState?.viewportWidth ?? 0) : 0;
+  const viewerSafeLeftX = mode === 'sandbox_360_test' ? Number(viewerState?.safeLeftX ?? 0) : 0;
+  const viewerSafeRightX = mode === 'sandbox_360_test' ? Number(viewerState?.safeRightX ?? 0) : 0;
   const sceneTransform = mode === 'sandbox_360_test'
-    ? `translate3d(${viewerTranslateX}%, ${viewerTranslateY}%, 0)`
+    ? `translate3d(${viewerTranslateX.toFixed(2)}px, ${viewerTranslateY.toFixed(2)}px, 0)`
     : undefined;
   const sandbox360PanStyle = mode === 'sandbox_360_test'
     ? {
@@ -2023,8 +2028,10 @@ export default function SceneView({
         <div
           ref={videoLayerRef}
           className={`scene-video-layer filter-layer ${curseVisualClass(curse)} ${mode === 'sandbox_360_test' ? 'scene-video-layer-sandbox360' : ''}`.trim()}
-          data-viewer-yaw={viewerYaw}
-          data-viewer-pitch={viewerPitch}
+          data-viewer-current-shot={viewerCurrentShot}
+          data-viewer-target-shot={viewerTargetShot}
+          data-viewer-current-x={viewerCurrentX}
+          data-viewer-target-x={viewerTargetX}
           data-viewer-translate-x={viewerTranslateX}
           data-viewer-translate-y={viewerTranslateY}
           data-viewer-transform={sceneTransform ?? 'none'}
@@ -2199,10 +2206,16 @@ export default function SceneView({
             <>
               <div>viewer command: {viewerLastCommand} | matched: {String(viewerParseMatched)}</div>
               <div>viewer lastCommandAt: {viewerLastCommandAt || '-'}</div>
-              <div>viewer yaw: {viewerYaw}</div>
-              <div>viewer pitch: {viewerPitch}</div>
-              <div>viewer translateX: {viewerTranslateX}%</div>
-              <div>viewer translateY: {viewerTranslateY}%</div>
+              <div>viewer currentShot: {viewerCurrentShot}</div>
+              <div>viewer targetShot: {viewerTargetShot}</div>
+              <div>viewer currentX: {viewerCurrentX.toFixed(2)}px</div>
+              <div>viewer targetX: {viewerTargetX.toFixed(2)}px</div>
+              <div>viewer renderedVideoWidth: {viewerRenderedVideoWidth.toFixed(2)}</div>
+              <div>viewer viewportWidth: {viewerViewportWidth.toFixed(2)}</div>
+              <div>viewer safeLeftX: {viewerSafeLeftX.toFixed(2)}</div>
+              <div>viewer safeRightX: {viewerSafeRightX.toFixed(2)}</div>
+              <div>viewer translateX: {viewerTranslateX.toFixed(2)}px</div>
+              <div>viewer translateY: {viewerTranslateY.toFixed(2)}px</div>
               <div>viewer transform: {sceneTransform ?? 'none'}</div>
             </>
           )}
