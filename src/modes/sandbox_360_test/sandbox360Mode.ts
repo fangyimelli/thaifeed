@@ -160,7 +160,7 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
-  viewer: { yaw: 0, pitch: 0, lastCommandAt: 0 }
+  viewer: { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0, time: 0, tx: 0, ty: 0, scale: 1.06, lastCommandAt: 0 }
   };
 };
 
