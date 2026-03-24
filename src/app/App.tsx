@@ -360,12 +360,19 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
 }
 
 const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
-const SANDBOX_360_BASE_SCALE = 1.05;
-const SANDBOX_360_BREATHING_SCALE_AMPLITUDE = 0.005;
-const SANDBOX_360_LEFT_POS_X = 18;
+const SANDBOX_360_VERTICAL_SMOOTH_FACTOR = 0.08;
+const SANDBOX_360_SCALE_SMOOTH_FACTOR = 0.06;
+const SANDBOX_360_LEFT_POS_X = 22;
 const SANDBOX_360_CENTER_POS_X = 50;
-const SANDBOX_360_RIGHT_POS_X = 82;
+const SANDBOX_360_RIGHT_POS_X = 78;
 const SANDBOX_360_POS_Y = 50;
+const SANDBOX_360_BASE_SCALE = 1.12;
+const SANDBOX_360_OBJECT_FIT = 'cover';
+const SANDBOX_360_SHOT_PRESETS: Record<'left' | 'center' | 'right', { posX: number; posY: number; scale: number }> = {
+  left: { posX: SANDBOX_360_LEFT_POS_X, posY: 50, scale: 1.16 },
+  center: { posX: SANDBOX_360_CENTER_POS_X, posY: 50, scale: 1.12 },
+  right: { posX: SANDBOX_360_RIGHT_POS_X, posY: 50, scale: 1.16 }
+};
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
@@ -4850,15 +4857,14 @@ export default function App() {
           lastCommandAt: 0
         };
         const time = currentViewer.time + delta;
-        const scale = SANDBOX_360_BASE_SCALE + Math.sin(time * 0.5) * SANDBOX_360_BREATHING_SCALE_AMPLITUDE;
-        const shotPosXMap = {
-          left: SANDBOX_360_LEFT_POS_X,
-          center: SANDBOX_360_CENTER_POS_X,
-          right: SANDBOX_360_RIGHT_POS_X
-        } as const;
-        const resolvedTargetShot = currentViewer.targetShot in shotPosXMap ? currentViewer.targetShot : 'center';
-        const targetPosX = shotPosXMap[resolvedTargetShot as keyof typeof shotPosXMap];
+        const resolvedTargetShot = currentViewer.targetShot in SANDBOX_360_SHOT_PRESETS ? currentViewer.targetShot : 'center';
+        const targetPreset = SANDBOX_360_SHOT_PRESETS[resolvedTargetShot as keyof typeof SANDBOX_360_SHOT_PRESETS];
+        const targetPosX = targetPreset.posX;
+        const targetPosY = targetPreset.posY;
+        const targetScale = targetPreset.scale;
         const currentPosX = currentViewer.currentPosX + (targetPosX - currentViewer.currentPosX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
+        const posY = currentViewer.posY + (targetPosY - currentViewer.posY) * SANDBOX_360_VERTICAL_SMOOTH_FACTOR;
+        const scale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
         const nextViewer = {
           ...currentViewer,
           targetShot: resolvedTargetShot,
@@ -4866,7 +4872,7 @@ export default function App() {
           currentPosX,
           targetPosX,
           time,
-          posY: SANDBOX_360_POS_Y,
+          posY,
           scale
         };
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
@@ -4877,7 +4883,7 @@ export default function App() {
           currentPosX: nextViewer.currentPosX,
           targetPosX: nextViewer.targetPosX,
           time,
-          posY: SANDBOX_360_POS_Y,
+          posY: nextViewer.posY,
           scale,
           leftPosX: SANDBOX_360_LEFT_POS_X,
           centerPosX: SANDBOX_360_CENTER_POS_X,
@@ -4886,8 +4892,9 @@ export default function App() {
         const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
         if (videoLayer) {
           videoLayer.style.setProperty('--sandbox360-object-pos-x', `${currentPosX.toFixed(3)}%`);
-          videoLayer.style.setProperty('--sandbox360-object-pos-y', `${SANDBOX_360_POS_Y.toFixed(3)}%`);
+          videoLayer.style.setProperty('--sandbox360-object-pos-y', `${nextViewer.posY.toFixed(3)}%`);
           videoLayer.style.setProperty('--sandbox360-scale', `${scale.toFixed(5)}`);
+          videoLayer.style.setProperty('--sandbox360-object-fit', SANDBOX_360_OBJECT_FIT);
         }
       }
       rafId = window.requestAnimationFrame(tick);
