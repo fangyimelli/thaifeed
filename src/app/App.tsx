@@ -59,7 +59,7 @@ import {
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
 import { createSandbox360Mode } from '../modes/sandbox_360_test/sandbox360Mode';
-import { parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
+import { isViewerCommandText, parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
 import {
   isSandboxWaitReplyStep,
   parseSandboxWaitReplyIndex,
@@ -5264,7 +5264,10 @@ export default function App() {
     const raw = rawText.trim();
     if (!raw) return markBlocked('empty_input');
     if (isComposing) return markBlocked('is_composing');
-    if (modeRef.current.id === 'sandbox_360_test') {
+    const runtimeModeId = modeRef.current.id;
+    const selectedModeId = modeIdRef.current;
+    const sandbox360ModeActive = runtimeModeId === 'sandbox_360_test' && selectedModeId === 'sandbox_360_test';
+    if (sandbox360ModeActive) {
       const viewerCommand = parseViewerCommand(raw);
       updateChatDebug({
         sandbox: {
@@ -5278,6 +5281,7 @@ export default function App() {
         }
       } as any);
       if (viewerCommand) {
+        console.debug('[viewer-cmd] applied (mode=sandbox_360_test)', { raw, command: viewerCommand.type });
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? { yaw: 0, pitch: 0, lastCommandAt: 0 };
         const nextViewer = { ...currentViewer, lastCommandAt: now };
@@ -5325,6 +5329,8 @@ export default function App() {
         logSendDebug('sent', { source, mode: 'sandbox_360_test_viewer_command', command: viewerCommand.type });
         return { ok: true, status: 'sent' };
       }
+    } else if (isViewerCommandText(raw)) {
+      console.debug(`[viewer-cmd] ignored (mode=${runtimeModeId})`, { raw, selectedModeId });
     }
     const normalizeHandleToken = (value: string | null | undefined) => {
       const normalized = normalizeHandle(value || '');
