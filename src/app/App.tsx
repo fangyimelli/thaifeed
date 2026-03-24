@@ -363,6 +363,11 @@ const SANDBOX_360_VIEWER_STEP_YAW = 20;
 const SANDBOX_360_VIEWER_STEP_PITCH = 15;
 const SANDBOX_360_VIEWER_MAX_TARGET_YAW = 100;
 const SANDBOX_360_VIEWER_MAX_TARGET_PITCH = 80;
+const SANDBOX_360_BASE_VIDEO_OVERSIZE_MIN = 1.65;
+const SANDBOX_360_BASE_VIDEO_OVERSIZE_MAX = 1.8;
+const SANDBOX_360_VIDEO_ASPECT_RATIO = 16 / 9;
+const SANDBOX_360_HORIZONTAL_PAN_FACTOR = 0.28;
+const SANDBOX_360_VERTICAL_PAN_FACTOR = SANDBOX_360_HORIZONTAL_PAN_FACTOR * 0.4;
 
 function clampSandbox360ViewerTarget(value: number, axis: 'yaw' | 'pitch') {
   const limit = axis === 'yaw' ? SANDBOX_360_VIEWER_MAX_TARGET_YAW : SANDBOX_360_VIEWER_MAX_TARGET_PITCH;
@@ -699,6 +704,14 @@ export default function App() {
     tx: 0,
     ty: 0,
     scale: 1.06,
+    viewportWidth: 0,
+    viewportHeight: 0,
+    renderedVideoWidth: 0,
+    renderedVideoHeight: 0,
+    maxOffsetX: 0,
+    maxOffsetY: 0,
+    clampedTx: 0,
+    clampedTy: 0,
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1744,6 +1757,14 @@ export default function App() {
         tx: sandbox360State.viewer?.tx ?? 0,
         ty: sandbox360State.viewer?.ty ?? 0,
         scale: sandbox360State.viewer?.scale ?? 1.06,
+        viewportWidth: 0,
+        viewportHeight: 0,
+        renderedVideoWidth: 0,
+        renderedVideoHeight: 0,
+        maxOffsetX: 0,
+        maxOffsetY: 0,
+        clampedTx: sandbox360State.viewer?.tx ?? 0,
+        clampedTy: sandbox360State.viewer?.ty ?? 0,
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
@@ -4854,8 +4875,23 @@ export default function App() {
         const wobbleX = Math.sin(time * 1.2) * 0.6;
         const wobbleY = Math.sin(time * 0.8) * 0.4;
         const scale = 1.06 + Math.sin(time * 0.5) * 0.01;
-        const tx = yaw + wobbleX;
-        const ty = pitch + wobbleY;
+        const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
+        const viewportWidth = Math.max(0, videoLayer?.clientWidth ?? 0);
+        const viewportHeight = Math.max(0, videoLayer?.clientHeight ?? 0);
+        const viewportAspect = viewportHeight > 0 ? viewportWidth / viewportHeight : SANDBOX_360_VIDEO_ASPECT_RATIO;
+        const aspectGap = Math.abs(viewportAspect - SANDBOX_360_VIDEO_ASPECT_RATIO) / SANDBOX_360_VIDEO_ASPECT_RATIO;
+        const baseVideoOversize = Math.min(
+          SANDBOX_360_BASE_VIDEO_OVERSIZE_MAX,
+          Math.max(SANDBOX_360_BASE_VIDEO_OVERSIZE_MIN, SANDBOX_360_BASE_VIDEO_OVERSIZE_MIN + aspectGap * 0.2)
+        );
+        const renderedVideoWidth = viewportWidth * baseVideoOversize * scale;
+        const renderedVideoHeight = viewportHeight * baseVideoOversize * scale;
+        const maxOffsetX = Math.max(0, (renderedVideoWidth - viewportWidth) / 2);
+        const maxOffsetY = Math.max(0, (renderedVideoHeight - viewportHeight) / 2);
+        const txRaw = (yaw / SANDBOX_360_VIEWER_MAX_TARGET_YAW) * viewportWidth * SANDBOX_360_HORIZONTAL_PAN_FACTOR + wobbleX;
+        const tyRaw = (pitch / SANDBOX_360_VIEWER_MAX_TARGET_PITCH) * viewportHeight * SANDBOX_360_VERTICAL_PAN_FACTOR + wobbleY;
+        const tx = Math.min(Math.max(txRaw, -maxOffsetX), maxOffsetX);
+        const ty = Math.min(Math.max(tyRaw, -maxOffsetY), maxOffsetY);
         const nextViewer = {
           ...currentViewer,
           yaw,
@@ -4875,14 +4911,22 @@ export default function App() {
           time,
           tx,
           ty,
-          scale
+          scale,
+          viewportWidth,
+          viewportHeight,
+          renderedVideoWidth,
+          renderedVideoHeight,
+          maxOffsetX,
+          maxOffsetY,
+          clampedTx: tx,
+          clampedTy: ty
         }));
-
-        const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
         if (videoLayer) {
           videoLayer.style.setProperty('--sandbox360-tx', `${tx.toFixed(3)}px`);
           videoLayer.style.setProperty('--sandbox360-ty', `${ty.toFixed(3)}px`);
           videoLayer.style.setProperty('--sandbox360-scale', `${scale.toFixed(5)}`);
+          videoLayer.style.setProperty('--sandbox360-video-width', `${(baseVideoOversize * 100).toFixed(3)}%`);
+          videoLayer.style.setProperty('--sandbox360-video-height', `${(baseVideoOversize * 100).toFixed(3)}%`);
         }
       }
       rafId = window.requestAnimationFrame(tick);
@@ -5386,6 +5430,14 @@ export default function App() {
           tx: nextViewer.tx,
           ty: nextViewer.ty,
           scale: nextViewer.scale,
+          viewportWidth: sandbox360ViewerState.viewportWidth,
+          viewportHeight: sandbox360ViewerState.viewportHeight,
+          renderedVideoWidth: sandbox360ViewerState.renderedVideoWidth,
+          renderedVideoHeight: sandbox360ViewerState.renderedVideoHeight,
+          maxOffsetX: sandbox360ViewerState.maxOffsetX,
+          maxOffsetY: sandbox360ViewerState.maxOffsetY,
+          clampedTx: sandbox360ViewerState.clampedTx,
+          clampedTy: sandbox360ViewerState.clampedTy,
           lastCommandAt: nextViewer.lastCommandAt,
           lastCommand: viewerCommand.type,
           lastParseMatched: true
@@ -5411,6 +5463,14 @@ export default function App() {
               tx: nextViewer.tx,
               ty: nextViewer.ty,
               scale: nextViewer.scale,
+              viewportWidth: sandbox360ViewerState.viewportWidth,
+              viewportHeight: sandbox360ViewerState.viewportHeight,
+              renderedVideoWidth: sandbox360ViewerState.renderedVideoWidth,
+              renderedVideoHeight: sandbox360ViewerState.renderedVideoHeight,
+              maxOffsetX: sandbox360ViewerState.maxOffsetX,
+              maxOffsetY: sandbox360ViewerState.maxOffsetY,
+              clampedTx: sandbox360ViewerState.clampedTx,
+              clampedTy: sandbox360ViewerState.clampedTy,
               lastCommandAt: nextViewer.lastCommandAt,
               lastCommand: viewerCommand.type
             }
@@ -7829,6 +7889,14 @@ export default function App() {
               <div>tx: {sandbox360ViewerState.tx.toFixed(2)}</div>
               <div>ty: {sandbox360ViewerState.ty.toFixed(2)}</div>
               <div>scale: {sandbox360ViewerState.scale.toFixed(4)}</div>
+              <div>viewportWidth: {sandbox360ViewerState.viewportWidth.toFixed(2)}</div>
+              <div>viewportHeight: {sandbox360ViewerState.viewportHeight.toFixed(2)}</div>
+              <div>renderedVideoWidth: {sandbox360ViewerState.renderedVideoWidth.toFixed(2)}</div>
+              <div>renderedVideoHeight: {sandbox360ViewerState.renderedVideoHeight.toFixed(2)}</div>
+              <div>maxOffsetX: {sandbox360ViewerState.maxOffsetX.toFixed(2)}</div>
+              <div>maxOffsetY: {sandbox360ViewerState.maxOffsetY.toFixed(2)}</div>
+              <div>clampedTx: {sandbox360ViewerState.clampedTx.toFixed(2)}</div>
+              <div>clampedTy: {sandbox360ViewerState.clampedTy.toFixed(2)}</div>
             </div>
           )}
           {!appStarted && (
