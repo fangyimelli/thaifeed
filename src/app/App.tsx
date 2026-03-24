@@ -360,7 +360,7 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
 }
 
 const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
-const SANDBOX_360_BASE_SCALE = 1.01;
+const SANDBOX_360_BASE_SCALE = 1.05;
 const SANDBOX_360_BREATHING_SCALE_AMPLITUDE = 0.005;
 const SANDBOX_360_LEFT_POS_X = 18;
 const SANDBOX_360_CENTER_POS_X = 50;
