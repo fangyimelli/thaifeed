@@ -539,14 +539,8 @@ body {
     height: 100%;
   }
 
-  .scene-view-mobile .scene-video {
+  .scene-view-mobile .scene-video-layer:not(.scene-video-layer-sandbox360) .scene-video {
     object-fit: contain;
-  }
-
-  .scene-view-mobile .scene-video-layer-sandbox360 .scene-video {
-    object-fit: var(--sandbox360-object-fit);
-    object-position: var(--sandbox360-object-pos-x) var(--sandbox360-object-pos-y);
-    transform: scale(var(--sandbox360-scale));
   }
 
   .scene-view-mobile .filter-layer.curse-mid,
