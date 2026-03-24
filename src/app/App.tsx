@@ -58,7 +58,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
-import { createSandbox360Mode } from '../modes/sandbox_360_test/sandbox360Mode';
+import { createSandbox360Mode, resolveSandbox360ViewerFraming } from '../modes/sandbox_360_test/sandbox360Mode';
 import { isViewerCommandText, parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
 import {
   isSandboxWaitReplyStep,
@@ -362,37 +362,6 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
 const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_VERTICAL_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_SCALE_SMOOTH_FACTOR = 0.06;
-const SANDBOX_360_DESKTOP_LEFT_POS_X = 22;
-const SANDBOX_360_DESKTOP_CENTER_POS_X = 50;
-const SANDBOX_360_DESKTOP_RIGHT_POS_X = 78;
-const SANDBOX_360_MOBILE_LEFT_POS_X = 10;
-const SANDBOX_360_MOBILE_CENTER_POS_X = 50;
-const SANDBOX_360_MOBILE_RIGHT_POS_X = 90;
-const SANDBOX_360_DESKTOP_SCALE = 1.05;
-const SANDBOX_360_MOBILE_SCALE = 1.0;
-const SANDBOX_360_MAX_SCALE = 1.08;
-const SANDBOX_360_ASPECT_BREAKPOINT = 1.2;
-const SANDBOX_360_POS_Y = 50;
-const SANDBOX_360_BASE_SCALE = SANDBOX_360_DESKTOP_SCALE;
-const SANDBOX_360_OBJECT_FIT = 'cover';
-
-function resolveSandbox360Framing(viewportWidth: number, viewportHeight: number) {
-  const safeWidth = viewportWidth > 0 ? viewportWidth : window.innerWidth || 1;
-  const safeHeight = viewportHeight > 0 ? viewportHeight : window.innerHeight || 1;
-  const aspect = safeWidth / safeHeight;
-  const mode: 'desktop' | 'mobile' = aspect > SANDBOX_360_ASPECT_BREAKPOINT ? 'desktop' : 'mobile';
-  const leftPosX = mode === 'desktop' ? SANDBOX_360_DESKTOP_LEFT_POS_X : SANDBOX_360_MOBILE_LEFT_POS_X;
-  const centerPosX = mode === 'desktop' ? SANDBOX_360_DESKTOP_CENTER_POS_X : SANDBOX_360_MOBILE_CENTER_POS_X;
-  const rightPosX = mode === 'desktop' ? SANDBOX_360_DESKTOP_RIGHT_POS_X : SANDBOX_360_MOBILE_RIGHT_POS_X;
-  const baseScale = mode === 'desktop' ? SANDBOX_360_DESKTOP_SCALE : SANDBOX_360_MOBILE_SCALE;
-  const clampedScale = Math.min(baseScale, SANDBOX_360_MAX_SCALE);
-  const shotPresets: Record<'left' | 'center' | 'right', { posX: number; posY: number; scale: number }> = {
-    left: { posX: leftPosX, posY: SANDBOX_360_POS_Y, scale: clampedScale },
-    center: { posX: centerPosX, posY: SANDBOX_360_POS_Y, scale: clampedScale },
-    right: { posX: rightPosX, posY: SANDBOX_360_POS_Y, scale: clampedScale }
-  };
-  return { aspect, mode, leftPosX, centerPosX, rightPosX, scale: clampedScale, shotPresets };
-}
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
@@ -715,19 +684,20 @@ export default function App() {
       return candidate > prev ? candidate : prev + 1;
     });
   }, []);
+  const initialSandbox360Framing = resolveSandbox360ViewerFraming(window.innerWidth, window.innerHeight);
   const [sandbox360ViewerState, setSandbox360ViewerState] = useState({
     currentShot: 'center' as 'left' | 'center' | 'right',
     targetShot: 'center' as 'left' | 'center' | 'right',
-    currentPosX: SANDBOX_360_DESKTOP_CENTER_POS_X,
-    targetPosX: SANDBOX_360_DESKTOP_CENTER_POS_X,
+    currentPosX: initialSandbox360Framing.centerPosX,
+    targetPosX: initialSandbox360Framing.centerPosX,
     time: 0,
-    posY: SANDBOX_360_POS_Y,
-    scale: SANDBOX_360_BASE_SCALE,
-    leftPosX: SANDBOX_360_DESKTOP_LEFT_POS_X,
-    centerPosX: SANDBOX_360_DESKTOP_CENTER_POS_X,
-    rightPosX: SANDBOX_360_DESKTOP_RIGHT_POS_X,
-    aspect: 16 / 9,
-    mode: 'desktop' as 'desktop' | 'mobile',
+    posY: initialSandbox360Framing.posY,
+    scale: initialSandbox360Framing.scale,
+    leftPosX: initialSandbox360Framing.leftPosX,
+    centerPosX: initialSandbox360Framing.centerPosX,
+    rightPosX: initialSandbox360Framing.rightPosX,
+    aspect: initialSandbox360Framing.aspect,
+    mode: initialSandbox360Framing.mode,
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1764,14 +1734,14 @@ export default function App() {
       ensureSandboxRuntimeStarted('mode_switch_bootstrap');
     } else if (selectedMode === 'sandbox_360_test') {
       const sandbox360State = sandbox360ModeRef.current.getState();
-      const framing = resolveSandbox360Framing(window.innerWidth, window.innerHeight);
+      const framing = resolveSandbox360ViewerFraming(window.innerWidth, window.innerHeight);
       setSandbox360ViewerState({
         currentShot: sandbox360State.viewer?.currentShot ?? 'center',
         targetShot: sandbox360State.viewer?.targetShot ?? 'center',
         currentPosX: sandbox360State.viewer?.currentPosX ?? framing.centerPosX,
         targetPosX: sandbox360State.viewer?.targetPosX ?? framing.centerPosX,
         time: sandbox360State.viewer?.time ?? 0,
-        posY: SANDBOX_360_POS_Y,
+        posY: framing.posY,
         scale: sandbox360State.viewer?.scale ?? framing.scale,
         leftPosX: framing.leftPosX,
         centerPosX: framing.centerPosX,
@@ -4870,7 +4840,7 @@ export default function App() {
       const delta = Math.max(0, Math.min(0.05, (ts - lastTs) / 1000));
       lastTs = ts;
       if (modeIdRef.current === 'sandbox_360_test') {
-        const framing = resolveSandbox360Framing(window.innerWidth, window.innerHeight);
+        const framing = resolveSandbox360ViewerFraming(window.innerWidth, window.innerHeight);
         const currentState = sandbox360ModeRef.current.getState();
         const currentViewer = currentState.viewer ?? {
           currentShot: 'center',
@@ -4878,7 +4848,7 @@ export default function App() {
           currentPosX: framing.centerPosX,
           targetPosX: framing.centerPosX,
           time: 0,
-          posY: SANDBOX_360_POS_Y,
+          posY: framing.posY,
           scale: framing.scale,
           lastCommandAt: 0
         };
@@ -4887,11 +4857,10 @@ export default function App() {
         const targetPreset = framing.shotPresets[resolvedTargetShot as keyof typeof framing.shotPresets];
         const targetPosX = targetPreset.posX;
         const targetPosY = targetPreset.posY;
-        const targetScale = Math.min(targetPreset.scale, SANDBOX_360_MAX_SCALE);
+        const targetScale = targetPreset.scale;
         const currentPosX = currentViewer.currentPosX + (targetPosX - currentViewer.currentPosX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
         const posY = currentViewer.posY + (targetPosY - currentViewer.posY) * SANDBOX_360_VERTICAL_SMOOTH_FACTOR;
-        const easedScale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
-        const scale = Math.min(easedScale, SANDBOX_360_MAX_SCALE);
+        const scale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
         const nextViewer = {
           ...currentViewer,
           targetShot: resolvedTargetShot,
@@ -4923,7 +4892,7 @@ export default function App() {
           videoLayer.style.setProperty('--sandbox360-object-pos-x', `${currentPosX.toFixed(3)}%`);
           videoLayer.style.setProperty('--sandbox360-object-pos-y', `${nextViewer.posY.toFixed(3)}%`);
           videoLayer.style.setProperty('--sandbox360-scale', `${scale.toFixed(5)}`);
-          videoLayer.style.setProperty('--sandbox360-object-fit', SANDBOX_360_OBJECT_FIT);
+          videoLayer.style.setProperty('--sandbox360-object-fit', framing.objectFit);
         }
       }
       rafId = window.requestAnimationFrame(tick);
@@ -5400,7 +5369,7 @@ export default function App() {
       } as any);
       if (viewerCommand) {
         console.debug('[viewer-cmd] applied (mode=sandbox_360_test)', { raw, command: viewerCommand.type });
-        const framing = resolveSandbox360Framing(window.innerWidth, window.innerHeight);
+        const framing = resolveSandbox360ViewerFraming(window.innerWidth, window.innerHeight);
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? {
           currentShot: 'center',
@@ -5408,7 +5377,7 @@ export default function App() {
           currentPosX: framing.centerPosX,
           targetPosX: framing.centerPosX,
           time: 0,
-          posY: SANDBOX_360_POS_Y,
+          posY: framing.posY,
           scale: framing.scale,
           lastCommandAt: 0
         };
@@ -5423,7 +5392,7 @@ export default function App() {
           currentPosX: nextViewer.currentPosX,
           targetPosX: nextViewer.targetPosX,
           time: nextViewer.time,
-          posY: SANDBOX_360_POS_Y,
+          posY: framing.posY,
           scale: nextViewer.scale,
           leftPosX: framing.leftPosX,
           centerPosX: framing.centerPosX,
@@ -5452,7 +5421,7 @@ export default function App() {
               currentPosX: nextViewer.currentPosX,
               targetPosX: nextViewer.targetPosX,
               time: nextViewer.time,
-              posY: SANDBOX_360_POS_Y,
+              posY: framing.posY,
               scale: nextViewer.scale,
               leftPosX: framing.leftPosX,
               centerPosX: framing.centerPosX,
