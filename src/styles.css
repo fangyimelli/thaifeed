@@ -293,6 +293,8 @@ body {
   --sandbox360-tx: 0px;
   --sandbox360-ty: 0px;
   --sandbox360-scale: 1.06;
+  --sandbox360-video-width: 170%;
+  --sandbox360-video-height: 170%;
 }
 .scene-pan-surface { position: absolute; }
 .scene-video, .overlay { position: absolute; width: 100%; height: 100%; inset: 0; }
@@ -301,8 +303,8 @@ body {
 .scene-video-layer-sandbox360 .scene-video {
   top: 50%;
   left: 50%;
-  width: 100%;
-  height: 100%;
+  width: var(--sandbox360-video-width);
+  height: var(--sandbox360-video-height);
   inset: auto;
   transform: translate(calc(-50% + var(--sandbox360-tx)), calc(-50% + var(--sandbox360-ty))) scale(var(--sandbox360-scale));
   transform-origin: center;
