@@ -362,6 +362,7 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
 const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_VERTICAL_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_SCALE_SMOOTH_FACTOR = 0.06;
+const SANDBOX_360_SHOT_SETTLE_THRESHOLD = 0.35;
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
@@ -696,6 +697,8 @@ export default function App() {
     leftPosX: initialSandbox360Framing.leftPosX,
     centerPosX: initialSandbox360Framing.centerPosX,
     rightPosX: initialSandbox360Framing.rightPosX,
+    posError: 0,
+    isSettled: true,
     aspect: initialSandbox360Framing.aspect,
     mode: initialSandbox360Framing.mode,
     lastCommandAt: 0,
@@ -1740,6 +1743,8 @@ export default function App() {
         targetShot: sandbox360State.viewer?.targetShot ?? 'center',
         currentPosX: sandbox360State.viewer?.currentPosX ?? framing.centerPosX,
         targetPosX: sandbox360State.viewer?.targetPosX ?? framing.centerPosX,
+        posError: Math.abs((sandbox360State.viewer?.currentPosX ?? framing.centerPosX) - (sandbox360State.viewer?.targetPosX ?? framing.centerPosX)),
+        isSettled: Math.abs((sandbox360State.viewer?.currentPosX ?? framing.centerPosX) - (sandbox360State.viewer?.targetPosX ?? framing.centerPosX)) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
         time: sandbox360State.viewer?.time ?? 0,
         posY: framing.posY,
         scale: sandbox360State.viewer?.scale ?? framing.scale,
@@ -4859,12 +4864,14 @@ export default function App() {
         const targetPosY = targetPreset.posY;
         const targetScale = targetPreset.scale;
         const currentPosX = currentViewer.currentPosX + (targetPosX - currentViewer.currentPosX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
+        const posError = Math.abs(currentPosX - targetPosX);
+        const isSettled = posError < SANDBOX_360_SHOT_SETTLE_THRESHOLD;
         const posY = currentViewer.posY + (targetPosY - currentViewer.posY) * SANDBOX_360_VERTICAL_SMOOTH_FACTOR;
         const scale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
         const nextViewer = {
           ...currentViewer,
           targetShot: resolvedTargetShot,
-          currentShot: resolvedTargetShot,
+          currentShot: isSettled ? resolvedTargetShot : currentViewer.currentShot,
           currentPosX,
           targetPosX,
           time,
@@ -4878,6 +4885,8 @@ export default function App() {
           targetShot: nextViewer.targetShot,
           currentPosX: nextViewer.currentPosX,
           targetPosX: nextViewer.targetPosX,
+          posError,
+          isSettled,
           time,
           posY: nextViewer.posY,
           scale,
@@ -5391,6 +5400,8 @@ export default function App() {
           targetShot: nextViewer.targetShot,
           currentPosX: nextViewer.currentPosX,
           targetPosX: nextViewer.targetPosX,
+          posError: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX),
+          isSettled: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
           time: nextViewer.time,
           posY: framing.posY,
           scale: nextViewer.scale,
@@ -5426,6 +5437,8 @@ export default function App() {
               leftPosX: framing.leftPosX,
               centerPosX: framing.centerPosX,
               rightPosX: framing.rightPosX,
+              posError: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX),
+              isSettled: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
               aspect: framing.aspect,
               mode: framing.mode,
               lastCommandAt: nextViewer.lastCommandAt,
@@ -7855,6 +7868,8 @@ export default function App() {
               <div>leftPosX: {sandbox360ViewerState.leftPosX.toFixed(2)}%</div>
               <div>centerPosX: {sandbox360ViewerState.centerPosX.toFixed(2)}%</div>
               <div>rightPosX: {sandbox360ViewerState.rightPosX.toFixed(2)}%</div>
+              <div>posError: {sandbox360ViewerState.posError.toFixed(3)}%</div>
+              <div>isSettled: {sandbox360ViewerState.isSettled ? 'true' : 'false'}</div>
               <div>scale: {sandbox360ViewerState.scale.toFixed(4)}</div>
             </div>
           )}
