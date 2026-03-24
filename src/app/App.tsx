@@ -362,17 +362,37 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
 const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_VERTICAL_SMOOTH_FACTOR = 0.08;
 const SANDBOX_360_SCALE_SMOOTH_FACTOR = 0.06;
-const SANDBOX_360_LEFT_POS_X = 22;
-const SANDBOX_360_CENTER_POS_X = 50;
-const SANDBOX_360_RIGHT_POS_X = 78;
+const SANDBOX_360_DESKTOP_LEFT_POS_X = 22;
+const SANDBOX_360_DESKTOP_CENTER_POS_X = 50;
+const SANDBOX_360_DESKTOP_RIGHT_POS_X = 78;
+const SANDBOX_360_MOBILE_LEFT_POS_X = 10;
+const SANDBOX_360_MOBILE_CENTER_POS_X = 50;
+const SANDBOX_360_MOBILE_RIGHT_POS_X = 90;
+const SANDBOX_360_DESKTOP_SCALE = 1.05;
+const SANDBOX_360_MOBILE_SCALE = 1.0;
+const SANDBOX_360_MAX_SCALE = 1.08;
+const SANDBOX_360_ASPECT_BREAKPOINT = 1.2;
 const SANDBOX_360_POS_Y = 50;
-const SANDBOX_360_BASE_SCALE = 1.12;
+const SANDBOX_360_BASE_SCALE = SANDBOX_360_DESKTOP_SCALE;
 const SANDBOX_360_OBJECT_FIT = 'cover';
-const SANDBOX_360_SHOT_PRESETS: Record<'left' | 'center' | 'right', { posX: number; posY: number; scale: number }> = {
-  left: { posX: SANDBOX_360_LEFT_POS_X, posY: 50, scale: 1.16 },
-  center: { posX: SANDBOX_360_CENTER_POS_X, posY: 50, scale: 1.12 },
-  right: { posX: SANDBOX_360_RIGHT_POS_X, posY: 50, scale: 1.16 }
-};
+
+function resolveSandbox360Framing(viewportWidth: number, viewportHeight: number) {
+  const safeWidth = viewportWidth > 0 ? viewportWidth : window.innerWidth || 1;
+  const safeHeight = viewportHeight > 0 ? viewportHeight : window.innerHeight || 1;
+  const aspect = safeWidth / safeHeight;
+  const mode: 'desktop' | 'mobile' = aspect > SANDBOX_360_ASPECT_BREAKPOINT ? 'desktop' : 'mobile';
+  const leftPosX = mode === 'desktop' ? SANDBOX_360_DESKTOP_LEFT_POS_X : SANDBOX_360_MOBILE_LEFT_POS_X;
+  const centerPosX = mode === 'desktop' ? SANDBOX_360_DESKTOP_CENTER_POS_X : SANDBOX_360_MOBILE_CENTER_POS_X;
+  const rightPosX = mode === 'desktop' ? SANDBOX_360_DESKTOP_RIGHT_POS_X : SANDBOX_360_MOBILE_RIGHT_POS_X;
+  const baseScale = mode === 'desktop' ? SANDBOX_360_DESKTOP_SCALE : SANDBOX_360_MOBILE_SCALE;
+  const clampedScale = Math.min(baseScale, SANDBOX_360_MAX_SCALE);
+  const shotPresets: Record<'left' | 'center' | 'right', { posX: number; posY: number; scale: number }> = {
+    left: { posX: leftPosX, posY: SANDBOX_360_POS_Y, scale: clampedScale },
+    center: { posX: centerPosX, posY: SANDBOX_360_POS_Y, scale: clampedScale },
+    right: { posX: rightPosX, posY: SANDBOX_360_POS_Y, scale: clampedScale }
+  };
+  return { aspect, mode, leftPosX, centerPosX, rightPosX, scale: clampedScale, shotPresets };
+}
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
@@ -698,14 +718,16 @@ export default function App() {
   const [sandbox360ViewerState, setSandbox360ViewerState] = useState({
     currentShot: 'center' as 'left' | 'center' | 'right',
     targetShot: 'center' as 'left' | 'center' | 'right',
-    currentPosX: SANDBOX_360_CENTER_POS_X,
-    targetPosX: SANDBOX_360_CENTER_POS_X,
+    currentPosX: SANDBOX_360_DESKTOP_CENTER_POS_X,
+    targetPosX: SANDBOX_360_DESKTOP_CENTER_POS_X,
     time: 0,
     posY: SANDBOX_360_POS_Y,
     scale: SANDBOX_360_BASE_SCALE,
-    leftPosX: SANDBOX_360_LEFT_POS_X,
-    centerPosX: SANDBOX_360_CENTER_POS_X,
-    rightPosX: SANDBOX_360_RIGHT_POS_X,
+    leftPosX: SANDBOX_360_DESKTOP_LEFT_POS_X,
+    centerPosX: SANDBOX_360_DESKTOP_CENTER_POS_X,
+    rightPosX: SANDBOX_360_DESKTOP_RIGHT_POS_X,
+    aspect: 16 / 9,
+    mode: 'desktop' as 'desktop' | 'mobile',
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1742,17 +1764,20 @@ export default function App() {
       ensureSandboxRuntimeStarted('mode_switch_bootstrap');
     } else if (selectedMode === 'sandbox_360_test') {
       const sandbox360State = sandbox360ModeRef.current.getState();
+      const framing = resolveSandbox360Framing(window.innerWidth, window.innerHeight);
       setSandbox360ViewerState({
         currentShot: sandbox360State.viewer?.currentShot ?? 'center',
         targetShot: sandbox360State.viewer?.targetShot ?? 'center',
-        currentPosX: sandbox360State.viewer?.currentPosX ?? SANDBOX_360_CENTER_POS_X,
-        targetPosX: sandbox360State.viewer?.targetPosX ?? SANDBOX_360_CENTER_POS_X,
+        currentPosX: sandbox360State.viewer?.currentPosX ?? framing.centerPosX,
+        targetPosX: sandbox360State.viewer?.targetPosX ?? framing.centerPosX,
         time: sandbox360State.viewer?.time ?? 0,
         posY: SANDBOX_360_POS_Y,
-        scale: sandbox360State.viewer?.scale ?? SANDBOX_360_BASE_SCALE,
-        leftPosX: SANDBOX_360_LEFT_POS_X,
-        centerPosX: SANDBOX_360_CENTER_POS_X,
-        rightPosX: SANDBOX_360_RIGHT_POS_X,
+        scale: sandbox360State.viewer?.scale ?? framing.scale,
+        leftPosX: framing.leftPosX,
+        centerPosX: framing.centerPosX,
+        rightPosX: framing.rightPosX,
+        aspect: framing.aspect,
+        mode: framing.mode,
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
@@ -4845,26 +4870,28 @@ export default function App() {
       const delta = Math.max(0, Math.min(0.05, (ts - lastTs) / 1000));
       lastTs = ts;
       if (modeIdRef.current === 'sandbox_360_test') {
+        const framing = resolveSandbox360Framing(window.innerWidth, window.innerHeight);
         const currentState = sandbox360ModeRef.current.getState();
         const currentViewer = currentState.viewer ?? {
           currentShot: 'center',
           targetShot: 'center',
-          currentPosX: SANDBOX_360_CENTER_POS_X,
-          targetPosX: SANDBOX_360_CENTER_POS_X,
+          currentPosX: framing.centerPosX,
+          targetPosX: framing.centerPosX,
           time: 0,
           posY: SANDBOX_360_POS_Y,
-          scale: SANDBOX_360_BASE_SCALE,
+          scale: framing.scale,
           lastCommandAt: 0
         };
         const time = currentViewer.time + delta;
-        const resolvedTargetShot = currentViewer.targetShot in SANDBOX_360_SHOT_PRESETS ? currentViewer.targetShot : 'center';
-        const targetPreset = SANDBOX_360_SHOT_PRESETS[resolvedTargetShot as keyof typeof SANDBOX_360_SHOT_PRESETS];
+        const resolvedTargetShot = currentViewer.targetShot in framing.shotPresets ? currentViewer.targetShot : 'center';
+        const targetPreset = framing.shotPresets[resolvedTargetShot as keyof typeof framing.shotPresets];
         const targetPosX = targetPreset.posX;
         const targetPosY = targetPreset.posY;
-        const targetScale = targetPreset.scale;
+        const targetScale = Math.min(targetPreset.scale, SANDBOX_360_MAX_SCALE);
         const currentPosX = currentViewer.currentPosX + (targetPosX - currentViewer.currentPosX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
         const posY = currentViewer.posY + (targetPosY - currentViewer.posY) * SANDBOX_360_VERTICAL_SMOOTH_FACTOR;
-        const scale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
+        const easedScale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
+        const scale = Math.min(easedScale, SANDBOX_360_MAX_SCALE);
         const nextViewer = {
           ...currentViewer,
           targetShot: resolvedTargetShot,
@@ -4885,9 +4912,11 @@ export default function App() {
           time,
           posY: nextViewer.posY,
           scale,
-          leftPosX: SANDBOX_360_LEFT_POS_X,
-          centerPosX: SANDBOX_360_CENTER_POS_X,
-          rightPosX: SANDBOX_360_RIGHT_POS_X
+          leftPosX: framing.leftPosX,
+          centerPosX: framing.centerPosX,
+          rightPosX: framing.rightPosX,
+          aspect: framing.aspect,
+          mode: framing.mode
         }));
         const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
         if (videoLayer) {
@@ -5371,15 +5400,16 @@ export default function App() {
       } as any);
       if (viewerCommand) {
         console.debug('[viewer-cmd] applied (mode=sandbox_360_test)', { raw, command: viewerCommand.type });
+        const framing = resolveSandbox360Framing(window.innerWidth, window.innerHeight);
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? {
           currentShot: 'center',
           targetShot: 'center',
-          currentPosX: SANDBOX_360_CENTER_POS_X,
-          targetPosX: SANDBOX_360_CENTER_POS_X,
+          currentPosX: framing.centerPosX,
+          targetPosX: framing.centerPosX,
           time: 0,
           posY: SANDBOX_360_POS_Y,
-          scale: SANDBOX_360_BASE_SCALE,
+          scale: framing.scale,
           lastCommandAt: 0
         };
         const nextViewer = { ...currentViewer, lastCommandAt: now };
@@ -5395,9 +5425,11 @@ export default function App() {
           time: nextViewer.time,
           posY: SANDBOX_360_POS_Y,
           scale: nextViewer.scale,
-          leftPosX: SANDBOX_360_LEFT_POS_X,
-          centerPosX: SANDBOX_360_CENTER_POS_X,
-          rightPosX: SANDBOX_360_RIGHT_POS_X,
+          leftPosX: framing.leftPosX,
+          centerPosX: framing.centerPosX,
+          rightPosX: framing.rightPosX,
+          aspect: framing.aspect,
+          mode: framing.mode,
           lastCommandAt: nextViewer.lastCommandAt,
           lastCommand: viewerCommand.type,
           lastParseMatched: true
@@ -5422,9 +5454,11 @@ export default function App() {
               time: nextViewer.time,
               posY: SANDBOX_360_POS_Y,
               scale: nextViewer.scale,
-              leftPosX: SANDBOX_360_LEFT_POS_X,
-              centerPosX: SANDBOX_360_CENTER_POS_X,
-              rightPosX: SANDBOX_360_RIGHT_POS_X,
+              leftPosX: framing.leftPosX,
+              centerPosX: framing.centerPosX,
+              rightPosX: framing.rightPosX,
+              aspect: framing.aspect,
+              mode: framing.mode,
               lastCommandAt: nextViewer.lastCommandAt,
               lastCommand: viewerCommand.type
             }
@@ -7846,6 +7880,8 @@ export default function App() {
             <div className="sandbox360-debug-overlay" aria-live="polite">
               <div>currentShot: {sandbox360ViewerState.currentShot}</div>
               <div>targetShot: {sandbox360ViewerState.targetShot}</div>
+              <div>aspect: {sandbox360ViewerState.aspect.toFixed(4)}</div>
+              <div>mode: {sandbox360ViewerState.mode}</div>
               <div>currentPosX: {sandbox360ViewerState.currentPosX.toFixed(2)}%</div>
               <div>leftPosX: {sandbox360ViewerState.leftPosX.toFixed(2)}%</div>
               <div>centerPosX: {sandbox360ViewerState.centerPosX.toFixed(2)}%</div>
