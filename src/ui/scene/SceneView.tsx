@@ -2006,6 +2006,23 @@ export default function SceneView({
   const viewerLastCommandAt = mode === 'sandbox_360_test' ? (viewerState?.lastCommandAt ?? 0) : 0;
   const viewerLastCommand = mode === 'sandbox_360_test' ? (viewerState?.lastCommand ?? '-') : '-';
   const viewerParseMatched = mode === 'sandbox_360_test' ? Boolean(viewerState?.lastParseMatched) : false;
+  const sandbox360ComputedStyle = (() => {
+    if (mode !== 'sandbox_360_test') return null;
+    const layer = videoLayerRef.current;
+    const activeVideo = currentVideoRef.current === 'A' ? videoARef.current : videoBRef.current;
+    if (!layer || !activeVideo) return null;
+    const layerStyle = window.getComputedStyle(layer);
+    const videoStyle = window.getComputedStyle(activeVideo);
+    return {
+      objectFit: videoStyle.objectFit,
+      objectPosition: videoStyle.objectPosition,
+      transform: videoStyle.transform,
+      cssVarPosX: layerStyle.getPropertyValue('--sandbox360-object-pos-x').trim(),
+      cssVarPosY: layerStyle.getPropertyValue('--sandbox360-object-pos-y').trim(),
+      cssVarScale: layerStyle.getPropertyValue('--sandbox360-scale').trim(),
+      cssVarFit: layerStyle.getPropertyValue('--sandbox360-object-fit').trim()
+    };
+  })();
 
   return (
     <section className={`scene-view ${isDesktopLayout ? 'scene-view-desktop' : 'scene-view-mobile'}`}>
@@ -2198,6 +2215,13 @@ export default function SceneView({
               <div>viewer rightPosX: {viewerRightPosX.toFixed(2)}%</div>
               <div>viewer posY: {viewerPosY.toFixed(2)}%</div>
               <div>viewer scale: {viewerScale.toFixed(4)}</div>
+              <div>computed object-fit: {sandbox360ComputedStyle?.objectFit ?? '-'}</div>
+              <div>computed object-position: {sandbox360ComputedStyle?.objectPosition ?? '-'}</div>
+              <div>computed transform: {sandbox360ComputedStyle?.transform ?? '-'}</div>
+              <div>computed --sandbox360-object-pos-x: {sandbox360ComputedStyle?.cssVarPosX ?? '-'}</div>
+              <div>computed --sandbox360-object-pos-y: {sandbox360ComputedStyle?.cssVarPosY ?? '-'}</div>
+              <div>computed --sandbox360-scale: {sandbox360ComputedStyle?.cssVarScale ?? '-'}</div>
+              <div>computed --sandbox360-object-fit: {sandbox360ComputedStyle?.cssVarFit ?? '-'}</div>
             </>
           )}
           <div>nextJumpDueIn: {nextJumpDueInSec}s</div>

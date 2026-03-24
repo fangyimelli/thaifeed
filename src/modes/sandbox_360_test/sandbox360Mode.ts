@@ -39,6 +39,59 @@ type SandboxPinnedReplyState = {
 };
 
 const SANDBOX_BOOTSTRAP_MIN_DURATION_MS = 30_000;
+const SANDBOX_360_ASPECT_BREAKPOINT = 1.2;
+const SANDBOX_360_MAX_SCALE = 1.08;
+const SANDBOX_360_POS_Y = 50;
+const SANDBOX_360_DEVICE_PRESETS = {
+  desktop: {
+    leftPosX: 22,
+    centerPosX: 50,
+    rightPosX: 78,
+    baseScale: 1.05
+  },
+  mobile: {
+    leftPosX: 10,
+    centerPosX: 50,
+    rightPosX: 90,
+    baseScale: 1.0
+  }
+} as const;
+
+export type Sandbox360ViewerFraming = {
+  aspect: number;
+  mode: 'desktop' | 'mobile';
+  leftPosX: number;
+  centerPosX: number;
+  rightPosX: number;
+  posY: number;
+  scale: number;
+  objectFit: 'cover';
+  shotPresets: Record<'left' | 'center' | 'right', { posX: number; posY: number; scale: number }>;
+};
+
+export function resolveSandbox360ViewerFraming(viewportWidth: number, viewportHeight: number): Sandbox360ViewerFraming {
+  const safeWidth = viewportWidth > 0 ? viewportWidth : window.innerWidth || 1;
+  const safeHeight = viewportHeight > 0 ? viewportHeight : window.innerHeight || 1;
+  const aspect = safeWidth / safeHeight;
+  const mode: 'desktop' | 'mobile' = aspect > SANDBOX_360_ASPECT_BREAKPOINT ? 'desktop' : 'mobile';
+  const strategy = SANDBOX_360_DEVICE_PRESETS[mode];
+  const scale = Math.min(strategy.baseScale, SANDBOX_360_MAX_SCALE);
+  return {
+    aspect,
+    mode,
+    leftPosX: strategy.leftPosX,
+    centerPosX: strategy.centerPosX,
+    rightPosX: strategy.rightPosX,
+    posY: SANDBOX_360_POS_Y,
+    scale,
+    objectFit: 'cover',
+    shotPresets: {
+      left: { posX: strategy.leftPosX, posY: SANDBOX_360_POS_Y, scale },
+      center: { posX: strategy.centerPosX, posY: SANDBOX_360_POS_Y, scale },
+      right: { posX: strategy.rightPosX, posY: SANDBOX_360_POS_Y, scale }
+    }
+  };
+}
 
 function shuffledOrder(length: number): number[] {
   const order = Array.from({ length }, (_, i) => i);
