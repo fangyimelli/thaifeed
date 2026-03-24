@@ -359,20 +359,16 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
   return 'classic';
 }
 
-const SANDBOX_360_VIEWER_STEP_YAW = 20;
-const SANDBOX_360_VIEWER_STEP_PITCH = 15;
-const SANDBOX_360_VIEWER_MAX_TARGET_YAW = 100;
-const SANDBOX_360_VIEWER_MAX_TARGET_PITCH = 80;
-const SANDBOX_360_BASE_VIDEO_OVERSIZE_MIN = 1.65;
-const SANDBOX_360_BASE_VIDEO_OVERSIZE_MAX = 1.8;
+const SANDBOX_360_BASE_VIDEO_OVERSIZE_MIN = 1.78;
+const SANDBOX_360_BASE_VIDEO_OVERSIZE_MAX = 1.95;
 const SANDBOX_360_VIDEO_ASPECT_RATIO = 16 / 9;
-const SANDBOX_360_HORIZONTAL_PAN_FACTOR = 0.28;
-const SANDBOX_360_VERTICAL_PAN_FACTOR = SANDBOX_360_HORIZONTAL_PAN_FACTOR * 0.4;
-
-function clampSandbox360ViewerTarget(value: number, axis: 'yaw' | 'pitch') {
-  const limit = axis === 'yaw' ? SANDBOX_360_VIEWER_MAX_TARGET_YAW : SANDBOX_360_VIEWER_MAX_TARGET_PITCH;
-  return Math.min(Math.max(value, -limit), limit);
-}
+const SANDBOX_360_SHOT_SMOOTH_FACTOR = 0.08;
+const SANDBOX_360_HANDHELD_WOBBLE_X = 0.45;
+const SANDBOX_360_HANDHELD_WOBBLE_Y = 0.16;
+const SANDBOX_360_FIXED_VERTICAL_OFFSET = -1.2;
+const SANDBOX_360_LEFT_SHOT_RATIO = -0.78;
+const SANDBOX_360_CENTER_SHOT_RATIO = 0;
+const SANDBOX_360_RIGHT_SHOT_RATIO = 0.78;
 
 function normalizeHandle(raw: string): string {
   return raw.trim().replace(/^@+/, '');
@@ -696,22 +692,22 @@ export default function App() {
     });
   }, []);
   const [sandbox360ViewerState, setSandbox360ViewerState] = useState({
-    yaw: 0,
-    pitch: 0,
-    targetYaw: 0,
-    targetPitch: 0,
+    currentShot: 'center' as 'left' | 'center' | 'right',
+    targetShot: 'center' as 'left' | 'center' | 'right',
+    currentX: 0,
+    targetX: 0,
     time: 0,
     tx: 0,
     ty: 0,
-    scale: 1.06,
+    scale: 1.08,
     viewportWidth: 0,
     viewportHeight: 0,
     renderedVideoWidth: 0,
     renderedVideoHeight: 0,
     maxOffsetX: 0,
     maxOffsetY: 0,
-    clampedTx: 0,
-    clampedTy: 0,
+    safeLeftX: 0,
+    safeRightX: 0,
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1749,22 +1745,22 @@ export default function App() {
     } else if (selectedMode === 'sandbox_360_test') {
       const sandbox360State = sandbox360ModeRef.current.getState();
       setSandbox360ViewerState({
-        yaw: sandbox360State.viewer?.yaw ?? 0,
-        pitch: sandbox360State.viewer?.pitch ?? 0,
-        targetYaw: sandbox360State.viewer?.targetYaw ?? 0,
-        targetPitch: sandbox360State.viewer?.targetPitch ?? 0,
+        currentShot: sandbox360State.viewer?.currentShot ?? 'center',
+        targetShot: sandbox360State.viewer?.targetShot ?? 'center',
+        currentX: sandbox360State.viewer?.currentX ?? 0,
+        targetX: sandbox360State.viewer?.targetX ?? 0,
         time: sandbox360State.viewer?.time ?? 0,
         tx: sandbox360State.viewer?.tx ?? 0,
         ty: sandbox360State.viewer?.ty ?? 0,
-        scale: sandbox360State.viewer?.scale ?? 1.06,
+        scale: sandbox360State.viewer?.scale ?? 1.08,
         viewportWidth: 0,
         viewportHeight: 0,
         renderedVideoWidth: 0,
         renderedVideoHeight: 0,
         maxOffsetX: 0,
         maxOffsetY: 0,
-        clampedTx: sandbox360State.viewer?.tx ?? 0,
-        clampedTy: sandbox360State.viewer?.ty ?? 0,
+        safeLeftX: 0,
+        safeRightX: 0,
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
@@ -4859,22 +4855,20 @@ export default function App() {
       if (modeIdRef.current === 'sandbox_360_test') {
         const currentState = sandbox360ModeRef.current.getState();
         const currentViewer = currentState.viewer ?? {
-          yaw: 0,
-          pitch: 0,
-          targetYaw: 0,
-          targetPitch: 0,
+          currentShot: 'center',
+          targetShot: 'center',
+          currentX: 0,
+          targetX: 0,
           time: 0,
           tx: 0,
           ty: 0,
-          scale: 1.06,
+          scale: 1.08,
           lastCommandAt: 0
         };
-        const yaw = currentViewer.yaw + (currentViewer.targetYaw - currentViewer.yaw) * 0.08;
-        const pitch = currentViewer.pitch + (currentViewer.targetPitch - currentViewer.pitch) * 0.08;
         const time = currentViewer.time + delta;
-        const wobbleX = Math.sin(time * 1.2) * 0.6;
-        const wobbleY = Math.sin(time * 0.8) * 0.4;
-        const scale = 1.06 + Math.sin(time * 0.5) * 0.01;
+        const wobbleX = Math.sin(time * 1.2) * SANDBOX_360_HANDHELD_WOBBLE_X;
+        const wobbleY = Math.sin(time * 0.8) * SANDBOX_360_HANDHELD_WOBBLE_Y;
+        const scale = 1.08 + Math.sin(time * 0.5) * 0.006;
         const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
         const viewportWidth = Math.max(0, videoLayer?.clientWidth ?? 0);
         const viewportHeight = Math.max(0, videoLayer?.clientHeight ?? 0);
@@ -4888,14 +4882,29 @@ export default function App() {
         const renderedVideoHeight = viewportHeight * baseVideoOversize * scale;
         const maxOffsetX = Math.max(0, (renderedVideoWidth - viewportWidth) / 2);
         const maxOffsetY = Math.max(0, (renderedVideoHeight - viewportHeight) / 2);
-        const txRaw = (yaw / SANDBOX_360_VIEWER_MAX_TARGET_YAW) * viewportWidth * SANDBOX_360_HORIZONTAL_PAN_FACTOR + wobbleX;
-        const tyRaw = (pitch / SANDBOX_360_VIEWER_MAX_TARGET_PITCH) * viewportHeight * SANDBOX_360_VERTICAL_PAN_FACTOR + wobbleY;
-        const tx = Math.min(Math.max(txRaw, -maxOffsetX), maxOffsetX);
+        const safeLeftX = -maxOffsetX;
+        const safeRightX = maxOffsetX;
+        const leftShotX = safeLeftX * SANDBOX_360_LEFT_SHOT_RATIO;
+        const centerShotX = safeLeftX * SANDBOX_360_CENTER_SHOT_RATIO;
+        const rightShotX = safeRightX * SANDBOX_360_RIGHT_SHOT_RATIO;
+        const shotXMap = {
+          left: leftShotX,
+          center: centerShotX,
+          right: rightShotX
+        } as const;
+        const resolvedTargetShot = currentViewer.targetShot in shotXMap ? currentViewer.targetShot : 'center';
+        const targetX = shotXMap[resolvedTargetShot as keyof typeof shotXMap];
+        const currentX = currentViewer.currentX + (targetX - currentViewer.currentX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
+        const txRaw = currentX + wobbleX;
+        const tyRaw = SANDBOX_360_FIXED_VERTICAL_OFFSET + wobbleY;
+        const tx = Math.min(Math.max(txRaw, safeLeftX), safeRightX);
         const ty = Math.min(Math.max(tyRaw, -maxOffsetY), maxOffsetY);
         const nextViewer = {
           ...currentViewer,
-          yaw,
-          pitch,
+          targetShot: resolvedTargetShot,
+          currentShot: resolvedTargetShot,
+          currentX,
+          targetX,
           time,
           tx,
           ty,
@@ -4904,10 +4913,10 @@ export default function App() {
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
         setSandbox360ViewerState((prev) => ({
           ...prev,
-          yaw,
-          pitch,
-          targetYaw: nextViewer.targetYaw,
-          targetPitch: nextViewer.targetPitch,
+          currentShot: nextViewer.currentShot,
+          targetShot: nextViewer.targetShot,
+          currentX: nextViewer.currentX,
+          targetX: nextViewer.targetX,
           time,
           tx,
           ty,
@@ -4918,8 +4927,8 @@ export default function App() {
           renderedVideoHeight,
           maxOffsetX,
           maxOffsetY,
-          clampedTx: tx,
-          clampedTy: ty
+          safeLeftX,
+          safeRightX
         }));
         if (videoLayer) {
           videoLayer.style.setProperty('--sandbox360-tx', `${tx.toFixed(3)}px`);
@@ -5405,27 +5414,26 @@ export default function App() {
         console.debug('[viewer-cmd] applied (mode=sandbox_360_test)', { raw, command: viewerCommand.type });
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? {
-          yaw: 0,
-          pitch: 0,
-          targetYaw: 0,
-          targetPitch: 0,
+          currentShot: 'center',
+          targetShot: 'center',
+          currentX: 0,
+          targetX: 0,
           time: 0,
           tx: 0,
           ty: 0,
-          scale: 1.06,
+          scale: 1.08,
           lastCommandAt: 0
         };
         const nextViewer = { ...currentViewer, lastCommandAt: now };
-        if (viewerCommand.type === 'LEFT') nextViewer.targetYaw = clampSandbox360ViewerTarget(nextViewer.targetYaw - SANDBOX_360_VIEWER_STEP_YAW, 'yaw');
-        if (viewerCommand.type === 'RIGHT') nextViewer.targetYaw = clampSandbox360ViewerTarget(nextViewer.targetYaw + SANDBOX_360_VIEWER_STEP_YAW, 'yaw');
-        if (viewerCommand.type === 'UP') nextViewer.targetPitch = clampSandbox360ViewerTarget(nextViewer.targetPitch - SANDBOX_360_VIEWER_STEP_PITCH, 'pitch');
-        if (viewerCommand.type === 'DOWN') nextViewer.targetPitch = clampSandbox360ViewerTarget(nextViewer.targetPitch + SANDBOX_360_VIEWER_STEP_PITCH, 'pitch');
+        if (viewerCommand.type === 'LEFT') nextViewer.targetShot = 'left';
+        if (viewerCommand.type === 'CENTER') nextViewer.targetShot = 'center';
+        if (viewerCommand.type === 'RIGHT') nextViewer.targetShot = 'right';
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
         setSandbox360ViewerState({
-          yaw: nextViewer.yaw,
-          pitch: nextViewer.pitch,
-          targetYaw: nextViewer.targetYaw,
-          targetPitch: nextViewer.targetPitch,
+          currentShot: nextViewer.currentShot,
+          targetShot: nextViewer.targetShot,
+          currentX: nextViewer.currentX,
+          targetX: nextViewer.targetX,
           time: nextViewer.time,
           tx: nextViewer.tx,
           ty: nextViewer.ty,
@@ -5436,8 +5444,8 @@ export default function App() {
           renderedVideoHeight: sandbox360ViewerState.renderedVideoHeight,
           maxOffsetX: sandbox360ViewerState.maxOffsetX,
           maxOffsetY: sandbox360ViewerState.maxOffsetY,
-          clampedTx: sandbox360ViewerState.clampedTx,
-          clampedTy: sandbox360ViewerState.clampedTy,
+          safeLeftX: sandbox360ViewerState.safeLeftX,
+          safeRightX: sandbox360ViewerState.safeRightX,
           lastCommandAt: nextViewer.lastCommandAt,
           lastCommand: viewerCommand.type,
           lastParseMatched: true
@@ -5455,10 +5463,10 @@ export default function App() {
           sandbox: {
             ...(((window.__CHAT_DEBUG__ as any)?.sandbox ?? {}) as Record<string, unknown>),
             sandbox360ViewerState: {
-              yaw: nextViewer.yaw,
-              pitch: nextViewer.pitch,
-              targetYaw: nextViewer.targetYaw,
-              targetPitch: nextViewer.targetPitch,
+              currentShot: nextViewer.currentShot,
+              targetShot: nextViewer.targetShot,
+              currentX: nextViewer.currentX,
+              targetX: nextViewer.targetX,
               time: nextViewer.time,
               tx: nextViewer.tx,
               ty: nextViewer.ty,
@@ -5469,8 +5477,8 @@ export default function App() {
               renderedVideoHeight: sandbox360ViewerState.renderedVideoHeight,
               maxOffsetX: sandbox360ViewerState.maxOffsetX,
               maxOffsetY: sandbox360ViewerState.maxOffsetY,
-              clampedTx: sandbox360ViewerState.clampedTx,
-              clampedTy: sandbox360ViewerState.clampedTy,
+              safeLeftX: sandbox360ViewerState.safeLeftX,
+              safeRightX: sandbox360ViewerState.safeRightX,
               lastCommandAt: nextViewer.lastCommandAt,
               lastCommand: viewerCommand.type
             }
@@ -7855,8 +7863,16 @@ export default function App() {
               mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : modeIdRef.current === 'sandbox_360_test' ? 'sandbox_360_test' : 'classic'}
               viewerState={modeIdRef.current === 'sandbox_360_test'
                 ? {
-                    yaw: 0,
-                    pitch: 0,
+                    currentShot: sandbox360ViewerState.currentShot,
+                    targetShot: sandbox360ViewerState.targetShot,
+                    currentX: sandbox360ViewerState.currentX,
+                    targetX: sandbox360ViewerState.targetX,
+                    tx: sandbox360ViewerState.tx,
+                    ty: sandbox360ViewerState.ty,
+                    renderedVideoWidth: sandbox360ViewerState.renderedVideoWidth,
+                    viewportWidth: sandbox360ViewerState.viewportWidth,
+                    safeLeftX: sandbox360ViewerState.safeLeftX,
+                    safeRightX: sandbox360ViewerState.safeRightX,
                     lastCommandAt: sandbox360ViewerState.lastCommandAt,
                     lastCommand: sandbox360ViewerState.lastCommand,
                     lastParseMatched: sandbox360ViewerState.lastParseMatched
@@ -7883,20 +7899,15 @@ export default function App() {
           )}
           {modeIdRef.current === 'sandbox_360_test' && (
             <div className="sandbox360-debug-overlay" aria-live="polite">
-              <div>yaw: {sandbox360ViewerState.yaw.toFixed(2)}</div>
-              <div>targetYaw: {sandbox360ViewerState.targetYaw.toFixed(2)}</div>
-              <div>pitch: {sandbox360ViewerState.pitch.toFixed(2)}</div>
-              <div>tx: {sandbox360ViewerState.tx.toFixed(2)}</div>
-              <div>ty: {sandbox360ViewerState.ty.toFixed(2)}</div>
+              <div>currentShot: {sandbox360ViewerState.currentShot}</div>
+              <div>targetShot: {sandbox360ViewerState.targetShot}</div>
+              <div>currentX: {sandbox360ViewerState.currentX.toFixed(2)}</div>
+              <div>targetX: {sandbox360ViewerState.targetX.toFixed(2)}</div>
               <div>scale: {sandbox360ViewerState.scale.toFixed(4)}</div>
-              <div>viewportWidth: {sandbox360ViewerState.viewportWidth.toFixed(2)}</div>
-              <div>viewportHeight: {sandbox360ViewerState.viewportHeight.toFixed(2)}</div>
               <div>renderedVideoWidth: {sandbox360ViewerState.renderedVideoWidth.toFixed(2)}</div>
-              <div>renderedVideoHeight: {sandbox360ViewerState.renderedVideoHeight.toFixed(2)}</div>
-              <div>maxOffsetX: {sandbox360ViewerState.maxOffsetX.toFixed(2)}</div>
-              <div>maxOffsetY: {sandbox360ViewerState.maxOffsetY.toFixed(2)}</div>
-              <div>clampedTx: {sandbox360ViewerState.clampedTx.toFixed(2)}</div>
-              <div>clampedTy: {sandbox360ViewerState.clampedTy.toFixed(2)}</div>
+              <div>viewportWidth: {sandbox360ViewerState.viewportWidth.toFixed(2)}</div>
+              <div>safeLeftX: {sandbox360ViewerState.safeLeftX.toFixed(2)}</div>
+              <div>safeRightX: {sandbox360ViewerState.safeRightX.toFixed(2)}</div>
             </div>
           )}
           {!appStarted && (
