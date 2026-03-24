@@ -2002,7 +2002,7 @@ export default function SceneView({
   const viewerLeftPosX = mode === 'sandbox_360_test' ? Number(viewerState?.leftPosX ?? 18) : 18;
   const viewerCenterPosX = mode === 'sandbox_360_test' ? Number(viewerState?.centerPosX ?? 50) : 50;
   const viewerRightPosX = mode === 'sandbox_360_test' ? Number(viewerState?.rightPosX ?? 82) : 82;
-  const viewerScale = mode === 'sandbox_360_test' ? Number(viewerState?.scale ?? 1.01) : 1.01;
+  const viewerScale = mode === 'sandbox_360_test' ? Number(viewerState?.scale ?? 1.05) : 1.01;
   const viewerLastCommandAt = mode === 'sandbox_360_test' ? (viewerState?.lastCommandAt ?? 0) : 0;
   const viewerLastCommand = mode === 'sandbox_360_test' ? (viewerState?.lastCommand ?? '-') : '-';
   const viewerParseMatched = mode === 'sandbox_360_test' ? Boolean(viewerState?.lastParseMatched) : false;
