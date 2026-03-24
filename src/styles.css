@@ -543,7 +543,7 @@ body {
   }
 
   .scene-view-mobile .scene-video-layer-sandbox360 .scene-video {
-    object-fit: cover;
+    object-fit: contain;
   }
 
   .scene-view-mobile .filter-layer.curse-mid,
