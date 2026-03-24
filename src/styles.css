@@ -293,15 +293,16 @@ body {
   --sandbox360-object-pos-x: 50%;
   --sandbox360-object-pos-y: 50%;
   --sandbox360-scale: 1.05;
+  --sandbox360-object-fit: cover;
 }
 .scene-pan-surface { position: absolute; inset: 0; }
 .scene-video, .overlay { position: absolute; width: 100%; height: 100%; inset: 0; }
 .scene-video { object-fit: contain; display: block; transition: opacity 420ms ease-in-out; opacity: 0; pointer-events: none; }
 .scene-video-layer-sandbox360 { background: #000; }
-.scene-video-layer-sandbox360 .scene-video { object-fit: contain; }
 .scene-video-layer-sandbox360 .scene-video {
   width: 100%;
   height: 100%;
+  object-fit: var(--sandbox360-object-fit);
   object-position: var(--sandbox360-object-pos-x) var(--sandbox360-object-pos-y);
   transform: scale(var(--sandbox360-scale));
   transform-origin: center;
