@@ -2013,10 +2013,40 @@ export default function SceneView({
     if (!layer || !activeVideo) return null;
     const layerStyle = window.getComputedStyle(layer);
     const videoStyle = window.getComputedStyle(activeVideo);
+    const containerWidth = layer.clientWidth;
+    const containerHeight = layer.clientHeight;
+    const videoIntrinsicWidth = activeVideo.videoWidth;
+    const videoIntrinsicHeight = activeVideo.videoHeight;
+    const videoClientWidth = activeVideo.clientWidth;
+    const videoClientHeight = activeVideo.clientHeight;
+    const containerAspect = containerWidth > 0 && containerHeight > 0 ? containerWidth / containerHeight : null;
+    const videoAspect = videoIntrinsicWidth > 0 && videoIntrinsicHeight > 0 ? videoIntrinsicWidth / videoIntrinsicHeight : null;
+    const computedObjectFit = videoStyle.objectFit;
+    const normalizedObjectFit = computedObjectFit.trim().toLowerCase();
+    const finalFitByComputedStyle =
+      normalizedObjectFit === 'cover' || normalizedObjectFit === 'contain' ? normalizedObjectFit : `other(${computedObjectFit || '-'})`;
+    const finalFitByAspect =
+      containerAspect != null && videoAspect != null
+        ? containerAspect > videoAspect
+          ? 'cover=>crop-height / contain=>letterbox-left-right'
+          : containerAspect < videoAspect
+            ? 'cover=>crop-left-right / contain=>letterbox-top-bottom'
+            : 'same-aspect (cover/contain visually same)'
+        : 'unknown (missing dimensions)';
     return {
-      objectFit: videoStyle.objectFit,
+      objectFit: computedObjectFit,
       objectPosition: videoStyle.objectPosition,
       transform: videoStyle.transform,
+      finalFitByComputedStyle,
+      finalFitByAspect,
+      videoIntrinsicWidth,
+      videoIntrinsicHeight,
+      videoClientWidth,
+      videoClientHeight,
+      containerWidth,
+      containerHeight,
+      videoAspect,
+      containerAspect,
       cssVarPosX: layerStyle.getPropertyValue('--sandbox360-object-pos-x').trim(),
       cssVarPosY: layerStyle.getPropertyValue('--sandbox360-object-pos-y').trim(),
       cssVarScale: layerStyle.getPropertyValue('--sandbox360-scale').trim(),
@@ -2218,6 +2248,12 @@ export default function SceneView({
               <div>computed object-fit: {sandbox360ComputedStyle?.objectFit ?? '-'}</div>
               <div>computed object-position: {sandbox360ComputedStyle?.objectPosition ?? '-'}</div>
               <div>computed transform: {sandbox360ComputedStyle?.transform ?? '-'}</div>
+              <div>video.videoWidth/video.videoHeight: {sandbox360ComputedStyle?.videoIntrinsicWidth ?? '-'} / {sandbox360ComputedStyle?.videoIntrinsicHeight ?? '-'}</div>
+              <div>video.clientWidth/clientHeight: {sandbox360ComputedStyle?.videoClientWidth ?? '-'} / {sandbox360ComputedStyle?.videoClientHeight ?? '-'}</div>
+              <div>container.clientWidth/clientHeight: {sandbox360ComputedStyle?.containerWidth ?? '-'} / {sandbox360ComputedStyle?.containerHeight ?? '-'}</div>
+              <div>videoAspect/containerAspect: {sandbox360ComputedStyle?.videoAspect?.toFixed(4) ?? '-'} / {sandbox360ComputedStyle?.containerAspect?.toFixed(4) ?? '-'}</div>
+              <div>final fit (authoritative computed): {sandbox360ComputedStyle?.finalFitByComputedStyle ?? '-'}</div>
+              <div>final fit (aspect interpretation): {sandbox360ComputedStyle?.finalFitByAspect ?? '-'}</div>
               <div>computed --sandbox360-object-pos-x: {sandbox360ComputedStyle?.cssVarPosX ?? '-'}</div>
               <div>computed --sandbox360-object-pos-y: {sandbox360ComputedStyle?.cssVarPosY ?? '-'}</div>
               <div>computed --sandbox360-scale: {sandbox360ComputedStyle?.cssVarScale ?? '-'}</div>
