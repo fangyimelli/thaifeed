@@ -359,12 +359,13 @@ function resolveInitialMode(debugEnabled: boolean): 'classic' | 'sandbox_story' 
   return 'classic';
 }
 
-const SANDBOX_360_VIEWER_STEP = 12;
-const SANDBOX_360_VIEWER_MAX_YAW = 72;
-const SANDBOX_360_VIEWER_MAX_PITCH = 36;
+const SANDBOX_360_VIEWER_STEP_YAW = 20;
+const SANDBOX_360_VIEWER_STEP_PITCH = 15;
+const SANDBOX_360_VIEWER_MAX_TARGET_YAW = 100;
+const SANDBOX_360_VIEWER_MAX_TARGET_PITCH = 80;
 
-function clampSandbox360Viewer(value: number, axis: 'yaw' | 'pitch') {
-  const limit = axis === 'yaw' ? SANDBOX_360_VIEWER_MAX_YAW : SANDBOX_360_VIEWER_MAX_PITCH;
+function clampSandbox360ViewerTarget(value: number, axis: 'yaw' | 'pitch') {
+  const limit = axis === 'yaw' ? SANDBOX_360_VIEWER_MAX_TARGET_YAW : SANDBOX_360_VIEWER_MAX_TARGET_PITCH;
   return Math.min(Math.max(value, -limit), limit);
 }
 
@@ -692,6 +693,12 @@ export default function App() {
   const [sandbox360ViewerState, setSandbox360ViewerState] = useState({
     yaw: 0,
     pitch: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    time: 0,
+    tx: 0,
+    ty: 0,
+    scale: 1.06,
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1731,6 +1738,12 @@ export default function App() {
       setSandbox360ViewerState({
         yaw: sandbox360State.viewer?.yaw ?? 0,
         pitch: sandbox360State.viewer?.pitch ?? 0,
+        targetYaw: sandbox360State.viewer?.targetYaw ?? 0,
+        targetPitch: sandbox360State.viewer?.targetPitch ?? 0,
+        time: sandbox360State.viewer?.time ?? 0,
+        tx: sandbox360State.viewer?.tx ?? 0,
+        ty: sandbox360State.viewer?.ty ?? 0,
+        scale: sandbox360State.viewer?.scale ?? 1.06,
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
@@ -4816,6 +4829,70 @@ export default function App() {
     };
   }, [sandbox360ViewerState]);
 
+  useEffect(() => {
+    let rafId = 0;
+    let lastTs = performance.now();
+    const tick = (ts: number) => {
+      const delta = Math.max(0, Math.min(0.05, (ts - lastTs) / 1000));
+      lastTs = ts;
+      if (modeIdRef.current === 'sandbox_360_test') {
+        const currentState = sandbox360ModeRef.current.getState();
+        const currentViewer = currentState.viewer ?? {
+          yaw: 0,
+          pitch: 0,
+          targetYaw: 0,
+          targetPitch: 0,
+          time: 0,
+          tx: 0,
+          ty: 0,
+          scale: 1.06,
+          lastCommandAt: 0
+        };
+        const yaw = currentViewer.yaw + (currentViewer.targetYaw - currentViewer.yaw) * 0.08;
+        const pitch = currentViewer.pitch + (currentViewer.targetPitch - currentViewer.pitch) * 0.08;
+        const time = currentViewer.time + delta;
+        const wobbleX = Math.sin(time * 1.2) * 0.6;
+        const wobbleY = Math.sin(time * 0.8) * 0.4;
+        const scale = 1.06 + Math.sin(time * 0.5) * 0.01;
+        const tx = yaw + wobbleX;
+        const ty = pitch + wobbleY;
+        const nextViewer = {
+          ...currentViewer,
+          yaw,
+          pitch,
+          time,
+          tx,
+          ty,
+          scale
+        };
+        sandbox360ModeRef.current.setState({ viewer: nextViewer });
+        setSandbox360ViewerState((prev) => ({
+          ...prev,
+          yaw,
+          pitch,
+          targetYaw: nextViewer.targetYaw,
+          targetPitch: nextViewer.targetPitch,
+          time,
+          tx,
+          ty,
+          scale
+        }));
+
+        const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
+        if (videoLayer) {
+          videoLayer.style.setProperty('--sandbox360-tx', `${tx.toFixed(3)}px`);
+          videoLayer.style.setProperty('--sandbox360-ty', `${ty.toFixed(3)}px`);
+          videoLayer.style.setProperty('--sandbox360-scale', `${scale.toFixed(5)}`);
+        }
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const blockRenameAttempt = useCallback((_nextHandle: string): false => {
     updateChatDebug({ ui: { send: { blockedReason: 'rename_disabled' } } });
     return false;
@@ -5283,16 +5360,32 @@ export default function App() {
       if (viewerCommand) {
         console.debug('[viewer-cmd] applied (mode=sandbox_360_test)', { raw, command: viewerCommand.type });
         const sandbox360State = sandbox360ModeRef.current.getState();
-        const currentViewer = sandbox360State.viewer ?? { yaw: 0, pitch: 0, lastCommandAt: 0 };
+        const currentViewer = sandbox360State.viewer ?? {
+          yaw: 0,
+          pitch: 0,
+          targetYaw: 0,
+          targetPitch: 0,
+          time: 0,
+          tx: 0,
+          ty: 0,
+          scale: 1.06,
+          lastCommandAt: 0
+        };
         const nextViewer = { ...currentViewer, lastCommandAt: now };
-        if (viewerCommand.type === 'LEFT') nextViewer.yaw = clampSandbox360Viewer(nextViewer.yaw - SANDBOX_360_VIEWER_STEP, 'yaw');
-        if (viewerCommand.type === 'RIGHT') nextViewer.yaw = clampSandbox360Viewer(nextViewer.yaw + SANDBOX_360_VIEWER_STEP, 'yaw');
-        if (viewerCommand.type === 'UP') nextViewer.pitch = clampSandbox360Viewer(nextViewer.pitch - SANDBOX_360_VIEWER_STEP, 'pitch');
-        if (viewerCommand.type === 'DOWN') nextViewer.pitch = clampSandbox360Viewer(nextViewer.pitch + SANDBOX_360_VIEWER_STEP, 'pitch');
+        if (viewerCommand.type === 'LEFT') nextViewer.targetYaw = clampSandbox360ViewerTarget(nextViewer.targetYaw - SANDBOX_360_VIEWER_STEP_YAW, 'yaw');
+        if (viewerCommand.type === 'RIGHT') nextViewer.targetYaw = clampSandbox360ViewerTarget(nextViewer.targetYaw + SANDBOX_360_VIEWER_STEP_YAW, 'yaw');
+        if (viewerCommand.type === 'UP') nextViewer.targetPitch = clampSandbox360ViewerTarget(nextViewer.targetPitch - SANDBOX_360_VIEWER_STEP_PITCH, 'pitch');
+        if (viewerCommand.type === 'DOWN') nextViewer.targetPitch = clampSandbox360ViewerTarget(nextViewer.targetPitch + SANDBOX_360_VIEWER_STEP_PITCH, 'pitch');
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
         setSandbox360ViewerState({
           yaw: nextViewer.yaw,
           pitch: nextViewer.pitch,
+          targetYaw: nextViewer.targetYaw,
+          targetPitch: nextViewer.targetPitch,
+          time: nextViewer.time,
+          tx: nextViewer.tx,
+          ty: nextViewer.ty,
+          scale: nextViewer.scale,
           lastCommandAt: nextViewer.lastCommandAt,
           lastCommand: viewerCommand.type,
           lastParseMatched: true
@@ -5312,6 +5405,12 @@ export default function App() {
             sandbox360ViewerState: {
               yaw: nextViewer.yaw,
               pitch: nextViewer.pitch,
+              targetYaw: nextViewer.targetYaw,
+              targetPitch: nextViewer.targetPitch,
+              time: nextViewer.time,
+              tx: nextViewer.tx,
+              ty: nextViewer.ty,
+              scale: nextViewer.scale,
               lastCommandAt: nextViewer.lastCommandAt,
               lastCommand: viewerCommand.type
             }
@@ -7694,7 +7793,15 @@ export default function App() {
               appStarted={appStarted}
               blackoutState={blackoutState}
               mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : modeIdRef.current === 'sandbox_360_test' ? 'sandbox_360_test' : 'classic'}
-              viewerState={modeIdRef.current === 'sandbox_360_test' ? sandbox360ViewerState : undefined}
+              viewerState={modeIdRef.current === 'sandbox_360_test'
+                ? {
+                    yaw: 0,
+                    pitch: 0,
+                    lastCommandAt: sandbox360ViewerState.lastCommandAt,
+                    lastCommand: sandbox360ViewerState.lastCommand,
+                    lastParseMatched: sandbox360ViewerState.lastParseMatched
+                  }
+                : undefined}
               wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
                 const st = sandboxModeRef.current.getState();
                 return {
@@ -7712,6 +7819,16 @@ export default function App() {
           ) : (
             <div className="asset-warning scene-placeholder">
               初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
+            </div>
+          )}
+          {modeIdRef.current === 'sandbox_360_test' && (
+            <div className="sandbox360-debug-overlay" aria-live="polite">
+              <div>yaw: {sandbox360ViewerState.yaw.toFixed(2)}</div>
+              <div>targetYaw: {sandbox360ViewerState.targetYaw.toFixed(2)}</div>
+              <div>pitch: {sandbox360ViewerState.pitch.toFixed(2)}</div>
+              <div>tx: {sandbox360ViewerState.tx.toFixed(2)}</div>
+              <div>ty: {sandbox360ViewerState.ty.toFixed(2)}</div>
+              <div>scale: {sandbox360ViewerState.scale.toFixed(4)}</div>
             </div>
           )}
           {!appStarted && (
