@@ -54,14 +54,13 @@ type Props = {
   viewerState?: {
     currentShot?: 'left' | 'center' | 'right';
     targetShot?: 'left' | 'center' | 'right';
-    currentX?: number;
-    targetX?: number;
-    tx?: number;
-    ty?: number;
-    renderedVideoWidth?: number;
-    viewportWidth?: number;
-    safeLeftX?: number;
-    safeRightX?: number;
+    currentPosX?: number;
+    targetPosX?: number;
+    posY?: number;
+    leftPosX?: number;
+    centerPosX?: number;
+    rightPosX?: number;
+    scale?: number;
     lastCommandAt?: number;
     lastCommand?: string;
     lastParseMatched?: boolean;
@@ -120,8 +119,6 @@ const randomMs = (min: number, max: number) => {
 };
 
 const clampCurse = (c: number) => Math.min(Math.max(c, 0), 100);
-const SANDBOX_360_SCENE_OVERSCAN_X = 24;
-const SANDBOX_360_SCENE_OVERSCAN_Y = 10;
 
 const randomPick = <T,>(items: T[]): T => {
   const index = Math.floor(Math.random() * items.length);
@@ -1999,25 +1996,13 @@ export default function SceneView({
   const consonantBubbleVisible = Boolean(promptVisible) && !revealPromptSuppressed;
   const viewerCurrentShot = mode === 'sandbox_360_test' ? (viewerState?.currentShot ?? 'center') : 'center';
   const viewerTargetShot = mode === 'sandbox_360_test' ? (viewerState?.targetShot ?? 'center') : 'center';
-  const viewerCurrentX = mode === 'sandbox_360_test' ? Number(viewerState?.currentX ?? 0) : 0;
-  const viewerTargetX = mode === 'sandbox_360_test' ? Number(viewerState?.targetX ?? 0) : 0;
-  const viewerTranslateX = mode === 'sandbox_360_test' ? Number(viewerState?.tx ?? 0) : 0;
-  const viewerTranslateY = mode === 'sandbox_360_test' ? Number(viewerState?.ty ?? 0) : 0;
-  const viewerRenderedVideoWidth = mode === 'sandbox_360_test' ? Number(viewerState?.renderedVideoWidth ?? 0) : 0;
-  const viewerViewportWidth = mode === 'sandbox_360_test' ? Number(viewerState?.viewportWidth ?? 0) : 0;
-  const viewerSafeLeftX = mode === 'sandbox_360_test' ? Number(viewerState?.safeLeftX ?? 0) : 0;
-  const viewerSafeRightX = mode === 'sandbox_360_test' ? Number(viewerState?.safeRightX ?? 0) : 0;
-  const sceneTransform = mode === 'sandbox_360_test'
-    ? `translate3d(${viewerTranslateX.toFixed(2)}px, ${viewerTranslateY.toFixed(2)}px, 0)`
-    : undefined;
-  const sandbox360PanStyle = mode === 'sandbox_360_test'
-    ? {
-        position: 'absolute' as const,
-        inset: `${-SANDBOX_360_SCENE_OVERSCAN_Y / 2}% ${-SANDBOX_360_SCENE_OVERSCAN_X / 2}%`,
-        transform: sceneTransform,
-        willChange: 'transform' as const
-      }
-    : undefined;
+  const viewerCurrentPosX = mode === 'sandbox_360_test' ? Number(viewerState?.currentPosX ?? 50) : 50;
+  const viewerTargetPosX = mode === 'sandbox_360_test' ? Number(viewerState?.targetPosX ?? 50) : 50;
+  const viewerPosY = mode === 'sandbox_360_test' ? Number(viewerState?.posY ?? 50) : 50;
+  const viewerLeftPosX = mode === 'sandbox_360_test' ? Number(viewerState?.leftPosX ?? 18) : 18;
+  const viewerCenterPosX = mode === 'sandbox_360_test' ? Number(viewerState?.centerPosX ?? 50) : 50;
+  const viewerRightPosX = mode === 'sandbox_360_test' ? Number(viewerState?.rightPosX ?? 82) : 82;
+  const viewerScale = mode === 'sandbox_360_test' ? Number(viewerState?.scale ?? 1.01) : 1.01;
   const viewerLastCommandAt = mode === 'sandbox_360_test' ? (viewerState?.lastCommandAt ?? 0) : 0;
   const viewerLastCommand = mode === 'sandbox_360_test' ? (viewerState?.lastCommand ?? '-') : '-';
   const viewerParseMatched = mode === 'sandbox_360_test' ? Boolean(viewerState?.lastParseMatched) : false;
@@ -2030,13 +2015,11 @@ export default function SceneView({
           className={`scene-video-layer filter-layer ${curseVisualClass(curse)} ${mode === 'sandbox_360_test' ? 'scene-video-layer-sandbox360' : ''}`.trim()}
           data-viewer-current-shot={viewerCurrentShot}
           data-viewer-target-shot={viewerTargetShot}
-          data-viewer-current-x={viewerCurrentX}
-          data-viewer-target-x={viewerTargetX}
-          data-viewer-translate-x={viewerTranslateX}
-          data-viewer-translate-y={viewerTranslateY}
-          data-viewer-transform={sceneTransform ?? 'none'}
+          data-viewer-current-pos-x={viewerCurrentPosX}
+          data-viewer-target-pos-x={viewerTargetPosX}
+          data-viewer-pos-y={viewerPosY}
         >
-          <div className={mode === 'sandbox_360_test' ? 'scene-pan-surface' : undefined} style={sandbox360PanStyle}>
+          <div className={mode === 'sandbox_360_test' ? 'scene-pan-surface' : undefined}>
           <video
             id="videoA"
             className="scene-video"
@@ -2208,15 +2191,13 @@ export default function SceneView({
               <div>viewer lastCommandAt: {viewerLastCommandAt || '-'}</div>
               <div>viewer currentShot: {viewerCurrentShot}</div>
               <div>viewer targetShot: {viewerTargetShot}</div>
-              <div>viewer currentX: {viewerCurrentX.toFixed(2)}px</div>
-              <div>viewer targetX: {viewerTargetX.toFixed(2)}px</div>
-              <div>viewer renderedVideoWidth: {viewerRenderedVideoWidth.toFixed(2)}</div>
-              <div>viewer viewportWidth: {viewerViewportWidth.toFixed(2)}</div>
-              <div>viewer safeLeftX: {viewerSafeLeftX.toFixed(2)}</div>
-              <div>viewer safeRightX: {viewerSafeRightX.toFixed(2)}</div>
-              <div>viewer translateX: {viewerTranslateX.toFixed(2)}px</div>
-              <div>viewer translateY: {viewerTranslateY.toFixed(2)}px</div>
-              <div>viewer transform: {sceneTransform ?? 'none'}</div>
+              <div>viewer currentPosX: {viewerCurrentPosX.toFixed(2)}%</div>
+              <div>viewer targetPosX: {viewerTargetPosX.toFixed(2)}%</div>
+              <div>viewer leftPosX: {viewerLeftPosX.toFixed(2)}%</div>
+              <div>viewer centerPosX: {viewerCenterPosX.toFixed(2)}%</div>
+              <div>viewer rightPosX: {viewerRightPosX.toFixed(2)}%</div>
+              <div>viewer posY: {viewerPosY.toFixed(2)}%</div>
+              <div>viewer scale: {viewerScale.toFixed(4)}</div>
             </>
           )}
           <div>nextJumpDueIn: {nextJumpDueInSec}s</div>

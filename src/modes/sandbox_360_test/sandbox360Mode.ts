@@ -160,7 +160,7 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
-  viewer: { currentShot: 'center', targetShot: 'center', currentX: 0, targetX: 0, time: 0, tx: 0, ty: 0, scale: 1.01, lastCommandAt: 0 }
+  viewer: { currentShot: 'center', targetShot: 'center', currentPosX: 50, targetPosX: 50, posY: 50, time: 0, scale: 1.01, leftPosX: 18, centerPosX: 50, rightPosX: 82, lastCommandAt: 0 }
   };
 };
 
@@ -237,11 +237,23 @@ export function ensureSandbox360StateShape(raw: any) {
   if (!next.viewer.targetShot || typeof next.viewer.targetShot !== 'string') {
     next.viewer.targetShot = next.viewer.currentShot;
   }
-  if (!Number.isFinite(next.viewer.currentX)) {
-    next.viewer.currentX = Number.isFinite(raw?.viewer?.tx) ? Number(raw.viewer.tx) : 0;
+  if (!Number.isFinite(next.viewer.currentPosX)) {
+    next.viewer.currentPosX = Number.isFinite(raw?.viewer?.currentX) ? Number(raw.viewer.currentX) : 50;
   }
-  if (!Number.isFinite(next.viewer.targetX)) {
-    next.viewer.targetX = next.viewer.currentX;
+  if (!Number.isFinite(next.viewer.targetPosX)) {
+    next.viewer.targetPosX = Number.isFinite(raw?.viewer?.targetX) ? Number(raw.viewer.targetX) : next.viewer.currentPosX;
+  }
+  if (!Number.isFinite(next.viewer.posY)) {
+    next.viewer.posY = 50;
+  }
+  if (!Number.isFinite(next.viewer.leftPosX)) {
+    next.viewer.leftPosX = 18;
+  }
+  if (!Number.isFinite(next.viewer.centerPosX)) {
+    next.viewer.centerPosX = 50;
+  }
+  if (!Number.isFinite(next.viewer.rightPosX)) {
+    next.viewer.rightPosX = 82;
   }
   return next;
 }
