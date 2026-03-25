@@ -1,3 +1,14 @@
+## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
+
+- Scope 嚴格限制於 `sandbox_360_test`；classic 與 `sandbox_story` 未改動。
+- `Sandbox360Viewer` 建立明確的 `ui-layer` 結構：
+  - `QuestionPanel`（題目字形層）
+  - `PinnedReply`（置頂回覆層）
+  - `ChatLayer`（既有 debug/shot/event 控制層）
+- `ui-layer` 採 `position:absolute; inset:0; pointer-events:none;`，`QuestionPanel` 明確 `pointer-events:auto`，避免被 scene/overlay 蓋住且不阻斷整體互動。
+- `App` 在 `sandbox_360_test` 將 authoritative `questionConsonant/questionVisible` 傳入 viewer，題目顯示邏輯與 sandbox reply gate 同步。
+- 新增 regression guard：檢查 `QuestionPanel/PinnedReply/ChatLayer` 結構、`question.visible/question.consonant` debug 欄位，以及 ui-layer pointer-events 規則，防止題目層再次消失。
+
 ## 2026-03-25 Sandbox 360 zoom-crop 3-shot framing + short transition authority
 
 - Scope limited to `sandbox_360_test` only; classic and `sandbox_story` remain untouched.

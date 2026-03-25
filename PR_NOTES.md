@@ -1,3 +1,26 @@
+## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic, `sandbox_story`, or QNA engine.
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 建立 `sandbox360UiLayer` 內的三層結構：`sandbox360QuestionPanel` / `sandbox360PinnedReply` / `sandbox360ChatLayer`。
+  - 題目層改為 viewer 內 overlay UI 顯示，並新增 `question.visible`、`question.consonant` debug 欄位。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - `ui-layer` 使用 `position:absolute + inset:0 + pointer-events:none`。
+  - `QuestionPanel` 設 `pointer-events:auto` 並提高 z-index，確保題目浮在 scene/overlay 之上。
+- `src/app/App.tsx`
+  - `sandbox_360_test` viewer 補傳 `questionConsonant`、`questionVisible`、`pinnedReplyText`。
+  - `getSandboxOverlayConsonant/getSandboxAuthoritativePromptVisible` 新增 `sandbox_360_test` 分支，使用 sandbox360 mode authoritative prompt/replyGate。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - guard 新增 ui-layer 結構與 pointer-events 規則檢查，防止 question layer 再次回歸消失。
+
+### Verification
+- `npm run test:sandbox360-shot-events`
+- `npm run build`
+
 ## 2026-03-25 Sandbox 360 zoom-crop framing authority + short transition
 
 ### Scope

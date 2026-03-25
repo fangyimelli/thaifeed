@@ -1,3 +1,16 @@
+## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
+
+### Scope
+- `sandbox_360_test` only.
+- classic / `sandbox_story` / QNA engine untouched.
+
+### Summary
+- `Sandbox360Viewer` 補齊 `ui-layer` 並拆成 `QuestionPanel + PinnedReply + ChatLayer`。
+- `ui-layer` 設定 `position:absolute; inset:0; pointer-events:none;`，`QuestionPanel` 設 `pointer-events:auto`。
+- `App` 對 `sandbox_360_test` 補上 `questionConsonant` / `questionVisible` authoritative 傳遞，題目層重新顯示且跟 reply gate 同步。
+- 保留 viewer 與 room overlay render path，不改 shot/overlay 既有規則。
+- regression guard 擴充：鎖定新 layer 結構、debug 欄位、以及 ui-layer CSS pointer-events 規則。
+
 ## 2026-03-25 Sandbox 360 zoom-crop framing authority + short transition
 
 ### Scope
