@@ -2229,6 +2229,16 @@ Console（debug 模式）可觀察：
 - 移除 sandbox `useState(sandboxPinnedEntry)` 作為 pinned reply 權威來源；改由 `sandboxStoryMode.state.pinnedReply` 單一事實來源。
 - 移除 sandbox reply preview 對 classic `qnaStatus` 的隱性相依，避免新舊 gate 判斷雙軌互打。
 
+## 2026-03-25 sandbox_360_test handheld camera pass
+
+- 僅調整 `sandbox_360_test`（不影響 classic / sandbox_story）。
+- 三鏡位 framing 仍固定：`LEFT=36 / CENTER=52 / RIGHT=66`。
+- shot transition 改為短距離 spring-damping（約 220~350ms 體感），保留小幅 overshoot 後回穩。
+- 新增手持 state：`cameraOffsetX/Y`, `cameraRotationDeg`, `cameraScaleOffset`, `cameraVelocityX/Y`。
+- 新增持續微手持：低頻 sway + 微 jitter + 輕呼吸 scale，停在任一鏡位也不會完全鎖死。
+- 主畫面與 overlay 改同掛在 `sandbox360TransformLayer`，避免晃動分離。
+- sandbox_360_test debug 面板新增/保留 shot + handheld 關鍵欄位，便於驗收。
+
 ## 2026-03-23 Sandbox 360 test mode
 
 - 新增 `sandbox_360_test` 模式，直接複製 `sandbox_story` runtime 作為隔離測試殼，避免動到既有 `sandbox_story` 與 classic mode。

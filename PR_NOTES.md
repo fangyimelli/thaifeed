@@ -194,3 +194,28 @@
 - Removed direct ownership of extracted sandbox fixed strings from `src/app/App.tsx`.
 - Removed direct ownership of shared chat UI text from `src/ui/chat/ChatPanel.tsx`.
 - Retained but explicitly marked legacy/parallel sources in the manifest where dual-track content still exists.
+
+## 2026-03-25 sandbox_360_test handheld camera integration
+
+### Scope
+- sandbox_360_test only.
+- no classic mode changes.
+- no sandbox_story changes.
+
+### Implemented
+- Added authoritative handheld camera fields into sandbox_360 viewer state:
+  - `cameraOffsetX`, `cameraOffsetY`
+  - `cameraRotationDeg`
+  - `cameraScaleOffset`
+  - `cameraVelocityX`, `cameraVelocityY`
+- Replaced shot position interpolation with spring-damping to create short turn-feel movement and small overshoot/recover behavior.
+- Added persistent micro handheld synthesis at rest (sway + jitter + breathing scale).
+- Added `sandbox360TransformLayer` so overlays and scene share identical final transform.
+- Extended sandbox_360_test debug readout with handheld values for verification.
+
+### Verification
+- Static inspection: `rg` confirmed new handheld state exists in:
+  - `src/modes/sandbox_360_test/sandbox360Mode.ts`
+  - `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - `src/app/App.tsx`
+- Static inspection: overlay alignment now routes through `sandbox360TransformLayer`.

@@ -12,9 +12,11 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 | --- | --- |
 | scale constant | `SANDBOX360_SCALE = 1.75` |
 | shot framing | `LEFT=36`, `CENTER=52`, `RIGHT=66` |
-| state authority | `currentShot`, `targetShot`, `currentPosX`, `targetPosX`, `isTransitioning` |
-| transition | short ease-out interpolation, `transitionDuration=0.28` (~280ms target) |
+| state authority | shot: `currentShot/targetShot/currentPosX/targetPosX/isTransitioning`; handheld: `cameraOffsetX/Y`, `cameraRotationDeg`, `cameraScaleOffset`, `cameraVelocityX/Y` |
+| transition | short spring-damping with tiny overshoot then settle (~220ms~350ms feel) |
 | interaction model | fixed shot switch only (no free drag / no 360 orbit) |
+| handheld layer | low-frequency sway + micro jitter + light breathing scale (small amplitude only) |
+| overlay alignment | overlay + scene share one transform container (`sandbox360TransformLayer`) |
 
 Notes:
 - Zoom-crop framing is authoritative in `resolveSandbox360ViewerFraming()` / `resolveSandbox360ViewerTarget()`.

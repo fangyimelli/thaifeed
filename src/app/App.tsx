@@ -688,6 +688,12 @@ export default function App() {
     currentPosX: initialSandbox360Framing.centerPosX,
     targetPosX: initialSandbox360Framing.centerPosX,
     isTransitioning: false,
+    cameraOffsetX: 0,
+    cameraOffsetY: 0,
+    cameraRotationDeg: 0,
+    cameraScaleOffset: 0,
+    cameraVelocityX: 0,
+    cameraVelocityY: 0,
     time: 0,
     posY: initialSandbox360Framing.posY,
     scale: initialSandbox360Framing.scale,
@@ -1743,6 +1749,12 @@ export default function App() {
         currentPosX: sandbox360State.viewer?.currentPosX ?? target.targetPosX,
         targetPosX: sandbox360State.viewer?.targetPosX ?? target.targetPosX,
         isTransitioning: Boolean(sandbox360State.viewer?.isTransitioning),
+        cameraOffsetX: sandbox360State.viewer?.cameraOffsetX ?? 0,
+        cameraOffsetY: sandbox360State.viewer?.cameraOffsetY ?? 0,
+        cameraRotationDeg: sandbox360State.viewer?.cameraRotationDeg ?? 0,
+        cameraScaleOffset: sandbox360State.viewer?.cameraScaleOffset ?? 0,
+        cameraVelocityX: sandbox360State.viewer?.cameraVelocityX ?? 0,
+        cameraVelocityY: sandbox360State.viewer?.cameraVelocityY ?? 0,
         posError: Math.abs((sandbox360State.viewer?.currentPosX ?? target.targetPosX) - (sandbox360State.viewer?.targetPosX ?? target.targetPosX)),
         isSettled: !Boolean(sandbox360State.viewer?.isTransitioning),
         time: sandbox360State.viewer?.time ?? 0,
@@ -4856,7 +4868,9 @@ export default function App() {
       centerPosX: resolvedTarget.framing.centerPosX,
       rightPosX: resolvedTarget.framing.rightPosX,
       lastCommandAt: now,
-      time: Number.isFinite(currentState.viewer?.time) ? Number(currentState.viewer?.time) : 0
+      time: Number.isFinite(currentState.viewer?.time) ? Number(currentState.viewer?.time) : 0,
+      cameraVelocityX: Number.isFinite(currentState.viewer?.cameraVelocityX) ? Number(currentState.viewer?.cameraVelocityX) : 0,
+      cameraVelocityY: Number.isFinite(currentState.viewer?.cameraVelocityY) ? Number(currentState.viewer?.cameraVelocityY) : 0
     };
     sandbox360ModeRef.current.setState({ viewer: nextViewer });
     setSandbox360ViewerState((prev) => ({
@@ -4866,6 +4880,8 @@ export default function App() {
       posError: Math.abs((prev.currentPosX ?? nextViewer.targetPosX) - nextViewer.targetPosX),
       isSettled: false,
       isTransitioning: true,
+      cameraVelocityX: nextViewer.cameraVelocityX,
+      cameraVelocityY: nextViewer.cameraVelocityY,
       time: nextViewer.time,
       posY: nextViewer.posY,
       scale: nextViewer.scale,
@@ -4897,6 +4913,12 @@ export default function App() {
           currentPosX: framing.centerPosX,
           targetPosX: framing.centerPosX,
           isTransitioning: false,
+          cameraOffsetX: 0,
+          cameraOffsetY: 0,
+          cameraRotationDeg: 0,
+          cameraScaleOffset: 0,
+          cameraVelocityX: 0,
+          cameraVelocityY: 0,
           time: 0,
           posY: framing.posY,
           targetPosY: framing.posY,
@@ -4904,28 +4926,43 @@ export default function App() {
           targetScale: framing.scale,
           lastCommandAt: 0
         };
-        const time = currentViewer.time + delta;
         const targetPosX = Number.isFinite(currentViewer.targetPosX) ? currentViewer.targetPosX : framing.centerPosX;
         const targetPosY = Number.isFinite(currentViewer.targetPosY) ? currentViewer.targetPosY : framing.posY;
         const targetScale = Number.isFinite(currentViewer.targetScale) ? currentViewer.targetScale : framing.scale;
         const currentPosXBase = Number.isFinite(currentViewer.currentPosX) ? currentViewer.currentPosX : targetPosX;
-        const posDelta = targetPosX - currentPosXBase;
-        const transitionDuration = 0.28;
-        const step = Math.min(1, delta / transitionDuration);
-        const easeOutStep = 1 - ((1 - step) * (1 - step));
-        const currentPosX = currentPosXBase + (posDelta * easeOutStep);
+        const velocityXBase = Number.isFinite(currentViewer.cameraVelocityX) ? currentViewer.cameraVelocityX : 0;
+        const shotSpringStiffness = 115;
+        const shotSpringDamping = 19;
+        const accelX = ((targetPosX - currentPosXBase) * shotSpringStiffness) - (velocityXBase * shotSpringDamping);
+        const velocityX = velocityXBase + (accelX * delta);
+        const currentPosX = currentPosXBase + (velocityX * delta);
         const posError = Math.abs(targetPosX - currentPosX);
-        const isSettled = posError <= 0.08;
+        const isSettled = posError <= 0.08 && Math.abs(velocityX) <= 0.08;
         const isTransitioning = !isSettled;
         const posY = targetPosY;
         const scale = targetScale;
+        const t = (Number.isFinite(currentViewer.time) ? currentViewer.time : 0) + delta;
+        const swayX = Math.sin(t * 1.5) * 0.7;
+        const swayY = Math.cos((t * 1.23) + 1.1) * 0.45;
+        const jitterX = ((Math.sin(t * 16.3) + Math.sin(t * 11.1 + 0.6)) * 0.5) * 0.22;
+        const jitterY = ((Math.cos(t * 13.2 + 0.4) + Math.sin(t * 9.7 + 0.9)) * 0.5) * 0.18;
+        const cameraOffsetX = swayX + jitterX + (velocityX * 0.015);
+        const cameraOffsetY = swayY + jitterY;
+        const cameraRotationDeg = (cameraOffsetX * 0.015) + (velocityX * 0.0018);
+        const cameraScaleOffset = (Math.sin(t * 0.9) * 0.0008) + (Math.cos(t * 0.37) * 0.0004);
         const nextViewer = {
           ...currentViewer,
           currentShot: isSettled ? currentViewer.targetShot : currentViewer.currentShot,
           currentPosX,
           targetPosX,
           isTransitioning,
-          time,
+          cameraOffsetX,
+          cameraOffsetY,
+          cameraRotationDeg,
+          cameraScaleOffset,
+          cameraVelocityX: isSettled ? 0 : velocityX,
+          cameraVelocityY: 0,
+          time: t,
           posY,
           scale
         };
@@ -4939,7 +4976,13 @@ export default function App() {
           posError,
           isSettled,
           isTransitioning,
-          time,
+          cameraOffsetX: nextViewer.cameraOffsetX,
+          cameraOffsetY: nextViewer.cameraOffsetY,
+          cameraRotationDeg: nextViewer.cameraRotationDeg,
+          cameraScaleOffset: nextViewer.cameraScaleOffset,
+          cameraVelocityX: nextViewer.cameraVelocityX,
+          cameraVelocityY: nextViewer.cameraVelocityY,
+          time: t,
           posY: nextViewer.posY,
           scale,
           leftPosX: framing.leftPosX,
@@ -7840,6 +7883,12 @@ export default function App() {
                   currentPosX: sandbox360ViewerState.currentPosX,
                   targetPosX: sandbox360ViewerState.targetPosX,
                   isTransitioning: sandbox360ViewerState.isTransitioning,
+                  cameraOffsetX: sandbox360ViewerState.cameraOffsetX,
+                  cameraOffsetY: sandbox360ViewerState.cameraOffsetY,
+                  cameraRotationDeg: sandbox360ViewerState.cameraRotationDeg,
+                  cameraScaleOffset: sandbox360ViewerState.cameraScaleOffset,
+                  cameraVelocityX: sandbox360ViewerState.cameraVelocityX,
+                  cameraVelocityY: sandbox360ViewerState.cameraVelocityY,
                   posY: sandbox360ViewerState.posY,
                   scale: sandbox360ViewerState.scale,
                   lastCommand: sandbox360ViewerState.lastCommand
