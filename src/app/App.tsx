@@ -138,6 +138,10 @@ type EventTxn = {
   };
 };
 
+type Sandbox360RoomEventType = 'LIGHT_FLASH_LEFT' | 'TV_STATIC' | 'DOLL_REFLECT' | 'DOOR_SHADOW';
+type Sandbox360RoomEventTriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scripted';
+type Sandbox360RoomEventTriggerMode = 'normal' | 'force';
+
 type DebugForceExecuteOptions = {
   ignoreCooldown?: boolean;
   ignorePause?: boolean;
@@ -712,6 +716,48 @@ export default function App() {
     lastCommand: '-' as string,
     lastParseMatched: false
   });
+  const [sandbox360RoomEvents, setSandbox360RoomEvents] = useState<Record<Sandbox360RoomEventType, number>>({
+    LIGHT_FLASH_LEFT: 0,
+    TV_STATIC: 0,
+    DOLL_REFLECT: 0,
+    DOOR_SHADOW: 0
+  });
+  const [sandbox360RoomEventDebug, setSandbox360RoomEventDebug] = useState({
+    eventType: null as Sandbox360RoomEventType | null,
+    triggerMode: 'normal' as Sandbox360RoomEventTriggerMode,
+    cooldownBypassed: false,
+    lastTriggeredAt: null as number | null,
+    lastBlockedReason: '-',
+    forceAllowed: true,
+    forceReason: 'debug_force_enabled'
+  });
+  const [sandbox360OverlayDebug, setSandbox360OverlayDebug] = useState({
+    tvAnchor: { x: 0, y: 0, w: 0, h: 0 },
+    tvDebugRect: { left: '-', top: '-', width: '-', height: '-' },
+    tvOverlayRect: { left: '-', top: '-', width: '-', height: '-' },
+    tvSharesTransformContainer: false,
+    questionVisible: false,
+    questionConsonant: '',
+    roomEventLast: null as Sandbox360RoomEventType | null
+  });
+  const sandbox360RoomEventCooldownRef = useRef<Record<Sandbox360RoomEventType, number>>({
+    LIGHT_FLASH_LEFT: 0,
+    TV_STATIC: 0,
+    DOLL_REFLECT: 0,
+    DOOR_SHADOW: 0
+  });
+  const sandbox360RoomEventTimeoutRef = useRef<Record<Sandbox360RoomEventType, number | null>>({
+    LIGHT_FLASH_LEFT: null,
+    TV_STATIC: null,
+    DOLL_REFLECT: null,
+    DOOR_SHADOW: null
+  });
+  const sandbox360ShotFlowTimersRef = useRef<{ delayedLightFlash: number | null; rightStay: number | null }>({
+    delayedLightFlash: null,
+    rightStay: null
+  });
+  const sandbox360ShotLastRef = useRef<'left' | 'center' | 'right'>('center');
+  const sandbox360ShotEnterAtRef = useRef<number>(Date.now());
   const [sandboxSsotVersion, setSandboxSsotVersion] = useState(NIGHT1.meta.version);
   const [blackoutState, setBlackoutState] = useState<BlackoutState>({
     isActive: false,
@@ -1746,6 +1792,15 @@ export default function App() {
       const sandbox360State = sandbox360ModeRef.current.getState();
       const target = resolveSandbox360ViewerTarget(window.innerWidth, window.innerHeight, sandbox360State.viewer?.targetShot);
       const framing = target.framing;
+      sandbox360ShotLastRef.current = (sandbox360State.viewer?.currentShot ?? 'center');
+      if (sandbox360ShotFlowTimersRef.current.delayedLightFlash !== null) {
+        window.clearTimeout(sandbox360ShotFlowTimersRef.current.delayedLightFlash);
+        sandbox360ShotFlowTimersRef.current.delayedLightFlash = null;
+      }
+      if (sandbox360ShotFlowTimersRef.current.rightStay !== null) {
+        window.clearTimeout(sandbox360ShotFlowTimersRef.current.rightStay);
+        sandbox360ShotFlowTimersRef.current.rightStay = null;
+      }
       setSandbox360ViewerState({
         currentShot: sandbox360State.viewer?.currentShot ?? 'center',
         targetShot: target.targetShot,
@@ -1775,6 +1830,21 @@ export default function App() {
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
+      });
+      setSandbox360RoomEvents({
+        LIGHT_FLASH_LEFT: 0,
+        TV_STATIC: 0,
+        DOLL_REFLECT: 0,
+        DOOR_SHADOW: 0
+      });
+      setSandbox360RoomEventDebug({
+        eventType: null,
+        triggerMode: 'normal',
+        cooldownBypassed: false,
+        lastTriggeredAt: null,
+        lastBlockedReason: '-',
+        forceAllowed: true,
+        forceReason: 'debug_force_enabled'
       });
     } else {
       sandboxModeRef.current.setPlayerIdentity({ handle: normalizeHandle(activeUserInitialHandleRef.current || '000') || '000', id: 'activeUser' });
@@ -4846,16 +4916,73 @@ export default function App() {
       }
     };
   }, []);
+  const clearSandbox360ShotFlowTimers = useCallback(() => {
+    if (sandbox360ShotFlowTimersRef.current.delayedLightFlash !== null) {
+      window.clearTimeout(sandbox360ShotFlowTimersRef.current.delayedLightFlash);
+      sandbox360ShotFlowTimersRef.current.delayedLightFlash = null;
+    }
+    if (sandbox360ShotFlowTimersRef.current.rightStay !== null) {
+      window.clearTimeout(sandbox360ShotFlowTimersRef.current.rightStay);
+      sandbox360ShotFlowTimersRef.current.rightStay = null;
+    }
+  }, []);
+  const clearSandbox360RoomEventTimer = useCallback((eventType: Sandbox360RoomEventType) => {
+    const existing = sandbox360RoomEventTimeoutRef.current[eventType];
+    if (existing !== null) {
+      window.clearTimeout(existing);
+      sandbox360RoomEventTimeoutRef.current[eventType] = null;
+    }
+  }, []);
+  const triggerSandbox360RoomEvent = useCallback((eventType: Sandbox360RoomEventType, options?: { source?: Sandbox360RoomEventTriggerSource; force?: boolean; ignoreCooldown?: boolean }) => {
+    const source = options?.source ?? 'manual';
+    const triggerMode: Sandbox360RoomEventTriggerMode = options?.force ? 'force' : 'normal';
+    const cooldownBypassed = Boolean(options?.force || options?.ignoreCooldown);
+    const now = Date.now();
+    const cooldownUntil = sandbox360RoomEventCooldownRef.current[eventType] ?? 0;
+    if (!cooldownBypassed && cooldownUntil > now) {
+      setSandbox360RoomEventDebug((prev) => ({
+        ...prev,
+        triggerMode,
+        cooldownBypassed,
+        lastBlockedReason: 'cooldown_blocked',
+        forceAllowed: options?.force ? true : prev.forceAllowed,
+        forceReason: options?.force ? 'debug_force_enabled' : prev.forceReason
+      }));
+      return false;
+    }
+    setSandbox360RoomEventDebug({
+      eventType,
+      triggerMode,
+      cooldownBypassed,
+      lastTriggeredAt: now,
+      lastBlockedReason: '-',
+      forceAllowed: Boolean(options?.force) || true,
+      forceReason: options?.force ? 'forced_by_debug_gate' : source
+    });
+    setSandbox360RoomEvents((prev) => ({ ...prev, [eventType]: prev[eventType] + 1 }));
+    const durationMs = eventType === 'LIGHT_FLASH_LEFT' ? 180 : eventType === 'TV_STATIC' ? 1200 : eventType === 'DOLL_REFLECT' ? 520 : 900;
+    const cooldownMs = eventType === 'LIGHT_FLASH_LEFT' ? 3000 : eventType === 'TV_STATIC' ? 4000 : 5000;
+    sandbox360RoomEventCooldownRef.current[eventType] = now + cooldownMs;
+    clearSandbox360RoomEventTimer(eventType);
+    sandbox360RoomEventTimeoutRef.current[eventType] = window.setTimeout(() => {
+      setSandbox360RoomEvents((prev) => ({ ...prev, [eventType]: 0 }));
+      sandbox360RoomEventTimeoutRef.current[eventType] = null;
+    }, durationMs);
+    return true;
+  }, [clearSandbox360RoomEventTimer]);
   useEffect(() => {
     const base = (window.__CHAT_DEBUG__ ?? {}) as any;
     window.__CHAT_DEBUG__ = {
       ...base,
       sandbox: {
         ...(base.sandbox ?? {}),
-        sandbox360ViewerState
+        sandbox360ViewerState,
+        sandbox360RoomEvents,
+        sandbox360RoomEventDebug,
+        sandbox360OverlayDebug
       }
     };
-  }, [sandbox360ViewerState]);
+  }, [sandbox360OverlayDebug, sandbox360RoomEventDebug, sandbox360RoomEvents, sandbox360ViewerState]);
 
   const applySandbox360Shot = useCallback((shot: 'left' | 'center' | 'right', source: 'chat_command' | 'debug_button') => {
     const now = Date.now();
@@ -4909,6 +5036,35 @@ export default function App() {
     }));
     return { now, resolvedTarget, nextViewer };
   }, []);
+
+  useEffect(() => {
+    if (modeIdRef.current !== 'sandbox_360_test') return;
+    const prevShot = sandbox360ShotLastRef.current;
+    const nextShot = sandbox360ViewerState.currentShot;
+    if (prevShot === nextShot) return;
+    const enteredAt = Date.now();
+    sandbox360ShotEnterAtRef.current = enteredAt;
+    sandbox360ShotLastRef.current = nextShot;
+    clearSandbox360ShotFlowTimers();
+    if (nextShot === 'right') {
+      sandbox360ShotFlowTimersRef.current.delayedLightFlash = window.setTimeout(() => {
+        if (sandbox360ShotLastRef.current !== 'right') return;
+        triggerSandbox360RoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' });
+      }, 500);
+      sandbox360ShotFlowTimersRef.current.rightStay = window.setTimeout(() => {
+        const stillOnRight = sandbox360ShotLastRef.current === 'right';
+        const sameEntry = sandbox360ShotEnterAtRef.current === enteredAt;
+        if (!stillOnRight || !sameEntry) return;
+        triggerSandbox360RoomEvent('TV_STATIC', { source: 'shot_flow' });
+      }, 3000);
+    }
+    if (prevShot === 'right' && nextShot === 'center') {
+      triggerSandbox360RoomEvent('DOOR_SHADOW', { source: 'shot_flow' });
+    }
+    if (prevShot === 'left' && nextShot === 'center') {
+      triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'shot_flow' });
+    }
+  }, [clearSandbox360ShotFlowTimers, sandbox360ViewerState.currentShot, triggerSandbox360RoomEvent]);
 
   useEffect(() => {
     let rafId = 0;
@@ -5026,6 +5182,12 @@ export default function App() {
       window.cancelAnimationFrame(rafId);
     };
   }, []);
+  useEffect(() => () => {
+    clearSandbox360ShotFlowTimers();
+    (Object.keys(sandbox360RoomEventTimeoutRef.current) as Sandbox360RoomEventType[]).forEach((eventType) => {
+      clearSandbox360RoomEventTimer(eventType);
+    });
+  }, [clearSandbox360RoomEventTimer, clearSandbox360ShotFlowTimers]);
 
   const blockRenameAttempt = useCallback((_nextHandle: string): false => {
     updateChatDebug({ ui: { send: { blockedReason: 'rename_disabled' } } });
@@ -7928,6 +8090,20 @@ export default function App() {
                 onDebugShotSelect={(shot) => {
                   applySandbox360Shot(shot, 'debug_button');
                 }}
+                onTriggerRoomEvent={(eventType, options) => triggerSandbox360RoomEvent(eventType, options)}
+                roomEventCounts={sandbox360RoomEvents}
+                roomEventObservability={sandbox360RoomEventDebug}
+                onViewerDebugStateChange={(payload) => {
+                  setSandbox360OverlayDebug({
+                    tvAnchor: payload.tvAnchor,
+                    tvDebugRect: payload.tvDebugRect,
+                    tvOverlayRect: payload.tvOverlayRect,
+                    tvSharesTransformContainer: payload.tvSharesTransformContainer,
+                    questionVisible: payload.questionVisible,
+                    questionConsonant: payload.questionConsonant,
+                    roomEventLast: payload.roomEventLast
+                  });
+                }}
                 viewerState={{
                   currentShot: sandbox360ViewerState.currentShot,
                   targetShot: sandbox360ViewerState.targetShot,
@@ -7946,15 +8122,6 @@ export default function App() {
                   posY: sandbox360ViewerState.posY,
                   scale: sandbox360ViewerState.scale,
                   lastCommand: sandbox360ViewerState.lastCommand
-                }}
-                debugState={{
-                  aspect: sandbox360ViewerState.aspect,
-                  mode: sandbox360ViewerState.mode,
-                  leftPosX: sandbox360ViewerState.leftPosX,
-                  centerPosX: sandbox360ViewerState.centerPosX,
-                  rightPosX: sandbox360ViewerState.rightPosX,
-                  posError: sandbox360ViewerState.posError,
-                  isSettled: sandbox360ViewerState.isSettled
                 }}
               />
             ) : (
@@ -8218,6 +8385,45 @@ export default function App() {
               </div>
                 </>
               )}
+              {mode === 'sandbox_360_test' && (
+                <>
+                  <div className="debug-event-tester" aria-label="Sandbox360 Debug">
+                    <h4>Sandbox 360 Debug Tools</h4>
+                    <div className="debug-route-controls">
+                      <button type="button" onClick={() => applySandbox360Shot('left', 'debug_button')}>Shot LEFT</button>
+                      <button type="button" onClick={() => applySandbox360Shot('center', 'debug_button')}>Shot CENTER</button>
+                      <button type="button" onClick={() => applySandbox360Shot('right', 'debug_button')}>Shot RIGHT</button>
+                    </div>
+                    <div className="debug-route-controls" style={{ marginTop: 8 }}>
+                      <button type="button" onClick={() => triggerSandbox360RoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>Trigger FLASH</button>
+                      <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual' })}>Trigger TV</button>
+                      <button type="button" onClick={() => triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'manual' })}>Trigger DOLL</button>
+                      <button type="button" onClick={() => triggerSandbox360RoomEvent('DOOR_SHADOW', { source: 'manual' })}>Trigger DOOR</button>
+                      <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual', force: true })}>Force TV</button>
+                    </div>
+                  </div>
+                  <div className="debug-route-meta" style={{ marginTop: 8 }}>
+                    <div><strong>Sandbox360 Viewer / Effect SSOT</strong></div>
+                    <div>currentShot / targetShot: {sandbox360ViewerState.currentShot} / {sandbox360ViewerState.targetShot}</div>
+                    <div>transition.durationMs / isTransitioning: {sandbox360ViewerState.shotTransitionDurationMs} / {String(sandbox360ViewerState.isTransitioning)}</div>
+                    <div>currentPosX / targetPosX: {sandbox360ViewerState.currentPosX.toFixed(2)} / {sandbox360ViewerState.targetPosX.toFixed(2)}</div>
+                    <div>cameraOffsetX/Y: {sandbox360ViewerState.cameraOffsetX.toFixed(3)} / {sandbox360ViewerState.cameraOffsetY.toFixed(3)}</div>
+                    <div>cameraRotationDeg / cameraScaleOffset: {sandbox360ViewerState.cameraRotationDeg.toFixed(4)} / {sandbox360ViewerState.cameraScaleOffset.toFixed(5)}</div>
+                    <div>cameraVelocityX/Y: {sandbox360ViewerState.cameraVelocityX.toFixed(3)} / {sandbox360ViewerState.cameraVelocityY.toFixed(3)}</div>
+                    <div>roomEvent.last: {sandbox360RoomEventDebug.eventType ?? '-'}</div>
+                    <div>effect.force.mode/reason: {sandbox360RoomEventDebug.triggerMode} / {sandbox360RoomEventDebug.forceReason}</div>
+                    <div>effect.cooldownBypassed/blockedReason: {String(sandbox360RoomEventDebug.cooldownBypassed)} / {sandbox360RoomEventDebug.lastBlockedReason}</div>
+                    <div>effect.lastTriggeredAt: {sandbox360RoomEventDebug.lastTriggeredAt ?? 0}</div>
+                    <div>event.counts: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT}, tv={sandbox360RoomEvents.TV_STATIC}, doll={sandbox360RoomEvents.DOLL_REFLECT}, door={sandbox360RoomEvents.DOOR_SHADOW}</div>
+                    <div>TV_ANCHOR: x={sandbox360OverlayDebug.tvAnchor.x}, y={sandbox360OverlayDebug.tvAnchor.y}, w={sandbox360OverlayDebug.tvAnchor.w}, h={sandbox360OverlayDebug.tvAnchor.h}</div>
+                    <div>tvDebugRect: left={sandbox360OverlayDebug.tvDebugRect.left}, top={sandbox360OverlayDebug.tvDebugRect.top}, width={sandbox360OverlayDebug.tvDebugRect.width}, height={sandbox360OverlayDebug.tvDebugRect.height}</div>
+                    <div>tvOverlayRect: left={sandbox360OverlayDebug.tvOverlayRect.left}, top={sandbox360OverlayDebug.tvOverlayRect.top}, width={sandbox360OverlayDebug.tvOverlayRect.width}, height={sandbox360OverlayDebug.tvOverlayRect.height}</div>
+                    <div>tv.sharedTransformContainer: {String(sandbox360OverlayDebug.tvSharesTransformContainer)}</div>
+                    <div>question.visible / consonant: {String(sandbox360OverlayDebug.questionVisible)} / {sandbox360OverlayDebug.questionConsonant || '-'}</div>
+                  </div>
+                </>
+              )}
+
               {mode === 'sandbox_story' && (
                 <div className="debug-event-tester" aria-label="Sandbox Story Debug Tools">
                   <h4>Sandbox Story Debug Tools</h4>

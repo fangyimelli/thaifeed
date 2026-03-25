@@ -37,6 +37,9 @@ type RoomEventObservabilityState = {
   triggerMode: RoomEventTriggerMode;
   cooldownBypassed: boolean;
   lastTriggeredAt: number | null;
+  lastBlockedReason?: string;
+  forceAllowed?: boolean;
+  forceReason?: string;
 };
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type SceneCameraState = {
@@ -56,15 +59,18 @@ type Props = {
   questionVisible: boolean;
   pinnedReplyText?: string;
   onDebugShotSelect: (shot: ShotType) => void;
-  debugState: {
-    aspect: number;
-    mode: 'desktop' | 'mobile';
-    leftPosX: number;
-    centerPosX: number;
-    rightPosX: number;
-    posError: number;
-    isSettled: boolean;
-  };
+  onTriggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
+  roomEventCounts: Record<RoomEventType, number>;
+  roomEventObservability: RoomEventObservabilityState;
+  onViewerDebugStateChange?: (payload: {
+    tvDebugRect: { left: string; top: string; width: string; height: string };
+    tvOverlayRect: { left: string; top: string; width: string; height: string };
+    tvAnchor: OverlayRect;
+    tvSharesTransformContainer: boolean;
+    questionVisible: boolean;
+    questionConsonant: string;
+    roomEventLast: RoomEventType | null;
+  }) => void;
 };
 
 type Sandbox360DebugApi = {
@@ -90,68 +96,31 @@ declare global {
   }
 }
 
-const ROOM_EVENT_DURATION_MS: Record<RoomEventType, number> = {
-  LIGHT_FLASH_LEFT: 180,
-  TV_STATIC: 1200,
-  DOLL_REFLECT: 520,
-  DOOR_SHADOW: 900
-};
-
-const ROOM_EVENT_COOLDOWN_MS: Record<RoomEventType, number> = {
-  LIGHT_FLASH_LEFT: 3000,
-  TV_STATIC: 4000,
-  DOLL_REFLECT: 5000,
-  DOOR_SHADOW: 5000
-};
-
 const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
 const SCENE_REFERENCE_SIZE = { width: 4096, height: 2048 } as const;
 const TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 } as const;
 
-export default function Sandbox360Viewer({ viewerState, curse, questionConsonant, questionVisible, pinnedReplyText = '', debugState, onDebugShotSelect }: Props) {
+export default function Sandbox360Viewer({
+  viewerState,
+  curse,
+  questionConsonant,
+  questionVisible,
+  pinnedReplyText = '',
+  onDebugShotSelect,
+  onTriggerRoomEvent,
+  roomEventCounts,
+  roomEventObservability,
+  onViewerDebugStateChange
+}: Props) {
   const [roomLoadFailed, setRoomLoadFailed] = useState(false);
   const [sceneImageSrc, setSceneImageSrc] = useState(SANDBOX360_SCENE_IMAGE_SRC);
   const [sceneDimensions, setSceneDimensions] = useState({ width: SCENE_DEFAULT_WIDTH, height: SCENE_DEFAULT_HEIGHT });
   const [viewportSize, setViewportSize] = useState({ width: 1, height: 1 });
-  const [activeEvents, setActiveEvents] = useState<Record<RoomEventType, number>>({
-    LIGHT_FLASH_LEFT: 0,
-    TV_STATIC: 0,
-    DOLL_REFLECT: 0,
-    DOOR_SHADOW: 0
-  });
-  const [roomEventObservability, setRoomEventObservability] = useState<RoomEventObservabilityState>({
-    eventType: null,
-    triggerMode: 'normal',
-    cooldownBypassed: false,
-    lastTriggeredAt: null
-  });
-  const timeoutsRef = useRef<Record<RoomEventType, number | null>>({
-    LIGHT_FLASH_LEFT: null,
-    TV_STATIC: null,
-    DOLL_REFLECT: null,
-    DOOR_SHADOW: null
-  });
-  const delayedLightFlashTimerRef = useRef<number | null>(null);
-  const rightStayTimerRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const transformLayerRef = useRef<HTMLDivElement | null>(null);
   const tvDebugRef = useRef<HTMLDivElement | null>(null);
   const tvOverlayRef = useRef<HTMLDivElement | null>(null);
-  const lastShotRef = useRef<ShotType>(viewerState.currentShot);
-  const shotEnterTimeRef = useRef<number>(Date.now());
-  const eventCooldownMapRef = useRef<Record<RoomEventType, number>>({
-    LIGHT_FLASH_LEFT: 0,
-    TV_STATIC: 0,
-    DOLL_REFLECT: 0,
-    DOOR_SHADOW: 0
-  });
-  const roomEventObservabilityRef = useRef<RoomEventObservabilityState>({
-    eventType: null,
-    triggerMode: 'normal',
-    cooldownBypassed: false,
-    lastTriggeredAt: null
-  });
   const [tvSharesTransformContainer, setTvSharesTransformContainer] = useState(false);
 
   const cameraState = useMemo<SceneCameraState>(() => {
@@ -213,116 +182,13 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     transform: `translate3d(${viewerState.cameraOffsetX.toFixed(3)}px, ${viewerState.cameraOffsetY.toFixed(3)}px, 0) rotate(${viewerState.cameraRotationDeg.toFixed(3)}deg) scale(${(1 + viewerState.cameraScaleOffset).toFixed(5)})`
   }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
 
-  const clearDelayedLightFlashTimer = useCallback(() => {
-    if (delayedLightFlashTimerRef.current !== null) {
-      window.clearTimeout(delayedLightFlashTimerRef.current);
-      delayedLightFlashTimerRef.current = null;
-    }
-  }, []);
-
-  const clearRightStayTimer = useCallback(() => {
-    if (rightStayTimerRef.current !== null) {
-      window.clearTimeout(rightStayTimerRef.current);
-      rightStayTimerRef.current = null;
-    }
-  }, []);
-
-  const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => {
-    const source = options?.source ?? 'manual';
-    const triggerMode: RoomEventTriggerMode = options?.force === true ? 'force' : 'normal';
-    const shouldBypassCooldown = Boolean(options?.force || options?.ignoreCooldown);
-    const now = Date.now();
-    const cooldownUntil = eventCooldownMapRef.current[eventType] ?? 0;
-    if (!shouldBypassCooldown && cooldownUntil > now) {
-      return false;
-    }
-
-    const nextObservabilityState: RoomEventObservabilityState = {
-      eventType,
-      triggerMode,
-      cooldownBypassed: shouldBypassCooldown,
-      lastTriggeredAt: now
-    };
-    roomEventObservabilityRef.current = nextObservabilityState;
-    setRoomEventObservability(nextObservabilityState);
-
-    setActiveEvents((prev) => ({
-      ...prev,
-      [eventType]: prev[eventType] + 1
-    }));
-
-    eventCooldownMapRef.current[eventType] = now + ROOM_EVENT_COOLDOWN_MS[eventType];
-
-    const existingTimeout = timeoutsRef.current[eventType];
-    if (existingTimeout !== null) {
-      window.clearTimeout(existingTimeout);
-    }
-    const timeoutId = window.setTimeout(() => {
-      setActiveEvents((prev) => ({
-        ...prev,
-        [eventType]: 0
-      }));
-      timeoutsRef.current[eventType] = null;
-    }, ROOM_EVENT_DURATION_MS[eventType]);
-    timeoutsRef.current[eventType] = timeoutId;
-
-    if (source === 'shot_flow') {
-      // no-op marker to keep shot-flow trigger path explicit in source/audits.
-    }
-
-    return true;
-  }, []);
-
-  const forceRoomEvent = useCallback((eventType: RoomEventType) => (
-    triggerRoomEvent(eventType, { force: true, source: 'manual' })
-  ), [triggerRoomEvent]);
-
-  const onShotChange = useCallback((prevShot: ShotType, nextShot: ShotType) => {
-    if (prevShot === nextShot) return;
-
-    const enteredAt = Date.now();
-    shotEnterTimeRef.current = enteredAt;
-
-    if (nextShot === 'right') {
-      clearDelayedLightFlashTimer();
-      delayedLightFlashTimerRef.current = window.setTimeout(() => {
-        if (lastShotRef.current !== 'right') return;
-        triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' });
-      }, 500);
-
-      clearRightStayTimer();
-      rightStayTimerRef.current = window.setTimeout(() => {
-        const stillOnRight = lastShotRef.current === 'right';
-        const sameRightEntry = shotEnterTimeRef.current === enteredAt;
-        if (!stillOnRight || !sameRightEntry) return;
-        triggerRoomEvent('TV_STATIC', { source: 'shot_flow' });
-      }, 3000);
-    } else {
-      clearDelayedLightFlashTimer();
-      clearRightStayTimer();
-    }
-
-    if (prevShot === 'right' && nextShot === 'center') {
-      triggerRoomEvent('DOOR_SHADOW', { source: 'shot_flow' });
-    }
-
-    if (prevShot === 'left' && nextShot === 'center') {
-      triggerRoomEvent('DOLL_REFLECT', { source: 'shot_flow' });
-    }
-  }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent]);
+  const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => (
+    onTriggerRoomEvent(eventType, options)
+  ), [onTriggerRoomEvent]);
 
   const triggerShot = useCallback((shot: ShotType) => {
     onDebugShotSelect(shot);
   }, [onDebugShotSelect]);
-
-  useEffect(() => {
-    const prevShot = lastShotRef.current;
-    const nextShot = viewerState.currentShot;
-    if (prevShot !== nextShot) {
-      onShotChange(prevShot, nextShot);
-      lastShotRef.current = nextShot;
-    }
-  }, [onShotChange, viewerState.currentShot]);
 
   useEffect(() => {
     const updateViewportSize = () => {
@@ -345,7 +211,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     const previousApi = window.__sandbox360;
     const debugApi: Sandbox360DebugApi = {
       triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
-      forceRoomEvent,
+      forceRoomEvent: (eventType) => onTriggerRoomEvent(eventType, { force: true, source: 'manual' }),
       overlay: {
         triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options)
       },
@@ -358,8 +224,8 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         }
       },
       debug: {
-        triggerRoomEvent: (eventType) => forceRoomEvent(eventType),
-        forceRoomEvent,
+        triggerRoomEvent: (eventType) => onTriggerRoomEvent(eventType, { force: true, source: 'manual' }),
+        forceRoomEvent: (eventType) => onTriggerRoomEvent(eventType, { force: true, source: 'manual' }),
         triggerShot
       }
     };
@@ -367,17 +233,8 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
 
     return () => {
       window.__sandbox360 = previousApi;
-      clearDelayedLightFlashTimer();
-      clearRightStayTimer();
-      (Object.keys(timeoutsRef.current) as RoomEventType[]).forEach((eventType) => {
-        const timeoutId = timeoutsRef.current[eventType];
-        if (timeoutId !== null) {
-          window.clearTimeout(timeoutId);
-          timeoutsRef.current[eventType] = null;
-        }
-      });
     };
-  }, [clearDelayedLightFlashTimer, clearRightStayTimer, forceRoomEvent, triggerRoomEvent, triggerShot]);
+  }, [onTriggerRoomEvent, triggerRoomEvent, triggerShot]);
 
   useEffect(() => {
     const transformLayer = transformLayerRef.current;
@@ -393,6 +250,18 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
       debugContainer === transformLayer
     ));
   }, [tvDebugRect, tvOverlayRect]);
+
+  useEffect(() => {
+    onViewerDebugStateChange?.({
+      tvDebugRect,
+      tvOverlayRect,
+      tvAnchor: TV_ANCHOR,
+      tvSharesTransformContainer,
+      questionVisible,
+      questionConsonant,
+      roomEventLast: roomEventObservability.eventType
+    });
+  }, [onViewerDebugStateChange, questionConsonant, questionVisible, roomEventObservability.eventType, tvDebugRect, tvOverlayRect, tvSharesTransformContainer]);
 
   return (
     <div
@@ -426,11 +295,11 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
           />
         </div>
         <div className="sandbox360OverlayLayer" aria-hidden="true">
-          <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
-          <div ref={tvDebugRef} className="sandbox360OverlayTvDebug" style={tvDebugRect} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
-          <div ref={tvOverlayRef} className="sandbox360OverlayTvNoise" style={tvOverlayRect} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
-          <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
-          <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={roomEventCounts.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
+          <div ref={tvDebugRef} className="sandbox360OverlayTvDebug" style={tvDebugRect} data-active={roomEventCounts.TV_STATIC > 0 ? 'true' : 'false'} />
+          <div ref={tvOverlayRef} className="sandbox360OverlayTvNoise" style={tvOverlayRect} data-active={roomEventCounts.TV_STATIC > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={roomEventCounts.DOLL_REFLECT > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={roomEventCounts.DOOR_SHADOW > 0 ? 'true' : 'false'} />
         </div>
       </div>
 
@@ -444,38 +313,6 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         <div className="sandbox360ChatLayer">
           {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
           <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
-          <div className="sandbox360ShotButtons">
-            <button type="button" onClick={() => triggerShot('left')}>LEFT</button>
-            <button type="button" onClick={() => triggerShot('center')}>CENTER</button>
-            <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
-          </div>
-          <div className="sandbox360RoomEventButtons">
-            <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>FLASH</button>
-            <button type="button" onClick={() => triggerRoomEvent('TV_STATIC', { source: 'manual' })}>TV</button>
-            <button type="button" onClick={() => triggerRoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
-            <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
-          </div>
-          <div className="sandbox360Debug" aria-live="polite">
-            <div>currentShot: {viewerState.currentShot}</div>
-            <div>targetShot: {viewerState.targetShot}</div>
-            <div>transition.durationMs: {viewerState.shotTransitionDurationMs}</div>
-            <div>aspect: {debugState.aspect.toFixed(4)}</div>
-            <div>mode: {debugState.mode}</div>
-            <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
-            <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
-            <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
-            <div>roomEvent.last: {roomEventObservability.eventType ?? '-'}</div>
-            <div>cameraOffsetX: {viewerState.cameraOffsetX.toFixed(3)}px</div>
-            <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
-            <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
-            <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
-            <div>TV_ANCHOR: x={TV_ANCHOR.x}, y={TV_ANCHOR.y}, w={TV_ANCHOR.w}, h={TV_ANCHOR.h}</div>
-            <div>tvDebugRect: left={tvDebugRect.left}, top={tvDebugRect.top}, width={tvDebugRect.width}, height={tvDebugRect.height}</div>
-            <div>tvOverlayRect: left={tvOverlayRect.left}, top={tvOverlayRect.top}, width={tvOverlayRect.width}, height={tvOverlayRect.height}</div>
-            <div>tv.sharedTransformContainer: {tvSharesTransformContainer ? 'true' : 'false'}</div>
-            <div>question.visible: {questionVisible ? 'true' : 'false'}</div>
-            <div>question.consonant: {questionConsonant || '-'}</div>
-          </div>
         </div>
       </div>
     </div>
