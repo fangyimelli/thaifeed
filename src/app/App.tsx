@@ -736,8 +736,11 @@ export default function App() {
   });
   const [sandbox360OverlayDebug, setSandbox360OverlayDebug] = useState({
     tvAnchor: { x: 0, y: 0, w: 0, h: 0 },
+    tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },
     tvDebugRect: { left: '-', top: '-', width: '-', height: '-' },
     tvOverlayRect: { left: '-', top: '-', width: '-', height: '-' },
+    tvRendererRect: { left: '-', top: '-', width: '-', height: '-' },
+    tvUsesResolvedRect: false,
     tvSharesTransformContainer: false,
     questionVisible: false,
     questionConsonant: '',
@@ -8133,8 +8136,11 @@ export default function App() {
                   onViewerDebugStateChange={(payload) => {
                     setSandbox360OverlayDebug({
                       tvAnchor: payload.tvAnchor,
+                      tvScreenRect: payload.tvScreenRect,
                       tvDebugRect: payload.tvDebugRect,
                       tvOverlayRect: payload.tvOverlayRect,
+                      tvRendererRect: payload.tvRendererRect,
+                      tvUsesResolvedRect: payload.tvUsesResolvedRect,
                       tvSharesTransformContainer: payload.tvSharesTransformContainer,
                       questionVisible: payload.questionVisible,
                       questionConsonant: payload.questionConsonant,
@@ -8443,8 +8449,11 @@ export default function App() {
                     <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
                     <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
                     <div>TV_ANCHOR: x={sandbox360OverlayDebug.tvAnchor.x}, y={sandbox360OverlayDebug.tvAnchor.y}, w={sandbox360OverlayDebug.tvAnchor.w}, h={sandbox360OverlayDebug.tvAnchor.h}</div>
+                    <div>tvScreenRect(scene-space): x={sandbox360OverlayDebug.tvScreenRect.x}, y={sandbox360OverlayDebug.tvScreenRect.y}, w={sandbox360OverlayDebug.tvScreenRect.w}, h={sandbox360OverlayDebug.tvScreenRect.h}</div>
                     <div>tvDebugRect: left={sandbox360OverlayDebug.tvDebugRect.left}, top={sandbox360OverlayDebug.tvDebugRect.top}, width={sandbox360OverlayDebug.tvDebugRect.width}, height={sandbox360OverlayDebug.tvDebugRect.height}</div>
                     <div>tvOverlayRect: left={sandbox360OverlayDebug.tvOverlayRect.left}, top={sandbox360OverlayDebug.tvOverlayRect.top}, width={sandbox360OverlayDebug.tvOverlayRect.width}, height={sandbox360OverlayDebug.tvOverlayRect.height}</div>
+                    <div>tvRendererRect: left={sandbox360OverlayDebug.tvRendererRect.left}, top={sandbox360OverlayDebug.tvRendererRect.top}, width={sandbox360OverlayDebug.tvRendererRect.width}, height={sandbox360OverlayDebug.tvRendererRect.height}</div>
+                    <div>tv.usesResolvedRect: {String(sandbox360OverlayDebug.tvUsesResolvedRect)}</div>
                     <div>tv.sharedTransformContainer: {String(sandbox360OverlayDebug.tvSharesTransformContainer)}</div>
                     <div>question.visible / consonant: {String(sandbox360OverlayDebug.questionVisible)} / {sandbox360OverlayDebug.questionConsonant || '-'}</div>
                   </div>
