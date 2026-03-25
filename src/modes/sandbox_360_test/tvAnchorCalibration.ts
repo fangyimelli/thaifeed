@@ -10,8 +10,8 @@ export type TvScreenQuad = {
   bottomLeft: TvScreenQuadPoint;
 };
 
-export const BASE_SCENE_WIDTH = 4096;
-export const BASE_SCENE_HEIGHT = 2048;
+export const BASE_SCENE_WIDTH = 2048;
+export const BASE_SCENE_HEIGHT = 1365;
 
 export type TvScreenInnerShot = 'LEFT' | 'CENTER' | 'RIGHT';
 
@@ -28,31 +28,30 @@ export type TvAnchorCalibration = {
   quadByShot: Record<TvScreenInnerShot, TvScreenQuad>;
 };
 
+const rectToQuad = (left: number, top: number, right: number, bottom: number): TvScreenQuad => ({
+  topLeft: { x: left, y: top },
+  topRight: { x: right, y: top },
+  bottomRight: { x: right, y: bottom },
+  bottomLeft: { x: left, y: bottom }
+});
+
+const CENTER_SCREEN_INNER_RECT = {
+  left: 1153,
+  top: 705,
+  right: 1209,
+  bottom: 750
+} as const;
+
 export const TV_SCREEN_INNER_QUAD_BY_SHOT: Record<TvScreenInnerShot, TvScreenQuad> = {
-  LEFT: {
-    topLeft: { x: 2239, y: 1018 },
-    topRight: { x: 2295, y: 1017 },
-    bottomRight: { x: 2296, y: 1076 },
-    bottomLeft: { x: 2238, y: 1077 }
-  },
-  CENTER: {
-    topLeft: { x: 2240, y: 1019 },
-    topRight: { x: 2294, y: 1018 },
-    bottomRight: { x: 2295, y: 1076 },
-    bottomLeft: { x: 2239, y: 1077 }
-  },
-  RIGHT: {
-    topLeft: { x: 2241, y: 1020 },
-    topRight: { x: 2293, y: 1019 },
-    bottomRight: { x: 2294, y: 1075 },
-    bottomLeft: { x: 2240, y: 1076 }
-  }
+  LEFT: rectToQuad(CENTER_SCREEN_INNER_RECT.left, CENTER_SCREEN_INNER_RECT.top, CENTER_SCREEN_INNER_RECT.right, CENTER_SCREEN_INNER_RECT.bottom),
+  CENTER: rectToQuad(CENTER_SCREEN_INNER_RECT.left, CENTER_SCREEN_INNER_RECT.top, CENTER_SCREEN_INNER_RECT.right, CENTER_SCREEN_INNER_RECT.bottom),
+  RIGHT: rectToQuad(CENTER_SCREEN_INNER_RECT.left, CENTER_SCREEN_INNER_RECT.top, CENTER_SCREEN_INNER_RECT.right, CENTER_SCREEN_INNER_RECT.bottom)
 };
 
 export const TV_ANCHOR_CALIBRATION: TvAnchorCalibration = {
-  version: 'tv-screen-inner-base-scene-calibration.v2026-03-25.6',
-  calibratedAt: '2026-03-25T23:20:00.000Z',
-  source: 'manual_authored_base_scene_absolute_screen_inner_quad_by_shot_red_box_followup',
+  version: 'tv-screen-inner-base-scene-calibration.v2026-03-25.7',
+  calibratedAt: '2026-03-25T23:55:00.000Z',
+  source: 'manual_authored_base_scene_absolute_screen_inner_quad_from_user_red_box_center_2048x1365',
   tvGeometryKind: 'quad',
   tvTargetRegionKind: 'tv_screen_inner',
   referenceScene: {

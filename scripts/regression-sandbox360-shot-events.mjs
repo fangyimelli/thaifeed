@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const viewerFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/Sandbox360Viewer.tsx', import.meta.url), 'utf8');
 const appFile = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
+const calibrationFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/tvAnchorCalibration.ts', import.meta.url), 'utf8');
 
 const assertHas = (file, token, message) => {
   if (!file.includes(token)) throw new Error(message);
@@ -30,6 +31,10 @@ assertHas(viewerFile, 'resolvedTvBoundingRect,', 'viewer debug payload must expo
 assertHas(viewerFile, 'rendererUsesResolvedQuad', 'viewer debug payload must expose renderer resolved-quad gate state');
 assertHas(viewerFile, 'effectContentUsesResolvedQuad', 'viewer debug payload must expose effect-content resolved-quad gate state');
 assertHas(viewerFile, 'effectVisibleBounds', 'viewer debug payload should include effect visible bounds');
+assertHas(viewerFile, 'baseTvScreenInnerRect: ScreenRectStyle;', 'viewer debug payload must expose base screen-inner rect');
+assertHas(viewerFile, 'resolvedTvScreenInnerRect: ScreenRectStyle;', 'viewer debug payload must expose resolved screen-inner rect');
+assertHas(viewerFile, 'const clampRectWithin = useCallback((rect: NumericScreenRect, container: NumericScreenRect): NumericScreenRect => {', 'viewer must clamp visible effect bounds within resolved tv screen-inner rect');
+assertHas(viewerFile, 'const clampedVisible = clampRectWithin(measuredNumeric, resolvedTvScreenInnerRectNumeric);', 'viewer effect visible bounds must be clamped to resolved tv screen-inner rect');
 assertHas(viewerFile, "const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';", 'viewer geometry kind must stay quad');
 assertHas(viewerFile, "const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;", 'viewer target region semantic must stay tv_screen_inner');
 assertHas(viewerFile, 'TV_SCREEN_GEOMETRY_BY_SHOT', 'viewer should document per-shot quad source');
@@ -72,8 +77,10 @@ assertHas(appFile, 'baseSceneHeight: 0,', 'app overlay debug state should includ
 assertHas(appFile, 'calibrationSource: \'-\',', 'app overlay debug state should include calibration source');
 assertHas(appFile, "tvGeometryKind: 'rect' as 'rect' | 'quad',", 'app overlay debug state should include geometry kind');
 assertHas(appFile, 'baseTvScreenInnerQuad:', 'app overlay debug state should include base tv screen-inner quad');
+assertHas(appFile, 'baseTvScreenInnerRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include base screen-inner rect');
 assertHas(appFile, 'baseTvScreenQuad:', 'app overlay debug state should include base tv screen quad');
 assertHas(appFile, 'resolvedTvScreenQuad:', 'app overlay debug state should include resolved tv screen quad');
+assertHas(appFile, 'resolvedTvScreenInnerRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved screen-inner rect');
 assertHas(appFile, 'resolvedTvBoundingRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved bounding rect');
 assertHas(appFile, 'renderedEffectRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include rendered effect rect');
 assertHas(appFile, 'effectVisibleBounds: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include effect visible bounds');
@@ -96,7 +103,9 @@ assertHas(appFile, 'FORCE TV', 'main view must expose force effect trigger contr
 assertHas(appFile, 'onViewerDebugStateChange={(payload) => {', 'viewer debug snapshot must be projected into app debug state');
 assertHas(appFile, 'calibrationSource: payload.calibrationSource,', 'app should consume calibration source');
 assertHas(appFile, 'baseTvScreenInnerQuad: payload.baseTvScreenInnerQuad,', 'app should consume base tv screen-inner quad');
+assertHas(appFile, 'baseTvScreenInnerRect: payload.baseTvScreenInnerRect,', 'app should consume base tv screen-inner rect');
 assertHas(appFile, 'resolvedTvScreenQuad: payload.resolvedTvScreenQuad,', 'app should consume resolved tv quad from viewer SSOT');
+assertHas(appFile, 'resolvedTvScreenInnerRect: payload.resolvedTvScreenInnerRect,', 'app should consume resolved tv screen-inner rect from viewer SSOT');
 assertHas(appFile, 'resolvedTvBoundingRect: payload.resolvedTvBoundingRect,', 'app should consume resolved tv bounding rect from viewer SSOT');
 assertHas(appFile, 'renderedEffectRect: payload.renderedEffectRect,', 'app should consume rendered effect rect from viewer SSOT');
 assertHas(appFile, 'effectVisibleBounds: payload.effectVisibleBounds,', 'app should consume effect visible bounds from viewer SSOT');
@@ -113,8 +122,15 @@ assertHas(appFile, 'effectContentUsesResolvedQuad: {String(sandbox360OverlayDebu
 assertHas(appFile, 'rendererGeometrySource: {sandbox360OverlayDebug.rendererGeometrySource}', 'debug panel should show renderer geometry source');
 assertHas(appFile, 'rendererUsesResolvedGeometry: {String(sandbox360OverlayDebug.rendererUsesResolvedGeometry)}', 'debug panel should show renderer resolved geometry identity');
 assertHas(appFile, 'calibrationSource: {sandbox360OverlayDebug.calibrationSource}', 'debug panel should show calibration source');
+assertHas(appFile, 'baseTvScreenInnerRect: left={sandbox360OverlayDebug.baseTvScreenInnerRect.left}', 'debug panel should show base screen-inner rect');
+assertHas(appFile, 'resolvedTvScreenInnerRect: left={sandbox360OverlayDebug.resolvedTvScreenInnerRect.left}', 'debug panel should show resolved screen-inner rect');
 if (appFile.includes('resolvedTvScreenRect')) {
   throw new Error('legacy resolvedTvScreenRect naming should be removed from app debug schema');
 }
+
+assertHas(calibrationFile, 'export const BASE_SCENE_WIDTH = 2048;', 'tv calibration must use 2048 base width');
+assertHas(calibrationFile, 'export const BASE_SCENE_HEIGHT = 1365;', 'tv calibration must use 1365 base height');
+assertHas(calibrationFile, "source: 'manual_authored_base_scene_absolute_screen_inner_quad_from_user_red_box_center_2048x1365',", 'tv calibration source must describe user red-box center base rect');
+assertHas(calibrationFile, 'CENTER_SCREEN_INNER_RECT', 'tv calibration should be anchored by explicit center screen-inner rect');
 
 console.log('regression-sandbox360-shot-events: ok');
