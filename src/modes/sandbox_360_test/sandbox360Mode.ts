@@ -225,7 +225,28 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
-  viewer: { currentShot: 'center', targetShot: 'center', currentPosX: 52, targetPosX: 52, isTransitioning: false, posY: 50, targetPosY: 50, time: 0, scale: SANDBOX360_SCALE, targetScale: SANDBOX360_SCALE, leftPosX: 36, centerPosX: 52, rightPosX: 66, lastCommandAt: 0 }
+  viewer: {
+    currentShot: 'center',
+    targetShot: 'center',
+    currentPosX: 52,
+    targetPosX: 52,
+    isTransitioning: false,
+    cameraOffsetX: 0,
+    cameraOffsetY: 0,
+    cameraRotationDeg: 0,
+    cameraScaleOffset: 0,
+    cameraVelocityX: 0,
+    cameraVelocityY: 0,
+    posY: 50,
+    targetPosY: 50,
+    time: 0,
+    scale: SANDBOX360_SCALE,
+    targetScale: SANDBOX360_SCALE,
+    leftPosX: 36,
+    centerPosX: 52,
+    rightPosX: 66,
+    lastCommandAt: 0
+  }
   };
 };
 
@@ -331,6 +352,24 @@ export function ensureSandbox360StateShape(raw: any) {
   }
   if (typeof next.viewer.isTransitioning !== 'boolean') {
     next.viewer.isTransitioning = false;
+  }
+  if (!Number.isFinite(next.viewer.cameraOffsetX)) {
+    next.viewer.cameraOffsetX = 0;
+  }
+  if (!Number.isFinite(next.viewer.cameraOffsetY)) {
+    next.viewer.cameraOffsetY = 0;
+  }
+  if (!Number.isFinite(next.viewer.cameraRotationDeg)) {
+    next.viewer.cameraRotationDeg = 0;
+  }
+  if (!Number.isFinite(next.viewer.cameraScaleOffset)) {
+    next.viewer.cameraScaleOffset = 0;
+  }
+  if (!Number.isFinite(next.viewer.cameraVelocityX)) {
+    next.viewer.cameraVelocityX = 0;
+  }
+  if (!Number.isFinite(next.viewer.cameraVelocityY)) {
+    next.viewer.cameraVelocityY = 0;
   }
   return next;
 }
