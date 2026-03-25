@@ -1,3 +1,19 @@
+## 2026-03-25 Sandbox 360 TV final rect semantics 補完（handheld + transition）
+
+- Scope 僅 `sandbox_360_test`，classic mode 完全未改。
+- bug 根因：
+  - `resolveTvEffectRect` 前一版只算到 camera-space（pre-transform），handheld 仍在 CSS transform layer，造成 debug 的「final rect」其實不是 renderer 最終 rect。
+  - `renderedEffectRect` 是 post-transform DOM 量測，與 pre-transform rect 比較後的 `rectDiff*` 混入語義落差。
+- 修正：
+  - `resolveTvEffectRect({ rect, camera, handheld })` 升級為唯一最終路徑，輸出 `preTransformTvRect` 與 `finalResolvedTvRect`。
+  - renderer/debug/overlay 全部統一使用 `finalResolvedTvRect`；debug 同步呈現 `baseSceneWidth/baseSceneHeight`、`tvScreenRectRatio`、`effectVisibleBounds`、`transitionState`、`rendererUsesResolvedRect`、`effectContentUsesResolvedRect`。
+  - TV bounds visualization 升級為雙框（renderer rect + effect visible bounds）+ Δx/Δy/Δw/Δh。
+- 左上 Shot / Trigger / FORCE TV 操作列仍留在主畫面；右下大型資訊面板未回退。
+
+### Removed / Deprecated Log
+
+- 2026-03-25：deprecated 舊命名 `resolvedTvScreenRect`（易誤導為 final）；sandbox_360_test 統一改為 `preTransformTvRect` / `finalResolvedTvRect`。
+
 ## 2026-03-25 Sandbox 360 TV 最終像素對位修復（renderer vs content bounds）
 
 - Scope 僅 `sandbox_360_test`，classic mode 完全未改。

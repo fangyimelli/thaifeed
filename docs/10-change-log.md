@@ -1,3 +1,17 @@
+## 2026-03-25 Sandbox360 TV final rect semantics gap closure（handheld-aware SSOT）
+
+- Root cause：
+  - 前一版 `resolveTvEffectRect` 僅計算 scene rect + camera，handheld transform 仍在 `.sandbox360TransformLayer` 的 CSS/DOM 層，導致 debug 宣稱 final 但實際上是 pre-transform。
+  - `renderedEffectRect` 來自 post-transform DOM 量測，而 `resolvedTvScreenRect` 是 pre-transform；`rectDiff*` 因語義差而不是誤差。
+- 修正：
+  - `Sandbox360Viewer` 的 `resolveTvEffectRect({ rect, camera, handheld })` 升級成唯一 final path，回傳 `preTransformTvRect + finalResolvedTvRect`。
+  - `tvRendererRect/tvOverlayRect/tvDebugRect` 全部綁定 `finalResolvedTvRect`，並顯式 gate：`rendererUsesResolvedRect=true`、`effectContentUsesResolvedRect=true`。
+  - 新增/補齊 debug schema：`baseSceneWidth/baseSceneHeight`、`tvScreenRectRatio`、`preTransformTvRect`、`finalResolvedTvRect`、`effectVisibleBounds`、`transitionState`、`tvRectSource`。
+  - `transformChain` 改為結構化 step（含 `data`），不再只靠單一文字摘要。
+  - TV bounds visualization 升級為雙框+差值（renderer rect / effect visible bounds / ΔxΔyΔwΔh），並維持只受 Debug toggle 控制。
+- regression guard：
+  - 鎖定 `resolveTvEffectRect` 三段輸出、`finalResolvedTvRect -> tvRendererRect`、`rendererUsesResolvedRect/effectContentUsesResolvedRect`、新 debug schema、visualization 來源一致性與舊命名移除。
+
 ## 2026-03-25 Sandbox360 TV 最終渲染對位 root-cause 修復（pixel observability）
 
 - Root cause（本次定位）：
