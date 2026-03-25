@@ -39,10 +39,10 @@ type SandboxPinnedReplyState = {
 };
 
 const SANDBOX_BOOTSTRAP_MIN_DURATION_MS = 30_000;
-const SANDBOX_360_ASPECT_BREAKPOINT = 1.2;
-const SANDBOX_360_MAX_SCALE = 1.08;
-const SANDBOX_360_POS_Y = 50;
-const SANDBOX_360_DEVICE_PRESETS = {
+const SANDBOX360_ASPECT_BREAKPOINT = 1.2;
+const SANDBOX360_MAX_SCALE = 1.08;
+const SANDBOX360_POS_Y = 50;
+const SANDBOX360_DEVICE_PRESETS = {
   desktop: {
     leftPosX: 22,
     centerPosX: 50,
@@ -60,6 +60,11 @@ const SANDBOX_360_DEVICE_PRESETS = {
 export type Sandbox360ViewerFraming = {
   aspect: number;
   mode: 'desktop' | 'mobile';
+  deviceBranchStrategy: {
+    branchBy: 'aspect_breakpoint';
+    breakpoint: number;
+    selected: 'desktop' | 'mobile';
+  };
   leftPosX: number;
   centerPosX: number;
   rightPosX: number;
@@ -73,23 +78,42 @@ export function resolveSandbox360ViewerFraming(viewportWidth: number, viewportHe
   const safeWidth = viewportWidth > 0 ? viewportWidth : window.innerWidth || 1;
   const safeHeight = viewportHeight > 0 ? viewportHeight : window.innerHeight || 1;
   const aspect = safeWidth / safeHeight;
-  const mode: 'desktop' | 'mobile' = aspect > SANDBOX_360_ASPECT_BREAKPOINT ? 'desktop' : 'mobile';
-  const strategy = SANDBOX_360_DEVICE_PRESETS[mode];
-  const scale = Math.min(strategy.baseScale, SANDBOX_360_MAX_SCALE);
+  const mode: 'desktop' | 'mobile' = aspect > SANDBOX360_ASPECT_BREAKPOINT ? 'desktop' : 'mobile';
+  const strategy = SANDBOX360_DEVICE_PRESETS[mode];
+  const scale = Math.min(strategy.baseScale, SANDBOX360_MAX_SCALE);
+  const shotPresets = {
+    left: { posX: strategy.leftPosX, posY: SANDBOX360_POS_Y, scale },
+    center: { posX: strategy.centerPosX, posY: SANDBOX360_POS_Y, scale },
+    right: { posX: strategy.rightPosX, posY: SANDBOX360_POS_Y, scale }
+  } as const;
   return {
     aspect,
     mode,
+    deviceBranchStrategy: { branchBy: 'aspect_breakpoint', breakpoint: SANDBOX360_ASPECT_BREAKPOINT, selected: mode },
     leftPosX: strategy.leftPosX,
     centerPosX: strategy.centerPosX,
     rightPosX: strategy.rightPosX,
-    posY: SANDBOX_360_POS_Y,
+    posY: SANDBOX360_POS_Y,
     scale,
     objectFit: 'cover',
-    shotPresets: {
-      left: { posX: strategy.leftPosX, posY: SANDBOX_360_POS_Y, scale },
-      center: { posX: strategy.centerPosX, posY: SANDBOX_360_POS_Y, scale },
-      right: { posX: strategy.rightPosX, posY: SANDBOX_360_POS_Y, scale }
-    }
+    shotPresets
+  };
+}
+
+export function resolveSandbox360ViewerTarget(
+  viewportWidth: number,
+  viewportHeight: number,
+  rawTargetShot: string | undefined
+) {
+  const framing = resolveSandbox360ViewerFraming(viewportWidth, viewportHeight);
+  const targetShot = rawTargetShot && rawTargetShot in framing.shotPresets ? rawTargetShot as 'left' | 'center' | 'right' : 'center';
+  const preset = framing.shotPresets[targetShot];
+  return {
+    framing,
+    targetShot,
+    targetPosX: preset.posX,
+    targetPosY: preset.posY,
+    targetScale: preset.scale
   };
 }
 
@@ -213,7 +237,7 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
-  viewer: { currentShot: 'center', targetShot: 'center', currentPosX: 50, targetPosX: 50, posY: 50, time: 0, scale: 1.05, leftPosX: 22, centerPosX: 50, rightPosX: 78, lastCommandAt: 0 }
+  viewer: { currentShot: 'center', targetShot: 'center', currentPosX: 50, targetPosX: 50, posY: 50, targetPosY: 50, time: 0, scale: 1.05, targetScale: 1.05, leftPosX: 22, centerPosX: 50, rightPosX: 78, lastCommandAt: 0 }
   };
 };
 
@@ -298,6 +322,15 @@ export function ensureSandbox360StateShape(raw: any) {
   }
   if (!Number.isFinite(next.viewer.posY)) {
     next.viewer.posY = 50;
+  }
+  if (!Number.isFinite(next.viewer.targetPosY)) {
+    next.viewer.targetPosY = next.viewer.posY;
+  }
+  if (!Number.isFinite(next.viewer.scale)) {
+    next.viewer.scale = 1.05;
+  }
+  if (!Number.isFinite(next.viewer.targetScale)) {
+    next.viewer.targetScale = next.viewer.scale;
   }
   if (!Number.isFinite(next.viewer.leftPosX)) {
     next.viewer.leftPosX = 22;

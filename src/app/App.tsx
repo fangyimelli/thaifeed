@@ -58,7 +58,7 @@ import {
 } from '../game/qna/qnaEngine';
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
-import { createSandbox360Mode, resolveSandbox360ViewerFraming } from '../modes/sandbox_360_test/sandbox360Mode';
+import { createSandbox360Mode, resolveSandbox360ViewerFraming, resolveSandbox360ViewerTarget } from '../modes/sandbox_360_test/sandbox360Mode';
 import { isViewerCommandText, parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
 import {
   isSandboxWaitReplyStep,
@@ -701,6 +701,7 @@ export default function App() {
     isSettled: true,
     aspect: initialSandbox360Framing.aspect,
     mode: initialSandbox360Framing.mode,
+    deviceBranchStrategy: initialSandbox360Framing.deviceBranchStrategy.selected,
     lastCommandAt: 0,
     lastCommand: '-' as string,
     lastParseMatched: false
@@ -1737,22 +1738,24 @@ export default function App() {
       ensureSandboxRuntimeStarted('mode_switch_bootstrap');
     } else if (selectedMode === 'sandbox_360_test') {
       const sandbox360State = sandbox360ModeRef.current.getState();
-      const framing = resolveSandbox360ViewerFraming(window.innerWidth, window.innerHeight);
+      const target = resolveSandbox360ViewerTarget(window.innerWidth, window.innerHeight, sandbox360State.viewer?.targetShot);
+      const framing = target.framing;
       setSandbox360ViewerState({
         currentShot: sandbox360State.viewer?.currentShot ?? 'center',
-        targetShot: sandbox360State.viewer?.targetShot ?? 'center',
-        currentPosX: sandbox360State.viewer?.currentPosX ?? framing.centerPosX,
-        targetPosX: sandbox360State.viewer?.targetPosX ?? framing.centerPosX,
-        posError: Math.abs((sandbox360State.viewer?.currentPosX ?? framing.centerPosX) - (sandbox360State.viewer?.targetPosX ?? framing.centerPosX)),
-        isSettled: Math.abs((sandbox360State.viewer?.currentPosX ?? framing.centerPosX) - (sandbox360State.viewer?.targetPosX ?? framing.centerPosX)) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
+        targetShot: target.targetShot,
+        currentPosX: sandbox360State.viewer?.currentPosX ?? target.targetPosX,
+        targetPosX: sandbox360State.viewer?.targetPosX ?? target.targetPosX,
+        posError: Math.abs((sandbox360State.viewer?.currentPosX ?? target.targetPosX) - (sandbox360State.viewer?.targetPosX ?? target.targetPosX)),
+        isSettled: Math.abs((sandbox360State.viewer?.currentPosX ?? target.targetPosX) - (sandbox360State.viewer?.targetPosX ?? target.targetPosX)) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
         time: sandbox360State.viewer?.time ?? 0,
-        posY: framing.posY,
-        scale: sandbox360State.viewer?.scale ?? framing.scale,
+        posY: sandbox360State.viewer?.posY ?? target.targetPosY,
+        scale: sandbox360State.viewer?.scale ?? target.targetScale,
         leftPosX: framing.leftPosX,
         centerPosX: framing.centerPosX,
         rightPosX: framing.rightPosX,
         aspect: framing.aspect,
         mode: framing.mode,
+        deviceBranchStrategy: framing.deviceBranchStrategy.selected,
         lastCommandAt: sandbox360State.viewer?.lastCommandAt ?? 0,
         lastCommand: '-',
         lastParseMatched: false
@@ -4854,15 +4857,15 @@ export default function App() {
           targetPosX: framing.centerPosX,
           time: 0,
           posY: framing.posY,
+          targetPosY: framing.posY,
           scale: framing.scale,
+          targetScale: framing.scale,
           lastCommandAt: 0
         };
         const time = currentViewer.time + delta;
-        const resolvedTargetShot = currentViewer.targetShot in framing.shotPresets ? currentViewer.targetShot : 'center';
-        const targetPreset = framing.shotPresets[resolvedTargetShot as keyof typeof framing.shotPresets];
-        const targetPosX = targetPreset.posX;
-        const targetPosY = targetPreset.posY;
-        const targetScale = targetPreset.scale;
+        const targetPosX = Number.isFinite(currentViewer.targetPosX) ? currentViewer.targetPosX : framing.centerPosX;
+        const targetPosY = Number.isFinite(currentViewer.targetPosY) ? currentViewer.targetPosY : framing.posY;
+        const targetScale = Number.isFinite(currentViewer.targetScale) ? currentViewer.targetScale : framing.scale;
         const currentPosX = currentViewer.currentPosX + (targetPosX - currentViewer.currentPosX) * SANDBOX_360_SHOT_SMOOTH_FACTOR;
         const posError = Math.abs(currentPosX - targetPosX);
         const isSettled = posError < SANDBOX_360_SHOT_SETTLE_THRESHOLD;
@@ -4870,8 +4873,7 @@ export default function App() {
         const scale = currentViewer.scale + (targetScale - currentViewer.scale) * SANDBOX_360_SCALE_SMOOTH_FACTOR;
         const nextViewer = {
           ...currentViewer,
-          targetShot: resolvedTargetShot,
-          currentShot: isSettled ? resolvedTargetShot : currentViewer.currentShot,
+          currentShot: isSettled ? currentViewer.targetShot : currentViewer.currentShot,
           currentPosX,
           targetPosX,
           time,
@@ -4894,7 +4896,8 @@ export default function App() {
           centerPosX: framing.centerPosX,
           rightPosX: framing.rightPosX,
           aspect: framing.aspect,
-          mode: framing.mode
+          mode: framing.mode,
+          deviceBranchStrategy: framing.deviceBranchStrategy.selected
         }));
         const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
         if (videoLayer) {
@@ -5378,22 +5381,31 @@ export default function App() {
       } as any);
       if (viewerCommand) {
         console.debug('[viewer-cmd] applied (mode=sandbox_360_test)', { raw, command: viewerCommand.type });
-        const framing = resolveSandbox360ViewerFraming(window.innerWidth, window.innerHeight);
         const sandbox360State = sandbox360ModeRef.current.getState();
         const currentViewer = sandbox360State.viewer ?? {
           currentShot: 'center',
           targetShot: 'center',
-          currentPosX: framing.centerPosX,
-          targetPosX: framing.centerPosX,
+          currentPosX: 50,
+          targetPosX: 50,
           time: 0,
-          posY: framing.posY,
-          scale: framing.scale,
+          posY: 50,
+          targetPosY: 50,
+          scale: 1.05,
+          targetScale: 1.05,
           lastCommandAt: 0
         };
         const nextViewer = { ...currentViewer, lastCommandAt: now };
         if (viewerCommand.type === 'LEFT') nextViewer.targetShot = 'left';
         if (viewerCommand.type === 'CENTER') nextViewer.targetShot = 'center';
         if (viewerCommand.type === 'RIGHT') nextViewer.targetShot = 'right';
+        const resolvedTarget = resolveSandbox360ViewerTarget(window.innerWidth, window.innerHeight, nextViewer.targetShot);
+        nextViewer.targetShot = resolvedTarget.targetShot;
+        nextViewer.targetPosX = resolvedTarget.targetPosX;
+        nextViewer.targetPosY = resolvedTarget.targetPosY;
+        nextViewer.targetScale = resolvedTarget.targetScale;
+        nextViewer.leftPosX = resolvedTarget.framing.leftPosX;
+        nextViewer.centerPosX = resolvedTarget.framing.centerPosX;
+        nextViewer.rightPosX = resolvedTarget.framing.rightPosX;
         sandbox360ModeRef.current.setState({ viewer: nextViewer });
         setSandbox360ViewerState({
           currentShot: nextViewer.currentShot,
@@ -5403,13 +5415,14 @@ export default function App() {
           posError: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX),
           isSettled: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
           time: nextViewer.time,
-          posY: framing.posY,
+          posY: nextViewer.posY,
           scale: nextViewer.scale,
-          leftPosX: framing.leftPosX,
-          centerPosX: framing.centerPosX,
-          rightPosX: framing.rightPosX,
-          aspect: framing.aspect,
-          mode: framing.mode,
+          leftPosX: resolvedTarget.framing.leftPosX,
+          centerPosX: resolvedTarget.framing.centerPosX,
+          rightPosX: resolvedTarget.framing.rightPosX,
+          aspect: resolvedTarget.framing.aspect,
+          mode: resolvedTarget.framing.mode,
+          deviceBranchStrategy: resolvedTarget.framing.deviceBranchStrategy.selected,
           lastCommandAt: nextViewer.lastCommandAt,
           lastCommand: viewerCommand.type,
           lastParseMatched: true
@@ -5432,15 +5445,16 @@ export default function App() {
               currentPosX: nextViewer.currentPosX,
               targetPosX: nextViewer.targetPosX,
               time: nextViewer.time,
-              posY: framing.posY,
+              posY: nextViewer.posY,
               scale: nextViewer.scale,
-              leftPosX: framing.leftPosX,
-              centerPosX: framing.centerPosX,
-              rightPosX: framing.rightPosX,
+              leftPosX: resolvedTarget.framing.leftPosX,
+              centerPosX: resolvedTarget.framing.centerPosX,
+              rightPosX: resolvedTarget.framing.rightPosX,
               posError: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX),
               isSettled: Math.abs(nextViewer.currentPosX - nextViewer.targetPosX) < SANDBOX_360_SHOT_SETTLE_THRESHOLD,
-              aspect: framing.aspect,
-              mode: framing.mode,
+              aspect: resolvedTarget.framing.aspect,
+              mode: resolvedTarget.framing.mode,
+              deviceBranchStrategy: resolvedTarget.framing.deviceBranchStrategy.selected,
               lastCommandAt: nextViewer.lastCommandAt,
               lastCommand: viewerCommand.type
             }
