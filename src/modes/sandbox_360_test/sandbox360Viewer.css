@@ -47,10 +47,10 @@
 }
 
 .sandbox360OverlayTvNoise {
-  right: 23%;
-  bottom: 27%;
-  width: 11%;
-  height: 10%;
+  right: 20%;
+  bottom: 23%;
+  width: 13%;
+  height: 12%;
   opacity: 0;
   overflow: hidden;
   border-radius: 2px;
@@ -74,10 +74,10 @@
 }
 
 .sandbox360OverlayDoll {
-  right: 3%;
-  top: 18%;
-  width: 18%;
-  height: 48%;
+  right: 0%;
+  top: 11%;
+  width: 34%;
+  height: 74%;
   opacity: 0;
   mix-blend-mode: screen;
   background:
@@ -96,10 +96,10 @@
 }
 
 .sandbox360OverlayDoor {
-  left: 44%;
-  top: 20%;
-  width: 12%;
-  height: 55%;
+  left: 45%;
+  top: 16%;
+  width: 14%;
+  height: 62%;
   opacity: 0;
   overflow: hidden;
 }

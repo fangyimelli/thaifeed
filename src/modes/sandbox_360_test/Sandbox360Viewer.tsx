@@ -8,6 +8,7 @@ export type Sandbox360ViewerState = {
   targetShot: 'left' | 'center' | 'right';
   currentPosX: number;
   targetPosX: number;
+  isTransitioning: boolean;
   posY: number;
   scale: number;
   lastCommand?: string;
@@ -271,10 +272,13 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
           <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', 'manual')}>DOOR</button>
         </div>
         <div className="sandbox360Debug" aria-live="polite">
+          <div>currentShot: {viewerState.currentShot}</div>
+          <div>targetShot: {viewerState.targetShot}</div>
           <div>aspect: {debugState.aspect.toFixed(4)}</div>
           <div>mode: {debugState.mode}</div>
           <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
           <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
+          <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
           <div>left/center/right: {debugState.leftPosX.toFixed(2)} / {debugState.centerPosX.toFixed(2)} / {debugState.rightPosX.toFixed(2)}</div>
           <div>posError: {debugState.posError.toFixed(3)}%</div>
           <div>isSettled: {debugState.isSettled ? 'true' : 'false'}</div>

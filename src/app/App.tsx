@@ -687,6 +687,7 @@ export default function App() {
     targetShot: 'center' as 'left' | 'center' | 'right',
     currentPosX: initialSandbox360Framing.centerPosX,
     targetPosX: initialSandbox360Framing.centerPosX,
+    isTransitioning: false,
     time: 0,
     posY: initialSandbox360Framing.posY,
     scale: initialSandbox360Framing.scale,
@@ -1741,8 +1742,9 @@ export default function App() {
         targetShot: target.targetShot,
         currentPosX: sandbox360State.viewer?.currentPosX ?? target.targetPosX,
         targetPosX: sandbox360State.viewer?.targetPosX ?? target.targetPosX,
+        isTransitioning: Boolean(sandbox360State.viewer?.isTransitioning),
         posError: Math.abs((sandbox360State.viewer?.currentPosX ?? target.targetPosX) - (sandbox360State.viewer?.targetPosX ?? target.targetPosX)),
-        isSettled: true,
+        isSettled: !Boolean(sandbox360State.viewer?.isTransitioning),
         time: sandbox360State.viewer?.time ?? 0,
         posY: sandbox360State.viewer?.posY ?? target.targetPosY,
         scale: sandbox360State.viewer?.scale ?? target.targetScale,
@@ -4843,10 +4845,9 @@ export default function App() {
     const resolvedTarget = resolveSandbox360ViewerTarget(window.innerWidth, window.innerHeight, shot);
     const nextViewer = {
       ...(currentState.viewer ?? {}),
-      currentShot: resolvedTarget.targetShot,
       targetShot: resolvedTarget.targetShot,
-      currentPosX: resolvedTarget.targetPosX,
       targetPosX: resolvedTarget.targetPosX,
+      isTransitioning: true,
       posY: resolvedTarget.targetPosY,
       targetPosY: resolvedTarget.targetPosY,
       scale: resolvedTarget.targetScale,
@@ -4860,12 +4861,11 @@ export default function App() {
     sandbox360ModeRef.current.setState({ viewer: nextViewer });
     setSandbox360ViewerState((prev) => ({
       ...prev,
-      currentShot: nextViewer.currentShot,
       targetShot: nextViewer.targetShot,
-      currentPosX: nextViewer.currentPosX,
       targetPosX: nextViewer.targetPosX,
-      posError: 0,
-      isSettled: true,
+      posError: Math.abs((prev.currentPosX ?? nextViewer.targetPosX) - nextViewer.targetPosX),
+      isSettled: false,
+      isTransitioning: true,
       time: nextViewer.time,
       posY: nextViewer.posY,
       scale: nextViewer.scale,
@@ -4896,6 +4896,7 @@ export default function App() {
           targetShot: 'center',
           currentPosX: framing.centerPosX,
           targetPosX: framing.centerPosX,
+          isTransitioning: false,
           time: 0,
           posY: framing.posY,
           targetPosY: framing.posY,
@@ -4907,16 +4908,23 @@ export default function App() {
         const targetPosX = Number.isFinite(currentViewer.targetPosX) ? currentViewer.targetPosX : framing.centerPosX;
         const targetPosY = Number.isFinite(currentViewer.targetPosY) ? currentViewer.targetPosY : framing.posY;
         const targetScale = Number.isFinite(currentViewer.targetScale) ? currentViewer.targetScale : framing.scale;
-        const currentPosX = targetPosX;
-        const posError = 0;
-        const isSettled = true;
+        const currentPosXBase = Number.isFinite(currentViewer.currentPosX) ? currentViewer.currentPosX : targetPosX;
+        const posDelta = targetPosX - currentPosXBase;
+        const transitionDuration = 0.28;
+        const step = Math.min(1, delta / transitionDuration);
+        const easeOutStep = 1 - ((1 - step) * (1 - step));
+        const currentPosX = currentPosXBase + (posDelta * easeOutStep);
+        const posError = Math.abs(targetPosX - currentPosX);
+        const isSettled = posError <= 0.08;
+        const isTransitioning = !isSettled;
         const posY = targetPosY;
         const scale = targetScale;
         const nextViewer = {
           ...currentViewer,
-          currentShot: currentViewer.targetShot,
+          currentShot: isSettled ? currentViewer.targetShot : currentViewer.currentShot,
           currentPosX,
           targetPosX,
+          isTransitioning,
           time,
           posY,
           scale
@@ -4930,6 +4938,7 @@ export default function App() {
           targetPosX: nextViewer.targetPosX,
           posError,
           isSettled,
+          isTransitioning,
           time,
           posY: nextViewer.posY,
           scale,
@@ -5434,14 +5443,15 @@ export default function App() {
               targetShot: nextViewer.targetShot,
               currentPosX: nextViewer.currentPosX,
               targetPosX: nextViewer.targetPosX,
+              isTransitioning: true,
               time: nextViewer.time,
               posY: nextViewer.posY,
               scale: nextViewer.scale,
               leftPosX: resolvedTarget.framing.leftPosX,
               centerPosX: resolvedTarget.framing.centerPosX,
               rightPosX: resolvedTarget.framing.rightPosX,
-              posError: 0,
-              isSettled: true,
+              posError: Math.abs((nextViewer.currentPosX ?? nextViewer.targetPosX) - nextViewer.targetPosX),
+              isSettled: false,
               aspect: resolvedTarget.framing.aspect,
               mode: resolvedTarget.framing.mode,
               deviceBranchStrategy: resolvedTarget.framing.deviceBranchStrategy.selected,
@@ -7829,6 +7839,7 @@ export default function App() {
                   targetShot: sandbox360ViewerState.targetShot,
                   currentPosX: sandbox360ViewerState.currentPosX,
                   targetPosX: sandbox360ViewerState.targetPosX,
+                  isTransitioning: sandbox360ViewerState.isTransitioning,
                   posY: sandbox360ViewerState.posY,
                   scale: sandbox360ViewerState.scale,
                   lastCommand: sandbox360ViewerState.lastCommand

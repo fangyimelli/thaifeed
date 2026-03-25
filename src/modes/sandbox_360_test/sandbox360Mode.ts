@@ -40,11 +40,11 @@ type SandboxPinnedReplyState = {
 
 const SANDBOX_BOOTSTRAP_MIN_DURATION_MS = 30_000;
 const SANDBOX360_ASPECT_BREAKPOINT = 1.2;
-const SANDBOX360_LEFT_POS = 22;
-const SANDBOX360_CENTER_POS = 50;
-const SANDBOX360_RIGHT_POS = 78;
+const SANDBOX360_LEFT_POS = 36;
+const SANDBOX360_CENTER_POS = 52;
+const SANDBOX360_RIGHT_POS = 66;
 const SANDBOX360_POS_Y = 50;
-const SANDBOX360_SCALE = 1.05;
+export const SANDBOX360_SCALE = 1.75;
 
 export type Sandbox360ViewerFraming = {
   aspect: number;
@@ -225,7 +225,7 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
-  viewer: { currentShot: 'center', targetShot: 'center', currentPosX: 50, targetPosX: 50, posY: 50, targetPosY: 50, time: 0, scale: 1.05, targetScale: 1.05, leftPosX: 22, centerPosX: 50, rightPosX: 78, lastCommandAt: 0 }
+  viewer: { currentShot: 'center', targetShot: 'center', currentPosX: 52, targetPosX: 52, isTransitioning: false, posY: 50, targetPosY: 50, time: 0, scale: SANDBOX360_SCALE, targetScale: SANDBOX360_SCALE, leftPosX: 36, centerPosX: 52, rightPosX: 66, lastCommandAt: 0 }
   };
 };
 
@@ -315,19 +315,22 @@ export function ensureSandbox360StateShape(raw: any) {
     next.viewer.targetPosY = next.viewer.posY;
   }
   if (!Number.isFinite(next.viewer.scale)) {
-    next.viewer.scale = 1.05;
+    next.viewer.scale = SANDBOX360_SCALE;
   }
   if (!Number.isFinite(next.viewer.targetScale)) {
     next.viewer.targetScale = next.viewer.scale;
   }
   if (!Number.isFinite(next.viewer.leftPosX)) {
-    next.viewer.leftPosX = 22;
+    next.viewer.leftPosX = SANDBOX360_LEFT_POS;
   }
   if (!Number.isFinite(next.viewer.centerPosX)) {
-    next.viewer.centerPosX = 50;
+    next.viewer.centerPosX = SANDBOX360_CENTER_POS;
   }
   if (!Number.isFinite(next.viewer.rightPosX)) {
-    next.viewer.rightPosX = 78;
+    next.viewer.rightPosX = SANDBOX360_RIGHT_POS;
+  }
+  if (typeof next.viewer.isTransitioning !== 'boolean') {
+    next.viewer.isTransitioning = false;
   }
   return next;
 }

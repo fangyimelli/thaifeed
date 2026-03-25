@@ -1,3 +1,21 @@
+## 2026-03-25 Sandbox 360 zoom-crop framing authority + short transition
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic or `sandbox_story`.
+
+### Summary
+- Raised authoritative zoom baseline to `SANDBOX360_SCALE = 1.75`.
+- Updated shot framing constants to `LEFT=36`, `CENTER=52`, `RIGHT=66` (zoomed fixed observation points).
+- Shot apply now sets target-only + `isTransitioning=true`; RAF tick performs short ease-out interpolation (`transitionDuration = 0.28`) and settles to authoritative `currentShot` only when close enough.
+- Viewer debug panel now includes: `currentShot`, `targetShot`, `currentPosX`, `targetPosX`, `scale`, `isTransitioning`.
+- Tuned overlay geometry under zoom (`sandbox360Viewer.css`) to reduce visible RIGHT doll-area misalignment.
+- Extended regression guard script to enforce new scale/framing/transition authority tokens.
+
+### Verification
+- `npm run test:sandbox360-shot-events`
+- `npm run build`
+
 ## 2026-03-25 Sandbox 360 namespace-only trigger API convergence
 
 ### Scope
