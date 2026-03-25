@@ -744,6 +744,7 @@ export default function App() {
     tvAnchorVersion: '-',
     tvAnchorCalibratedAt: '-',
     tvAnchorSource: '-',
+    calibrationSource: '-',
     baseSceneWidth: 0,
     baseSceneHeight: 0,
     tvGeometryKind: 'rect' as 'rect' | 'quad',
@@ -758,11 +759,26 @@ export default function App() {
       bottomRight: { x: 0, y: 0 },
       bottomLeft: { x: 0, y: 0 }
     },
+    baseTvScreenInnerQuad: {
+      topLeft: { x: 0, y: 0 },
+      topRight: { x: 0, y: 0 },
+      bottomRight: { x: 0, y: 0 },
+      bottomLeft: { x: 0, y: 0 }
+    },
     resolvedTvScreenQuad: {
       topLeft: { x: 0, y: 0 },
       topRight: { x: 0, y: 0 },
       bottomRight: { x: 0, y: 0 },
       bottomLeft: { x: 0, y: 0 }
+    },
+    resolvedTvScreenInnerGeometry: {
+      quad: {
+        topLeft: { x: 0, y: 0 },
+        topRight: { x: 0, y: 0 },
+        bottomRight: { x: 0, y: 0 },
+        bottomLeft: { x: 0, y: 0 }
+      },
+      boundingRect: { left: '-', top: '-', width: '-', height: '-' }
     },
     resolvedTvBoundingRect: { left: '-', top: '-', width: '-', height: '-' },
     renderedEffectBounds: { left: '-', top: '-', width: '-', height: '-' },
@@ -8182,6 +8198,7 @@ export default function App() {
                     setSandbox360OverlayDebug({
                       baseSceneWidth: payload.baseSceneWidth,
                       baseSceneHeight: payload.baseSceneHeight,
+                      calibrationSource: payload.calibrationSource,
                       tvGeometryKind: payload.tvGeometryKind,
                       tvTargetRegionKind: payload.tvTargetRegionKind,
                       geometrySource: payload.geometrySource,
@@ -8193,7 +8210,9 @@ export default function App() {
                       tvAnchorCalibratedAt: payload.tvAnchorCalibratedAt,
                       tvAnchorSource: payload.tvAnchorSource,
                       baseTvScreenQuad: payload.baseTvScreenQuad,
+                      baseTvScreenInnerQuad: payload.baseTvScreenInnerQuad,
                       resolvedTvScreenQuad: payload.resolvedTvScreenQuad,
+                      resolvedTvScreenInnerGeometry: payload.resolvedTvScreenInnerGeometry,
                       resolvedTvBoundingRect: payload.resolvedTvBoundingRect,
                       renderedEffectBounds: payload.renderedEffectBounds,
                       renderedEffectRect: payload.renderedEffectRect,
@@ -8517,6 +8536,7 @@ export default function App() {
                     <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
                     <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
                     <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>
+                    <div>calibrationSource: {sandbox360OverlayDebug.calibrationSource}</div>
                     <div>tvGeometryKind: {sandbox360OverlayDebug.tvGeometryKind}</div>
                     <div>tvTargetRegionKind: {sandbox360OverlayDebug.tvTargetRegionKind}</div>
                     <div>geometrySource: {sandbox360OverlayDebug.geometrySource}</div>
@@ -8525,8 +8545,10 @@ export default function App() {
                     <div>rendererFallbackReason: {sandbox360OverlayDebug.rendererFallbackReason}</div>
                     <div>TV_ANCHOR(center): tl=({sandbox360OverlayDebug.tvAnchor.topLeft.x},{sandbox360OverlayDebug.tvAnchor.topLeft.y}) tr=({sandbox360OverlayDebug.tvAnchor.topRight.x},{sandbox360OverlayDebug.tvAnchor.topRight.y}) br=({sandbox360OverlayDebug.tvAnchor.bottomRight.x},{sandbox360OverlayDebug.tvAnchor.bottomRight.y}) bl=({sandbox360OverlayDebug.tvAnchor.bottomLeft.x},{sandbox360OverlayDebug.tvAnchor.bottomLeft.y})</div>
                     <div>TV_ANCHOR metadata: version={sandbox360OverlayDebug.tvAnchorVersion}, calibratedAt={sandbox360OverlayDebug.tvAnchorCalibratedAt}, source={sandbox360OverlayDebug.tvAnchorSource}</div>
+                    <div>baseTvScreenInnerQuad: tl=({sandbox360OverlayDebug.baseTvScreenInnerQuad.topLeft.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenInnerQuad.topLeft.y.toFixed(2)}) tr=({sandbox360OverlayDebug.baseTvScreenInnerQuad.topRight.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenInnerQuad.topRight.y.toFixed(2)}) br=({sandbox360OverlayDebug.baseTvScreenInnerQuad.bottomRight.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenInnerQuad.bottomRight.y.toFixed(2)}) bl=({sandbox360OverlayDebug.baseTvScreenInnerQuad.bottomLeft.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenInnerQuad.bottomLeft.y.toFixed(2)})</div>
                     <div>baseTvScreenQuad: tl=({sandbox360OverlayDebug.baseTvScreenQuad.topLeft.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.topLeft.y.toFixed(2)}) tr=({sandbox360OverlayDebug.baseTvScreenQuad.topRight.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.topRight.y.toFixed(2)}) br=({sandbox360OverlayDebug.baseTvScreenQuad.bottomRight.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.bottomRight.y.toFixed(2)}) bl=({sandbox360OverlayDebug.baseTvScreenQuad.bottomLeft.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.bottomLeft.y.toFixed(2)})</div>
                     <div>resolvedTvScreenQuad: tl=({sandbox360OverlayDebug.resolvedTvScreenQuad.topLeft.x.toFixed(2)},{sandbox360OverlayDebug.resolvedTvScreenQuad.topLeft.y.toFixed(2)}) tr=({sandbox360OverlayDebug.resolvedTvScreenQuad.topRight.x.toFixed(2)},{sandbox360OverlayDebug.resolvedTvScreenQuad.topRight.y.toFixed(2)}) br=({sandbox360OverlayDebug.resolvedTvScreenQuad.bottomRight.x.toFixed(2)},{sandbox360OverlayDebug.resolvedTvScreenQuad.bottomRight.y.toFixed(2)}) bl=({sandbox360OverlayDebug.resolvedTvScreenQuad.bottomLeft.x.toFixed(2)},{sandbox360OverlayDebug.resolvedTvScreenQuad.bottomLeft.y.toFixed(2)})</div>
+                    <div>resolvedTvScreenInnerGeometry.boundingRect: left={sandbox360OverlayDebug.resolvedTvScreenInnerGeometry.boundingRect.left}, top={sandbox360OverlayDebug.resolvedTvScreenInnerGeometry.boundingRect.top}, width={sandbox360OverlayDebug.resolvedTvScreenInnerGeometry.boundingRect.width}, height={sandbox360OverlayDebug.resolvedTvScreenInnerGeometry.boundingRect.height}</div>
                     <div>resolvedTvBoundingRect: left={sandbox360OverlayDebug.resolvedTvBoundingRect.left}, top={sandbox360OverlayDebug.resolvedTvBoundingRect.top}, width={sandbox360OverlayDebug.resolvedTvBoundingRect.width}, height={sandbox360OverlayDebug.resolvedTvBoundingRect.height}</div>
                     <div>renderedEffectBounds: left={sandbox360OverlayDebug.renderedEffectBounds.left}, top={sandbox360OverlayDebug.renderedEffectBounds.top}, width={sandbox360OverlayDebug.renderedEffectBounds.width}, height={sandbox360OverlayDebug.renderedEffectBounds.height}</div>
                     <div>renderedEffectRect: left={sandbox360OverlayDebug.renderedEffectRect.left}, top={sandbox360OverlayDebug.renderedEffectRect.top}, width={sandbox360OverlayDebug.renderedEffectRect.width}, height={sandbox360OverlayDebug.renderedEffectRect.height}</div>

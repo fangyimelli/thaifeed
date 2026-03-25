@@ -1,3 +1,20 @@
+## 2026-03-25 Sandbox360 TV red-box follow-up calibration（CENTER/LEFT/RIGHT）
+
+- 依據使用者提供紅框目標區，將 `TV_SCREEN_INNER_QUAD_BY_SHOT` 再次收斂（`v2026-03-25.6`），把 screen-inner 從偏寬矩形改為更接近實際螢幕發光區的小範圍 quad。
+- `calibrationSource` 更新為 `manual_authored_base_scene_absolute_screen_inner_quad_by_shot_red_box_followup`，Debug 可直接驗證目前是否吃到這版校準。
+
+## 2026-03-25 Sandbox360 TV base-scene absolute calibration SSOT（screen-inner only）
+
+- Scope 僅 `sandbox_360_test`；classic mode 無改動。
+- 這次主軸：先定義 base scene 絕對座標，再由單一路徑 resolve 到目前 viewer；不再從 viewport 或 TV 外框近似回推。
+- 新增/明確化：
+  - `BASE_SCENE_WIDTH=4096`、`BASE_SCENE_HEIGHT=2048`。
+  - `TV_SCREEN_INNER_QUAD_BY_SHOT.{LEFT|CENTER|RIGHT}`（全部為 base scene 絕對像素）。
+  - 單一路徑 `resolveTvScreenInnerGeometryFromBaseCalibration(...)`（base scene quad → camera/cover/shot transition → handheld → final viewer geometry）。
+  - debug 新增 `calibrationSource`、`baseTvScreenInnerQuad`、`resolvedTvScreenInnerGeometry`，並保留 `rendererUsesResolvedGeometry` / `effectContentUsesResolvedGeometry` 供驗收。
+- Removed / Deprecated Log：
+  - deprecated 以 viewport/外框近似為主 render geometry 的做法（主路徑改為 authored base-scene calibration only）。
+
 ## 2026-03-25 Sandbox360 TV render geometry hard switch（screen-inner authored-only）
 
 - Root cause：前次雖已有 quad 欄位，但主路徑 `baseTvScreenQuad` 固定採 `currentShot`，transition 期間未做 shot 幾何插值；且 debug 未輸出 renderer 實際 geometry source/kind/fallback，難以證明 renderer 是否真吃到 authored screen-inner。
