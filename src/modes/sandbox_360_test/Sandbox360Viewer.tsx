@@ -22,11 +22,18 @@ export type Sandbox360ViewerState = {
 
 type ShotType = 'left' | 'center' | 'right';
 type RoomEventType = 'LIGHT_FLASH_LEFT' | 'TV_STATIC' | 'DOLL_REFLECT' | 'DOOR_SHADOW';
-type TriggerSource = 'manual' | 'shot_flow';
+type TriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scripted';
 type TriggerRoomEventOptions = {
   source: TriggerSource;
   force?: boolean;
   ignoreCooldown?: boolean;
+};
+type RoomEventTriggerMode = 'normal' | 'force';
+type RoomEventObservabilityState = {
+  eventType: RoomEventType | null;
+  triggerMode: RoomEventTriggerMode;
+  cooldownBypassed: boolean;
+  lastTriggeredAt: number | null;
 };
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type SceneCameraState = {
@@ -105,6 +112,12 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     DOLL_REFLECT: 0,
     DOOR_SHADOW: 0
   });
+  const [roomEventObservability, setRoomEventObservability] = useState<RoomEventObservabilityState>({
+    eventType: null,
+    triggerMode: 'normal',
+    cooldownBypassed: false,
+    lastTriggeredAt: null
+  });
   const timeoutsRef = useRef<Record<RoomEventType, number | null>>({
     LIGHT_FLASH_LEFT: null,
     TV_STATIC: null,
@@ -121,6 +134,12 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     TV_STATIC: 0,
     DOLL_REFLECT: 0,
     DOOR_SHADOW: 0
+  });
+  const roomEventObservabilityRef = useRef<RoomEventObservabilityState>({
+    eventType: null,
+    triggerMode: 'normal',
+    cooldownBypassed: false,
+    lastTriggeredAt: null
   });
 
   const cameraState = useMemo<SceneCameraState>(() => {
@@ -188,12 +207,22 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
 
   const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => {
     const source = options?.source ?? 'manual';
+    const triggerMode: RoomEventTriggerMode = options?.force === true ? 'force' : 'normal';
     const shouldBypassCooldown = Boolean(options?.force || options?.ignoreCooldown);
     const now = Date.now();
     const cooldownUntil = eventCooldownMapRef.current[eventType] ?? 0;
     if (!shouldBypassCooldown && cooldownUntil > now) {
       return false;
     }
+
+    const nextObservabilityState: RoomEventObservabilityState = {
+      eventType,
+      triggerMode,
+      cooldownBypassed: shouldBypassCooldown,
+      lastTriggeredAt: now
+    };
+    roomEventObservabilityRef.current = nextObservabilityState;
+    setRoomEventObservability(nextObservabilityState);
 
     setActiveEvents((prev) => ({
       ...prev,
@@ -389,6 +418,10 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
           <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
           <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
           <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
+          <div>eventType: {roomEventObservability.eventType ?? 'null'}</div>
+          <div>triggerMode: {roomEventObservability.triggerMode}</div>
+          <div>cooldownBypassed: {roomEventObservability.cooldownBypassed ? 'true' : 'false'}</div>
+          <div>lastTriggeredAt: {roomEventObservability.lastTriggeredAt ?? 'null'}</div>
         </div>
       </div>
     </div>
