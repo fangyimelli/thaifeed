@@ -5,7 +5,7 @@ const svgDataUri = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponen
 // NOTE: binary assets are not supported in this repository workflow.
 // Keep sandbox_360_test path resolution isolated in this file so we can
 // switch to dedicated sandbox binaries later without touching shared viewers.
-export const SANDBOX360_VIDEO_SRC = resolveAssetUrl('assets/scenes/oldhouse_room_loop3.mp4');
+export const SANDBOX360_SCENE_IMAGE_SRC = resolveAssetUrl('assets/scenes/room_360.png');
 
 export const SANDBOX360_OVERLAY_ASSETS = {
   roomLight: svgDataUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><radialGradient id="g" cx="70%" cy="40%" r="70%"><stop offset="0%" stop-color="#fff7d6" stop-opacity="0.5"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient><rect width="1920" height="1080" fill="url(#g)"/></svg>'),
