@@ -56,6 +56,7 @@ type Props = {
 
 type Sandbox360DebugApi = {
   triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
+  forceRoomEvent: (eventType: RoomEventType) => boolean;
   overlay: {
     triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
   };
@@ -65,6 +66,7 @@ type Sandbox360DebugApi = {
   };
   debug: {
     triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
+    forceRoomEvent: (eventType: RoomEventType) => boolean;
     triggerShot: (shot: ShotType) => void;
   };
 };
@@ -220,6 +222,10 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     return true;
   }, []);
 
+  const forceRoomEvent = useCallback((eventType: RoomEventType) => (
+    triggerRoomEvent(eventType, { force: true, source: 'manual' })
+  ), [triggerRoomEvent]);
+
   const onShotChange = useCallback((prevShot: ShotType, nextShot: ShotType) => {
     if (prevShot === nextShot) return;
 
@@ -288,6 +294,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     const previousApi = window.__sandbox360;
     const debugApi: Sandbox360DebugApi = {
       triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
+      forceRoomEvent,
       overlay: {
         triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options)
       },
@@ -301,6 +308,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
       },
       debug: {
         triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
+        forceRoomEvent,
         triggerShot
       }
     };
@@ -318,7 +326,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
         }
       });
     };
-  }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent, triggerShot]);
+  }, [clearDelayedLightFlashTimer, clearRightStayTimer, forceRoomEvent, triggerRoomEvent, triggerShot]);
 
   return (
     <div
