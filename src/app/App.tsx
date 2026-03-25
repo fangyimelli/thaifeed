@@ -757,6 +757,7 @@ export default function App() {
     rectDiffW: '-',
     rectDiffH: '-',
     tvRectSource: '-',
+    tvTargetRegionKind: 'tv_outer_frame' as 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner',
     transformChain: [] as Array<{ step: string; summary: string; data: Record<string, number | string | boolean | undefined> }>,
     transitionState: {
       isTransitioning: false,
@@ -8185,6 +8186,7 @@ export default function App() {
                       rectDiffW: payload.rectDiffW,
                       rectDiffH: payload.rectDiffH,
                       tvRectSource: payload.tvRectSource,
+                      tvTargetRegionKind: payload.tvTargetRegionKind,
                       transformChain: payload.transformChain,
                       transitionState: payload.transitionState,
                       rendererUsesResolvedRect: payload.rendererUsesResolvedRect,
@@ -8513,6 +8515,7 @@ export default function App() {
                     <div>rectDiffX / rectDiffY / rectDiffW / rectDiffH: {sandbox360OverlayDebug.rectDiffX} / {sandbox360OverlayDebug.rectDiffY} / {sandbox360OverlayDebug.rectDiffW} / {sandbox360OverlayDebug.rectDiffH}</div>
                     <div>transitionState: from={sandbox360OverlayDebug.transitionState.fromPosX.toFixed(2)}, current={sandbox360OverlayDebug.transitionState.currentPosX.toFixed(2)}, target={sandbox360OverlayDebug.transitionState.targetPosX.toFixed(2)}, duration={sandbox360OverlayDebug.transitionState.durationMs}, transitioning={String(sandbox360OverlayDebug.transitionState.isTransitioning)}</div>
                     <div>tvRectSource: {sandbox360OverlayDebug.tvRectSource}</div>
+                    <div>tvTargetRegionKind: {sandbox360OverlayDebug.tvTargetRegionKind}</div>
                     <div>rendererUsesResolvedRect: {String(sandbox360OverlayDebug.rendererUsesResolvedRect)}</div>
                     <div>effectContentUsesResolvedRect: {String(sandbox360OverlayDebug.effectContentUsesResolvedRect)}</div>
                     <div>tv.sharedTransformContainer: {String(sandbox360OverlayDebug.tvSharesTransformContainer)}</div>

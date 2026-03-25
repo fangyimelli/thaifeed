@@ -1,4 +1,5 @@
 > 2026-03-25 sandbox_360_test 補充（第二波）：主畫面左上保留 Shot/Trigger live controls；Debug panel 僅承接資訊觀測。effect runtime SSOT 升級為 `active + triggerCount + triggerSeq`，renderer/debug 共讀並以 `triggerSeq` 重播 force 效果。
+> 2026-03-25 sandbox_360_test 補充（第三波）：TV 目標區語義升級為 `tv_screen_inner`（非 `tv_body` / `tv_outer_frame`）；debug schema 新增 `tvTargetRegionKind`，並要求 `tvRectSource` 明確標示 `TV_ANCHOR(tv_screen_inner scene-space)`。
 
 # Sandbox Flow Table
 
@@ -46,10 +47,11 @@ Notes:
 | rect layers | `baseTvSceneRect -> preTransformTvRect -> finalResolvedTvRect -> tvRendererRect` |
 | effect content layer | `sandbox360OverlayTvNoiseContent` (`transform:none`, `transform-origin:center center`) |
 | pixel observability | `renderedEffectRect`, `effectVisibleBounds`, `rectDiffX/Y/W/H` |
-| debug schema | `baseSceneWidth/baseSceneHeight`, `tvScreenRectRatio`, `transitionState`, `tvRectSource`, `rendererUsesResolvedRect`, `effectContentUsesResolvedRect` |
+| debug schema | `baseSceneWidth/baseSceneHeight`, `tvScreenRectRatio`, `transitionState`, `tvRectSource`, `tvTargetRegionKind`, `rendererUsesResolvedRect`, `effectContentUsesResolvedRect` |
 | debug transform steps | `transformChain`（base rect → pre-transform → handheld → transition → final renderer rect） |
 | visualization toggle | `TV effect bounds visualization` (Debug panel only) |
 | anti-mask policy | clip/mask 僅保護，不可替代定位修正 |
+| target region semantic guard | `tvTargetRegionKind` must be `tv_screen_inner` |
 
 
 ## Sandbox 360 zoom-crop framing authority (sandbox_360_test only)

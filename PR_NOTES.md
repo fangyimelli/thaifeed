@@ -1,3 +1,22 @@
+## 2026-03-25 Sandbox 360 TV screen-inner red-box alignment fix
+
+### Root cause
+- Previous cleanup unified resolver/debug/renderer, but the **base anchor semantic** was still oversized (closer to `tv_body`) instead of `tv_screen_inner`.
+- Because all consumers shared that same wrong base rect, values looked consistent while visual region remained too large/right.
+
+### What changed
+- `src/modes/sandbox_360_test/tvAnchorCalibration.ts`
+  - Bumped calibration to `tv-anchor-calibration.v2026-03-25.2`.
+  - Recalibrated anchor to smaller/left/up screen-inner target region.
+  - Source metadata now explicitly states `screen_inner_only`.
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Added `tvTargetRegionKind` schema and hard-set to `tv_screen_inner`.
+  - Updated `tvRectSource` string to explicitly describe `TV_ANCHOR(tv_screen_inner scene-space)`.
+- `src/app/App.tsx`
+  - Added `tvTargetRegionKind` in overlay debug state, payload ingestion, and debug panel rendering.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added semantic guards for `tv_screen_inner` target-region contract and debug chain propagation.
+
 ## 2026-03-25 Sandbox 360 TV final rect semantics closure（QA gap fix）
 
 ### Scope

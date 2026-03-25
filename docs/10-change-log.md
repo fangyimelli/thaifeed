@@ -1,3 +1,15 @@
+## 2026-03-25 Sandbox360 TV screen-inner target-region 語義修正
+
+- Root cause：
+  - 先前鏈路已統一 `finalResolvedTvRect`，但 base calibration anchor 仍偏大偏右，實際語義更接近 `tv_body` 而非 `tv_screen_inner`。
+  - 這會導致 renderer/effect/debug 欄位彼此一致，卻一致對準錯誤區域。
+- 修正：
+  - 更新 `tvAnchorCalibration.ts` 到 `tv-anchor-calibration.v2026-03-25.2`，將 TV rect 校正為螢幕有效發光區（更小、偏左上）。
+  - 新增 `tvTargetRegionKind` 欄位，viewer 明確輸出 `tv_screen_inner`，App debug 面板同步顯示。
+  - `tvRectSource` 明示 `TV_ANCHOR(tv_screen_inner scene-space)`，避免再以整台 TV 外觀作為定位語義。
+- guard：
+  - `scripts/regression-sandbox360-shot-events.mjs` 新增語義 guard：鎖定 `tv_screen_inner` target-region、payload 透傳與 debug 顯示。
+
 ## 2026-03-25 Sandbox360 TV final rect semantics gap closure（handheld-aware SSOT）
 
 - Root cause：
