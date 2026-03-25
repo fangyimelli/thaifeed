@@ -1561,3 +1561,12 @@
 - 新增持續手持感合成：低頻 sway + 微量 jitter + 極小 breathing scale。
 - `Sandbox360Viewer` 新增共同 transform 容器 `sandbox360TransformLayer`，主畫面與 overlay 套用同一 handheld transform，避免視覺分離。
 - sandbox_360_test debug 欄位新增 handheld 指標：`cameraOffsetX/Y`, `cameraRotationDeg`, `cameraScaleOffset`。
+
+## 2026-03-25 Sandbox 360 TV screen-inner center rect hard calibration (2048x1365)
+
+- 將 `sandbox_360_test` 的 TV base calibration 改為使用使用者提供基準圖尺寸 `2048x1365`，不再沿用 `4096x2048`。
+- CENTER shot（目前同時套用 LEFT/RIGHT 以避免過渡插值脫離）改為絕對 `screen-inner` rect：`left=1153, top=705, right=1209, bottom=750`。
+- renderer/effect/clip/debug/visualization 全部改走同一條 `tv_screen_inner` resolved geometry 路徑，並維持 `tvGeometryKind=quad`。
+- `effectVisibleBounds` 改為由實測 content bounds 與 `resolvedTvScreenInnerRect` 做交集，強制不超出 screen-inner 區域。
+- debug payload / debug panel 新增 `baseTvScreenInnerRect`、`resolvedTvScreenInnerRect` 以直接對照校正區域。
+- 新增 regression guard：鎖定 base scene 尺寸、center red-box calibration source、screen-inner rect observability 與 visible-bounds clamp 路徑。

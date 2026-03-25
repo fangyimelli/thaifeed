@@ -109,11 +109,13 @@ type Props = {
     rendererGeometryKind: RendererGeometryKind;
     rendererFallbackReason: string;
     baseTvScreenInnerQuad: TvScreenQuad;
+    baseTvScreenInnerRect: ScreenRectStyle;
     baseTvScreenQuad: TvScreenQuad;
     resolvedTvScreenInnerGeometry: {
       quad: TvScreenQuad;
       boundingRect: ScreenRectStyle;
     };
+    resolvedTvScreenInnerRect: ScreenRectStyle;
     resolvedTvScreenQuad: TvScreenQuad;
     resolvedTvBoundingRect: ScreenRectStyle;
     renderedEffectBounds: ScreenRectStyle;
@@ -240,6 +242,13 @@ export default function Sandbox360Viewer({
   onViewerDebugStateChange,
   tvBoundsVisualizationEnabled = false
 }: Props) {
+  const clampRectWithin = useCallback((rect: NumericScreenRect, container: NumericScreenRect): NumericScreenRect => {
+    const x1 = Math.max(rect.x, container.x);
+    const y1 = Math.max(rect.y, container.y);
+    const x2 = Math.min(rect.x + rect.w, container.x + container.w);
+    const y2 = Math.min(rect.y + rect.h, container.y + container.h);
+    return { x: x1, y: y1, w: Math.max(0, x2 - x1), h: Math.max(0, y2 - y1) };
+  }, []);
   const interpolateQuad = useCallback((from: TvScreenQuad, to: TvScreenQuad, progress: number): TvScreenQuad => {
     const t = Math.min(1, Math.max(0, progress));
     const lerp = (a: number, b: number) => a + (b - a) * t;
@@ -367,7 +376,19 @@ export default function Sandbox360Viewer({
     }
   }), [baseTvScreenQuad, cameraState, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
   const resolvedTvScreenQuad = resolvedTvGeometry.finalResolvedQuad;
+  const baseTvScreenInnerRectNumeric = useMemo<NumericScreenRect>(() => {
+    const xs = [baseTvScreenQuad.topLeft.x, baseTvScreenQuad.topRight.x, baseTvScreenQuad.bottomRight.x, baseTvScreenQuad.bottomLeft.x];
+    const ys = [baseTvScreenQuad.topLeft.y, baseTvScreenQuad.topRight.y, baseTvScreenQuad.bottomRight.y, baseTvScreenQuad.bottomLeft.y];
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }, [baseTvScreenQuad.bottomLeft.x, baseTvScreenQuad.bottomLeft.y, baseTvScreenQuad.bottomRight.x, baseTvScreenQuad.bottomRight.y, baseTvScreenQuad.topLeft.x, baseTvScreenQuad.topLeft.y, baseTvScreenQuad.topRight.x, baseTvScreenQuad.topRight.y]);
+  const resolvedTvScreenInnerRectNumeric = resolvedTvGeometry.finalResolvedBoundingRect;
   const resolvedTvBoundingRect = useMemo(() => toScreenRectStyle(resolvedTvGeometry.finalResolvedBoundingRect), [resolvedTvGeometry.finalResolvedBoundingRect, toScreenRectStyle]);
+  const baseTvScreenInnerRect = useMemo(() => toScreenRectStyle(baseTvScreenInnerRectNumeric), [baseTvScreenInnerRectNumeric, toScreenRectStyle]);
+  const resolvedTvScreenInnerRect = useMemo(() => toScreenRectStyle(resolvedTvScreenInnerRectNumeric), [resolvedTvScreenInnerRectNumeric, toScreenRectStyle]);
   const quadToPolygonStyle = useCallback((quad: TvScreenQuad): QuadStyle => {
     const minX = Math.min(quad.topLeft.x, quad.topRight.x, quad.bottomRight.x, quad.bottomLeft.x);
     const minY = Math.min(quad.topLeft.y, quad.topRight.y, quad.bottomRight.y, quad.bottomLeft.y);
@@ -501,8 +522,15 @@ export default function Sandbox360Viewer({
         height: `${content.height.toFixed(3)}px`
       };
       setRenderedEffectRect(measured);
-      setEffectVisibleBounds(measured);
-      setQuadDiff(`Δx ${(content.left - root.left - resolvedTvGeometry.finalResolvedBoundingRect.x).toFixed(3)}px / Δy ${(content.top - root.top - resolvedTvGeometry.finalResolvedBoundingRect.y).toFixed(3)}px / Δw ${(content.width - resolvedTvGeometry.finalResolvedBoundingRect.w).toFixed(3)}px / Δh ${(content.height - resolvedTvGeometry.finalResolvedBoundingRect.h).toFixed(3)}px`);
+      const measuredNumeric: NumericScreenRect = {
+        x: content.left - root.left,
+        y: content.top - root.top,
+        w: content.width,
+        h: content.height
+      };
+      const clampedVisible = clampRectWithin(measuredNumeric, resolvedTvScreenInnerRectNumeric);
+      setEffectVisibleBounds(toScreenRectStyle(clampedVisible));
+      setQuadDiff(`Δx ${(measuredNumeric.x - resolvedTvScreenInnerRectNumeric.x).toFixed(3)}px / Δy ${(measuredNumeric.y - resolvedTvScreenInnerRectNumeric.y).toFixed(3)}px / Δw ${(measuredNumeric.w - resolvedTvScreenInnerRectNumeric.w).toFixed(3)}px / Δh ${(measuredNumeric.h - resolvedTvScreenInnerRectNumeric.h).toFixed(3)}px`);
     };
     updateRenderedEffectRect();
     const frame = window.requestAnimationFrame(updateRenderedEffectRect);
@@ -511,7 +539,7 @@ export default function Sandbox360Viewer({
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', updateRenderedEffectRect);
     };
-  }, [resolvedTvGeometry.finalResolvedBoundingRect.h, resolvedTvGeometry.finalResolvedBoundingRect.w, resolvedTvGeometry.finalResolvedBoundingRect.x, resolvedTvGeometry.finalResolvedBoundingRect.y, roomEventState.TV_STATIC.active, roomEventState.TV_STATIC.triggerSeq, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+  }, [clampRectWithin, resolvedTvScreenInnerRectNumeric, roomEventState.TV_STATIC.active, roomEventState.TV_STATIC.triggerSeq, toScreenRectStyle, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
 
   useEffect(() => {
     onViewerDebugStateChange?.({
@@ -525,11 +553,13 @@ export default function Sandbox360Viewer({
       rendererGeometryKind,
       rendererFallbackReason,
       baseTvScreenInnerQuad: baseTvScreenQuad,
+      baseTvScreenInnerRect,
       baseTvScreenQuad,
       resolvedTvScreenInnerGeometry: {
         quad: resolvedTvScreenQuad,
         boundingRect: resolvedTvBoundingRect
       },
+      resolvedTvScreenInnerRect,
       resolvedTvScreenQuad,
       resolvedTvBoundingRect,
       renderedEffectBounds: renderedEffectRect,
@@ -554,7 +584,7 @@ export default function Sandbox360Viewer({
       questionConsonant,
       roomEventLast: roomEventObservability.eventType
     });
-  }, [baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
 
   return (
     <div
