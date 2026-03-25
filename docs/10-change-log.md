@@ -1,3 +1,17 @@
+## 2026-03-25 Sandbox 360 作用域收斂（namespace-only debug/event API）
+
+### Scope
+- 僅修改 `sandbox_360_test` 與對應文件/guard。
+- classic / sandbox_story / shared submitChat / 已驗證 shot 規則不變。
+
+### Implemented
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx` 移除 `window.triggerRoomEvent` 掛載，改為 `window.__sandbox360` mode-local API。
+- `triggerRoomEvent`、overlay debug trigger、viewer shot debug actions（`triggerShot`, `shot.left/center/right`）統一收斂到 `window.__sandbox360`。
+- debug buttons 保持原功能，但只呼叫 sandbox_360_test 本地 handler，不依賴全域函式。
+
+### Regression guard
+- `scripts/regression-sandbox360-shot-events.mjs` 新增 guard：若 `Sandbox360Viewer.tsx` 出現 `window.triggerRoomEvent` 即失敗。
+
 ## 2026-03-25 Sandbox 360 視角驅動事件系統（shot-driven overlay events）
 
 ### Scope

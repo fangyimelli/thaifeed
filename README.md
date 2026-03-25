@@ -1,3 +1,11 @@
+## 2026-03-25 Sandbox 360 namespace convergence (standalone API scope)
+
+- Scope limited to `sandbox_360_test`; no changes in classic, `sandbox_story`, shared submit path, or validated shot rules/overlay visuals.
+- `window.triggerRoomEvent` is removed from sandbox_360_test integration surface; room-event trigger now mounts as mode-local namespace API: `window.__sandbox360.triggerRoomEvent(...)`.
+- Consolidated sandbox_360_test debug surfaces into `window.__sandbox360` only: room-event trigger, overlay debug trigger alias, and viewer shot debug actions (`triggerShot`, `shot.left/center/right`).
+- UI debug buttons now call local sandbox_360_test handlers (no global function dependency).
+- Added regression guard to fail if `window.triggerRoomEvent` reappears in `Sandbox360Viewer.tsx`.
+
 ## 2026-03-25 Sandbox 360 shot-driven room event automation
 
 - Scope limited to `sandbox_360_test` viewer overlay runtime; classic / sandbox_story / parser / chat flow are untouched.
