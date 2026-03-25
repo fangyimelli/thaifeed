@@ -1,3 +1,22 @@
+## 2026-03-25 Sandbox 360 TV quad / 四角定位主路徑落地
+
+### Root cause
+- 單一 TV rect（x/y/w/h）在此場景只提供外接框，難以描述實際螢幕面板四角。
+- 在 shot transition + handheld transform 下，rect 微調會持續漂移，且 debug/renderer 容易各自推導局部幾何。
+
+### What changed
+- `src/modes/sandbox_360_test/tvAnchorCalibration.ts`
+  - 改為 `quadByShot`（LEFT/CENTER/RIGHT）作者標定四角。
+  - 新增 `tvGeometryKind='quad'`、`tvTargetRegionKind='tv_screen_inner'` metadata。
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 實作唯一幾何路徑 `resolveTvEffectGeometry(...)`，輸出 `resolvedTvScreenQuad` 與 `resolvedTvBoundingRect`。
+  - TV noise content 改為 quad polygon clip-path。
+  - debug/visualization 統一依賴 resolved quad，新增 corner + quad overlay 可視化。
+- `src/app/App.tsx`
+  - sandbox360 overlay debug schema 改為 quad 欄位，並在 debug panel 顯示 base/resolved quad 與 quadDiff。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增/調整 guard：geometry kind、single resolve path、quad payload、resolved-quad renderer/effect flag、quad visualization token。
+
 ## 2026-03-25 Sandbox 360 TV screen-inner red-box alignment fix
 
 ### Root cause

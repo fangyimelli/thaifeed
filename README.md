@@ -1,3 +1,18 @@
+## 2026-03-25 Sandbox 360 TV quad SSOT integration（screen-inner authoritative）
+
+- Scope 僅 `sandbox_360_test`；classic mode 無改動。
+- Root cause：
+  - 單一 `x/y/w/h` rect 在 handheld rotation + transition + cover crop 鏈路下，只能產生外接框，無法穩定代表螢幕有效顯示面板。
+  - renderer/debug/effect 若各自 local 推導 rect，會出現看似一致但實際偏移的漂移問題。
+- 修正（quad 作為 SSOT）：
+  - `tvAnchorCalibration.ts` 升級為 `quadByShot`（`left/center/right`），並標示 `tvGeometryKind=quad`、`tvTargetRegionKind=tv_screen_inner`。
+  - `Sandbox360Viewer` 新增唯一幾何輸出路徑 `resolveTvEffectGeometry()`：base quad → camera/cover → handheld → transition → final quad。
+  - TV effect 改為 quad 導向：container 用 quad bounding rect，content 用 `clip-path: polygon(...)` 貼合四角。
+  - debug/visualization/hit(renderer path) 全部讀同一 `resolvedTvScreenQuad`，不再以舊 rect 當唯一真實來源。
+  - Debug 面板新增：`tvGeometryKind`、`baseTvScreenQuad`、`resolvedTvScreenQuad`、`resolvedTvBoundingRect`、`quadDiff`、`rendererUsesResolvedQuad`、`effectContentUsesResolvedQuad`、`geometrySource`。
+- Removed / Deprecated Log：
+  - `TV_ANCHOR` 單一 rect 主導路徑降級；`resolvedTvBoundingRect` 僅由 `resolvedTvScreenQuad` 派生，不再直接由 anchor rect 生成。
+
 ## 2026-03-25 Sandbox 360 TV screen-inner rect 校正（red-box acceptance）
 
 - Scope 僅 `sandbox_360_test`；classic mode 未改動。

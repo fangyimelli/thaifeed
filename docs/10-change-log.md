@@ -1,3 +1,22 @@
+## 2026-03-25 Sandbox360 TV quad geometry SSOT（replace rect-primary path）
+
+- Root cause：
+  - 單一 rect 在 shot transition + handheld rotation 場景只會得到外接框，不是螢幕有效區四角面板。
+  - 先前「調 rect」本質是 workaround，無法穩定覆蓋 LEFT/CENTER/RIGHT 與 transition 過程。
+- 修正：
+  - `src/modes/sandbox_360_test/tvAnchorCalibration.ts`
+    - 校正資料改為 `quadByShot.left/center/right`。
+    - 明確標示 `tvGeometryKind='quad'`、`tvTargetRegionKind='tv_screen_inner'`。
+  - `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+    - 新增唯一路徑 `resolveTvEffectGeometry()`，輸出 `resolvedTvScreenQuad` + `resolvedTvBoundingRect(from quad)`。
+    - TV noise content 改走 `clip-path: polygon(...)`，直接貼合 quad。
+    - visualization 新增 quad 邊線與四角點。
+    - debug payload 升級：`baseTvScreenQuad/resolvedTvScreenQuad/resolvedTvBoundingRect/quadDiff/geometrySource/rendererUsesResolvedQuad/effectContentUsesResolvedQuad`。
+  - `src/app/App.tsx`
+    - debug schema 與 panel 全量改為 quad 欄位，不再以 pre/final rect 當主觀測。
+  - `scripts/regression-sandbox360-shot-events.mjs`
+    - guard 改鎖 `tvGeometryKind=quad`、single resolve path、quad payload 透傳、renderer/effect resolved-quad flag、quad visualization token。
+
 ## 2026-03-25 Sandbox360 TV screen-inner target-region 語義修正
 
 - Root cause：

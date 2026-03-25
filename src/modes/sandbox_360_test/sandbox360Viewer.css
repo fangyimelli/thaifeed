@@ -75,9 +75,8 @@
 .sandbox360OverlayTvNoise {
   opacity: 0;
   overflow: hidden;
-  border-radius: 2px;
   isolation: isolate;
-  clip-path: inset(0 round 2px);
+  clip-path: inset(0);
   background: rgba(0, 0, 0, 0.01);
 }
 
@@ -89,6 +88,7 @@
   transform: none;
   transform-origin: center center;
   mix-blend-mode: screen;
+  will-change: clip-path;
   background-image:
     repeating-linear-gradient(to bottom, rgba(196, 230, 255, 0.65) 0, rgba(196, 230, 255, 0.65) 1px, rgba(12, 18, 32, 0) 1px, rgba(12, 18, 32, 0) 3px),
     radial-gradient(circle at 70% 20%, rgba(190, 220, 255, 0.25) 0%, rgba(32, 36, 72, 0.08) 38%, rgba(12, 13, 20, 0.1) 70%),
@@ -119,7 +119,9 @@
 }
 
 .sandbox360OverlayTvBoundsVizRendererRect,
-.sandbox360OverlayTvBoundsVizVisibleRect {
+.sandbox360OverlayTvBoundsVizVisibleRect,
+.sandbox360OverlayTvBoundsVizQuad,
+.sandbox360OverlayTvBoundsVizCorner {
   position: absolute;
   pointer-events: none;
 }
@@ -132,6 +134,21 @@
 .sandbox360OverlayTvBoundsVizVisibleRect {
   border: 2px dashed rgba(248, 113, 113, 0.98);
   background: rgba(248, 113, 113, 0.08);
+}
+
+.sandbox360OverlayTvBoundsVizQuad {
+  border: 2px solid rgba(59, 130, 246, 0.95);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.sandbox360OverlayTvBoundsVizCorner {
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.98);
+  box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.85);
 }
 
 .sandbox360OverlayTvBoundsVizDelta {
