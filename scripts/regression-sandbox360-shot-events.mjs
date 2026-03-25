@@ -18,6 +18,12 @@ assertHas(viewerFile, 'key={`TV_STATIC_OVERLAY-${roomEventState.TV_STATIC.trigge
 assertHas(viewerFile, 'data-active={roomEventState.TV_STATIC.active ? \'true\' : \'false\'}', 'renderer overlay must consume shared room event active state');
 assertHas(viewerFile, 'tvDebugRect', 'viewer should keep authoritative rect projection');
 assertHas(viewerFile, 'tvOverlayRect', 'viewer should keep authoritative overlay rect projection');
+assertHas(viewerFile, 'const tvScreenRect = useMemo<OverlayRect>(() => {', 'viewer must resolve TV screen rect from TV anchor in scene space');
+assertHas(viewerFile, 'const resolvedTvScreenRect = useMemo(() => toScreenRect(tvScreenRect), [toScreenRect, tvScreenRect]);', 'viewer must project a single resolved TV rect for renderer/debug');
+assertHas(viewerFile, 'const tvRendererRect = resolvedTvScreenRect;', 'renderer must consume the same resolved rect');
+assertHas(viewerFile, 'tvUsesResolvedRect', 'viewer debug payload must expose resolved-rect gate state');
+assertHas(viewerFile, 'style={tvRendererRect}', 'TV overlay renderer should bind to the resolved renderer rect SSOT');
+assertHas(viewerFile, 'tvScreenRect,', 'debug payload should include scene-space TV screen rect');
 if (viewerFile.includes('sandbox360ShotState')) {
   throw new Error('main view should not retain standalone shot state overlay');
 }
@@ -35,6 +41,9 @@ if (viewerFile.includes('className="sandbox360ShotButtons"')) {
 assertHas(appFile, 'type Sandbox360RoomEventState = Record<Sandbox360RoomEventType, Sandbox360RoomEventRuntime>;', 'app should keep a typed room event SSOT');
 assertHas(appFile, 'const [sandbox360RoomEvents, setSandbox360RoomEvents] = useState<Sandbox360RoomEventState>({', 'app must own sandbox360 room event SSOT');
 assertHas(appFile, 'const [sandbox360RoomEventDebug, setSandbox360RoomEventDebug] = useState({', 'app must own sandbox360 room event debug SSOT');
+assertHas(appFile, 'tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },', 'app overlay debug state should include scene-space TV rect');
+assertHas(appFile, 'tvRendererRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include renderer rect');
+assertHas(appFile, 'tvUsesResolvedRect: false,', 'app overlay debug state should expose resolved-rect identity flag');
 assertHas(appFile, 'const triggerSandbox360RoomEvent = useCallback((eventType: Sandbox360RoomEventType', 'app must own room event gate + force pipeline');
 assertHas(appFile, 'triggerSeq: prev[eventType].triggerSeq + 1', 'force/event triggers must increment sequence to replay visual effect');
 assertHas(appFile, 'renderedActive: true,', 'debug state should explicitly reflect active render status');
@@ -49,5 +58,8 @@ assertHas(appFile, 'live controls location: main_view_top_left', 'debug panel mu
 assertHas(appFile, 'className="sandbox360-live-controls"', 'main view should retain sandbox direct control buttons');
 assertHas(appFile, 'FORCE TV', 'main view must expose force effect trigger control');
 assertHas(appFile, 'onViewerDebugStateChange={(payload) => {', 'viewer debug snapshot must be projected into app debug state');
+assertHas(appFile, 'tvScreenRect: payload.tvScreenRect,', 'app should consume scene-space TV screen rect from viewer SSOT');
+assertHas(appFile, 'tvRendererRect: payload.tvRendererRect,', 'app should consume renderer TV rect from viewer SSOT');
+assertHas(appFile, 'tv.usesResolvedRect: {String(sandbox360OverlayDebug.tvUsesResolvedRect)}', 'debug panel should show renderer/debug rect identity gate');
 
 console.log('regression-sandbox360-shot-events: ok');

@@ -76,6 +76,17 @@
   opacity: 0;
   overflow: hidden;
   border-radius: 2px;
+  isolation: isolate;
+  clip-path: inset(0 round 2px);
+  background: rgba(0, 0, 0, 0.01);
+}
+
+.sandbox360OverlayTvNoise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
   mix-blend-mode: screen;
   background-image:
     repeating-linear-gradient(to bottom, rgba(196, 230, 255, 0.65) 0, rgba(196, 230, 255, 0.65) 1px, rgba(12, 18, 32, 0) 1px, rgba(12, 18, 32, 0) 3px),
@@ -84,6 +95,10 @@
 }
 
 .sandbox360OverlayTvNoise[data-active='true'] {
+  opacity: 1;
+}
+
+.sandbox360OverlayTvNoise[data-active='true']::before {
   animation: sandbox360TvNoiseFlicker 1200ms steps(12, end);
 }
 

@@ -1,3 +1,15 @@
+## 2026-03-25 Sandbox360 TV effect rect SSOT + clip alignment fix
+
+- Root cause：TV effect 雖然與 debug 使用同一錨點常數，但 renderer 缺少「resolved rect 單一路徑」可觀測欄位，且 flicker 動畫直接移動 overlay container，導致 transition/shot 下容易出現視覺飄移與邊界越界假象。
+- 修正：
+  - `Sandbox360Viewer` 建立單一 `tvScreenRect(scene-space) -> resolvedTvScreenRect(screen-space)` 路徑。
+  - `tvDebugRect`、`tvOverlayRect`、`tvRendererRect` 全部綁定同一份 `resolvedTvScreenRect`，並回傳 `tvUsesResolvedRect=true` 作為 gate。
+  - debug payload 新增 `tvScreenRect`、`tvRendererRect`，App debug 面板同步顯示，對齊「anchor / scene rect / overlay rect / renderer rect」。
+  - TV flicker 改為動畫 `::before` 內容層，保留容器定位不動，並使用 `clip-path + overflow` 限制在 TV screen 內。
+- regression guard 更新：
+  - 鎖定 viewer 必須存在 `tvScreenRect` / `resolvedTvScreenRect` / `tvRendererRect` / `tvUsesResolvedRect` token。
+  - 鎖定 App debug 必須顯示 `tvScreenRect`、`tvRendererRect`、`tv.usesResolvedRect`。
+
 ## 2026-03-25 Sandbox360 force replay root-cause fix + controls/debug split
 
 - Root cause：effect active 期間再觸發（含 force）只更新 count，不會重啟 overlay animation，造成「debug 有觸發、畫面未重播」不一致。
