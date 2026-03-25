@@ -9,6 +9,12 @@ export type Sandbox360ViewerState = {
   currentPosX: number;
   targetPosX: number;
   isTransitioning: boolean;
+  cameraOffsetX: number;
+  cameraOffsetY: number;
+  cameraRotationDeg: number;
+  cameraScaleOffset: number;
+  cameraVelocityX: number;
+  cameraVelocityY: number;
   posY: number;
   scale: number;
   lastCommand?: string;
@@ -155,6 +161,9 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     width: `${(cameraState.sceneWidth * cameraState.cameraScale).toFixed(3)}px`,
     height: `${(cameraState.sceneHeight * cameraState.cameraScale).toFixed(3)}px`
   }), [cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, cameraState.sceneHeight, cameraState.sceneWidth]);
+  const handheldTransformStyle = useMemo(() => ({
+    transform: `translate3d(${viewerState.cameraOffsetX.toFixed(3)}px, ${viewerState.cameraOffsetY.toFixed(3)}px, 0) rotate(${viewerState.cameraRotationDeg.toFixed(3)}deg) scale(${(1 + viewerState.cameraScaleOffset).toFixed(5)})`
+  }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
 
   const clearDelayedLightFlashTimer = useCallback(() => {
     if (delayedLightFlashTimerRef.current !== null) {
@@ -311,31 +320,33 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
       data-shot-current={viewerState.currentShot}
       data-shot-target={viewerState.targetShot}
     >
-      <img
-        className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
-        src={sceneImageSrc}
-        alt=""
-        style={sceneImageStyle}
-        onLoad={(event) => {
-          const image = event.currentTarget;
-          if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-            setSceneDimensions({ width: image.naturalWidth, height: image.naturalHeight });
-          }
-        }}
-        onError={() => {
-          if (sceneImageSrc !== SANDBOX360_SCENE_IMAGE_FALLBACK_SRC) {
-            setSceneImageSrc(SANDBOX360_SCENE_IMAGE_FALLBACK_SRC);
-            return;
-          }
+      <div className="sandbox360TransformLayer" style={handheldTransformStyle}>
+        <img
+          className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
+          src={sceneImageSrc}
+          alt=""
+          style={sceneImageStyle}
+          onLoad={(event) => {
+            const image = event.currentTarget;
+            if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+              setSceneDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+            }
+          }}
+          onError={() => {
+            if (sceneImageSrc !== SANDBOX360_SCENE_IMAGE_FALLBACK_SRC) {
+              setSceneImageSrc(SANDBOX360_SCENE_IMAGE_FALLBACK_SRC);
+              return;
+            }
 
-          setRoomLoadFailed(true);
-          console.error('FAILED TO LOAD ROOM_360');
-        }}
-      />
-      <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} aria-hidden="true" data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
-      <div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)} aria-hidden="true" data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
-      <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} aria-hidden="true" data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
-      <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} aria-hidden="true" data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
+            setRoomLoadFailed(true);
+            console.error('FAILED TO LOAD ROOM_360');
+          }}
+        />
+        <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} aria-hidden="true" data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
+        <div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)} aria-hidden="true" data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
+        <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} aria-hidden="true" data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
+        <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} aria-hidden="true" data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
+      </div>
 
       <div className="sandbox360UiLayer">
         {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
@@ -359,13 +370,10 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
           <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
           <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
           <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
-          <div>left/center/right: {debugState.leftPosX.toFixed(2)} / {debugState.centerPosX.toFixed(2)} / {debugState.rightPosX.toFixed(2)}</div>
-          <div>posError: {debugState.posError.toFixed(3)}%</div>
-          <div>isSettled: {debugState.isSettled ? 'true' : 'false'}</div>
-          <div>scale: {viewerState.scale.toFixed(4)}</div>
-          <div>scene: {cameraState.sceneWidth} × {cameraState.sceneHeight}</div>
-          <div>camera: ({cameraState.cameraX.toFixed(1)}, {cameraState.cameraY.toFixed(1)})</div>
-          <div>cameraScale: {cameraState.cameraScale.toFixed(4)}</div>
+          <div>cameraOffsetX: {viewerState.cameraOffsetX.toFixed(3)}px</div>
+          <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
+          <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
+          <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
         </div>
       </div>
     </div>
