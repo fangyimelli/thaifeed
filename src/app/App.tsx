@@ -740,6 +740,8 @@ export default function App() {
     tvAnchorCalibratedAt: '-',
     tvAnchorSource: '-',
     baseTvSceneRect: { x: 0, y: 0, w: 0, h: 0 },
+    preHandheldRect: { x: 0, y: 0, w: 0, h: 0 },
+    finalRendererRect: { x: 0, y: 0, w: 0, h: 0 },
     tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },
     resolvedTvScreenRect: { left: '-', top: '-', width: '-', height: '-' },
     tvDebugRect: { left: '-', top: '-', width: '-', height: '-' },
@@ -8155,6 +8157,8 @@ export default function App() {
                       tvAnchorCalibratedAt: payload.tvAnchorCalibratedAt,
                       tvAnchorSource: payload.tvAnchorSource,
                       baseTvSceneRect: payload.baseTvSceneRect,
+                      preHandheldRect: payload.preHandheldRect,
+                      finalRendererRect: payload.finalRendererRect,
                       tvScreenRect: payload.tvScreenRect,
                       resolvedTvScreenRect: payload.resolvedTvScreenRect,
                       tvDebugRect: payload.tvDebugRect,
@@ -8484,6 +8488,8 @@ export default function App() {
                     <div>tvAnchorSource: {sandbox360OverlayDebug.tvAnchorSource}</div>
                     <div>tvScreenRect(scene-space): x={sandbox360OverlayDebug.tvScreenRect.x}, y={sandbox360OverlayDebug.tvScreenRect.y}, w={sandbox360OverlayDebug.tvScreenRect.w}, h={sandbox360OverlayDebug.tvScreenRect.h}</div>
                     <div>baseTvSceneRect: x={sandbox360OverlayDebug.baseTvSceneRect.x}, y={sandbox360OverlayDebug.baseTvSceneRect.y}, w={sandbox360OverlayDebug.baseTvSceneRect.w}, h={sandbox360OverlayDebug.baseTvSceneRect.h}</div>
+                    <div>preHandheldRect(camera-space): x={sandbox360OverlayDebug.preHandheldRect.x}, y={sandbox360OverlayDebug.preHandheldRect.y}, w={sandbox360OverlayDebug.preHandheldRect.w}, h={sandbox360OverlayDebug.preHandheldRect.h}</div>
+                    <div>finalRendererRect(chain result): x={sandbox360OverlayDebug.finalRendererRect.x}, y={sandbox360OverlayDebug.finalRendererRect.y}, w={sandbox360OverlayDebug.finalRendererRect.w}, h={sandbox360OverlayDebug.finalRendererRect.h}</div>
                     <div>resolvedTvScreenRect: left={sandbox360OverlayDebug.resolvedTvScreenRect.left}, top={sandbox360OverlayDebug.resolvedTvScreenRect.top}, width={sandbox360OverlayDebug.resolvedTvScreenRect.width}, height={sandbox360OverlayDebug.resolvedTvScreenRect.height}</div>
                     <div>tvDebugRect: left={sandbox360OverlayDebug.tvDebugRect.left}, top={sandbox360OverlayDebug.tvDebugRect.top}, width={sandbox360OverlayDebug.tvDebugRect.width}, height={sandbox360OverlayDebug.tvDebugRect.height}</div>
                     <div>tvOverlayRect: left={sandbox360OverlayDebug.tvOverlayRect.left}, top={sandbox360OverlayDebug.tvOverlayRect.top}, width={sandbox360OverlayDebug.tvOverlayRect.width}, height={sandbox360OverlayDebug.tvOverlayRect.height}</div>
