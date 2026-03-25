@@ -16,6 +16,19 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 | data source | `questionConsonant` / `questionVisible` from `sandbox360Mode` authoritative prompt + reply gate |
 | regression guard | `scripts/regression-sandbox360-shot-events.mjs` validates scene/overlay/ui layer tokens + CSS pointer-events + z-index rules |
 
+## Sandbox 360 TV anchor authority（sandbox_360_test only）
+
+| item | authority |
+| --- | --- |
+| authoritative TV anchor | `TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 }` |
+| reference scene | `4096x2048` scene-space |
+| runtime mapping | `scaleX = sceneWidth/4096`, `scaleY = sceneHeight/2048`, then map `TV_ANCHOR` |
+| shared consumers | `sandbox360OverlayTvDebug` + `sandbox360OverlayTvNoise` both read `overlaySceneRects.tv` |
+| anti-drift policy | do not use screen-space percentage for TV positioning |
+
+Notes:
+- TV anchor now follows scene-space SSOT and remains stable across camera crop/zoom.
+- Debug box is observability-only; authority remains in scene-space anchor constants.
 
 
 ## Sandbox 360 zoom-crop framing authority (sandbox_360_test only)
@@ -25,14 +38,14 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 | scale constant | `SANDBOX360_SCALE = 1.75` |
 | shot framing | `LEFT=36`, `CENTER=52`, `RIGHT=66` |
 | state authority | shot: `currentShot/targetShot/currentPosX/targetPosX/isTransitioning`; handheld: `cameraOffsetX/Y`, `cameraRotationDeg`, `cameraScaleOffset`, `cameraVelocityX/Y` |
-| transition | short spring-damping with tiny overshoot then settle (~220ms~350ms feel) |
+| transition | duration-based ease-out (`shotTransitionDurationMs = 280`) |
 | interaction model | fixed shot switch only (no free drag / no 360 orbit) |
 | handheld layer | low-frequency sway + micro jitter + light breathing scale (small amplitude only) |
 | overlay alignment | overlay + scene share one transform container (`sandbox360TransformLayer`) |
 
 Notes:
 - Zoom-crop framing is authoritative in `resolveSandbox360ViewerFraming()` / `resolveSandbox360ViewerTarget()`.
-- Render path consumes authoritative shot transition state and settles `currentShot` only when `currentPosX` reaches `targetPosX` tolerance.
+- Render path consumes authoritative shot transition state (`shotTransitionStartedAt`, `shotTransitionDurationMs`, `shotTransitionFromPosX`) and settles `currentShot` only when transition progress reaches 1.
 
 ## Sandbox 360 shot-driven room-event flow (sandbox_360_test only)
 

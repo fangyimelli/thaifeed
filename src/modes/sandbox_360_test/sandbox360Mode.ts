@@ -237,6 +237,9 @@ export const createSandbox360InitialState = () => {
     cameraScaleOffset: 0,
     cameraVelocityX: 0,
     cameraVelocityY: 0,
+    shotTransitionStartedAt: 0,
+    shotTransitionDurationMs: 280,
+    shotTransitionFromPosX: 52,
     posY: 50,
     targetPosY: 50,
     time: 0,
@@ -370,6 +373,15 @@ export function ensureSandbox360StateShape(raw: any) {
   }
   if (!Number.isFinite(next.viewer.cameraVelocityY)) {
     next.viewer.cameraVelocityY = 0;
+  }
+  if (!Number.isFinite(next.viewer.shotTransitionStartedAt)) {
+    next.viewer.shotTransitionStartedAt = 0;
+  }
+  if (!Number.isFinite(next.viewer.shotTransitionDurationMs) || next.viewer.shotTransitionDurationMs <= 0) {
+    next.viewer.shotTransitionDurationMs = 280;
+  }
+  if (!Number.isFinite(next.viewer.shotTransitionFromPosX)) {
+    next.viewer.shotTransitionFromPosX = next.viewer.currentPosX;
   }
   return next;
 }
