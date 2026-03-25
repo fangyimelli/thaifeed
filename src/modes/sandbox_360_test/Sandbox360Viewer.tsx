@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
-import { SANDBOX360_SCENE_IMAGE_SRC } from './assets';
+import { SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -69,6 +69,7 @@ const ROOM_EVENT_COOLDOWN_MS: Record<RoomEventType, number> = {
 
 export default function Sandbox360Viewer({ viewerState, curse, debugState, onDebugShotSelect }: Props) {
   const [roomLoadFailed, setRoomLoadFailed] = useState(false);
+  const [sceneImageSrc, setSceneImageSrc] = useState(SANDBOX360_SCENE_IMAGE_SRC);
   const [activeEvents, setActiveEvents] = useState<Record<RoomEventType, number>>({
     LIGHT_FLASH_LEFT: 0,
     TV_STATIC: 0,
@@ -238,9 +239,14 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     >
       <img
         className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
-        src={SANDBOX360_SCENE_IMAGE_SRC}
+        src={sceneImageSrc}
         alt=""
         onError={() => {
+          if (sceneImageSrc !== SANDBOX360_SCENE_IMAGE_FALLBACK_SRC) {
+            setSceneImageSrc(SANDBOX360_SCENE_IMAGE_FALLBACK_SRC);
+            return;
+          }
+
           setRoomLoadFailed(true);
           console.error('FAILED TO LOAD ROOM_360');
         }}
