@@ -1,3 +1,25 @@
+## 2026-03-25 Sandbox 360 triggerRoomEvent force/normal contract sync
+
+### Scope
+- `sandbox_360_test` only.
+- classic / `sandbox_story` / shared chat flow unchanged.
+
+### Summary
+- `window.__sandbox360.triggerRoomEvent(type, options)` 文件化支援 `force` / `ignoreCooldown`。
+- debug buttons 事件映射改為 force trigger（`forceRoomEvent`）。
+- cooldown 維持作用於 normal path（shot/auto/random/scripted/non-debug），force path 只給 debug/manual。
+- regression guard 補強 API options、button mapping、cooldown 範圍契約。
+
+### Risks
+- 若未來把 force trigger 暴露到非 debug 路徑，可能造成 cooldown 節奏失效與事件暴衝。
+- 若 button mapping 回退成 normal trigger，debug 驗證會受 cooldown 影響導致誤判。
+- 若 options schema 漂移（例如移除 `ignoreCooldown`），既有 debug/integration script 可能失效。
+
+### Verification Commands
+- `npm run test:sandbox360-shot-events`
+- `npm run build`
+- `rg -n "triggerRoomEvent\(|forceRoomEvent|ignoreCooldown|options\?\.force|options\?\.ignoreCooldown" src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+
 ## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
 
 ### Scope

@@ -1,3 +1,32 @@
+## 2026-03-25 Sandbox 360 triggerRoomEvent force/normal contract sync
+
+### Scope
+- `sandbox_360_test` only.
+- No behavior change in classic / `sandbox_story`.
+
+### API structure
+- `triggerRoomEvent(type, options)` options schema 明確化：`{ source?: string; force?: boolean; ignoreCooldown?: boolean }`。
+- trigger mode 明確分流：`force=true` => `force`；其餘 => `normal`。
+- cooldown bypass gate 明確化：`options.force || options.ignoreCooldown` 才能跳過 cooldown。
+
+### Button mapping
+- Debug event buttons 改為 force mapping：`forceRoomEvent(eventType)`（內部等同 `triggerRoomEvent(eventType, { force: true, source: 'manual' })`）。
+- namespace API 保持 `window.__sandbox360.*`，不回退到 `window.triggerRoomEvent`。
+
+### Cooldown scope
+- Cooldown 僅對 normal path（shot-driven/auto/random/scripted/non-debug）持續生效。
+- force path 僅用於 debug/manual 驗證，不改正式事件節奏。
+
+### Regression guard
+- Guard 新增/補強項目：
+  - `triggerRoomEvent(type, options)` options 型別與 mode 判斷 token。
+  - debug button 必須走 force trigger。
+  - normal path 仍保有 cooldown gate，force path 不得污染 normal 規則。
+
+### Removed / Deprecated Log
+- 2026-03-25：deprecated debug buttons 走 normal `triggerRoomEvent(type)`。
+- 2026-03-25：deprecated 舊式「僅 type 參數」debug 呼叫慣例；替代為 `triggerRoomEvent(type, options)`。
+
 ## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
 
 ### Scope
