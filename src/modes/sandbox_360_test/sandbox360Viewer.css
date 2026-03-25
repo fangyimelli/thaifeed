@@ -8,13 +8,9 @@
 
 .sandbox360Scene {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: var(--sandbox360-object-pos-x, 50%) var(--sandbox360-object-pos-y, 50%);
-  transform: scale(var(--sandbox360-scale, 1));
-  transform-origin: center center;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
   transition: filter 200ms linear;
 }
 
@@ -27,10 +23,6 @@
 }
 
 .sandbox360OverlayRoomLight {
-  left: 0%;
-  top: 0%;
-  width: 40%;
-  height: 60%;
   opacity: 0;
   background: radial-gradient(circle at 28% 34%, rgba(255, 218, 160, 0.95) 0%, rgba(255, 170, 85, 0.42) 32%, rgba(255, 120, 60, 0.12) 58%, transparent 82%);
   mix-blend-mode: screen;
@@ -47,10 +39,6 @@
 }
 
 .sandbox360OverlayTvNoise {
-  right: 20%;
-  bottom: 23%;
-  width: 13%;
-  height: 12%;
   opacity: 0;
   overflow: hidden;
   border-radius: 2px;
@@ -74,10 +62,6 @@
 }
 
 .sandbox360OverlayDoll {
-  right: 0%;
-  top: 11%;
-  width: 34%;
-  height: 74%;
   opacity: 0;
   mix-blend-mode: screen;
   background:
@@ -96,10 +80,6 @@
 }
 
 .sandbox360OverlayDoor {
-  left: 45%;
-  top: 16%;
-  width: 14%;
-  height: 62%;
   opacity: 0;
   overflow: hidden;
 }
