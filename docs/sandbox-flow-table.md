@@ -12,9 +12,9 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 | ui-layer children | `QuestionPanel`, `PinnedReply`, `ChatLayer` |
 | ui-layer interaction | `position:absolute; inset:0; pointer-events:none` |
 | QuestionPanel interaction | `pointer-events:auto` |
-| z-index policy | `QuestionPanel (highest) > ChatLayer > scene/overlay` |
+| z-index policy | `scene(1) < overlay(2) < ui-layer(30) < question(40)` |
 | data source | `questionConsonant` / `questionVisible` from `sandbox360Mode` authoritative prompt + reply gate |
-| regression guard | `scripts/regression-sandbox360-shot-events.mjs` validates layer tokens + CSS pointer-events rules |
+| regression guard | `scripts/regression-sandbox360-shot-events.mjs` validates scene/overlay/ui layer tokens + CSS pointer-events + z-index rules |
 
 
 

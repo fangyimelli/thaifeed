@@ -1,24 +1,22 @@
-## 2026-03-25 Sandbox 360 triggerRoomEvent force/normal contract sync
+## 2026-03-25 Sandbox 360 題目層顯示回歸修正（viewer root 分層 + z-index guard）
 
 ### Scope
 - `sandbox_360_test` only.
-- classic / `sandbox_story` / shared chat flow unchanged.
+- No changes in classic, `sandbox_story`, or QNA engine.
 
 ### Summary
-- `window.__sandbox360.triggerRoomEvent(type, options)` 文件化支援 `force` / `ignoreCooldown`。
-- debug buttons 事件映射改為 force trigger（`forceRoomEvent`）。
-- cooldown 維持作用於 normal path（shot/auto/random/scripted/non-debug），force path 只給 debug/manual。
-- regression guard 補強 API options、button mapping、cooldown 範圍契約。
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - viewer root 改為明確三段：`SceneLayer`（scene image）→ `OverlayLayer`（room overlays）→ `UiLayer`（QuestionPanel/PinnedReply/ChatLayer）。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 新增 `scene/overlay` layer CSS，並固定 z-index 契約：scene=1、overlay=2、ui-layer=30、question=40。
+  - `ui-layer` 仍維持 `pointer-events:none`，`QuestionPanel` 仍維持 `pointer-events:auto`。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增 DOM 結構 guard（`SceneLayer` / `OverlayLayer`）。
+  - 新增 z-index guard，防止題目層再次被 scene/overlay 覆蓋。
 
-### Risks
-- 若未來把 force trigger 暴露到非 debug 路徑，可能造成 cooldown 節奏失效與事件暴衝。
-- 若 button mapping 回退成 normal trigger，debug 驗證會受 cooldown 影響導致誤判。
-- 若 options schema 漂移（例如移除 `ignoreCooldown`），既有 debug/integration script 可能失效。
-
-### Verification Commands
+### Verification
 - `npm run test:sandbox360-shot-events`
 - `npm run build`
-- `rg -n "triggerRoomEvent\(|forceRoomEvent|ignoreCooldown|options\?\.force|options\?\.ignoreCooldown" src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
 
 ## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
 

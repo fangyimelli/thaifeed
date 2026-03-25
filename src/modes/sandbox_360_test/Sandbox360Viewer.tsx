@@ -368,31 +368,35 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
       data-shot-target={viewerState.targetShot}
     >
       <div className="sandbox360TransformLayer" style={handheldTransformStyle}>
-        <img
-          className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
-          src={sceneImageSrc}
-          alt=""
-          style={sceneImageStyle}
-          onLoad={(event) => {
-            const image = event.currentTarget;
-            if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-              setSceneDimensions({ width: image.naturalWidth, height: image.naturalHeight });
-            }
-          }}
-          onError={() => {
-            if (sceneImageSrc !== SANDBOX360_SCENE_IMAGE_FALLBACK_SRC) {
-              setSceneImageSrc(SANDBOX360_SCENE_IMAGE_FALLBACK_SRC);
-              return;
-            }
+        <div className="sandbox360SceneLayer">
+          <img
+            className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
+            src={sceneImageSrc}
+            alt=""
+            style={sceneImageStyle}
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                setSceneDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+              }
+            }}
+            onError={() => {
+              if (sceneImageSrc !== SANDBOX360_SCENE_IMAGE_FALLBACK_SRC) {
+                setSceneImageSrc(SANDBOX360_SCENE_IMAGE_FALLBACK_SRC);
+                return;
+              }
 
-            setRoomLoadFailed(true);
-            console.error('FAILED TO LOAD ROOM_360');
-          }}
-        />
-        <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} aria-hidden="true" data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
-        <div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)} aria-hidden="true" data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
-        <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} aria-hidden="true" data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
-        <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} aria-hidden="true" data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
+              setRoomLoadFailed(true);
+              console.error('FAILED TO LOAD ROOM_360');
+            }}
+          />
+        </div>
+        <div className="sandbox360OverlayLayer" aria-hidden="true">
+          <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
+        </div>
       </div>
 
       <div className="sandbox360UiLayer">
@@ -402,22 +406,36 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         <div className="sandbox360PinnedReply" data-visible={pinnedReplyText ? 'true' : 'false'}>
           {pinnedReplyText ? <span>{pinnedReplyText}</span> : null}
         </div>
-        <div className="sandbox360Debug" aria-live="polite">
-          <div>currentShot: {viewerState.currentShot}</div>
-          <div>targetShot: {viewerState.targetShot}</div>
-          <div>aspect: {debugState.aspect.toFixed(4)}</div>
-          <div>mode: {debugState.mode}</div>
-          <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
-          <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
-          <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
-          <div>cameraOffsetX: {viewerState.cameraOffsetX.toFixed(3)}px</div>
-          <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
-          <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
-          <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
-          <div>eventType: {roomEventObservability.eventType ?? 'null'}</div>
-          <div>triggerMode: {roomEventObservability.triggerMode}</div>
-          <div>cooldownBypassed: {roomEventObservability.cooldownBypassed ? 'true' : 'false'}</div>
-          <div>lastTriggeredAt: {roomEventObservability.lastTriggeredAt ?? 'null'}</div>
+        <div className="sandbox360ChatLayer">
+          {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
+          <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
+          <div className="sandbox360ShotButtons">
+            <button type="button" onClick={() => triggerShot('left')}>LEFT</button>
+            <button type="button" onClick={() => triggerShot('center')}>CENTER</button>
+            <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
+          </div>
+          <div className="sandbox360RoomEventButtons">
+            <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>FLASH</button>
+            <button type="button" onClick={() => triggerRoomEvent('TV_STATIC', { source: 'manual' })}>TV</button>
+            <button type="button" onClick={() => triggerRoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
+            <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
+          </div>
+          <div className="sandbox360Debug" aria-live="polite">
+            <div>currentShot: {viewerState.currentShot}</div>
+            <div>targetShot: {viewerState.targetShot}</div>
+            <div>aspect: {debugState.aspect.toFixed(4)}</div>
+            <div>mode: {debugState.mode}</div>
+            <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
+            <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
+            <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
+            <div>roomEvent.last: {roomEventObservability.eventType ?? '-'}</div>
+            <div>cameraOffsetX: {viewerState.cameraOffsetX.toFixed(3)}px</div>
+            <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
+            <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
+            <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
+            <div>question.visible: {questionVisible ? 'true' : 'false'}</div>
+            <div>question.consonant: {questionConsonant || '-'}</div>
+          </div>
         </div>
       </div>
     </div>
