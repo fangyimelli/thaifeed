@@ -1,3 +1,17 @@
+## 2026-03-25 Sandbox 360 TV screen-inner rect 校正（red-box acceptance）
+
+- Scope 僅 `sandbox_360_test`；classic mode 未改動。
+- Root cause（本次）：
+  - TV base rect 雖然統一走同一 resolver 鏈，但 calibration anchor 本身仍偏向較大的 TV 區域，語義接近 `tv_body`，不是螢幕有效發光區 `tv_screen_inner`。
+  - 因此 `finalResolvedTvRect / renderedEffectRect / effectVisibleBounds` 一致時，仍會一致地對到「錯誤的大框」。
+- 修正：
+  - `tvAnchorCalibration.ts` 重新校正為更小、偏左上的 screen-inner anchor（`v2026-03-25.2`）。
+  - debug schema 新增 `tvTargetRegionKind`，並強制標示 `tv_screen_inner`。
+  - `tvRectSource` 改為明示 `TV_ANCHOR(tv_screen_inner scene-space)`。
+  - App Debug 面板同步顯示 `tvTargetRegionKind`，避免再以整台 TV 區域驗收。
+- regression guard：
+  - 新增 guard：必須存在 `TV_TARGET_REGION_KIND='tv_screen_inner'`、`tvTargetRegionKind` payload 透傳、以及 screen-inner 語義的 `tvRectSource`。
+
 ## 2026-03-25 Sandbox 360 TV final rect semantics 補完（handheld + transition）
 
 - Scope 僅 `sandbox_360_test`，classic mode 完全未改。

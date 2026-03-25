@@ -72,6 +72,7 @@ type SceneCameraState = {
   cameraScale: number;
 };
 type TvScreenRectRatio = { x: number; y: number; w: number; h: number };
+type TvTargetRegionKind = 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner';
 
 type Props = {
   viewerState: Sandbox360ViewerState;
@@ -102,6 +103,7 @@ type Props = {
     rectDiffW: string;
     rectDiffH: string;
     tvRectSource: string;
+    tvTargetRegionKind: TvTargetRegionKind;
     transformChain: TransformChainStep[];
     transitionState: TransitionState;
     rendererUsesResolvedRect: boolean;
@@ -145,6 +147,7 @@ const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
 const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
 const TV_ANCHOR = TV_ANCHOR_CALIBRATION.anchor;
+const TV_TARGET_REGION_KIND: TvTargetRegionKind = 'tv_screen_inner';
 
 const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInput): ResolveTvEffectRectResult => {
   const preTransformRect: NumericScreenRect = {
@@ -455,7 +458,8 @@ export default function Sandbox360Viewer({
       rectDiffY: rectDiff.y,
       rectDiffW: rectDiff.w,
       rectDiffH: rectDiff.h,
-      tvRectSource: 'TV_ANCHOR(scene-space)->resolveTvEffectRect(preTransform+handheld+final)',
+      tvRectSource: 'TV_ANCHOR(tv_screen_inner scene-space)->resolveTvEffectRect(preTransform+handheld+final)',
+      tvTargetRegionKind: TV_TARGET_REGION_KIND,
       transformChain,
       transitionState,
       rendererUsesResolvedRect,

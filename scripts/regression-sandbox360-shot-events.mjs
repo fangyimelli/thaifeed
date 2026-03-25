@@ -17,13 +17,16 @@ assertHas(viewerFile, 'forceRoomEvent: (eventType) => onTriggerRoomEvent(eventTy
 assertHas(viewerFile, 'key={`TV_STATIC_OVERLAY-${roomEventState.TV_STATIC.triggerSeq}`}', 'renderer overlay must re-mount on each trigger sequence to force effect replay');
 assertHas(viewerFile, 'data-active={roomEventState.TV_STATIC.active ? \'true\' : \'false\'}', 'renderer overlay must consume shared room event active state');
 assertHas(viewerFile, 'const tvScreenRect = useMemo<OverlayRect>(() => {', 'viewer must resolve TV screen rect from TV anchor in scene space');
-assertHas(viewerFile, 'const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInput): { preTransformRect: NumericScreenRect; finalResolvedRect: NumericScreenRect } => {', 'viewer must keep a single resolveTvEffectRect final path');
+assertHas(viewerFile, 'const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInput): ResolveTvEffectRectResult => {', 'viewer must keep a single resolveTvEffectRect final path');
 assertHas(viewerFile, 'const preTransformTvRect = useMemo(() => toScreenRectStyle(resolvedTvRects.preTransformRect), [resolvedTvRects.preTransformRect, toScreenRectStyle]);', 'viewer must expose pre-transform tv rect');
 assertHas(viewerFile, 'const finalResolvedTvRect = useMemo(() => toScreenRectStyle(resolvedTvRects.finalResolvedRect), [resolvedTvRects.finalResolvedRect, toScreenRectStyle]);', 'viewer must expose final resolved tv rect');
 assertHas(viewerFile, 'const tvRendererRect = finalResolvedTvRect;', 'renderer must consume final resolved rect');
 assertHas(viewerFile, 'rendererUsesResolvedRect', 'viewer debug payload must expose renderer resolved-rect gate state');
 assertHas(viewerFile, 'effectContentUsesResolvedRect', 'viewer debug payload must expose effect-content resolved-rect gate state');
 assertHas(viewerFile, 'effectVisibleBounds', 'viewer debug payload should include effect visible bounds');
+assertHas(viewerFile, "const TV_TARGET_REGION_KIND: TvTargetRegionKind = 'tv_screen_inner';", 'viewer target region semantic must stay tv_screen_inner');
+assertHas(viewerFile, "tvRectSource: 'TV_ANCHOR(tv_screen_inner scene-space)->resolveTvEffectRect(preTransform+handheld+final)'", 'viewer rect source must explicitly document tv_screen_inner base rect');
+assertHas(viewerFile, 'tvTargetRegionKind: TV_TARGET_REGION_KIND,', 'viewer debug payload must expose tv target region kind');
 assertHas(viewerFile, 'transitionState', 'viewer debug payload should include structured transition state');
 assertHas(viewerFile, 'className="sandbox360OverlayTvNoiseContent"', 'tv effect should render through explicit inner content layer');
 assertHas(viewerFile, 'className="sandbox360OverlayTvBoundsViz"', 'tv bounds visualization should render explicit dual-frame overlay');
@@ -56,6 +59,7 @@ assertHas(appFile, 'preTransformTvRect: { left: \'-\', top: \'-\', width: \'-\',
 assertHas(appFile, 'finalResolvedTvRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include final resolved tv rect');
 assertHas(appFile, 'renderedEffectRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include rendered effect rect');
 assertHas(appFile, 'effectVisibleBounds: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include effect visible bounds');
+assertHas(appFile, "tvTargetRegionKind: 'tv_outer_frame' as 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner',", 'app overlay debug state should include tv target region semantic');
 assertHas(appFile, 'rendererUsesResolvedRect: false,', 'app overlay debug state should expose renderer resolved-rect identity flag');
 assertHas(appFile, 'effectContentUsesResolvedRect: false,', 'app overlay debug state should expose effect-content resolved-rect identity flag');
 assertHas(appFile, 'const triggerSandbox360RoomEvent = useCallback((eventType: Sandbox360RoomEventType', 'app must own room event gate + force pipeline');
@@ -76,8 +80,10 @@ assertHas(appFile, 'preTransformTvRect: payload.preTransformTvRect,', 'app shoul
 assertHas(appFile, 'finalResolvedTvRect: payload.finalResolvedTvRect,', 'app should consume final resolved tv rect from viewer SSOT');
 assertHas(appFile, 'renderedEffectRect: payload.renderedEffectRect,', 'app should consume rendered effect rect from viewer SSOT');
 assertHas(appFile, 'effectVisibleBounds: payload.effectVisibleBounds,', 'app should consume effect visible bounds from viewer SSOT');
+assertHas(appFile, 'tvTargetRegionKind: payload.tvTargetRegionKind,', 'app should consume tv target region semantic from viewer SSOT');
 assertHas(appFile, 'TV effect bounds visualization:', 'debug page must expose tv effect bounds visualization toggle');
 assertHas(appFile, 'rectDiffX / rectDiffY / rectDiffW / rectDiffH:', 'debug page must show rect diff observability');
+assertHas(appFile, 'tvTargetRegionKind: {sandbox360OverlayDebug.tvTargetRegionKind}', 'debug page must show tv target region semantic');
 assertHas(appFile, 'rendererUsesResolvedRect: {String(sandbox360OverlayDebug.rendererUsesResolvedRect)}', 'debug panel should show renderer rect identity gate');
 assertHas(appFile, 'effectContentUsesResolvedRect: {String(sandbox360OverlayDebug.effectContentUsesResolvedRect)}', 'debug panel should show effect content rect identity gate');
 if (appFile.includes('resolvedTvScreenRect')) {
