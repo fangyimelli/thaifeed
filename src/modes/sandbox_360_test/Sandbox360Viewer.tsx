@@ -402,35 +402,22 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         <div className="sandbox360PinnedReply" data-visible={pinnedReplyText ? 'true' : 'false'}>
           {pinnedReplyText ? <span>{pinnedReplyText}</span> : null}
         </div>
-        <div className="sandbox360ChatLayer">
-          {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
-          <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
-          <div className="sandbox360ShotButtons">
-            <button type="button" onClick={() => triggerShot('left')}>LEFT</button>
-            <button type="button" onClick={() => triggerShot('center')}>CENTER</button>
-            <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
-          </div>
-          <div className="sandbox360RoomEventButtons">
-            <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>FLASH</button>
-            <button type="button" onClick={() => triggerRoomEvent('TV_STATIC', { source: 'manual' })}>TV</button>
-            <button type="button" onClick={() => triggerRoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
-            <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
-          </div>
-          <div className="sandbox360Debug" aria-live="polite">
-            <div>currentShot: {viewerState.currentShot}</div>
-            <div>targetShot: {viewerState.targetShot}</div>
-            <div>aspect: {debugState.aspect.toFixed(4)}</div>
-            <div>mode: {debugState.mode}</div>
-            <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
-            <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
-            <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
-            <div>cameraOffsetX: {viewerState.cameraOffsetX.toFixed(3)}px</div>
-            <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
-            <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
-            <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
-            <div>question.visible: {questionVisible ? 'true' : 'false'}</div>
-            <div>question.consonant: {questionConsonant || '-'}</div>
-          </div>
+        <div className="sandbox360Debug" aria-live="polite">
+          <div>currentShot: {viewerState.currentShot}</div>
+          <div>targetShot: {viewerState.targetShot}</div>
+          <div>aspect: {debugState.aspect.toFixed(4)}</div>
+          <div>mode: {debugState.mode}</div>
+          <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
+          <div>targetPosX: {viewerState.targetPosX.toFixed(2)}%</div>
+          <div>isTransitioning: {viewerState.isTransitioning ? 'true' : 'false'}</div>
+          <div>cameraOffsetX: {viewerState.cameraOffsetX.toFixed(3)}px</div>
+          <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
+          <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
+          <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
+          <div>eventType: {roomEventObservability.eventType ?? 'null'}</div>
+          <div>triggerMode: {roomEventObservability.triggerMode}</div>
+          <div>cooldownBypassed: {roomEventObservability.cooldownBypassed ? 'true' : 'false'}</div>
+          <div>lastTriggeredAt: {roomEventObservability.lastTriggeredAt ?? 'null'}</div>
         </div>
       </div>
     </div>
