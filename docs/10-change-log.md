@@ -1361,3 +1361,13 @@
 - Added regression guard `scripts/chat-content-regression-guards.mjs` and artifact generator `scripts/generate-chat-content-artifacts.mjs`.
 - Existing sandbox regression guard updated to accept extracted preheat content living in the content layer while still enforcing the same flow invariants.
 - No intentional classic/sandbox flow-order change; change is content-layer extraction + verification only.
+## 2026-03-25 Sandbox 360 handheld shot transition integration
+
+- Scope 僅限 `sandbox_360_test`；classic mode 與 sandbox_story 未改。
+- 將 viewer authoritative state 明確拆為：
+  - shot framing：`currentShot/targetShot/currentPosX/targetPosX`
+  - handheld camera：`cameraOffsetX/cameraOffsetY/cameraRotationDeg/cameraScaleOffset/cameraVelocityX/cameraVelocityY`
+- shot 切換從固定插值調整為短距離 spring-damping，保留微幅 overshoot 再回穩（非自由拖曳）。
+- 新增持續手持感合成：低頻 sway + 微量 jitter + 極小 breathing scale。
+- `Sandbox360Viewer` 新增共同 transform 容器 `sandbox360TransformLayer`，主畫面與 overlay 套用同一 handheld transform，避免視覺分離。
+- sandbox_360_test debug 欄位新增 handheld 指標：`cameraOffsetX/Y`, `cameraRotationDeg`, `cameraScaleOffset`。
