@@ -49,6 +49,9 @@ type SceneCameraState = {
 type Props = {
   viewerState: Sandbox360ViewerState;
   curse: number;
+  questionConsonant: string;
+  questionVisible: boolean;
+  pinnedReplyText?: string;
   onDebugShotSelect: (shot: ShotType) => void;
   debugState: {
     aspect: number;
@@ -101,7 +104,7 @@ const ROOM_EVENT_COOLDOWN_MS: Record<RoomEventType, number> = {
 const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
 
-export default function Sandbox360Viewer({ viewerState, curse, debugState, onDebugShotSelect }: Props) {
+export default function Sandbox360Viewer({ viewerState, curse, questionConsonant, questionVisible, pinnedReplyText = '', debugState, onDebugShotSelect }: Props) {
   const [roomLoadFailed, setRoomLoadFailed] = useState(false);
   const [sceneImageSrc, setSceneImageSrc] = useState(SANDBOX360_SCENE_IMAGE_SRC);
   const [sceneDimensions, setSceneDimensions] = useState({ width: SCENE_DEFAULT_WIDTH, height: SCENE_DEFAULT_HEIGHT });
@@ -393,18 +396,11 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
       </div>
 
       <div className="sandbox360UiLayer">
-        {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
-        <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
-        <div className="sandbox360ShotButtons">
-          <button type="button" onClick={() => triggerShot('left')}>LEFT</button>
-          <button type="button" onClick={() => triggerShot('center')}>CENTER</button>
-          <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
+        <div className="sandbox360QuestionPanel" data-visible={questionVisible ? 'true' : 'false'}>
+          {questionVisible ? <span className="glyph-blink sandbox-story-prompt-glyph">{questionConsonant || '·'}</span> : null}
         </div>
-        <div className="sandbox360RoomEventButtons">
-          <button type="button" onClick={() => forceRoomEvent('LIGHT_FLASH_LEFT')}>FLASH</button>
-          <button type="button" onClick={() => forceRoomEvent('TV_STATIC')}>TV</button>
-          <button type="button" onClick={() => forceRoomEvent('DOLL_REFLECT')}>DOLL</button>
-          <button type="button" onClick={() => forceRoomEvent('DOOR_SHADOW')}>DOOR</button>
+        <div className="sandbox360PinnedReply" data-visible={pinnedReplyText ? 'true' : 'false'}>
+          {pinnedReplyText ? <span>{pinnedReplyText}</span> : null}
         </div>
         <div className="sandbox360Debug" aria-live="polite">
           <div>currentShot: {viewerState.currentShot}</div>

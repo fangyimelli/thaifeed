@@ -6178,26 +6178,48 @@ export default function App() {
   }, [recoverFromStuckEventState]);
 
   const getSandboxOverlayConsonant = useCallback(() => {
-    if (modeIdRef.current !== 'sandbox_story') return state.currentConsonant.letter;
-    const prompt = sandboxModeRef.current.getCurrentPrompt();
-    const consonantShown = prompt?.kind === 'consonant' ? prompt.consonant : '';
-    sandboxModeRef.current.commitPromptOverlay({ consonantShown });
-    return consonantShown;
+    if (modeIdRef.current === 'sandbox_story') {
+      const prompt = sandboxModeRef.current.getCurrentPrompt();
+      const consonantShown = prompt?.kind === 'consonant' ? prompt.consonant : '';
+      sandboxModeRef.current.commitPromptOverlay({ consonantShown });
+      return consonantShown;
+    }
+    if (modeIdRef.current === 'sandbox_360_test') {
+      const prompt = sandbox360ModeRef.current.getCurrentPrompt();
+      const consonantShown = prompt?.kind === 'consonant' ? prompt.consonant : '';
+      sandbox360ModeRef.current.commitPromptOverlay({ consonantShown });
+      return consonantShown;
+    }
+    return state.currentConsonant.letter;
   }, [state.currentConsonant.letter]);
 
 
   const getSandboxAuthoritativePromptVisible = useCallback(() => {
-    if (modeIdRef.current !== 'sandbox_story') return true;
-    const st = sandboxModeRef.current.getState();
-    const currentPrompt = st.prompt.current;
-    const hasCurrentPrompt = Boolean(currentPrompt?.kind === 'consonant' && currentPrompt.wordKey && currentPrompt.consonant);
-    const authoritativeCanReply = Boolean(
-      st.replyGate?.armed
-      && st.replyGate?.canReply
-      && st.replyGate?.gateType === 'consonant_answer'
-      && isSandboxWaitReplyStep(st.flow.step)
-    );
-    return authoritativeCanReply && hasCurrentPrompt;
+    if (modeIdRef.current === 'sandbox_story') {
+      const st = sandboxModeRef.current.getState();
+      const currentPrompt = st.prompt.current;
+      const hasCurrentPrompt = Boolean(currentPrompt?.kind === 'consonant' && currentPrompt.wordKey && currentPrompt.consonant);
+      const authoritativeCanReply = Boolean(
+        st.replyGate?.armed
+        && st.replyGate?.canReply
+        && st.replyGate?.gateType === 'consonant_answer'
+        && isSandboxWaitReplyStep(st.flow.step)
+      );
+      return authoritativeCanReply && hasCurrentPrompt;
+    }
+    if (modeIdRef.current === 'sandbox_360_test') {
+      const st = sandbox360ModeRef.current.getState();
+      const currentPrompt = st.prompt.current;
+      const hasCurrentPrompt = Boolean(currentPrompt?.kind === 'consonant' && currentPrompt.wordKey && currentPrompt.consonant);
+      const authoritativeCanReply = Boolean(
+        st.replyGate?.armed
+        && st.replyGate?.canReply
+        && st.replyGate?.gateType === 'consonant_answer'
+        && isSandboxWaitReplyStep(st.flow.step)
+      );
+      return authoritativeCanReply && hasCurrentPrompt;
+    }
+    return true;
   }, []);
 
   const resolveSandboxSceneKeyByQuestionIndex = useCallback((questionIndex: number): 'loop2' | 'loop3' | 'loop4' => {
@@ -7874,6 +7896,9 @@ export default function App() {
             modeIdRef.current === 'sandbox_360_test' ? (
               <Sandbox360Viewer
                 curse={state.curse}
+                questionConsonant={getSandboxOverlayConsonant()}
+                questionVisible={getSandboxAuthoritativePromptVisible()}
+                pinnedReplyText={sandbox360ModeRef.current.getState().pinnedReply?.text ?? ''}
                 onDebugShotSelect={(shot) => {
                   applySandbox360Shot(shot, 'debug_button');
                 }}

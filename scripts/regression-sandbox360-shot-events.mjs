@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const viewerFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/Sandbox360Viewer.tsx', import.meta.url), 'utf8');
 const modeFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/sandbox360Mode.ts', import.meta.url), 'utf8');
 const appFile = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
+const viewerCssFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/sandbox360Viewer.css', import.meta.url), 'utf8');
 
 const assertHas = (token, message) => {
   if (!viewerFile.includes(token)) {
@@ -40,6 +41,11 @@ assertHas('const lastShotRef = useRef<ShotType>(viewerState.currentShot)', 'last
 assertHas('isTransitioning: {viewerState.isTransitioning ? \'true\' : \'false\'}', 'viewer debug must expose isTransitioning');
 assertHas('<div>currentShot: {viewerState.currentShot}</div>', 'viewer debug must expose currentShot');
 assertHas('<div>targetShot: {viewerState.targetShot}</div>', 'viewer debug must expose targetShot');
+assertHas('<div className="sandbox360QuestionPanel" data-visible={questionVisible ? \'true\' : \'false\'}>', 'question panel layer must exist');
+assertHas('<div className="sandbox360PinnedReply" data-visible={pinnedReplyText ? \'true\' : \'false\'}>', 'pinned reply layer must exist');
+assertHas('<div className="sandbox360ChatLayer">', 'chat layer wrapper must exist');
+assertHas('<div>question.visible: {questionVisible ? \'true\' : \'false\'}</div>', 'question visibility debug field must exist');
+assertHas('<div>question.consonant: {questionConsonant || \'-\'}</div>', 'question consonant debug field must exist');
 
 if (!modeFile.includes('export const SANDBOX360_SCALE = 1.75;')) {
   throw new Error('SANDBOX360_SCALE must default to 1.75 for zoom-crop framing baseline');
@@ -51,14 +57,24 @@ if (!modeFile.includes('isTransitioning: false')) {
   throw new Error('viewer state must define authoritative isTransitioning');
 }
 
-if (!appFile.includes('const transitionDuration = 0.28;')) {
-  throw new Error('sandbox360 transition duration guard missing');
-}
-if (!appFile.includes('const easeOutStep = 1 - ((1 - step) * (1 - step));')) {
-  throw new Error('sandbox360 short ease-out transition guard missing');
+if (!appFile.includes('const shotSpringStiffness = 115;') || !appFile.includes('const shotSpringDamping = 19;')) {
+  throw new Error('sandbox360 shot spring constants guard missing');
 }
 if (!appFile.includes('const isTransitioning = !isSettled;')) {
   throw new Error('sandbox360 authoritative transition state guard missing');
+}
+if (!appFile.includes('questionConsonant={getSandboxOverlayConsonant()}')) {
+  throw new Error('Sandbox360Viewer must receive authoritative questionConsonant');
+}
+if (!appFile.includes('questionVisible={getSandboxAuthoritativePromptVisible()}')) {
+  throw new Error('Sandbox360Viewer must receive authoritative questionVisible');
+}
+
+if (!viewerCssFile.includes('.sandbox360UiLayer') || !viewerCssFile.includes('pointer-events: none;')) {
+  throw new Error('sandbox360 ui layer must default to pointer-events none');
+}
+if (!viewerCssFile.includes('.sandbox360QuestionPanel') || !viewerCssFile.includes('pointer-events: auto;')) {
+  throw new Error('sandbox360 question panel must keep pointer-events auto');
 }
 
 console.log('regression-sandbox360-shot-events: ok');
