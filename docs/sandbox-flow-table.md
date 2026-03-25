@@ -1,3 +1,5 @@
+> 2026-03-25 sandbox_360_test 補充（第四波）：TV 幾何改為 `TV_SCREEN_QUAD_BY_SHOT`（LEFT/CENTER/RIGHT 作者標定四角），並以 `resolveTvEffectGeometry` 作唯一輸出；`resolvedTvBoundingRect` 僅由 quad 派生。
+
 > 2026-03-25 sandbox_360_test 補充（第二波）：主畫面左上保留 Shot/Trigger live controls；Debug panel 僅承接資訊觀測。effect runtime SSOT 升級為 `active + triggerCount + triggerSeq`，renderer/debug 共讀並以 `triggerSeq` 重播 force 效果。
 > 2026-03-25 sandbox_360_test 補充（第三波）：TV 目標區語義升級為 `tv_screen_inner`（非 `tv_body` / `tv_outer_frame`）；debug schema 新增 `tvTargetRegionKind`，並要求 `tvRectSource` 明確標示 `TV_ANCHOR(tv_screen_inner scene-space)`。
 
@@ -38,6 +40,18 @@ Notes:
 - TV anchor now follows scene-space SSOT and remains stable across camera crop/zoom.
 - Debug box is observability-only; authority remains in calibration artifact.
 - Regression guard will fail if code regresses to bare `TV_ANCHOR = {...}` without source/version metadata.
+
+## Sandbox 360 TV quad authority（sandbox_360_test only）
+
+| item | authority |
+| --- | --- |
+| authoritative geometry | `TV_ANCHOR_CALIBRATION.quadByShot.{left|center|right}` |
+| geometry semantic | `tvGeometryKind=quad`, `tvTargetRegionKind=tv_screen_inner` |
+| resolver path | `resolveTvEffectGeometry(baseQuad, camera, handheld, shot)` |
+| final outputs | `resolvedTvScreenQuad` + `resolvedTvBoundingRect(from quad)` |
+| effect mapping | overlay container = bounding rect, effect content = quad polygon clip-path |
+| debug observability | `baseTvScreenQuad`, `resolvedTvScreenQuad`, `quadDiff`, `quadPolygon`, `geometrySource` |
+| anti-regression | 禁止回歸 rect-only 主路徑；rect 僅作 quad 派生資料 |
 
 ## Sandbox 360 TV effect final-render alignment guard（sandbox_360_test only）
 
