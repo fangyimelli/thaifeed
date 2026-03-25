@@ -736,6 +736,9 @@ export default function App() {
   });
   const [sandbox360OverlayDebug, setSandbox360OverlayDebug] = useState({
     tvAnchor: { x: 0, y: 0, w: 0, h: 0 },
+    tvAnchorVersion: '-',
+    tvAnchorCalibratedAt: '-',
+    tvAnchorSource: '-',
     baseTvSceneRect: { x: 0, y: 0, w: 0, h: 0 },
     tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },
     resolvedTvScreenRect: { left: '-', top: '-', width: '-', height: '-' },
@@ -8148,6 +8151,9 @@ export default function App() {
                   onViewerDebugStateChange={(payload) => {
                     setSandbox360OverlayDebug({
                       tvAnchor: payload.tvAnchor,
+                      tvAnchorVersion: payload.tvAnchorVersion,
+                      tvAnchorCalibratedAt: payload.tvAnchorCalibratedAt,
+                      tvAnchorSource: payload.tvAnchorSource,
                       baseTvSceneRect: payload.baseTvSceneRect,
                       tvScreenRect: payload.tvScreenRect,
                       resolvedTvScreenRect: payload.resolvedTvScreenRect,
@@ -8473,6 +8479,9 @@ export default function App() {
                     <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
                     <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
                     <div>TV_ANCHOR: x={sandbox360OverlayDebug.tvAnchor.x}, y={sandbox360OverlayDebug.tvAnchor.y}, w={sandbox360OverlayDebug.tvAnchor.w}, h={sandbox360OverlayDebug.tvAnchor.h}</div>
+                    <div>tvAnchorVersion: {sandbox360OverlayDebug.tvAnchorVersion}</div>
+                    <div>tvAnchorCalibratedAt: {sandbox360OverlayDebug.tvAnchorCalibratedAt}</div>
+                    <div>tvAnchorSource: {sandbox360OverlayDebug.tvAnchorSource}</div>
                     <div>tvScreenRect(scene-space): x={sandbox360OverlayDebug.tvScreenRect.x}, y={sandbox360OverlayDebug.tvScreenRect.y}, w={sandbox360OverlayDebug.tvScreenRect.w}, h={sandbox360OverlayDebug.tvScreenRect.h}</div>
                     <div>baseTvSceneRect: x={sandbox360OverlayDebug.baseTvSceneRect.x}, y={sandbox360OverlayDebug.baseTvSceneRect.y}, w={sandbox360OverlayDebug.baseTvSceneRect.w}, h={sandbox360OverlayDebug.baseTvSceneRect.h}</div>
                     <div>resolvedTvScreenRect: left={sandbox360OverlayDebug.resolvedTvScreenRect.left}, top={sandbox360OverlayDebug.resolvedTvScreenRect.top}, width={sandbox360OverlayDebug.resolvedTvScreenRect.width}, height={sandbox360OverlayDebug.resolvedTvScreenRect.height}</div>

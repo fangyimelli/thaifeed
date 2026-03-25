@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import { SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
+import { TV_ANCHOR_CALIBRATION } from './tvAnchorCalibration';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -84,6 +85,9 @@ type Props = {
     tvRectSource: string;
     transformChain: TransformChainStep[];
     tvAnchor: OverlayRect;
+    tvAnchorVersion: string;
+    tvAnchorCalibratedAt: string;
+    tvAnchorSource: string;
     tvUsesResolvedRect: boolean;
     tvSharesTransformContainer: boolean;
     questionVisible: boolean;
@@ -118,8 +122,8 @@ declare global {
 
 const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
-const SCENE_REFERENCE_SIZE = { width: 4096, height: 2048 } as const;
-const TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 } as const;
+const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
+const TV_ANCHOR = TV_ANCHOR_CALIBRATION.anchor;
 
 const resolveTvEffectRect = ({ rect, camera }: ResolveTvEffectRectInput): NumericScreenRect => ({
   x: (rect.x - camera.cameraX) * camera.cameraScale,
@@ -349,6 +353,9 @@ export default function Sandbox360Viewer({
       tvRectSource: 'TV_ANCHOR(scene-space)->resolveTvEffectRect(single path)',
       transformChain,
       tvAnchor: TV_ANCHOR,
+      tvAnchorVersion: TV_ANCHOR_CALIBRATION.version,
+      tvAnchorCalibratedAt: TV_ANCHOR_CALIBRATION.calibratedAt,
+      tvAnchorSource: TV_ANCHOR_CALIBRATION.source,
       tvUsesResolvedRect,
       tvSharesTransformContainer,
       questionVisible,
