@@ -1,3 +1,18 @@
+## 2026-03-25 Sandbox 360 force replay 修復 + 主畫面控制/Debug 責任切分
+
+- Scope 僅 `sandbox_360_test`，classic / `sandbox_story` 無改動。
+- 根因修復：`roomEvent` 原本以 `count>0` 當 renderer active flag，force 在 effect 仍 active 時只會加 count、不會重播 CSS animation，導致「debug 顯示觸發但畫面沒再次生效」。
+- `App` 現在以單一 SSOT 管理 `sandbox360RoomEvents`：每個 event 都有 `active + triggerCount + triggerSeq`，renderer 與 debug 同步讀同一份狀態。
+- `Sandbox360Viewer` overlay 改為讀 `roomEventState`，並以 `triggerSeq` 做 key remount，確保 force/重觸發時效果一定重播。
+- 主畫面左上保留 Shot/Trigger 操作列（含 `FORCE TV`）作為 sandbox 直接操作入口；Debug 頁面保留觀測面板，不再接手操作責任。
+- 主畫面移除 shot 文字資訊疊層（`sandbox360ShotState`），大型觀測資訊集中在 Debug 面板。
+- Debug 面板 `sandbox_360_test` 欄位補強：`event.counts`、`event.active`、`event.seq`、`effect.renderedActive` 與 `live controls location`。
+- regression guard `scripts/regression-sandbox360-shot-events.mjs` 更新：鎖定 controls 責任切分、event seq replay、主畫面不回歸舊 overlay。
+
+### Removed / Deprecated Log
+
+- 2026-03-25：移除 `Sandbox360Viewer` 內 `sandbox360ShotState` 主畫面資訊疊層，避免主畫面/Debug 雙軌資訊責任。
+
 ## 2026-03-25 Sandbox 360 effect force SSOT 收斂 + 主畫面 debug overlay 移除
 
 - Scope 僅 `sandbox_360_test`，classic / `sandbox_story` 未改。
