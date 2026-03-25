@@ -736,13 +736,17 @@ export default function App() {
   });
   const [sandbox360OverlayDebug, setSandbox360OverlayDebug] = useState({
     tvAnchor: { x: 0, y: 0, w: 0, h: 0 },
+    baseSceneWidth: 0,
+    baseSceneHeight: 0,
+    tvScreenRectRatio: { x: 0, y: 0, w: 0, h: 0 },
     baseTvSceneRect: { x: 0, y: 0, w: 0, h: 0 },
-    tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },
-    resolvedTvScreenRect: { left: '-', top: '-', width: '-', height: '-' },
+    preTransformTvRect: { left: '-', top: '-', width: '-', height: '-' },
+    finalResolvedTvRect: { left: '-', top: '-', width: '-', height: '-' },
     tvDebugRect: { left: '-', top: '-', width: '-', height: '-' },
     tvOverlayRect: { left: '-', top: '-', width: '-', height: '-' },
     tvRendererRect: { left: '-', top: '-', width: '-', height: '-' },
     renderedEffectRect: { left: '-', top: '-', width: '-', height: '-' },
+    effectVisibleBounds: { left: '-', top: '-', width: '-', height: '-' },
     effectContentInset: '-',
     effectInnerTransform: '-',
     rectDiffX: '-',
@@ -750,8 +754,17 @@ export default function App() {
     rectDiffW: '-',
     rectDiffH: '-',
     tvRectSource: '-',
-    transformChain: [] as Array<{ step: string; summary: string }>,
-    tvUsesResolvedRect: false,
+    transformChain: [] as Array<{ step: string; summary: string; data: Record<string, number | string | boolean | undefined> }>,
+    transitionState: {
+      isTransitioning: false,
+      startedAt: 0,
+      durationMs: 0,
+      fromPosX: 0,
+      currentPosX: 0,
+      targetPosX: 0
+    },
+    rendererUsesResolvedRect: false,
+    effectContentUsesResolvedRect: false,
     tvSharesTransformContainer: false,
     questionVisible: false,
     questionConsonant: '',
@@ -8147,14 +8160,18 @@ export default function App() {
                   roomEventObservability={sandbox360RoomEventDebug}
                   onViewerDebugStateChange={(payload) => {
                     setSandbox360OverlayDebug({
+                      baseSceneWidth: payload.baseSceneWidth,
+                      baseSceneHeight: payload.baseSceneHeight,
+                      tvScreenRectRatio: payload.tvScreenRectRatio,
                       tvAnchor: payload.tvAnchor,
                       baseTvSceneRect: payload.baseTvSceneRect,
-                      tvScreenRect: payload.tvScreenRect,
-                      resolvedTvScreenRect: payload.resolvedTvScreenRect,
+                      preTransformTvRect: payload.preTransformTvRect,
+                      finalResolvedTvRect: payload.finalResolvedTvRect,
                       tvDebugRect: payload.tvDebugRect,
                       tvOverlayRect: payload.tvOverlayRect,
                       tvRendererRect: payload.tvRendererRect,
                       renderedEffectRect: payload.renderedEffectRect,
+                      effectVisibleBounds: payload.effectVisibleBounds,
                       effectContentInset: payload.effectContentInset,
                       effectInnerTransform: payload.effectInnerTransform,
                       rectDiffX: payload.rectDiffX,
@@ -8163,7 +8180,9 @@ export default function App() {
                       rectDiffH: payload.rectDiffH,
                       tvRectSource: payload.tvRectSource,
                       transformChain: payload.transformChain,
-                      tvUsesResolvedRect: payload.tvUsesResolvedRect,
+                      transitionState: payload.transitionState,
+                      rendererUsesResolvedRect: payload.rendererUsesResolvedRect,
+                      effectContentUsesResolvedRect: payload.effectContentUsesResolvedRect,
                       tvSharesTransformContainer: payload.tvSharesTransformContainer,
                       questionVisible: payload.questionVisible,
                       questionConsonant: payload.questionConsonant,
@@ -8472,18 +8491,23 @@ export default function App() {
                     <div>event.counts: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerCount}, tv={sandbox360RoomEvents.TV_STATIC.triggerCount}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerCount}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerCount}</div>
                     <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
                     <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
+                    <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>
+                    <div>tvScreenRectRatio: x={sandbox360OverlayDebug.tvScreenRectRatio.x.toFixed(6)}, y={sandbox360OverlayDebug.tvScreenRectRatio.y.toFixed(6)}, w={sandbox360OverlayDebug.tvScreenRectRatio.w.toFixed(6)}, h={sandbox360OverlayDebug.tvScreenRectRatio.h.toFixed(6)}</div>
                     <div>TV_ANCHOR: x={sandbox360OverlayDebug.tvAnchor.x}, y={sandbox360OverlayDebug.tvAnchor.y}, w={sandbox360OverlayDebug.tvAnchor.w}, h={sandbox360OverlayDebug.tvAnchor.h}</div>
-                    <div>tvScreenRect(scene-space): x={sandbox360OverlayDebug.tvScreenRect.x}, y={sandbox360OverlayDebug.tvScreenRect.y}, w={sandbox360OverlayDebug.tvScreenRect.w}, h={sandbox360OverlayDebug.tvScreenRect.h}</div>
                     <div>baseTvSceneRect: x={sandbox360OverlayDebug.baseTvSceneRect.x}, y={sandbox360OverlayDebug.baseTvSceneRect.y}, w={sandbox360OverlayDebug.baseTvSceneRect.w}, h={sandbox360OverlayDebug.baseTvSceneRect.h}</div>
-                    <div>resolvedTvScreenRect: left={sandbox360OverlayDebug.resolvedTvScreenRect.left}, top={sandbox360OverlayDebug.resolvedTvScreenRect.top}, width={sandbox360OverlayDebug.resolvedTvScreenRect.width}, height={sandbox360OverlayDebug.resolvedTvScreenRect.height}</div>
+                    <div>preTransformTvRect: left={sandbox360OverlayDebug.preTransformTvRect.left}, top={sandbox360OverlayDebug.preTransformTvRect.top}, width={sandbox360OverlayDebug.preTransformTvRect.width}, height={sandbox360OverlayDebug.preTransformTvRect.height}</div>
+                    <div>finalResolvedTvRect: left={sandbox360OverlayDebug.finalResolvedTvRect.left}, top={sandbox360OverlayDebug.finalResolvedTvRect.top}, width={sandbox360OverlayDebug.finalResolvedTvRect.width}, height={sandbox360OverlayDebug.finalResolvedTvRect.height}</div>
                     <div>tvDebugRect: left={sandbox360OverlayDebug.tvDebugRect.left}, top={sandbox360OverlayDebug.tvDebugRect.top}, width={sandbox360OverlayDebug.tvDebugRect.width}, height={sandbox360OverlayDebug.tvDebugRect.height}</div>
                     <div>tvOverlayRect: left={sandbox360OverlayDebug.tvOverlayRect.left}, top={sandbox360OverlayDebug.tvOverlayRect.top}, width={sandbox360OverlayDebug.tvOverlayRect.width}, height={sandbox360OverlayDebug.tvOverlayRect.height}</div>
                     <div>tvRendererRect: left={sandbox360OverlayDebug.tvRendererRect.left}, top={sandbox360OverlayDebug.tvRendererRect.top}, width={sandbox360OverlayDebug.tvRendererRect.width}, height={sandbox360OverlayDebug.tvRendererRect.height}</div>
                     <div>renderedEffectRect: left={sandbox360OverlayDebug.renderedEffectRect.left}, top={sandbox360OverlayDebug.renderedEffectRect.top}, width={sandbox360OverlayDebug.renderedEffectRect.width}, height={sandbox360OverlayDebug.renderedEffectRect.height}</div>
+                    <div>effectVisibleBounds: left={sandbox360OverlayDebug.effectVisibleBounds.left}, top={sandbox360OverlayDebug.effectVisibleBounds.top}, width={sandbox360OverlayDebug.effectVisibleBounds.width}, height={sandbox360OverlayDebug.effectVisibleBounds.height}</div>
                     <div>effectContentInset / effectInnerTransform: {sandbox360OverlayDebug.effectContentInset} / {sandbox360OverlayDebug.effectInnerTransform}</div>
                     <div>rectDiffX / rectDiffY / rectDiffW / rectDiffH: {sandbox360OverlayDebug.rectDiffX} / {sandbox360OverlayDebug.rectDiffY} / {sandbox360OverlayDebug.rectDiffW} / {sandbox360OverlayDebug.rectDiffH}</div>
+                    <div>transitionState: from={sandbox360OverlayDebug.transitionState.fromPosX.toFixed(2)}, current={sandbox360OverlayDebug.transitionState.currentPosX.toFixed(2)}, target={sandbox360OverlayDebug.transitionState.targetPosX.toFixed(2)}, duration={sandbox360OverlayDebug.transitionState.durationMs}, transitioning={String(sandbox360OverlayDebug.transitionState.isTransitioning)}</div>
                     <div>tvRectSource: {sandbox360OverlayDebug.tvRectSource}</div>
-                    <div>tv.usesResolvedRect: {String(sandbox360OverlayDebug.tvUsesResolvedRect)}</div>
+                    <div>rendererUsesResolvedRect: {String(sandbox360OverlayDebug.rendererUsesResolvedRect)}</div>
+                    <div>effectContentUsesResolvedRect: {String(sandbox360OverlayDebug.effectContentUsesResolvedRect)}</div>
                     <div>tv.sharedTransformContainer: {String(sandbox360OverlayDebug.tvSharesTransformContainer)}</div>
                     <div>question.visible / consonant: {String(sandbox360OverlayDebug.questionVisible)} / {sandbox360OverlayDebug.questionConsonant || '-'}</div>
                     <div style={{ marginTop: 6 }}>

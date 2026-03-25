@@ -3,7 +3,7 @@
 # Sandbox Flow Table
 
 > 2026-03-25 sandbox_360_test 補充：effect/room-event force gate 與 debug 顯示改為 App SSOT（`sandbox360RoomEvents` + `sandbox360RoomEventDebug`），viewer 不再持有本地 debug overlay 狀態。
-> 2026-03-25 sandbox_360_test 補充：TV effect 新增 `resolveTvEffectRect` 單一路徑 + rendered content bounds 量測（`renderedEffectRect`/`rectDiff*`/`transformChain`）用於最終像素對位驗證。
+> 2026-03-25 sandbox_360_test 補充：TV effect rect 契約升級為 `resolveTvEffectRect` 輸出 `preTransformTvRect + finalResolvedTvRect`；final path 已納入 handheld/transition 幾何，並同步 `effectVisibleBounds`、`rendererUsesResolvedRect`、`effectContentUsesResolvedRect`。
 
 Generated from mode-specific flow definition and content map for **sandbox** mode.
 
@@ -40,11 +40,12 @@ Notes:
 
 | item | authority |
 | --- | --- |
-| single rect resolver | `resolveTvEffectRect({ rect, camera })` |
-| renderer rect source | `resolvedTvScreenRect -> tvRendererRect` |
+| single rect resolver | `resolveTvEffectRect({ rect, camera, handheld })` |
+| rect layers | `baseTvSceneRect -> preTransformTvRect -> finalResolvedTvRect -> tvRendererRect` |
 | effect content layer | `sandbox360OverlayTvNoiseContent` (`transform:none`, `transform-origin:center center`) |
-| pixel observability | `renderedEffectRect`, `rectDiffX/Y/W/H` |
-| debug transform steps | `transformChain`（base rect → camera → aspect → shot offset → transition → final rect） |
+| pixel observability | `renderedEffectRect`, `effectVisibleBounds`, `rectDiffX/Y/W/H` |
+| debug schema | `baseSceneWidth/baseSceneHeight`, `tvScreenRectRatio`, `transitionState`, `tvRectSource`, `rendererUsesResolvedRect`, `effectContentUsesResolvedRect` |
+| debug transform steps | `transformChain`（base rect → pre-transform → handheld → transition → final renderer rect） |
 | visualization toggle | `TV effect bounds visualization` (Debug panel only) |
 | anti-mask policy | clip/mask 僅保護，不可替代定位修正 |
 

@@ -1,3 +1,32 @@
+## 2026-03-25 Sandbox 360 TV final rect semantics closure（QA gap fix）
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic / `sandbox_story`.
+
+### Root cause
+- Previous SSOT pass still left semantic gap: `resolveTvEffectRect` ended at camera-space pre-transform rect, while handheld transform lived on `.sandbox360TransformLayer`.
+- Debug fields labeled as final were not true renderer final rect; measured bounds were post-transform, creating non-error semantic diff.
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Upgraded single resolver to `resolveTvEffectRect({ rect, camera, handheld })`.
+  - Resolver now emits `preTransformTvRect` and `finalResolvedTvRect` (handheld-aware).
+  - Renderer/debug/overlay all consume `finalResolvedTvRect`.
+  - Added schema fields: `baseSceneWidth`, `baseSceneHeight`, `tvScreenRectRatio`, `effectVisibleBounds`, `transitionState`, `rendererUsesResolvedRect`, `effectContentUsesResolvedRect`.
+  - Upgraded `transformChain` into structured steps with `data`.
+  - Upgraded visualization to explicit dual-frame + Δx/Δy/Δw/Δh readout (`sandbox360OverlayTvBoundsViz*`).
+- `src/app/App.tsx`
+  - Synced debug SSOT shape to new schema (`preTransformTvRect` / `finalResolvedTvRect` / `effectVisibleBounds` / structured `transitionState`).
+  - Debug panel now explicitly distinguishes base scene rect, intermediate rect, final resolved rect, renderer rect, and visible bounds.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Added dual-frame visualization styles for renderer rect vs visible bounds.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added guard for final rect resolver contract, new schema fields, resolved-rect usage flags, visualization deltas, and legacy naming removal.
+
+### Removed / Deprecated Log
+- Deprecated ambiguous naming `resolvedTvScreenRect` in sandbox_360_test viewer/debug schema; replaced with explicit `preTransformTvRect` / `finalResolvedTvRect`.
+
 ## 2026-03-25 Sandbox 360 TV final render alignment root-cause fix
 
 ### Scope
