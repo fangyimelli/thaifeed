@@ -1,3 +1,15 @@
+## 2026-03-25 Sandbox360 TV renderer path hard-switch（authoritative screen-inner quad）
+
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 導入 `TV_SCREEN_GEOMETRY_BY_SHOT` 單一來源與 transition quad interpolation。
+  - debug payload 補齊 `rendererGeometrySource` / `rendererGeometryKind` / `rendererFallbackReason` / `rendererUsesResolvedGeometry` / `effectContentUsesResolvedGeometry` / `currentShot` / `targetShot`。
+- `src/modes/sandbox_360_test/tvAnchorCalibration.ts`
+  - 版本升級 `tv-screen-quad-calibration.v2026-03-25.4`，中心 shot 以 screen-inner 為驗收基準重標。
+- `src/app/App.tsx`
+  - sandbox360 debug state 與面板同步新欄位，直接驗證 renderer 主路徑幾何來源。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增 guard：必須存在 shot interpolation、renderer geometry source/kind/fallback 與 resolved-geometry gate。
+
 ## 2026-03-25 Sandbox360 TV quad geometry SSOT（replace rect-primary path）
 
 - Root cause：

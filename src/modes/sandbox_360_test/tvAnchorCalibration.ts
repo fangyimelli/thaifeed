@@ -24,9 +24,9 @@ export type TvAnchorCalibration = {
 };
 
 export const TV_ANCHOR_CALIBRATION: TvAnchorCalibration = {
-  version: 'tv-screen-quad-calibration.v2026-03-25.3',
-  calibratedAt: '2026-03-25T18:00:00.000Z',
-  source: 'manual_red_box_ssot_user_review_screen_inner_quad_by_shot',
+  version: 'tv-screen-quad-calibration.v2026-03-25.4',
+  calibratedAt: '2026-03-25T20:30:00.000Z',
+  source: 'manual_red_box_ssot_user_review_screen_inner_quad_by_shot_center_realigned_strict_inner',
   tvGeometryKind: 'quad',
   tvTargetRegionKind: 'tv_screen_inner',
   referenceScene: {
@@ -35,22 +35,22 @@ export const TV_ANCHOR_CALIBRATION: TvAnchorCalibration = {
   },
   quadByShot: {
     left: {
-      topLeft: { x: 2229, y: 1022 },
-      topRight: { x: 2410, y: 1017 },
-      bottomRight: { x: 2414, y: 1110 },
-      bottomLeft: { x: 2225, y: 1114 }
+      topLeft: { x: 2243, y: 1030 },
+      topRight: { x: 2392, y: 1027 },
+      bottomRight: { x: 2395, y: 1102 },
+      bottomLeft: { x: 2241, y: 1105 }
     },
     center: {
-      topLeft: { x: 2232, y: 1022 },
-      topRight: { x: 2408, y: 1019 },
-      bottomRight: { x: 2411, y: 1110 },
-      bottomLeft: { x: 2230, y: 1112 }
+      topLeft: { x: 2244, y: 1031 },
+      topRight: { x: 2391, y: 1028 },
+      bottomRight: { x: 2394, y: 1101 },
+      bottomLeft: { x: 2242, y: 1104 }
     },
     right: {
-      topLeft: { x: 2234, y: 1024 },
-      topRight: { x: 2407, y: 1021 },
-      bottomRight: { x: 2410, y: 1109 },
-      bottomLeft: { x: 2232, y: 1112 }
+      topLeft: { x: 2246, y: 1032 },
+      topRight: { x: 2389, y: 1029 },
+      bottomRight: { x: 2392, y: 1100 },
+      bottomLeft: { x: 2244, y: 1103 }
     }
   }
 };

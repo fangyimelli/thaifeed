@@ -1,3 +1,5 @@
+> 2026-03-25 sandbox_360_test 補充（第五波）：TV 幾何主路徑強制收斂為 `TV_SCREEN_GEOMETRY_BY_SHOT`（LEFT/CENTER/RIGHT authored screen-inner quad），transition 期間使用 quad interpolation；renderer/debug/visualization 必須共讀同一 resolved geometry。
+
 > 2026-03-25 sandbox_360_test 補充（第四波）：TV 幾何改為 `TV_SCREEN_QUAD_BY_SHOT`（LEFT/CENTER/RIGHT 作者標定四角），並以 `resolveTvEffectGeometry` 作唯一輸出；`resolvedTvBoundingRect` 僅由 quad 派生。
 
 > 2026-03-25 sandbox_360_test 補充（第二波）：主畫面左上保留 Shot/Trigger live controls；Debug panel 僅承接資訊觀測。effect runtime SSOT 升級為 `active + triggerCount + triggerSeq`，renderer/debug 共讀並以 `triggerSeq` 重播 force 效果。

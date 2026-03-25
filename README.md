@@ -1,3 +1,14 @@
+## 2026-03-25 Sandbox360 TV render geometry hard switch（screen-inner authored-only）
+
+- Root cause：前次雖已有 quad 欄位，但主路徑 `baseTvScreenQuad` 固定採 `currentShot`，transition 期間未做 shot 幾何插值；且 debug 未輸出 renderer 實際 geometry source/kind/fallback，難以證明 renderer 是否真吃到 authored screen-inner。
+- 修正：
+  - `TV_SCREEN_GEOMETRY_BY_SHOT` 成為唯一 TV 目標幾何來源（LEFT/CENTER/RIGHT）。
+  - transition 期間改為 `interpolateQuad(currentShotQuad, targetShotQuad, progress)`，主 render path 不再硬吃單 shot 近似。
+  - renderer/debug/visualization 統一輸出 `resolvedTvScreenQuad + resolvedTvBoundingRect`，並新增 `rendererGeometrySource/rendererGeometryKind/rendererFallbackReason/rendererUsesResolvedGeometry/effectContentUsesResolvedGeometry`。
+  - calibration 更新至 `v2026-03-25.4`，CENTER shot 內框再縮小並右下收斂，移除偏大偏左上外擴。
+- Removed / Deprecated Log：
+  - deprecated `TV_SCREEN_QUAD_BY_SHOT` 舊命名與無 shot interpolation 的 base-quad 路徑。
+
 ## 2026-03-25 Sandbox 360 TV quad SSOT integration（screen-inner authoritative）
 
 - Scope 僅 `sandbox_360_test`；classic mode 無改動。
