@@ -40,22 +40,11 @@ type SandboxPinnedReplyState = {
 
 const SANDBOX_BOOTSTRAP_MIN_DURATION_MS = 30_000;
 const SANDBOX360_ASPECT_BREAKPOINT = 1.2;
-const SANDBOX360_MAX_SCALE = 1.08;
+const SANDBOX360_LEFT_POS = 22;
+const SANDBOX360_CENTER_POS = 50;
+const SANDBOX360_RIGHT_POS = 78;
 const SANDBOX360_POS_Y = 50;
-const SANDBOX360_DEVICE_PRESETS = {
-  desktop: {
-    leftPosX: 22,
-    centerPosX: 50,
-    rightPosX: 78,
-    baseScale: 1.05
-  },
-  mobile: {
-    leftPosX: 10,
-    centerPosX: 50,
-    rightPosX: 90,
-    baseScale: 1.0
-  }
-} as const;
+const SANDBOX360_SCALE = 1.05;
 
 export type Sandbox360ViewerFraming = {
   aspect: number;
@@ -79,20 +68,19 @@ export function resolveSandbox360ViewerFraming(viewportWidth: number, viewportHe
   const safeHeight = viewportHeight > 0 ? viewportHeight : window.innerHeight || 1;
   const aspect = safeWidth / safeHeight;
   const mode: 'desktop' | 'mobile' = aspect > SANDBOX360_ASPECT_BREAKPOINT ? 'desktop' : 'mobile';
-  const strategy = SANDBOX360_DEVICE_PRESETS[mode];
-  const scale = Math.min(strategy.baseScale, SANDBOX360_MAX_SCALE);
+  const scale = SANDBOX360_SCALE;
   const shotPresets = {
-    left: { posX: strategy.leftPosX, posY: SANDBOX360_POS_Y, scale },
-    center: { posX: strategy.centerPosX, posY: SANDBOX360_POS_Y, scale },
-    right: { posX: strategy.rightPosX, posY: SANDBOX360_POS_Y, scale }
+    left: { posX: SANDBOX360_LEFT_POS, posY: SANDBOX360_POS_Y, scale },
+    center: { posX: SANDBOX360_CENTER_POS, posY: SANDBOX360_POS_Y, scale },
+    right: { posX: SANDBOX360_RIGHT_POS, posY: SANDBOX360_POS_Y, scale }
   } as const;
   return {
     aspect,
     mode,
     deviceBranchStrategy: { branchBy: 'aspect_breakpoint', breakpoint: SANDBOX360_ASPECT_BREAKPOINT, selected: mode },
-    leftPosX: strategy.leftPosX,
-    centerPosX: strategy.centerPosX,
-    rightPosX: strategy.rightPosX,
+    leftPosX: SANDBOX360_LEFT_POS,
+    centerPosX: SANDBOX360_CENTER_POS,
+    rightPosX: SANDBOX360_RIGHT_POS,
     posY: SANDBOX360_POS_Y,
     scale,
     objectFit: 'cover',

@@ -16,6 +16,7 @@ export type Sandbox360ViewerState = {
 type Props = {
   viewerState: Sandbox360ViewerState;
   curse: number;
+  onDebugShotSelect: (shot: 'left' | 'center' | 'right') => void;
   debugState: {
     aspect: number;
     mode: 'desktop' | 'mobile';
@@ -27,7 +28,7 @@ type Props = {
   };
 };
 
-export default function Sandbox360Viewer({ viewerState, curse, debugState }: Props) {
+export default function Sandbox360Viewer({ viewerState, curse, debugState, onDebugShotSelect }: Props) {
   const sceneStyle = useMemo(() => ({
     ['--sandbox360-object-pos-x' as string]: `${viewerState.currentPosX.toFixed(3)}%`,
     ['--sandbox360-object-pos-y' as string]: `${viewerState.posY.toFixed(3)}%`,
@@ -48,6 +49,11 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState }: Pro
         <img className="sandbox360OverlayMask" src={SANDBOX360_OVERLAY_ASSETS.maskCrack} alt="" />
       </div>
       <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
+      <div className="sandbox360ShotButtons">
+        <button type="button" onClick={() => onDebugShotSelect('left')}>LEFT</button>
+        <button type="button" onClick={() => onDebugShotSelect('center')}>CENTER</button>
+        <button type="button" onClick={() => onDebugShotSelect('right')}>RIGHT</button>
+      </div>
       <div className="sandbox360Debug" aria-live="polite">
         <div>aspect: {debugState.aspect.toFixed(4)}</div>
         <div>mode: {debugState.mode}</div>
