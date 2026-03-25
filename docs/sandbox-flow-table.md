@@ -25,16 +25,18 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 
 | item | authority |
 | --- | --- |
-| authoritative TV anchor | `TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 }`（manual calibrated from user red-box SSOT） |
+| authoritative TV anchor | `TV_ANCHOR_CALIBRATION.anchor`（from `src/modes/sandbox_360_test/tvAnchorCalibration.ts`） |
+| anchor metadata | `TV_ANCHOR_CALIBRATION.version / calibratedAt / source`（debug 必須顯示） |
 | reference scene | `4096x2048` scene-space |
-| runtime mapping | `scaleX = sceneWidth/4096`, `scaleY = sceneHeight/2048`, then map `TV_ANCHOR` |
+| runtime mapping | `scaleX = sceneWidth/referenceScene.width`, `scaleY = sceneHeight/referenceScene.height`, then map calibration anchor |
 | shared consumers | `sandbox360OverlayTvDebug` + `sandbox360OverlayTvNoise` both read `overlaySceneRects.tv` |
-| debug observability | `TV_ANCHOR`, `tvDebugRect`, `tvOverlayRect`, `tv.sharedTransformContainer` |
+| debug observability | `TV_ANCHOR`, `tvAnchorVersion`, `tvAnchorCalibratedAt`, `tvAnchorSource`, `tvDebugRect`, `tvOverlayRect`, `tv.sharedTransformContainer` |
 | anti-drift policy | do not use screen-space percentage for TV positioning |
 
 Notes:
 - TV anchor now follows scene-space SSOT and remains stable across camera crop/zoom.
-- Debug box is observability-only; authority remains in scene-space anchor constants.
+- Debug box is observability-only; authority remains in calibration artifact.
+- Regression guard will fail if code regresses to bare `TV_ANCHOR = {...}` without source/version metadata.
 
 ## Sandbox 360 TV effect final-render alignment guard（sandbox_360_test only）
 

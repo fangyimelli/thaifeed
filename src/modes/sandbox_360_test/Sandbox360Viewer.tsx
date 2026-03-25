@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import { SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
+import { TV_ANCHOR_CALIBRATION } from './tvAnchorCalibration';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -137,8 +138,48 @@ declare global {
 
 const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
-const SCENE_REFERENCE_SIZE = { width: 4096, height: 2048 } as const;
-const TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 } as const;
+const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
+const TV_ANCHOR = TV_ANCHOR_CALIBRATION.anchor;
+
+const resolveTvEffectRect = ({ rect, camera, handheld, viewerSize }: ResolveTvEffectRectInput): ResolveTvEffectRectResult => {
+  const preHandheldRect: NumericScreenRect = {
+    x: (rect.x - camera.cameraX) * camera.cameraScale,
+    y: (rect.y - camera.cameraY) * camera.cameraScale,
+    w: rect.w * camera.cameraScale,
+    h: rect.h * camera.cameraScale
+  };
+
+  const originX = viewerSize.width / 2;
+  const originY = viewerSize.height / 2;
+  const theta = handheld.rotationDeg * (Math.PI / 180);
+  const cosTheta = Math.cos(theta);
+  const sinTheta = Math.sin(theta);
+
+  const transformPoint = (x: number, y: number) => {
+    const localX = x - originX;
+    const localY = y - originY;
+    const scaledX = localX * handheld.scale;
+    const scaledY = localY * handheld.scale;
+    const rotatedX = scaledX * cosTheta - scaledY * sinTheta;
+    const rotatedY = scaledX * sinTheta + scaledY * cosTheta;
+    return {
+      x: rotatedX + originX + handheld.offsetX,
+      y: rotatedY + originY + handheld.offsetY
+    };
+  };
+
+  const corners = [
+    transformPoint(preHandheldRect.x, preHandheldRect.y),
+    transformPoint(preHandheldRect.x + preHandheldRect.w, preHandheldRect.y),
+    transformPoint(preHandheldRect.x, preHandheldRect.y + preHandheldRect.h),
+    transformPoint(preHandheldRect.x + preHandheldRect.w, preHandheldRect.y + preHandheldRect.h)
+  ];
+  const xs = corners.map((corner) => corner.x);
+  const ys = corners.map((corner) => corner.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
 
 const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInput): { preTransformRect: NumericScreenRect; finalResolvedRect: NumericScreenRect } => {
   const preTransformRect = {
@@ -254,6 +295,13 @@ export default function Sandbox360Viewer({
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth, tvScreenRect]);
 
+  const handheldState = useMemo<HandheldTransformState>(() => ({
+    offsetX: viewerState.cameraOffsetX,
+    offsetY: viewerState.cameraOffsetY,
+    rotationDeg: viewerState.cameraRotationDeg,
+    scale: 1 + viewerState.cameraScaleOffset
+  }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+
   const toScreenRect = useCallback((rect: OverlayRect): NumericScreenRect => (
     resolveTvEffectRect({
       rect,
@@ -319,8 +367,8 @@ export default function Sandbox360Viewer({
     height: `${(cameraState.sceneHeight * cameraState.cameraScale).toFixed(3)}px`
   }), [cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, cameraState.sceneHeight, cameraState.sceneWidth]);
   const handheldTransformStyle = useMemo(() => ({
-    transform: `translate3d(${viewerState.cameraOffsetX.toFixed(3)}px, ${viewerState.cameraOffsetY.toFixed(3)}px, 0) rotate(${viewerState.cameraRotationDeg.toFixed(3)}deg) scale(${(1 + viewerState.cameraScaleOffset).toFixed(5)})`
-  }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+    transform: `translate3d(${handheldState.offsetX.toFixed(3)}px, ${handheldState.offsetY.toFixed(3)}px, 0) rotate(${handheldState.rotationDeg.toFixed(3)}deg) scale(${handheldState.scale.toFixed(5)})`
+  }), [handheldState.offsetX, handheldState.offsetY, handheldState.rotationDeg, handheldState.scale]);
 
   const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => (
     onTriggerRoomEvent(eventType, options)

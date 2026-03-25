@@ -67,10 +67,10 @@
 
 - Scope 僅 `sandbox_360_test`，classic / `sandbox_story` / shared submit path 無改動。
 - `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
-  - 新增正式（人工校正）`TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 }`（scene-space, reference 4096x2048，使用者紅框 SSOT）。
+  - TV anchor 改由 `src/modes/sandbox_360_test/tvAnchorCalibration.ts` 載入（`version + calibratedAt + source + referenceScene + anchor`），不再允許裸常數作為唯一來源。
   - TV static overlay 與 TV debug box 共享同一 `overlaySceneRects.tv` authoritative anchor。
   - TV anchor 由 reference scene px 映射到 runtime scene px，不再使用 TV screen-space 百分比定位。
-  - debug 新增 `TV_ANCHOR`、`tvDebugRect`、`tvOverlayRect`、`tv.sharedTransformContainer`、`transition.durationMs` 可觀測欄位。
+  - debug 新增 `TV_ANCHOR`、`tvAnchorVersion`、`tvAnchorCalibratedAt`、`tvAnchorSource`、`tvDebugRect`、`tvOverlayRect`、`tv.sharedTransformContainer`、`transition.durationMs` 可觀測欄位。
 - `src/app/App.tsx`
   - shot 切換改為單一路徑 duration-based transition（280ms），權威 state 為 `shotTransitionStartedAt/shotTransitionDurationMs/shotTransitionFromPosX`。
   - 保留輕量 handheld，但縮小 offset/rotation/scale 幅度，避免破壞 framing。
@@ -79,7 +79,15 @@
 - `src/modes/sandbox_360_test/sandbox360Viewer.css`
   - 新增 `sandbox360OverlayTvDebug`，作為 TV anchor 可視化驗收框。
 - `scripts/regression-sandbox360-shot-events.mjs`
-  - guard 新增：TV_ANCHOR 常數、TV debug/static 共錨點、TV rect debug 欄位、scene+overlay 共享 transform container。
+  - guard 新增：TV anchor 必須來自 calibration artifact、debug metadata 必須包含 version/source/calibratedAt、若回退裸常數直接 fail。
+
+### 2026-03-25（sandbox_360_test TV anchor calibration ownership）
+
+- 校準流程責任切分：
+  - 校準輸入由 feature owner 收斂（使用者紅框驗收 + reference scene）。
+  - 版本化輸出統一寫入 `tvAnchorCalibration.ts`。
+  - viewer 僅讀 artifact；Debug 僅做可觀測，不可自行推導權威 anchor。
+  - regression guard 負責阻止「裸常數 + 無 metadata」回歸。
 
 ### Removed / Deprecated Log
 - 2026-03-25：deprecated shot spring constants (`shotSpringStiffness/shotSpringDamping`)；sandbox_360_test 轉場 authority 改為單一 duration-based state。
