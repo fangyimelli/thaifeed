@@ -1,5 +1,7 @@
 # Sandbox Flow Table
 
+> 2026-03-25 sandbox_360_test 補充：effect/room-event force gate 與 debug 顯示改為 App SSOT（`sandbox360RoomEvents` + `sandbox360RoomEventDebug`），viewer 不再持有本地 debug overlay 狀態。
+
 Generated from mode-specific flow definition and content map for **sandbox** mode.
 
 - Companion review packet: `docs/sandbox-shared-message-review.md` for editable sandbox/shared review.

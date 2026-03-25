@@ -290,3 +290,11 @@
   - `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
   - `src/app/App.tsx`
 - Static inspection: overlay alignment now routes through `sandbox360TransformLayer`.
+
+
+## 2026-03-25 sandbox_360_test effect-force + debug-ssot integration
+
+- 把 sandbox_360_test room effect force/cooldown/blocked reason 收斂到 App authoritative gate。
+- 移除主畫面右下角 debug 大面板（含 shot/event buttons），改由 Debug Panel 呈現完整欄位。
+- viewer 與 debug panel 共同讀同一份 state：`sandbox360ViewerState` + `sandbox360RoomEvents` + `sandbox360RoomEventDebug` + `sandbox360OverlayDebug`。
+- 補 regression guard：確保不回歸到 viewer 本地 debug overlay 與雙軌 effect gate。

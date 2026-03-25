@@ -1,3 +1,21 @@
+## 2026-03-25 Sandbox 360 effect force SSOT 收斂 + 主畫面 debug overlay 移除
+
+- Scope 僅 `sandbox_360_test`，classic / `sandbox_story` 未改。
+- `Sandbox360Viewer` 移除右下角大型 debug 資訊與 shot/event debug buttons，主畫面僅保留必要場景呈現 + 問題/pinned reply + 最小 shot 狀態。
+- room effect（`LIGHT_FLASH_LEFT/TV_STATIC/DOLL_REFLECT/DOOR_SHADOW`）改由 `App` 單一 state/gate 決策：
+  - shot flow（left/right/center 切換）觸發時機集中在 App。
+  - cooldown / force bypass / blocked reason / trigger mode 統一寫入 `sandbox360RoomEventDebug`。
+  - renderer 與 debug panel 共同讀取 `sandbox360RoomEvents` 與 `sandbox360RoomEventDebug`，避免「debug 有值、畫面沒套用」雙軌。
+- viewer 僅輸出 TV anchor/rect 與問題顯示投影到 debug container（`onViewerDebugStateChange`），不再在 viewer 內自行拼裝另一套 debug overlay。
+- Debug panel 新增 `sandbox_360_test` 專區，集中呈現：shot/transition、camera offsets/rotation/scale、roomEvent.last、effect force mode/reason/blockedReason、TV anchor/rect、question visible/consonant。
+- `window.__CHAT_DEBUG__.sandbox` 同步鏡像 `sandbox360ViewerState + sandbox360RoomEvents + sandbox360RoomEventDebug + sandbox360OverlayDebug` 作為 debug SSOT。
+- regression guard `scripts/regression-sandbox360-shot-events.mjs` 更新：鎖定「主畫面不再有 overlay debug panel」與「effect 由 App SSOT 驅動」契約。
+
+### Removed / Deprecated Log
+
+- 2026-03-25：移除 `Sandbox360Viewer` 內的 room-event cooldown/force/local activeEvents 本地狀態，避免與 App authoritative gate 雙軌。
+- 2026-03-25：移除主畫面右下角 `sandbox360Debug` 面板與 `sandbox360ShotButtons` / `sandbox360RoomEventButtons`。
+
 ## 2026-03-25 Sandbox 360 TV anchor 鎖定 + 手持鏡頭感（authoritative integration）
 
 - Scope 僅 `sandbox_360_test`；classic / `sandbox_story` / shared `submitChat` 完全未改。

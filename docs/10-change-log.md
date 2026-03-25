@@ -1,3 +1,13 @@
+## 2026-03-25 Sandbox360 effect force 與 debug 面板收斂（single SSOT）
+
+- Root cause：`Sandbox360Viewer` 同時承擔 render + effect local gate + debug overlay，造成 App/debug page 與 renderer 並非讀同一份 state，force observability 與實際套用存在漂移。
+- 修正：
+  - room effect trigger/cooldown/force gate 移到 `src/app/App.tsx` 單一 authoritative state。
+  - viewer 改為純 render + projection，透過 callback 回傳 TV rect / anchor / question 顯示投影。
+  - 主畫面移除右下角大型 debug overlay 與 debug buttons，改在 Debug Panel (`mode=sandbox_360_test`) 集中呈現。
+- 新增/更新 debug 欄位：`sandbox360RoomEvents`、`sandbox360RoomEventDebug`、`sandbox360OverlayDebug`，並同步到 `window.__CHAT_DEBUG__.sandbox`。
+- 更新 regression guard：禁止主畫面回歸 `sandbox360Debug` / shot+event debug buttons，並鎖定 App 端 effect SSOT 管線。
+
 ## 2026-03-25（sandbox_360_test TV anchor authoritative + handheld transition convergence）
 
 - Scope 僅 `sandbox_360_test`，classic / `sandbox_story` / shared submit path 無改動。
