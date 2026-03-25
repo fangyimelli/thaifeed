@@ -46,7 +46,22 @@ type OverlayRect = { x: number; y: number; w: number; h: number };
 type ScreenRectStyle = { left: string; top: string; width: string; height: string };
 type NumericScreenRect = { x: number; y: number; w: number; h: number };
 type TransformChainStep = { step: string; summary: string };
-type ResolveTvEffectRectInput = { rect: OverlayRect; camera: SceneCameraState };
+type HandheldTransformState = {
+  offsetX: number;
+  offsetY: number;
+  rotationDeg: number;
+  scale: number;
+};
+type ResolveTvEffectRectInput = {
+  rect: OverlayRect;
+  camera: SceneCameraState;
+  handheld: HandheldTransformState;
+  viewerSize: { width: number; height: number };
+};
+type ResolveTvEffectRectResult = {
+  preHandheldRect: NumericScreenRect;
+  finalRendererRect: NumericScreenRect;
+};
 type SceneCameraState = {
   sceneWidth: number;
   sceneHeight: number;
@@ -69,6 +84,8 @@ type Props = {
   roomEventObservability: RoomEventObservabilityState;
   onViewerDebugStateChange?: (payload: {
     baseTvSceneRect: OverlayRect;
+    preHandheldRect: NumericScreenRect;
+    finalRendererRect: NumericScreenRect;
     tvScreenRect: OverlayRect;
     resolvedTvScreenRect: ScreenRectStyle;
     tvDebugRect: ScreenRectStyle;
@@ -121,12 +138,56 @@ const SCENE_DEFAULT_HEIGHT = 2048;
 const SCENE_REFERENCE_SIZE = { width: 4096, height: 2048 } as const;
 const TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 } as const;
 
-const resolveTvEffectRect = ({ rect, camera }: ResolveTvEffectRectInput): NumericScreenRect => ({
-  x: (rect.x - camera.cameraX) * camera.cameraScale,
-  y: (rect.y - camera.cameraY) * camera.cameraScale,
-  w: rect.w * camera.cameraScale,
-  h: rect.h * camera.cameraScale
-});
+const resolveTvEffectRect = ({ rect, camera, handheld, viewerSize }: ResolveTvEffectRectInput): ResolveTvEffectRectResult => {
+  const preHandheldRect: NumericScreenRect = {
+    x: (rect.x - camera.cameraX) * camera.cameraScale,
+    y: (rect.y - camera.cameraY) * camera.cameraScale,
+    w: rect.w * camera.cameraScale,
+    h: rect.h * camera.cameraScale
+  };
+
+  const originX = viewerSize.width / 2;
+  const originY = viewerSize.height / 2;
+  const theta = handheld.rotationDeg * (Math.PI / 180);
+  const cosTheta = Math.cos(theta);
+  const sinTheta = Math.sin(theta);
+
+  const transformPoint = (x: number, y: number) => {
+    const localX = x - originX;
+    const localY = y - originY;
+    const scaledX = localX * handheld.scale;
+    const scaledY = localY * handheld.scale;
+    const rotatedX = scaledX * cosTheta - scaledY * sinTheta;
+    const rotatedY = scaledX * sinTheta + scaledY * cosTheta;
+    return {
+      x: rotatedX + originX + handheld.offsetX,
+      y: rotatedY + originY + handheld.offsetY
+    };
+  };
+
+  const corners = [
+    transformPoint(preHandheldRect.x, preHandheldRect.y),
+    transformPoint(preHandheldRect.x + preHandheldRect.w, preHandheldRect.y),
+    transformPoint(preHandheldRect.x, preHandheldRect.y + preHandheldRect.h),
+    transformPoint(preHandheldRect.x + preHandheldRect.w, preHandheldRect.y + preHandheldRect.h)
+  ];
+  const xs = corners.map((corner) => corner.x);
+  const ys = corners.map((corner) => corner.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+
+  return {
+    preHandheldRect,
+    finalRendererRect: {
+      x: minX,
+      y: minY,
+      w: Math.max(0, maxX - minX),
+      h: Math.max(0, maxY - minY)
+    }
+  };
+};
 
 export default function Sandbox360Viewer({
   viewerState,
@@ -199,9 +260,16 @@ export default function Sandbox360Viewer({
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth, tvScreenRect]);
 
+  const handheldState = useMemo<HandheldTransformState>(() => ({
+    offsetX: viewerState.cameraOffsetX,
+    offsetY: viewerState.cameraOffsetY,
+    rotationDeg: viewerState.cameraRotationDeg,
+    scale: 1 + viewerState.cameraScaleOffset
+  }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+
   const toScreenRect = useCallback((rect: OverlayRect): NumericScreenRect => (
-    resolveTvEffectRect({ rect, camera: cameraState })
-  ), [cameraState]);
+    resolveTvEffectRect({ rect, camera: cameraState, handheld: handheldState, viewerSize: viewportSize }).finalRendererRect
+  ), [cameraState, handheldState, viewportSize]);
   const toScreenRectStyle = useCallback((rect: NumericScreenRect): ScreenRectStyle => ({
     left: `${rect.x.toFixed(3)}px`,
     top: `${rect.y.toFixed(3)}px`,
@@ -209,7 +277,13 @@ export default function Sandbox360Viewer({
     height: `${rect.h.toFixed(3)}px`
   }), []);
   const baseTvSceneRect = tvScreenRect;
-  const resolvedTvScreenRectNumeric = useMemo(() => toScreenRect(baseTvSceneRect), [baseTvSceneRect, toScreenRect]);
+  const resolvedTvRect = useMemo(
+    () => resolveTvEffectRect({ rect: baseTvSceneRect, camera: cameraState, handheld: handheldState, viewerSize: viewportSize }),
+    [baseTvSceneRect, cameraState, handheldState, viewportSize]
+  );
+  const preHandheldRectNumeric = resolvedTvRect.preHandheldRect;
+  const finalRendererRectNumeric = resolvedTvRect.finalRendererRect;
+  const resolvedTvScreenRectNumeric = finalRendererRectNumeric;
   const resolvedTvScreenRect = useMemo(() => toScreenRectStyle(resolvedTvScreenRectNumeric), [resolvedTvScreenRectNumeric, toScreenRectStyle]);
   const tvDebugRect = resolvedTvScreenRect;
   const tvOverlayRect = resolvedTvScreenRect;
@@ -217,12 +291,12 @@ export default function Sandbox360Viewer({
   const tvUsesResolvedRect = true;
   const transformChain = useMemo<TransformChainStep[]>(() => [
     { step: 'base scene rect', summary: `x=${baseTvSceneRect.x.toFixed(3)}, y=${baseTvSceneRect.y.toFixed(3)}, w=${baseTvSceneRect.w.toFixed(3)}, h=${baseTvSceneRect.h.toFixed(3)}` },
-    { step: 'camera transform', summary: `cameraX=${cameraState.cameraX.toFixed(3)}, cameraY=${cameraState.cameraY.toFixed(3)}, cameraScale=${cameraState.cameraScale.toFixed(6)} -> x=${resolvedTvScreenRectNumeric.x.toFixed(3)}, y=${resolvedTvScreenRectNumeric.y.toFixed(3)}, w=${resolvedTvScreenRectNumeric.w.toFixed(3)}, h=${resolvedTvScreenRectNumeric.h.toFixed(3)}` },
+    { step: 'camera transform', summary: `cameraX=${cameraState.cameraX.toFixed(3)}, cameraY=${cameraState.cameraY.toFixed(3)}, cameraScale=${cameraState.cameraScale.toFixed(6)} -> preHandheld x=${preHandheldRectNumeric.x.toFixed(3)}, y=${preHandheldRectNumeric.y.toFixed(3)}, w=${preHandheldRectNumeric.w.toFixed(3)}, h=${preHandheldRectNumeric.h.toFixed(3)}` },
     { step: 'aspect correction', summary: `coverScale=${(cameraState.cameraScale / viewerState.scale).toFixed(6)} (applied once in cameraScale)` },
-    { step: 'shot offset', summary: `handheld translate=(${viewerState.cameraOffsetX.toFixed(3)}, ${viewerState.cameraOffsetY.toFixed(3)}), rotate=${viewerState.cameraRotationDeg.toFixed(3)}, scale=${(1 + viewerState.cameraScaleOffset).toFixed(6)}` },
+    { step: 'handheld transform', summary: `origin=(${(viewportSize.width / 2).toFixed(3)}, ${(viewportSize.height / 2).toFixed(3)}), translate=(${handheldState.offsetX.toFixed(3)}, ${handheldState.offsetY.toFixed(3)}), rotate=${handheldState.rotationDeg.toFixed(3)}, scale=${handheldState.scale.toFixed(6)}` },
     { step: 'transition interpolation', summary: `from=${viewerState.shotTransitionFromPosX.toFixed(3)}, current=${viewerState.currentPosX.toFixed(3)}, target=${viewerState.targetPosX.toFixed(3)}, durationMs=${viewerState.shotTransitionDurationMs}, transitioning=${String(viewerState.isTransitioning)}` },
-    { step: 'final renderer rect', summary: `left=${tvRendererRect.left}, top=${tvRendererRect.top}, width=${tvRendererRect.width}, height=${tvRendererRect.height}` }
-  ], [baseTvSceneRect.h, baseTvSceneRect.w, baseTvSceneRect.x, baseTvSceneRect.y, cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, resolvedTvScreenRectNumeric.h, resolvedTvScreenRectNumeric.w, resolvedTvScreenRectNumeric.x, resolvedTvScreenRectNumeric.y, tvRendererRect.height, tvRendererRect.left, tvRendererRect.top, tvRendererRect.width, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset, viewerState.currentPosX, viewerState.isTransitioning, viewerState.scale, viewerState.shotTransitionDurationMs, viewerState.shotTransitionFromPosX, viewerState.targetPosX]);
+    { step: 'final renderer rect', summary: `x=${finalRendererRectNumeric.x.toFixed(3)}, y=${finalRendererRectNumeric.y.toFixed(3)}, w=${finalRendererRectNumeric.w.toFixed(3)}, h=${finalRendererRectNumeric.h.toFixed(3)} (left=${tvRendererRect.left}, top=${tvRendererRect.top}, width=${tvRendererRect.width}, height=${tvRendererRect.height})` }
+  ], [baseTvSceneRect.h, baseTvSceneRect.w, baseTvSceneRect.x, baseTvSceneRect.y, cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, finalRendererRectNumeric.h, finalRendererRectNumeric.w, finalRendererRectNumeric.x, finalRendererRectNumeric.y, handheldState.offsetX, handheldState.offsetY, handheldState.rotationDeg, handheldState.scale, preHandheldRectNumeric.h, preHandheldRectNumeric.w, preHandheldRectNumeric.x, preHandheldRectNumeric.y, tvRendererRect.height, tvRendererRect.left, tvRendererRect.top, tvRendererRect.width, viewerState.currentPosX, viewerState.isTransitioning, viewerState.scale, viewerState.shotTransitionDurationMs, viewerState.shotTransitionFromPosX, viewerState.targetPosX, viewportSize.height, viewportSize.width]);
 
   const sceneImageStyle = useMemo(() => ({
     left: `${(-cameraState.cameraX * cameraState.cameraScale).toFixed(3)}px`,
@@ -231,8 +305,8 @@ export default function Sandbox360Viewer({
     height: `${(cameraState.sceneHeight * cameraState.cameraScale).toFixed(3)}px`
   }), [cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, cameraState.sceneHeight, cameraState.sceneWidth]);
   const handheldTransformStyle = useMemo(() => ({
-    transform: `translate3d(${viewerState.cameraOffsetX.toFixed(3)}px, ${viewerState.cameraOffsetY.toFixed(3)}px, 0) rotate(${viewerState.cameraRotationDeg.toFixed(3)}deg) scale(${(1 + viewerState.cameraScaleOffset).toFixed(5)})`
-  }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+    transform: `translate3d(${handheldState.offsetX.toFixed(3)}px, ${handheldState.offsetY.toFixed(3)}px, 0) rotate(${handheldState.rotationDeg.toFixed(3)}deg) scale(${handheldState.scale.toFixed(5)})`
+  }), [handheldState.offsetX, handheldState.offsetY, handheldState.rotationDeg, handheldState.scale]);
 
   const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => (
     onTriggerRoomEvent(eventType, options)
@@ -316,10 +390,10 @@ export default function Sandbox360Viewer({
       };
       setRenderedEffectRect(measured);
       setRectDiff({
-        x: `${(content.left - root.left - resolvedTvScreenRectNumeric.x).toFixed(3)}px`,
-        y: `${(content.top - root.top - resolvedTvScreenRectNumeric.y).toFixed(3)}px`,
-        w: `${(content.width - resolvedTvScreenRectNumeric.w).toFixed(3)}px`,
-        h: `${(content.height - resolvedTvScreenRectNumeric.h).toFixed(3)}px`
+        x: `${(content.left - root.left - finalRendererRectNumeric.x).toFixed(3)}px`,
+        y: `${(content.top - root.top - finalRendererRectNumeric.y).toFixed(3)}px`,
+        w: `${(content.width - finalRendererRectNumeric.w).toFixed(3)}px`,
+        h: `${(content.height - finalRendererRectNumeric.h).toFixed(3)}px`
       });
     };
     updateRenderedEffectRect();
@@ -329,11 +403,13 @@ export default function Sandbox360Viewer({
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', updateRenderedEffectRect);
     };
-  }, [resolvedTvScreenRectNumeric.h, resolvedTvScreenRectNumeric.w, resolvedTvScreenRectNumeric.x, resolvedTvScreenRectNumeric.y, roomEventState.TV_STATIC.active, roomEventState.TV_STATIC.triggerSeq, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+  }, [finalRendererRectNumeric.h, finalRendererRectNumeric.w, finalRendererRectNumeric.x, finalRendererRectNumeric.y, roomEventState.TV_STATIC.active, roomEventState.TV_STATIC.triggerSeq, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
 
   useEffect(() => {
     onViewerDebugStateChange?.({
       baseTvSceneRect,
+      preHandheldRect: preHandheldRectNumeric,
+      finalRendererRect: finalRendererRectNumeric,
       tvScreenRect,
       resolvedTvScreenRect,
       tvDebugRect,
@@ -355,7 +431,7 @@ export default function Sandbox360Viewer({
       questionConsonant,
       roomEventLast: roomEventObservability.eventType
     });
-  }, [baseTvSceneRect, onViewerDebugStateChange, questionConsonant, questionVisible, rectDiff.h, rectDiff.w, rectDiff.x, rectDiff.y, renderedEffectRect, resolvedTvScreenRect, roomEventObservability.eventType, transformChain, tvDebugRect, tvOverlayRect, tvRendererRect, tvScreenRect, tvSharesTransformContainer, tvUsesResolvedRect]);
+  }, [baseTvSceneRect, finalRendererRectNumeric, onViewerDebugStateChange, preHandheldRectNumeric, questionConsonant, questionVisible, rectDiff.h, rectDiff.w, rectDiff.x, rectDiff.y, renderedEffectRect, resolvedTvScreenRect, roomEventObservability.eventType, transformChain, tvDebugRect, tvOverlayRect, tvRendererRect, tvScreenRect, tvSharesTransformContainer, tvUsesResolvedRect]);
 
   return (
     <div
