@@ -19,15 +19,17 @@ assertHas('DOOR_SHADOW: 5000', 'DOOR_SHADOW cooldown must be 5000ms');
 assertHas('const onShotChange = useCallback((prevShot: ShotType, nextShot: ShotType) => {', 'onShotChange hook missing');
 assertHas("if (prevShot === 'right' && nextShot === 'center')", 'RIGHT -> CENTER trigger missing');
 assertHas("if (prevShot === 'left' && nextShot === 'center')", 'LEFT -> CENTER trigger missing');
-assertHas("triggerRoomEvent('DOOR_SHADOW', 'shot_flow')", 'DOOR_SHADOW shot trigger missing');
-assertHas("triggerRoomEvent('DOLL_REFLECT', 'shot_flow')", 'DOLL_REFLECT shot trigger missing');
+assertHas("triggerRoomEvent('DOOR_SHADOW', { source: 'shot_flow' })", 'DOOR_SHADOW shot trigger missing');
+assertHas("triggerRoomEvent('DOLL_REFLECT', { source: 'shot_flow' })", 'DOLL_REFLECT shot trigger missing');
 assertHas("delayedLightFlashTimerRef.current = window.setTimeout", 'CENTER -> RIGHT delayed timer missing');
-assertHas("triggerRoomEvent('LIGHT_FLASH_LEFT', 'shot_flow')", 'LIGHT_FLASH_LEFT shot trigger missing');
+assertHas("triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' })", 'LIGHT_FLASH_LEFT shot trigger missing');
 assertHas("rightStayTimerRef.current = window.setTimeout", 'RIGHT stay timer missing');
-assertHas("triggerRoomEvent('TV_STATIC', 'shot_flow')", 'TV_STATIC stay trigger missing');
+assertHas("triggerRoomEvent('TV_STATIC', { source: 'shot_flow' })", 'TV_STATIC stay trigger missing');
 
 assertHas('window.__sandbox360 = debugApi', 'sandbox360 namespace API mount missing');
-assertHas("triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual')", 'sandbox360 room event API should delegate to local trigger');
+assertHas('const shouldBypassCooldown = Boolean(options?.force || options?.ignoreCooldown);', 'triggerRoomEvent should derive bypass cooldown from options');
+assertHas('if (!shouldBypassCooldown && cooldownUntil > now)', 'cooldown gate should only block when bypass=false');
+assertHas("triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options)", 'sandbox360 room event API should delegate to local trigger');
 if (viewerFile.includes('window.triggerRoomEvent')) {
   throw new Error('legacy global window.triggerRoomEvent must not be mounted');
 }

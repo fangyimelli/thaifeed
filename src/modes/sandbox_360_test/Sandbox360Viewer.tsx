@@ -23,6 +23,11 @@ export type Sandbox360ViewerState = {
 type ShotType = 'left' | 'center' | 'right';
 type RoomEventType = 'LIGHT_FLASH_LEFT' | 'TV_STATIC' | 'DOLL_REFLECT' | 'DOOR_SHADOW';
 type TriggerSource = 'manual' | 'shot_flow';
+type TriggerRoomEventOptions = {
+  source: TriggerSource;
+  force?: boolean;
+  ignoreCooldown?: boolean;
+};
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type SceneCameraState = {
   sceneWidth: number;
@@ -50,16 +55,16 @@ type Props = {
 };
 
 type Sandbox360DebugApi = {
-  triggerRoomEvent: (eventType: RoomEventType) => boolean;
+  triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
   overlay: {
-    triggerRoomEvent: (eventType: RoomEventType) => boolean;
+    triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
   };
   viewer: {
     triggerShot: (shot: ShotType) => void;
     shot: Record<ShotType, () => void>;
   };
   debug: {
-    triggerRoomEvent: (eventType: RoomEventType) => boolean;
+    triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
     triggerShot: (shot: ShotType) => void;
   };
 };
@@ -179,10 +184,12 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     }
   }, []);
 
-  const triggerRoomEvent = useCallback((eventType: RoomEventType, source: TriggerSource = 'manual') => {
+  const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => {
+    const source = options?.source ?? 'manual';
+    const shouldBypassCooldown = Boolean(options?.force || options?.ignoreCooldown);
     const now = Date.now();
     const cooldownUntil = eventCooldownMapRef.current[eventType] ?? 0;
-    if (cooldownUntil > now) {
+    if (!shouldBypassCooldown && cooldownUntil > now) {
       return false;
     }
 
@@ -223,7 +230,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
       clearDelayedLightFlashTimer();
       delayedLightFlashTimerRef.current = window.setTimeout(() => {
         if (lastShotRef.current !== 'right') return;
-        triggerRoomEvent('LIGHT_FLASH_LEFT', 'shot_flow');
+        triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' });
       }, 500);
 
       clearRightStayTimer();
@@ -231,7 +238,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
         const stillOnRight = lastShotRef.current === 'right';
         const sameRightEntry = shotEnterTimeRef.current === enteredAt;
         if (!stillOnRight || !sameRightEntry) return;
-        triggerRoomEvent('TV_STATIC', 'shot_flow');
+        triggerRoomEvent('TV_STATIC', { source: 'shot_flow' });
       }, 3000);
     } else {
       clearDelayedLightFlashTimer();
@@ -239,11 +246,11 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     }
 
     if (prevShot === 'right' && nextShot === 'center') {
-      triggerRoomEvent('DOOR_SHADOW', 'shot_flow');
+      triggerRoomEvent('DOOR_SHADOW', { source: 'shot_flow' });
     }
 
     if (prevShot === 'left' && nextShot === 'center') {
-      triggerRoomEvent('DOLL_REFLECT', 'shot_flow');
+      triggerRoomEvent('DOLL_REFLECT', { source: 'shot_flow' });
     }
   }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent]);
 
@@ -280,9 +287,9 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
   useEffect(() => {
     const previousApi = window.__sandbox360;
     const debugApi: Sandbox360DebugApi = {
-      triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual'),
+      triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
       overlay: {
-        triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual')
+        triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options)
       },
       viewer: {
         triggerShot,
@@ -293,7 +300,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
         }
       },
       debug: {
-        triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual'),
+        triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
         triggerShot
       }
     };
@@ -357,10 +364,10 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
           <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
         </div>
         <div className="sandbox360RoomEventButtons">
-          <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', 'manual')}>FLASH</button>
-          <button type="button" onClick={() => triggerRoomEvent('TV_STATIC', 'manual')}>TV</button>
-          <button type="button" onClick={() => triggerRoomEvent('DOLL_REFLECT', 'manual')}>DOLL</button>
-          <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', 'manual')}>DOOR</button>
+          <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>FLASH</button>
+          <button type="button" onClick={() => triggerRoomEvent('TV_STATIC', { source: 'manual' })}>TV</button>
+          <button type="button" onClick={() => triggerRoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
+          <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
         </div>
         <div className="sandbox360Debug" aria-live="polite">
           <div>currentShot: {viewerState.currentShot}</div>
