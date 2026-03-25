@@ -1,3 +1,12 @@
+## 2026-03-25 Sandbox 360 shot-driven room event automation
+
+- Scope limited to `sandbox_360_test` viewer overlay runtime; classic / sandbox_story / parser / chat flow are untouched.
+- Added shot-change listener (`onShotChange(prevShot, nextShot)`) in `Sandbox360Viewer` to trigger room overlays from camera direction transitions.
+- Added RIGHT-entry delayed/stay rules: `CENTER -> RIGHT` triggers `LIGHT_FLASH_LEFT` after 500ms, and RIGHT stay for 3s triggers `TV_STATIC`.
+- Added return-to-center rules: `RIGHT -> CENTER` triggers `DOOR_SHADOW`; `LEFT -> CENTER` triggers `DOLL_REFLECT`.
+- Added authoritative cooldown guard map (`eventCooldownMap`) for all room events to prevent burst retrigger.
+- Added regression guard script `npm run test:sandbox360-shot-events` to lock event mapping, cooldown durations, and required shot state refs.
+
 ## 2026-03-22 Mode ownership split blueprint (phase 1)
 
 - Added mode-specific flow definitions under `src/modes/classic/flow/classicFlowDefinition.ts` and `src/modes/sandbox/flow/sandboxFlowDefinition.ts`.
