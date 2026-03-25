@@ -48,6 +48,18 @@ Notes:
 - Sandbox debug/event API is namespace-local: `window.__sandbox360.*` (no `window.triggerRoomEvent`).
 - `eventCooldownMap` is the authoritative gate to avoid rapid retrigger from debug spam or fast camera oscillation.
 
+## Sandbox 360 force vs normal event behavior（sandbox_360_test only）
+
+| path | trigger examples | trigger API | cooldown behavior | notes |
+| --- | --- | --- | --- | --- |
+| force (debug/manual) | Debug buttons（FLASH/TV/DOLL/DOOR） | `triggerRoomEvent(type, { force:true })` / `forceRoomEvent(type)` | bypass（可忽略 cooldown） | 測試優先，避免 debug 被 cooldown 擋住 |
+| normal (non-debug) | shot-driven / auto / random / scripted | `triggerRoomEvent(type)` 或 `triggerRoomEvent(type, { source:'shot_flow' })` | enforce（仍受 cooldown） | 正式節奏保持防抖/防連發 |
+| normal + override | 少數人工檢查 | `triggerRoomEvent(type, { ignoreCooldown:true })` | bypass | 僅限明確指定 override，不是預設 |
+
+Notes:
+- `triggerRoomEvent(type, options)` options 支援 `force` / `ignoreCooldown`。
+- cooldown 範圍定義：normal path 生效；force path 僅 debug/manual 使用。
+
 ## Flow definition
 
 | stepId | purpose | canReply | gateType | uiSurface | allowed categories | next steps | blocked reasons | notes |
