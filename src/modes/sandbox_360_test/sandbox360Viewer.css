@@ -17,8 +17,24 @@
 .sandbox360TransformLayer {
   position: absolute;
   inset: 0;
+  z-index: 1;
   transform-origin: center center;
   will-change: transform;
+}
+
+.sandbox360SceneLayer,
+.sandbox360OverlayLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sandbox360SceneLayer {
+  z-index: 1;
+}
+
+.sandbox360OverlayLayer {
+  z-index: 2;
 }
 
 .sandbox360OverlayRoomLight,
@@ -121,14 +137,14 @@
 .sandbox360UiLayer {
   position: absolute;
   inset: 0;
-  z-index: 10;
+  z-index: 30;
   pointer-events: none;
 }
 
 .sandbox360QuestionPanel {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: 40;
   display: grid;
   place-items: center;
   pointer-events: auto;
@@ -143,7 +159,7 @@
   left: 12px;
   right: 12px;
   bottom: 14px;
-  z-index: 24;
+  z-index: 35;
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -167,7 +183,7 @@
 .sandbox360ChatLayer {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  z-index: 34;
   pointer-events: none;
 }
 

@@ -1,3 +1,23 @@
+## 2026-03-25 Sandbox 360 題目層顯示回歸修正（viewer root 分層 + z-index guard）
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic, `sandbox_story`, or QNA engine.
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - viewer root 改為明確三段：`SceneLayer`（scene image）→ `OverlayLayer`（room overlays）→ `UiLayer`（QuestionPanel/PinnedReply/ChatLayer）。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 新增 `scene/overlay` layer CSS，並固定 z-index 契約：scene=1、overlay=2、ui-layer=30、question=40。
+  - `ui-layer` 仍維持 `pointer-events:none`，`QuestionPanel` 仍維持 `pointer-events:auto`。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增 DOM 結構 guard（`SceneLayer` / `OverlayLayer`）。
+  - 新增 z-index guard，防止題目層再次被 scene/overlay 覆蓋。
+
+### Verification
+- `npm run test:sandbox360-shot-events`
+- `npm run build`
+
 ## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
 
 ### Scope

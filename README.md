@@ -1,3 +1,14 @@
+## 2026-03-25 Sandbox 360 題目層修復（二次整合：scene/overlay/ui 分層 + z-index）
+
+- 只修改 `sandbox_360_test`，不改 classic / `sandbox_story` / QNA engine。
+- `Sandbox360Viewer` 重新明確化 viewer root 結構：
+  - `scene-layer`（scene image）
+  - `overlay-layer`（room overlay）
+  - `ui-layer`（`QuestionPanel` / `PinnedReply` / `ChatLayer`）
+- `ui-layer` 維持 `position:absolute; inset:0; pointer-events:none`，`QuestionPanel` 維持 `pointer-events:auto`。
+- 補齊 z-index 契約：`scene(1) < overlay(2) < ui-layer(30) < question(40)`，確保題目層不被 scene/overlay 蓋住。
+- regression guard 擴充：鎖定 `SceneLayer/OverlayLayer/UiLayer` 結構與 z-index token，避免題目 UI 再次消失。
+
 ## 2026-03-25 Sandbox 360 題目 UI layer 回復（viewer/overlay 保持）
 
 - Scope 嚴格限制於 `sandbox_360_test`；classic 與 `sandbox_story` 未改動。

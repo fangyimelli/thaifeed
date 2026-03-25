@@ -44,6 +44,8 @@ assertHas('<div>targetShot: {viewerState.targetShot}</div>', 'viewer debug must 
 assertHas('<div className="sandbox360QuestionPanel" data-visible={questionVisible ? \'true\' : \'false\'}>', 'question panel layer must exist');
 assertHas('<div className="sandbox360PinnedReply" data-visible={pinnedReplyText ? \'true\' : \'false\'}>', 'pinned reply layer must exist');
 assertHas('<div className="sandbox360ChatLayer">', 'chat layer wrapper must exist');
+assertHas('<div className="sandbox360SceneLayer">', 'scene layer wrapper must exist');
+assertHas('<div className="sandbox360OverlayLayer" aria-hidden="true">', 'overlay layer wrapper must exist');
 assertHas('<div>question.visible: {questionVisible ? \'true\' : \'false\'}</div>', 'question visibility debug field must exist');
 assertHas('<div>question.consonant: {questionConsonant || \'-\'}</div>', 'question consonant debug field must exist');
 
@@ -75,6 +77,15 @@ if (!viewerCssFile.includes('.sandbox360UiLayer') || !viewerCssFile.includes('po
 }
 if (!viewerCssFile.includes('.sandbox360QuestionPanel') || !viewerCssFile.includes('pointer-events: auto;')) {
   throw new Error('sandbox360 question panel must keep pointer-events auto');
+}
+if (!viewerCssFile.includes('.sandbox360OverlayLayer') || !viewerCssFile.includes('z-index: 2;')) {
+  throw new Error('sandbox360 overlay layer z-index guard missing');
+}
+if (!viewerCssFile.includes('.sandbox360UiLayer') || !viewerCssFile.includes('z-index: 30;')) {
+  throw new Error('sandbox360 ui layer must stay above scene/overlay');
+}
+if (!viewerCssFile.includes('.sandbox360QuestionPanel') || !viewerCssFile.includes('z-index: 40;')) {
+  throw new Error('sandbox360 question panel must stay top-most within ui layer');
 }
 
 console.log('regression-sandbox360-shot-events: ok');
