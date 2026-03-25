@@ -15,6 +15,9 @@ export type Sandbox360ViewerState = {
   cameraScaleOffset: number;
   cameraVelocityX: number;
   cameraVelocityY: number;
+  shotTransitionStartedAt: number;
+  shotTransitionDurationMs: number;
+  shotTransitionFromPosX: number;
   posY: number;
   scale: number;
   lastCommand?: string;
@@ -103,6 +106,8 @@ const ROOM_EVENT_COOLDOWN_MS: Record<RoomEventType, number> = {
 
 const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
+const SCENE_REFERENCE_SIZE = { width: 4096, height: 2048 } as const;
+const TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 } as const;
 
 export default function Sandbox360Viewer({ viewerState, curse, questionConsonant, questionVisible, pinnedReplyText = '', debugState, onDebugShotSelect }: Props) {
   const [roomLoadFailed, setRoomLoadFailed] = useState(false);
@@ -169,9 +174,17 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
   const overlaySceneRects = useMemo<Record<'tv' | 'doll' | 'door' | 'roomLight', OverlayRect>>(() => {
     const sceneWidth = cameraState.sceneWidth;
     const sceneHeight = cameraState.sceneHeight;
+    const scaleX = sceneWidth / SCENE_REFERENCE_SIZE.width;
+    const scaleY = sceneHeight / SCENE_REFERENCE_SIZE.height;
+    const tvAnchorRect: OverlayRect = {
+      x: TV_ANCHOR.x * scaleX,
+      y: TV_ANCHOR.y * scaleY,
+      w: TV_ANCHOR.w * scaleX,
+      h: TV_ANCHOR.h * scaleY
+    };
     return {
       roomLight: { x: 0, y: 0, w: sceneWidth * 0.4, h: sceneHeight * 0.6 },
-      tv: { x: sceneWidth * 0.67, y: sceneHeight * 0.65, w: sceneWidth * 0.13, h: sceneHeight * 0.12 },
+      tv: tvAnchorRect,
       doll: { x: sceneWidth * 0.66, y: sceneHeight * 0.11, w: sceneWidth * 0.34, h: sceneHeight * 0.74 },
       door: { x: sceneWidth * 0.45, y: sceneHeight * 0.16, w: sceneWidth * 0.14, h: sceneHeight * 0.62 }
     };
@@ -393,6 +406,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         </div>
         <div className="sandbox360OverlayLayer" aria-hidden="true">
           <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
+          <div className="sandbox360OverlayTvDebug" style={toScreenRect(overlaySceneRects.tv)} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
           <div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
           <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
           <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
@@ -423,6 +437,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
           <div className="sandbox360Debug" aria-live="polite">
             <div>currentShot: {viewerState.currentShot}</div>
             <div>targetShot: {viewerState.targetShot}</div>
+            <div>transition.durationMs: {viewerState.shotTransitionDurationMs}</div>
             <div>aspect: {debugState.aspect.toFixed(4)}</div>
             <div>mode: {debugState.mode}</div>
             <div>currentPosX: {viewerState.currentPosX.toFixed(2)}%</div>
