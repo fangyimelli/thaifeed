@@ -1,3 +1,18 @@
+## 2026-03-25 Sandbox 360 TV anchor 鎖定 + 手持鏡頭感（authoritative integration）
+
+- Scope 僅 `sandbox_360_test`；classic / `sandbox_story` / shared `submitChat` 完全未改。
+- `Sandbox360Viewer` 新增正式 scene-space 常數 `TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 }`（基準場景 4096x2048）；TV static overlay 與 TV debug box 都共用同一個 authoritative anchor。
+- TV anchor 以 scene-space 映射（reference scene px -> runtime scene px），不再由 screen-space 百分比猜測位置。
+- shot 切換改為 authoritative 短時平滑：`shotTransitionDurationMs=280`，以 `shotTransitionStartedAt/shotTransitionFromPosX` 驅動，僅 left/center/right 轉位，不提供自由拖曳。
+- 停在鏡位時保留微小 handheld offset（`cameraOffsetX/Y`, `cameraRotationDeg`, `cameraScaleOffset`），幅度下修，避免破壞 framing。
+- scene 與 overlay 持續共用 `sandbox360TransformLayer`，確保主畫面與 overlay 同步晃動。
+- debug 新增 `transition.durationMs`，手持/轉位狀態可觀測但不作流程權威來源。
+- regression guard 擴充：鎖定 TV_ANCHOR、TV debug+static 同錨點、shot transition duration/ease token、transform-layer 共用契約。
+
+### Removed / Deprecated Log
+
+- 2026-03-25：移除 `sandbox_360_test` 舊 shot spring（stiffness/damping）路徑，統一為單一 authoritative duration-based shot transition，避免新舊雙軌並存。
+
 ## 2026-03-25 Sandbox 360 題目層修復（二次整合：scene/overlay/ui 分層 + z-index）
 
 - 只修改 `sandbox_360_test`，不改 classic / `sandbox_story` / QNA engine。

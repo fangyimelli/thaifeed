@@ -694,6 +694,9 @@ export default function App() {
     cameraScaleOffset: 0,
     cameraVelocityX: 0,
     cameraVelocityY: 0,
+    shotTransitionStartedAt: 0,
+    shotTransitionDurationMs: 280,
+    shotTransitionFromPosX: initialSandbox360Framing.centerPosX,
     time: 0,
     posY: initialSandbox360Framing.posY,
     scale: initialSandbox360Framing.scale,
@@ -1755,6 +1758,9 @@ export default function App() {
         cameraScaleOffset: sandbox360State.viewer?.cameraScaleOffset ?? 0,
         cameraVelocityX: sandbox360State.viewer?.cameraVelocityX ?? 0,
         cameraVelocityY: sandbox360State.viewer?.cameraVelocityY ?? 0,
+        shotTransitionStartedAt: sandbox360State.viewer?.shotTransitionStartedAt ?? 0,
+        shotTransitionDurationMs: sandbox360State.viewer?.shotTransitionDurationMs ?? 280,
+        shotTransitionFromPosX: sandbox360State.viewer?.shotTransitionFromPosX ?? (sandbox360State.viewer?.currentPosX ?? target.targetPosX),
         posError: Math.abs((sandbox360State.viewer?.currentPosX ?? target.targetPosX) - (sandbox360State.viewer?.targetPosX ?? target.targetPosX)),
         isSettled: !Boolean(sandbox360State.viewer?.isTransitioning),
         time: sandbox360State.viewer?.time ?? 0,
@@ -4868,6 +4874,9 @@ export default function App() {
       centerPosX: resolvedTarget.framing.centerPosX,
       rightPosX: resolvedTarget.framing.rightPosX,
       lastCommandAt: now,
+      shotTransitionStartedAt: now,
+      shotTransitionDurationMs: 280,
+      shotTransitionFromPosX: Number.isFinite(currentState.viewer?.currentPosX) ? Number(currentState.viewer?.currentPosX) : resolvedTarget.targetPosX,
       time: Number.isFinite(currentState.viewer?.time) ? Number(currentState.viewer?.time) : 0,
       cameraVelocityX: Number.isFinite(currentState.viewer?.cameraVelocityX) ? Number(currentState.viewer?.cameraVelocityX) : 0,
       cameraVelocityY: Number.isFinite(currentState.viewer?.cameraVelocityY) ? Number(currentState.viewer?.cameraVelocityY) : 0
@@ -4882,6 +4891,9 @@ export default function App() {
       isTransitioning: true,
       cameraVelocityX: nextViewer.cameraVelocityX,
       cameraVelocityY: nextViewer.cameraVelocityY,
+      shotTransitionStartedAt: nextViewer.shotTransitionStartedAt,
+      shotTransitionDurationMs: nextViewer.shotTransitionDurationMs,
+      shotTransitionFromPosX: nextViewer.shotTransitionFromPosX,
       time: nextViewer.time,
       posY: nextViewer.posY,
       scale: nextViewer.scale,
@@ -4919,6 +4931,9 @@ export default function App() {
           cameraScaleOffset: 0,
           cameraVelocityX: 0,
           cameraVelocityY: 0,
+          shotTransitionStartedAt: 0,
+          shotTransitionDurationMs: 280,
+          shotTransitionFromPosX: framing.centerPosX,
           time: 0,
           posY: framing.posY,
           targetPosY: framing.posY,
@@ -4930,26 +4945,31 @@ export default function App() {
         const targetPosY = Number.isFinite(currentViewer.targetPosY) ? currentViewer.targetPosY : framing.posY;
         const targetScale = Number.isFinite(currentViewer.targetScale) ? currentViewer.targetScale : framing.scale;
         const currentPosXBase = Number.isFinite(currentViewer.currentPosX) ? currentViewer.currentPosX : targetPosX;
-        const velocityXBase = Number.isFinite(currentViewer.cameraVelocityX) ? currentViewer.cameraVelocityX : 0;
-        const shotSpringStiffness = 115;
-        const shotSpringDamping = 19;
-        const accelX = ((targetPosX - currentPosXBase) * shotSpringStiffness) - (velocityXBase * shotSpringDamping);
-        const velocityX = velocityXBase + (accelX * delta);
-        const currentPosX = currentPosXBase + (velocityX * delta);
+        const transitionStartedAt = Number.isFinite(currentViewer.shotTransitionStartedAt) ? currentViewer.shotTransitionStartedAt : 0;
+        const transitionDurationMs = Number.isFinite(currentViewer.shotTransitionDurationMs) && currentViewer.shotTransitionDurationMs > 0
+          ? currentViewer.shotTransitionDurationMs
+          : 280;
+        const transitionFromPosX = Number.isFinite(currentViewer.shotTransitionFromPosX) ? currentViewer.shotTransitionFromPosX : currentPosXBase;
+        const transitionElapsed = transitionStartedAt > 0 ? (Date.now() - transitionStartedAt) : transitionDurationMs;
+        const transitionProgress = Math.max(0, Math.min(1, transitionElapsed / transitionDurationMs));
+        const easedTransitionProgress = 1 - Math.pow(1 - transitionProgress, 3);
+        const transitionPosX = transitionFromPosX + ((targetPosX - transitionFromPosX) * easedTransitionProgress);
+        const velocityX = (transitionPosX - currentPosXBase) / Math.max(delta, 0.001);
+        const currentPosX = transitionProgress >= 1 ? targetPosX : transitionPosX;
         const posError = Math.abs(targetPosX - currentPosX);
-        const isSettled = posError <= 0.08 && Math.abs(velocityX) <= 0.08;
-        const isTransitioning = !isSettled;
+        const isTransitioning = transitionProgress < 1;
+        const isSettled = !isTransitioning && posError <= 0.04;
         const posY = targetPosY;
         const scale = targetScale;
         const t = (Number.isFinite(currentViewer.time) ? currentViewer.time : 0) + delta;
-        const swayX = Math.sin(t * 1.5) * 0.7;
-        const swayY = Math.cos((t * 1.23) + 1.1) * 0.45;
-        const jitterX = ((Math.sin(t * 16.3) + Math.sin(t * 11.1 + 0.6)) * 0.5) * 0.22;
-        const jitterY = ((Math.cos(t * 13.2 + 0.4) + Math.sin(t * 9.7 + 0.9)) * 0.5) * 0.18;
-        const cameraOffsetX = swayX + jitterX + (velocityX * 0.015);
+        const swayX = Math.sin(t * 1.5) * 0.46;
+        const swayY = Math.cos((t * 1.23) + 1.1) * 0.33;
+        const jitterX = ((Math.sin(t * 16.3) + Math.sin(t * 11.1 + 0.6)) * 0.5) * 0.14;
+        const jitterY = ((Math.cos(t * 13.2 + 0.4) + Math.sin(t * 9.7 + 0.9)) * 0.5) * 0.11;
+        const cameraOffsetX = swayX + jitterX + (velocityX * 0.0022);
         const cameraOffsetY = swayY + jitterY;
-        const cameraRotationDeg = (cameraOffsetX * 0.015) + (velocityX * 0.0018);
-        const cameraScaleOffset = (Math.sin(t * 0.9) * 0.0008) + (Math.cos(t * 0.37) * 0.0004);
+        const cameraRotationDeg = (cameraOffsetX * 0.013) + (velocityX * 0.00042);
+        const cameraScaleOffset = (Math.sin(t * 0.9) * 0.00055) + (Math.cos(t * 0.37) * 0.00022);
         const nextViewer = {
           ...currentViewer,
           currentShot: isSettled ? currentViewer.targetShot : currentViewer.currentShot,
@@ -4962,6 +4982,9 @@ export default function App() {
           cameraScaleOffset,
           cameraVelocityX: isSettled ? 0 : velocityX,
           cameraVelocityY: 0,
+          shotTransitionStartedAt: currentViewer.shotTransitionStartedAt,
+          shotTransitionDurationMs: transitionDurationMs,
+          shotTransitionFromPosX: transitionFromPosX,
           time: t,
           posY,
           scale
@@ -4982,6 +5005,9 @@ export default function App() {
           cameraScaleOffset: nextViewer.cameraScaleOffset,
           cameraVelocityX: nextViewer.cameraVelocityX,
           cameraVelocityY: nextViewer.cameraVelocityY,
+          shotTransitionStartedAt: nextViewer.shotTransitionStartedAt,
+          shotTransitionDurationMs: nextViewer.shotTransitionDurationMs,
+          shotTransitionFromPosX: nextViewer.shotTransitionFromPosX,
           time: t,
           posY: nextViewer.posY,
           scale,
@@ -7914,6 +7940,9 @@ export default function App() {
                   cameraScaleOffset: sandbox360ViewerState.cameraScaleOffset,
                   cameraVelocityX: sandbox360ViewerState.cameraVelocityX,
                   cameraVelocityY: sandbox360ViewerState.cameraVelocityY,
+                  shotTransitionStartedAt: sandbox360ViewerState.shotTransitionStartedAt,
+                  shotTransitionDurationMs: sandbox360ViewerState.shotTransitionDurationMs,
+                  shotTransitionFromPosX: sandbox360ViewerState.shotTransitionFromPosX,
                   posY: sandbox360ViewerState.posY,
                   scale: sandbox360ViewerState.scale,
                   lastCommand: sandbox360ViewerState.lastCommand

@@ -1,3 +1,30 @@
+## 2026-03-25 Sandbox 360 TV anchor lock + handheld transition smoothing
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic, `sandbox_story`, or shared `submitChat`.
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Added authoritative scene-space `TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 }` (reference scene: 4096x2048).
+  - TV static overlay and TV debug box now read the same authoritative anchor (`overlaySceneRects.tv`).
+  - Added debug field `transition.durationMs` for observable shot transition configuration.
+- `src/app/App.tsx`
+  - Replaced spring-based shot interpolation with duration-based transition (`280ms`) driven by authoritative state:
+    - `shotTransitionStartedAt`
+    - `shotTransitionDurationMs`
+    - `shotTransitionFromPosX`
+  - Reduced handheld offset/rotation/scale amplitude to keep framing stable.
+- `src/modes/sandbox_360_test/sandbox360Mode.ts`
+  - Added transition fields into viewer initial state + hydration guards.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Added `.sandbox360OverlayTvDebug` to visualize TV anchor in debug flow.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added guards for TV anchor SSOT, shared TV anchor usage (debug/static), transform-layer coupling, and duration-based transition tokens.
+
+### Removed / Deprecated Log
+- Deprecated spring constants path for sandbox_360_test shot transition (`shotSpringStiffness`, `shotSpringDamping`) to avoid dual transition authority.
+
 ## 2026-03-25 Sandbox 360 題目層顯示回歸修正（viewer root 分層 + z-index guard）
 
 ### Scope

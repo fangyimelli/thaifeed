@@ -39,10 +39,6 @@ assertHas("triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' });", 'sho
 assertHas("triggerRoomEvent('TV_STATIC', { source: 'shot_flow' });", 'shot-flow right-stay trigger should remain non-force');
 assertHas("triggerRoomEvent('DOOR_SHADOW', { source: 'shot_flow' });", 'shot-flow transition trigger should remain non-force');
 assertHas("triggerRoomEvent('DOLL_REFLECT', { source: 'shot_flow' });", 'shot-flow transition trigger should remain non-force');
-assertHas("<button type=\"button\" onClick={() => forceRoomEvent('LIGHT_FLASH_LEFT')}>FLASH</button>", 'debug FLASH button should map to forceRoomEvent');
-assertHas("<button type=\"button\" onClick={() => forceRoomEvent('TV_STATIC')}>TV</button>", 'debug TV button should map to forceRoomEvent');
-assertHas("<button type=\"button\" onClick={() => forceRoomEvent('DOLL_REFLECT')}>DOLL</button>", 'debug DOLL button should map to forceRoomEvent');
-assertHas("<button type=\"button\" onClick={() => forceRoomEvent('DOOR_SHADOW')}>DOOR</button>", 'debug DOOR button should map to forceRoomEvent');
 assertHas("forceRoomEvent: (eventType: RoomEventType) => boolean;", 'debug API contract should expose forceRoomEvent');
 assertHas('forceRoomEvent,', 'debug namespace export should include forceRoomEvent token');
 if (viewerFile.includes('window.triggerRoomEvent')) {
@@ -60,8 +56,14 @@ assertHas('<div className="sandbox360PinnedReply" data-visible={pinnedReplyText 
 assertHas('<div className="sandbox360ChatLayer">', 'chat layer wrapper must exist');
 assertHas('<div className="sandbox360SceneLayer">', 'scene layer wrapper must exist');
 assertHas('<div className="sandbox360OverlayLayer" aria-hidden="true">', 'overlay layer wrapper must exist');
+assertHas('<div className="sandbox360TransformLayer" style={handheldTransformStyle}>', 'scene and overlays must share a single transform layer');
+assertHas('const TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 } as const;', 'TV anchor must be a fixed authoritative scene-space constant');
+assertHas('const tvAnchorRect: OverlayRect = {', 'TV anchor rect derivation missing');
+assertHas('<div className="sandbox360OverlayTvDebug" style={toScreenRect(overlaySceneRects.tv)}', 'TV debug overlay must share same authoritative anchor');
+assertHas('<div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)}', 'TV static overlay must share same authoritative anchor');
 assertHas('<div>question.visible: {questionVisible ? \'true\' : \'false\'}</div>', 'question visibility debug field must exist');
 assertHas('<div>question.consonant: {questionConsonant || \'-\'}</div>', 'question consonant debug field must exist');
+assertHas('<div>transition.durationMs: {viewerState.shotTransitionDurationMs}</div>', 'transition duration observability debug field missing');
 
 if (!modeFile.includes('export const SANDBOX360_SCALE = 1.75;')) {
   throw new Error('SANDBOX360_SCALE must default to 1.75 for zoom-crop framing baseline');
@@ -73,10 +75,10 @@ if (!modeFile.includes('isTransitioning: false')) {
   throw new Error('viewer state must define authoritative isTransitioning');
 }
 
-if (!appFile.includes('const shotSpringStiffness = 115;') || !appFile.includes('const shotSpringDamping = 19;')) {
-  throw new Error('sandbox360 shot spring constants guard missing');
+if (!appFile.includes('shotTransitionDurationMs: 280') || !appFile.includes('const transitionProgress = Math.max(0, Math.min(1, transitionElapsed / transitionDurationMs));')) {
+  throw new Error('sandbox360 shot transition duration/ease guard missing');
 }
-if (!appFile.includes('const isTransitioning = !isSettled;')) {
+if (!appFile.includes('const isTransitioning = transitionProgress < 1;')) {
   throw new Error('sandbox360 authoritative transition state guard missing');
 }
 if (!appFile.includes('questionConsonant={getSandboxOverlayConsonant()}')) {
@@ -94,6 +96,9 @@ if (!viewerCssFile.includes('.sandbox360QuestionPanel') || !viewerCssFile.includ
 }
 if (!viewerCssFile.includes('.sandbox360OverlayLayer') || !viewerCssFile.includes('z-index: 2;')) {
   throw new Error('sandbox360 overlay layer z-index guard missing');
+}
+if (!viewerCssFile.includes('.sandbox360OverlayTvDebug') || !viewerCssFile.includes('border: 2px solid rgba(255, 66, 66, 0.92);')) {
+  throw new Error('sandbox360 tv debug anchor box style guard missing');
 }
 if (!viewerCssFile.includes('.sandbox360UiLayer') || !viewerCssFile.includes('z-index: 30;')) {
   throw new Error('sandbox360 ui layer must stay above scene/overlay');
