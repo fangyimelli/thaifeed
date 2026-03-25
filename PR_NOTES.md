@@ -6,9 +6,9 @@
 
 ### Summary
 - `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
-  - Added authoritative scene-space `TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 }` (reference scene: 4096x2048).
+  - Added authoritative scene-space (manual calibrated) `TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 }` (reference scene: 4096x2048, aligned to user red-box SSOT).
   - TV static overlay and TV debug box now read the same authoritative anchor (`overlaySceneRects.tv`).
-  - Added debug field `transition.durationMs` for observable shot transition configuration.
+  - Added debug fields: `TV_ANCHOR`, `tvDebugRect`, `tvOverlayRect`, `tv.sharedTransformContainer`, and `transition.durationMs`.
 - `src/app/App.tsx`
   - Replaced spring-based shot interpolation with duration-based transition (`280ms`) driven by authoritative state:
     - `shotTransitionStartedAt`
@@ -20,10 +20,11 @@
 - `src/modes/sandbox_360_test/sandbox360Viewer.css`
   - Added `.sandbox360OverlayTvDebug` to visualize TV anchor in debug flow.
 - `scripts/regression-sandbox360-shot-events.mjs`
-  - Added guards for TV anchor SSOT, shared TV anchor usage (debug/static), transform-layer coupling, and duration-based transition tokens.
+  - Added guards for TV anchor SSOT, shared TV anchor usage (debug/static), TV rect observability fields, transform-layer coupling, and duration-based transition tokens.
 
 ### Removed / Deprecated Log
 - Deprecated spring constants path for sandbox_360_test shot transition (`shotSpringStiffness`, `shotSpringDamping`) to avoid dual transition authority.
+- Deprecated old estimated TV anchor (`{ x: 2240, y: 1154, w: 418, h: 244 }`) to avoid estimated/manual dual-anchor paths.
 
 ## 2026-03-25 Sandbox 360 題目層顯示回歸修正（viewer root 分層 + z-index guard）
 

@@ -107,7 +107,7 @@ const ROOM_EVENT_COOLDOWN_MS: Record<RoomEventType, number> = {
 const SCENE_DEFAULT_WIDTH = 4096;
 const SCENE_DEFAULT_HEIGHT = 2048;
 const SCENE_REFERENCE_SIZE = { width: 4096, height: 2048 } as const;
-const TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 } as const;
+const TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 } as const;
 
 export default function Sandbox360Viewer({ viewerState, curse, questionConsonant, questionVisible, pinnedReplyText = '', debugState, onDebugShotSelect }: Props) {
   const [roomLoadFailed, setRoomLoadFailed] = useState(false);
@@ -135,6 +135,9 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
   const delayedLightFlashTimerRef = useRef<number | null>(null);
   const rightStayTimerRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const transformLayerRef = useRef<HTMLDivElement | null>(null);
+  const tvDebugRef = useRef<HTMLDivElement | null>(null);
+  const tvOverlayRef = useRef<HTMLDivElement | null>(null);
   const lastShotRef = useRef<ShotType>(viewerState.currentShot);
   const shotEnterTimeRef = useRef<number>(Date.now());
   const eventCooldownMapRef = useRef<Record<RoomEventType, number>>({
@@ -149,6 +152,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     cooldownBypassed: false,
     lastTriggeredAt: null
   });
+  const [tvSharesTransformContainer, setTvSharesTransformContainer] = useState(false);
 
   const cameraState = useMemo<SceneCameraState>(() => {
     const sceneWidth = Math.max(1, sceneDimensions.width);
@@ -196,6 +200,8 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     width: `${rect.w * cameraState.cameraScale}px`,
     height: `${rect.h * cameraState.cameraScale}px`
   }), [cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY]);
+  const tvDebugRect = useMemo(() => toScreenRect(overlaySceneRects.tv), [overlaySceneRects.tv, toScreenRect]);
+  const tvOverlayRect = useMemo(() => toScreenRect(overlaySceneRects.tv), [overlaySceneRects.tv, toScreenRect]);
 
   const sceneImageStyle = useMemo(() => ({
     left: `${(-cameraState.cameraX * cameraState.cameraScale).toFixed(3)}px`,
@@ -373,6 +379,21 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     };
   }, [clearDelayedLightFlashTimer, clearRightStayTimer, forceRoomEvent, triggerRoomEvent, triggerShot]);
 
+  useEffect(() => {
+    const transformLayer = transformLayerRef.current;
+    const tvDebugEl = tvDebugRef.current;
+    const tvOverlayEl = tvOverlayRef.current;
+    const debugContainer = tvDebugEl?.closest('.sandbox360TransformLayer');
+    const overlayContainer = tvOverlayEl?.closest('.sandbox360TransformLayer');
+    setTvSharesTransformContainer(Boolean(
+      transformLayer &&
+      debugContainer &&
+      overlayContainer &&
+      debugContainer === overlayContainer &&
+      debugContainer === transformLayer
+    ));
+  }, [tvDebugRect, tvOverlayRect]);
+
   return (
     <div
       ref={rootRef}
@@ -380,7 +401,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
       data-shot-current={viewerState.currentShot}
       data-shot-target={viewerState.targetShot}
     >
-      <div className="sandbox360TransformLayer" style={handheldTransformStyle}>
+      <div ref={transformLayerRef} className="sandbox360TransformLayer" style={handheldTransformStyle}>
         <div className="sandbox360SceneLayer">
           <img
             className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
@@ -406,8 +427,8 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         </div>
         <div className="sandbox360OverlayLayer" aria-hidden="true">
           <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
-          <div className="sandbox360OverlayTvDebug" style={toScreenRect(overlaySceneRects.tv)} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
-          <div className="sandbox360OverlayTvNoise" style={toScreenRect(overlaySceneRects.tv)} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
+          <div ref={tvDebugRef} className="sandbox360OverlayTvDebug" style={tvDebugRect} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
+          <div ref={tvOverlayRef} className="sandbox360OverlayTvNoise" style={tvOverlayRect} data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
           <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
           <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
         </div>
@@ -448,6 +469,10 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
             <div>cameraOffsetY: {viewerState.cameraOffsetY.toFixed(3)}px</div>
             <div>cameraRotationDeg: {viewerState.cameraRotationDeg.toFixed(4)}°</div>
             <div>cameraScaleOffset: {viewerState.cameraScaleOffset.toFixed(5)}</div>
+            <div>TV_ANCHOR: x={TV_ANCHOR.x}, y={TV_ANCHOR.y}, w={TV_ANCHOR.w}, h={TV_ANCHOR.h}</div>
+            <div>tvDebugRect: left={tvDebugRect.left}, top={tvDebugRect.top}, width={tvDebugRect.width}, height={tvDebugRect.height}</div>
+            <div>tvOverlayRect: left={tvOverlayRect.left}, top={tvOverlayRect.top}, width={tvOverlayRect.width}, height={tvOverlayRect.height}</div>
+            <div>tv.sharedTransformContainer: {tvSharesTransformContainer ? 'true' : 'false'}</div>
             <div>question.visible: {questionVisible ? 'true' : 'false'}</div>
             <div>question.consonant: {questionConsonant || '-'}</div>
           </div>

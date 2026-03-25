@@ -20,10 +20,11 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 
 | item | authority |
 | --- | --- |
-| authoritative TV anchor | `TV_ANCHOR = { x: 2240, y: 1154, w: 418, h: 244 }` |
+| authoritative TV anchor | `TV_ANCHOR = { x: 2256, y: 1054, w: 220, h: 118 }`（manual calibrated from user red-box SSOT） |
 | reference scene | `4096x2048` scene-space |
 | runtime mapping | `scaleX = sceneWidth/4096`, `scaleY = sceneHeight/2048`, then map `TV_ANCHOR` |
 | shared consumers | `sandbox360OverlayTvDebug` + `sandbox360OverlayTvNoise` both read `overlaySceneRects.tv` |
+| debug observability | `TV_ANCHOR`, `tvDebugRect`, `tvOverlayRect`, `tv.sharedTransformContainer` |
 | anti-drift policy | do not use screen-space percentage for TV positioning |
 
 Notes:
