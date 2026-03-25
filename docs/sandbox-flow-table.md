@@ -4,6 +4,18 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 
 - Companion review packet: `docs/sandbox-shared-message-review.md` for editable sandbox/shared review.
 
+## Sandbox 360 題目 UI layer guard（sandbox_360_test only）
+
+| item | authority |
+| --- | --- |
+| viewer root structure | `viewer-root -> scene-image + overlay layers + ui-layer` |
+| ui-layer children | `QuestionPanel`, `PinnedReply`, `ChatLayer` |
+| ui-layer interaction | `position:absolute; inset:0; pointer-events:none` |
+| QuestionPanel interaction | `pointer-events:auto` |
+| z-index policy | `QuestionPanel (highest) > ChatLayer > scene/overlay` |
+| data source | `questionConsonant` / `questionVisible` from `sandbox360Mode` authoritative prompt + reply gate |
+| regression guard | `scripts/regression-sandbox360-shot-events.mjs` validates layer tokens + CSS pointer-events rules |
+
 
 
 ## Sandbox 360 zoom-crop framing authority (sandbox_360_test only)

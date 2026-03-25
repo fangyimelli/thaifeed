@@ -121,7 +121,54 @@
 .sandbox360UiLayer {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.sandbox360QuestionPanel {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.sandbox360QuestionPanel[data-visible='false'] {
+  display: none;
+}
+
+.sandbox360PinnedReply {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 14px;
+  z-index: 24;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.sandbox360PinnedReply span {
+  max-width: min(92%, 720px);
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 225, 120, 0.35);
+  background: rgba(255, 225, 120, 0.14);
+  color: #fff5bf;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.sandbox360PinnedReply[data-visible='false'] {
+  display: none;
+}
+
+.sandbox360ChatLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
 }
 
 .sandbox360RoomLoadError {
@@ -156,6 +203,7 @@
   display: flex;
   gap: 6px;
   z-index: 2;
+  pointer-events: auto;
 }
 
 .sandbox360ShotButtons {
@@ -191,4 +239,5 @@
   border: 1px solid rgba(243, 244, 246, 0.32);
   border-radius: 8px;
   font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  pointer-events: auto;
 }
