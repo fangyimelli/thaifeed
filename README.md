@@ -1,3 +1,12 @@
+## 2026-03-25 Sandbox 360 zoom-crop 3-shot framing + short transition authority
+
+- Scope limited to `sandbox_360_test` only; classic and `sandbox_story` remain untouched.
+- Viewer framing upgraded to zoom-crop baseline with authoritative constant `SANDBOX360_SCALE = 1.75` and tightened shot presets (`LEFT=36`, `CENTER=52`, `RIGHT=66`) so each shot is a true zoomed observation point.
+- Shot switching now uses authoritative transition state (`currentShot`, `targetShot`, `currentPosX`, `targetPosX`, `isTransitioning`) with short ease-out interpolation (~280ms), avoiding free-drag and instant jumps.
+- Debug panel now exposes `currentShot`, `targetShot`, `currentPosX`, `targetPosX`, `scale`, `isTransitioning`.
+- Overlay alignment tuned for zoom baseline (TV/doll/door regions) with priority on RIGHT doll-cabinet framing.
+- Regression guard `test:sandbox360-shot-events` extended to lock scale/framing constants and transition implementation tokens.
+
 ## 2026-03-25 Sandbox 360 namespace convergence (standalone API scope)
 
 - Scope limited to `sandbox_360_test`; no changes in classic, `sandbox_story`, shared submit path, or validated shot rules/overlay visuals.

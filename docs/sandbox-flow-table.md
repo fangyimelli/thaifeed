@@ -5,6 +5,21 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 - Companion review packet: `docs/sandbox-shared-message-review.md` for editable sandbox/shared review.
 
 
+
+## Sandbox 360 zoom-crop framing authority (sandbox_360_test only)
+
+| key | value |
+| --- | --- |
+| scale constant | `SANDBOX360_SCALE = 1.75` |
+| shot framing | `LEFT=36`, `CENTER=52`, `RIGHT=66` |
+| state authority | `currentShot`, `targetShot`, `currentPosX`, `targetPosX`, `isTransitioning` |
+| transition | short ease-out interpolation, `transitionDuration=0.28` (~280ms target) |
+| interaction model | fixed shot switch only (no free drag / no 360 orbit) |
+
+Notes:
+- Zoom-crop framing is authoritative in `resolveSandbox360ViewerFraming()` / `resolveSandbox360ViewerTarget()`.
+- Render path consumes authoritative shot transition state and settles `currentShot` only when `currentPosX` reaches `targetPosX` tolerance.
+
 ## Sandbox 360 shot-driven room-event flow (sandbox_360_test only)
 
 | trigger | condition | delay | room event | cooldown |

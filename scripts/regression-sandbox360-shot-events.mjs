@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 
 const viewerFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/Sandbox360Viewer.tsx', import.meta.url), 'utf8');
+const modeFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/sandbox360Mode.ts', import.meta.url), 'utf8');
+const appFile = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
 
 const assertHas = (token, message) => {
   if (!viewerFile.includes(token)) {
@@ -33,5 +35,28 @@ if (viewerFile.includes('window.triggerRoomEvent')) {
 assertHas('const eventCooldownMapRef = useRef<Record<RoomEventType, number>>({', 'eventCooldownMap state missing');
 assertHas('const shotEnterTimeRef = useRef<number>(Date.now())', 'shotEnterTime state missing');
 assertHas('const lastShotRef = useRef<ShotType>(viewerState.currentShot)', 'lastShot state missing');
+assertHas('isTransitioning: {viewerState.isTransitioning ? \'true\' : \'false\'}', 'viewer debug must expose isTransitioning');
+assertHas('<div>currentShot: {viewerState.currentShot}</div>', 'viewer debug must expose currentShot');
+assertHas('<div>targetShot: {viewerState.targetShot}</div>', 'viewer debug must expose targetShot');
+
+if (!modeFile.includes('export const SANDBOX360_SCALE = 1.75;')) {
+  throw new Error('SANDBOX360_SCALE must default to 1.75 for zoom-crop framing baseline');
+}
+if (!modeFile.includes('const SANDBOX360_LEFT_POS = 36;') || !modeFile.includes('const SANDBOX360_CENTER_POS = 52;') || !modeFile.includes('const SANDBOX360_RIGHT_POS = 66;')) {
+  throw new Error('left/center/right framing constants drifted');
+}
+if (!modeFile.includes('isTransitioning: false')) {
+  throw new Error('viewer state must define authoritative isTransitioning');
+}
+
+if (!appFile.includes('const transitionDuration = 0.28;')) {
+  throw new Error('sandbox360 transition duration guard missing');
+}
+if (!appFile.includes('const easeOutStep = 1 - ((1 - step) * (1 - step));')) {
+  throw new Error('sandbox360 short ease-out transition guard missing');
+}
+if (!appFile.includes('const isTransitioning = !isSettled;')) {
+  throw new Error('sandbox360 authoritative transition state guard missing');
+}
 
 console.log('regression-sandbox360-shot-events: ok');
