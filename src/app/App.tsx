@@ -736,6 +736,9 @@ export default function App() {
   });
   const [sandbox360OverlayDebug, setSandbox360OverlayDebug] = useState({
     tvAnchor: { x: 0, y: 0, w: 0, h: 0 },
+    tvAnchorVersion: '-',
+    tvAnchorCalibratedAt: '-',
+    tvAnchorSource: '-',
     baseSceneWidth: 0,
     baseSceneHeight: 0,
     tvScreenRectRatio: { x: 0, y: 0, w: 0, h: 0 },
@@ -8497,6 +8500,7 @@ export default function App() {
                     <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>
                     <div>tvScreenRectRatio: x={sandbox360OverlayDebug.tvScreenRectRatio.x.toFixed(6)}, y={sandbox360OverlayDebug.tvScreenRectRatio.y.toFixed(6)}, w={sandbox360OverlayDebug.tvScreenRectRatio.w.toFixed(6)}, h={sandbox360OverlayDebug.tvScreenRectRatio.h.toFixed(6)}</div>
                     <div>TV_ANCHOR: x={sandbox360OverlayDebug.tvAnchor.x}, y={sandbox360OverlayDebug.tvAnchor.y}, w={sandbox360OverlayDebug.tvAnchor.w}, h={sandbox360OverlayDebug.tvAnchor.h}</div>
+                    <div>TV_ANCHOR metadata: version={sandbox360OverlayDebug.tvAnchorVersion}, calibratedAt={sandbox360OverlayDebug.tvAnchorCalibratedAt}, source={sandbox360OverlayDebug.tvAnchorSource}</div>
                     <div>baseTvSceneRect: x={sandbox360OverlayDebug.baseTvSceneRect.x}, y={sandbox360OverlayDebug.baseTvSceneRect.y}, w={sandbox360OverlayDebug.baseTvSceneRect.w}, h={sandbox360OverlayDebug.baseTvSceneRect.h}</div>
                     <div>preTransformTvRect: left={sandbox360OverlayDebug.preTransformTvRect.left}, top={sandbox360OverlayDebug.preTransformTvRect.top}, width={sandbox360OverlayDebug.preTransformTvRect.width}, height={sandbox360OverlayDebug.preTransformTvRect.height}</div>
                     <div>finalResolvedTvRect: left={sandbox360OverlayDebug.finalResolvedTvRect.left}, top={sandbox360OverlayDebug.finalResolvedTvRect.top}, width={sandbox360OverlayDebug.finalResolvedTvRect.width}, height={sandbox360OverlayDebug.finalResolvedTvRect.height}</div>
