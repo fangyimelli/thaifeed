@@ -29,7 +29,21 @@ assertHas("triggerRoomEvent('TV_STATIC', { source: 'shot_flow' })", 'TV_STATIC s
 assertHas('window.__sandbox360 = debugApi', 'sandbox360 namespace API mount missing');
 assertHas('const shouldBypassCooldown = Boolean(options?.force || options?.ignoreCooldown);', 'triggerRoomEvent should derive bypass cooldown from options');
 assertHas('if (!shouldBypassCooldown && cooldownUntil > now)', 'cooldown gate should only block when bypass=false');
+assertHas("const triggerMode: RoomEventTriggerMode = options?.force === true ? 'force' : 'normal';", 'trigger mode should encode force/non-force branch');
+assertHas('cooldownBypassed: shouldBypassCooldown,', 'observability should record cooldown bypass state');
 assertHas("triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options)", 'sandbox360 room event API should delegate to local trigger');
+assertHas("const forceRoomEvent = useCallback((eventType: RoomEventType) => (", 'forceRoomEvent helper should exist');
+assertHas("triggerRoomEvent(eventType, { force: true, source: 'manual' })", 'forceRoomEvent should trigger with force flag to bypass cooldown');
+assertHas("triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' });", 'shot-flow triggers should remain non-force');
+assertHas("triggerRoomEvent('TV_STATIC', { source: 'shot_flow' });", 'shot-flow right-stay trigger should remain non-force');
+assertHas("triggerRoomEvent('DOOR_SHADOW', { source: 'shot_flow' });", 'shot-flow transition trigger should remain non-force');
+assertHas("triggerRoomEvent('DOLL_REFLECT', { source: 'shot_flow' });", 'shot-flow transition trigger should remain non-force');
+assertHas("<button type=\"button\" onClick={() => forceRoomEvent('LIGHT_FLASH_LEFT')}>FLASH</button>", 'debug FLASH button should map to forceRoomEvent');
+assertHas("<button type=\"button\" onClick={() => forceRoomEvent('TV_STATIC')}>TV</button>", 'debug TV button should map to forceRoomEvent');
+assertHas("<button type=\"button\" onClick={() => forceRoomEvent('DOLL_REFLECT')}>DOLL</button>", 'debug DOLL button should map to forceRoomEvent');
+assertHas("<button type=\"button\" onClick={() => forceRoomEvent('DOOR_SHADOW')}>DOOR</button>", 'debug DOOR button should map to forceRoomEvent');
+assertHas("forceRoomEvent: (eventType: RoomEventType) => boolean;", 'debug API contract should expose forceRoomEvent');
+assertHas('forceRoomEvent,', 'debug namespace export should include forceRoomEvent token');
 if (viewerFile.includes('window.triggerRoomEvent')) {
   throw new Error('legacy global window.triggerRoomEvent must not be mounted');
 }
