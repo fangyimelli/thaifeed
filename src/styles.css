@@ -288,41 +288,8 @@ body {
 .scene-view { position: relative; isolation: isolate; overflow: hidden; border-radius: 12px; border: 1px solid #2b3140; background: #05070c; width: 100%; height: 100%; }
 .video-layer-wrapper { position: relative; width: 100%; height: 100%; overflow: hidden; }
 .scene-video-layer { position: absolute; inset: 0; }
-.scene-video-layer-sandbox360 {
-  overflow: hidden;
-  --sandbox360-object-pos-x: 50%;
-  --sandbox360-object-pos-y: 50%;
-  --sandbox360-scale: 1.05;
-  --sandbox360-object-fit: cover;
-}
-.scene-pan-surface { position: absolute; inset: 0; }
 .scene-video, .overlay { position: absolute; width: 100%; height: 100%; inset: 0; }
 .scene-video { object-fit: contain; display: block; transition: opacity 420ms ease-in-out; opacity: 0; pointer-events: none; }
-.scene-video-layer-sandbox360 { background: #000; }
-.scene-video-layer-sandbox360 .scene-video {
-  width: 100%;
-  height: 100%;
-  object-fit: var(--sandbox360-object-fit);
-  object-position: var(--sandbox360-object-pos-x) var(--sandbox360-object-pos-y);
-  transform: scale(var(--sandbox360-scale));
-  transform-origin: center;
-  will-change: object-position, transform;
-}
-.sandbox360-debug-overlay {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 40;
-  min-width: 180px;
-  padding: 8px 10px;
-  border: 1px solid rgba(145, 184, 255, 0.5);
-  border-radius: 8px;
-  background: rgba(6, 10, 20, 0.74);
-  color: #d7e8ff;
-  font-size: 12px;
-  line-height: 1.4;
-  pointer-events: none;
-}
 .debug-player-page { padding: 16px; color: #dbe6ff; }
 .debug-player-stage { position: relative; width: min(960px, 100%); aspect-ratio: 16/9; background: #05070c; border: 1px solid #2b3140; overflow: hidden; }
 .debug-player-stage .scene-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
@@ -537,10 +504,6 @@ body {
     inset: 0;
     width: 100%;
     height: 100%;
-  }
-
-  .scene-view-mobile .scene-video-layer-sandbox360 {
-    --sandbox360-object-fit: cover;
   }
 
   .scene-view-mobile .filter-layer.curse-mid,

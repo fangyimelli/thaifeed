@@ -15,6 +15,7 @@ import donatePools from '../content/pools/donatePools.json';
 import usernames from '../content/pools/usernames.json';
 import ChatPanel from '../ui/chat/ChatPanel';
 import SceneView from '../ui/scene/SceneView';
+import Sandbox360Viewer from '../modes/sandbox_360_test/Sandbox360Viewer';
 import LiveHeader from '../ui/hud/LiveHeader';
 import LoadingOverlay, { type LoadingState } from '../ui/hud/LoadingOverlay';
 import { preloadAssets, verifyRequiredAssets, type MissingRequiredAsset } from '../utils/preload';
@@ -4899,13 +4900,6 @@ export default function App() {
           mode: framing.mode,
           deviceBranchStrategy: framing.deviceBranchStrategy.selected
         }));
-        const videoLayer = videoRef.current?.querySelector('.scene-video-layer-sandbox360') as HTMLElement | null;
-        if (videoLayer) {
-          videoLayer.style.setProperty('--sandbox360-object-pos-x', `${currentPosX.toFixed(3)}%`);
-          videoLayer.style.setProperty('--sandbox360-object-pos-y', `${nextViewer.posY.toFixed(3)}%`);
-          videoLayer.style.setProperty('--sandbox360-scale', `${scale.toFixed(5)}`);
-          videoLayer.style.setProperty('--sandbox360-object-fit', framing.objectFit);
-        }
       }
       rafId = window.requestAnimationFrame(tick);
     };
@@ -7823,68 +7817,61 @@ export default function App() {
             <LiveHeader viewerCountLabel={formatViewerCount(viewerCount)} />
           </div>
         </header>
-        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'} ${mode === 'sandbox_story' || mode === 'sandbox_360_test' ? 'sandbox-story-mode' : ''}`}>
+        <section ref={videoRef} tabIndex={-1} className={`video-area video-container ${isDesktopLayout ? 'videoViewportDesktop' : 'videoViewportMobile'} ${mode === 'sandbox_story' ? 'sandbox-story-mode' : ''}`}>
           <button type="button" className="video-debug-toggle" onClick={() => setDebugOpen((prev) => !prev)} aria-expanded={debugOpen}>
             Debug
           </button>
           {!hasFatalInitError ? (
-            <SceneView
-              targetConsonant={getSandboxOverlayConsonant()}
-              promptVisible={getSandboxAuthoritativePromptVisible()}
-              curse={state.curse}
-              anchor={state.currentAnchor}
-              isDesktopLayout={isDesktopLayout}
-              appStarted={appStarted}
-              blackoutState={blackoutState}
-              mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : modeIdRef.current === 'sandbox_360_test' ? 'sandbox_360_test' : 'classic'}
-              viewerState={modeIdRef.current === 'sandbox_360_test'
-                ? {
-                    currentShot: sandbox360ViewerState.currentShot,
-                    targetShot: sandbox360ViewerState.targetShot,
-                    currentPosX: sandbox360ViewerState.currentPosX,
-                    targetPosX: sandbox360ViewerState.targetPosX,
-                    leftPosX: sandbox360ViewerState.leftPosX,
-                    centerPosX: sandbox360ViewerState.centerPosX,
-                    rightPosX: sandbox360ViewerState.rightPosX,
-                    posY: sandbox360ViewerState.posY,
-                    scale: sandbox360ViewerState.scale,
-                    lastCommandAt: sandbox360ViewerState.lastCommandAt,
-                    lastCommand: sandbox360ViewerState.lastCommand,
-                    lastParseMatched: sandbox360ViewerState.lastParseMatched
-                  }
-                : undefined}
-              wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
-                const st = sandboxModeRef.current.getState();
-                return {
-                  visible: st.reveal.visible,
-                  phase: st.reveal.phase,
-                  wordKey: st.reveal.wordKey,
-                  consonantFromPrompt: st.reveal.consonantFromPrompt,
-                  mismatch: isSandboxPromptRevealMismatch(st),
-                  durationMs: st.reveal.durationMs,
-                  wordText: st.reveal.text,
-                  onRenderStateChange: handleSandboxRevealRenderStateChange
-                };
-              })() : undefined}
-            />
+            modeIdRef.current === 'sandbox_360_test' ? (
+              <Sandbox360Viewer
+                curse={state.curse}
+                viewerState={{
+                  currentShot: sandbox360ViewerState.currentShot,
+                  targetShot: sandbox360ViewerState.targetShot,
+                  currentPosX: sandbox360ViewerState.currentPosX,
+                  targetPosX: sandbox360ViewerState.targetPosX,
+                  posY: sandbox360ViewerState.posY,
+                  scale: sandbox360ViewerState.scale,
+                  lastCommand: sandbox360ViewerState.lastCommand
+                }}
+                debugState={{
+                  aspect: sandbox360ViewerState.aspect,
+                  mode: sandbox360ViewerState.mode,
+                  leftPosX: sandbox360ViewerState.leftPosX,
+                  centerPosX: sandbox360ViewerState.centerPosX,
+                  rightPosX: sandbox360ViewerState.rightPosX,
+                  posError: sandbox360ViewerState.posError,
+                  isSettled: sandbox360ViewerState.isSettled
+                }}
+              />
+            ) : (
+              <SceneView
+                targetConsonant={getSandboxOverlayConsonant()}
+                promptVisible={getSandboxAuthoritativePromptVisible()}
+                curse={state.curse}
+                anchor={state.currentAnchor}
+                isDesktopLayout={isDesktopLayout}
+                appStarted={appStarted}
+                blackoutState={blackoutState}
+                mode={modeIdRef.current === 'sandbox_story' ? 'sandbox_story' : 'classic'}
+                wordReveal={modeIdRef.current === 'sandbox_story' ? (() => {
+                  const st = sandboxModeRef.current.getState();
+                  return {
+                    visible: st.reveal.visible,
+                    phase: st.reveal.phase,
+                    wordKey: st.reveal.wordKey,
+                    consonantFromPrompt: st.reveal.consonantFromPrompt,
+                    mismatch: isSandboxPromptRevealMismatch(st),
+                    durationMs: st.reveal.durationMs,
+                    wordText: st.reveal.text,
+                    onRenderStateChange: handleSandboxRevealRenderStateChange
+                  };
+                })() : undefined}
+              />
+            )
           ) : (
             <div className="asset-warning scene-placeholder">
               初始化失敗：必要素材缺失（素材未加入專案或 base path 設定錯誤），請開啟 Console 檢查 missing 清單。
-            </div>
-          )}
-          {modeIdRef.current === 'sandbox_360_test' && (
-            <div className="sandbox360-debug-overlay" aria-live="polite">
-              <div>currentShot: {sandbox360ViewerState.currentShot}</div>
-              <div>targetShot: {sandbox360ViewerState.targetShot}</div>
-              <div>aspect: {sandbox360ViewerState.aspect.toFixed(4)}</div>
-              <div>mode: {sandbox360ViewerState.mode}</div>
-              <div>currentPosX: {sandbox360ViewerState.currentPosX.toFixed(2)}%</div>
-              <div>leftPosX: {sandbox360ViewerState.leftPosX.toFixed(2)}%</div>
-              <div>centerPosX: {sandbox360ViewerState.centerPosX.toFixed(2)}%</div>
-              <div>rightPosX: {sandbox360ViewerState.rightPosX.toFixed(2)}%</div>
-              <div>posError: {sandbox360ViewerState.posError.toFixed(3)}%</div>
-              <div>isSettled: {sandbox360ViewerState.isSettled ? 'true' : 'false'}</div>
-              <div>scale: {sandbox360ViewerState.scale.toFixed(4)}</div>
             </div>
           )}
           {!appStarted && (
