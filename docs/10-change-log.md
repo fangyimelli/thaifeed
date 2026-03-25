@@ -1,3 +1,19 @@
+## 2026-03-25 Sandbox360 TV 最終渲染對位 root-cause 修復（pixel observability）
+
+- Root cause（本次定位）：
+  - 上次雖然 `tvDebugRect/tvOverlayRect/tvRendererRect` 名義一致，但缺少「最終 effect 內容層可見區」量測，無法證明真正像素落點。
+  - TV flicker 使用 pseudo-element 無法直接量測實際 content bounds，且 transform chain 沒有逐步觀測，導致 debug 與 renderer 同步錯誤時仍可能誤判為對齊。
+- 修正：
+  - `Sandbox360Viewer` 新增 `resolveTvEffectRect()`，作為 TV rect scene-space→screen-space 唯一路徑。
+  - 新增 `sandbox360OverlayTvNoiseContent` 內層（取代 pseudo-element）並固定 `transform:none; transform-origin:center center`，移除未登記 offset 來源。
+  - 新增 rendered effect 量測：`renderedEffectRect`、`rectDiffX/Y/W/H`，直接比較 renderer rect 與 content 可見區。
+  - Debug payload 新增：`baseTvSceneRect`、`resolvedTvScreenRect`、`renderedEffectRect`、`effectContentInset`、`effectInnerTransform`、`tvRectSource`、`transformChain`。
+  - Debug page 新增可切換 `TV effect bounds visualization`（顯示 renderer 與 content 邊界）。
+- regression guard 更新：
+  - 強制 `resolveTvEffectRect` 存在且為單一路徑。
+  - 強制 App/Debug 顯示 rendered rect + rect diff + visualization toggle + transform chain。
+  - 強制 effect 內容層使用顯式 inner layer（避免未登記 transform）。
+
 ## 2026-03-25 Sandbox360 TV effect rect SSOT + clip alignment fix
 
 - Root cause：TV effect 雖然與 debug 使用同一錨點常數，但 renderer 缺少「resolved rect 單一路徑」可觀測欄位，且 flicker 動畫直接移動 overlay container，導致 transition/shot 下容易出現視覺飄移與邊界越界假象。

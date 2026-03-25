@@ -81,12 +81,13 @@
   background: rgba(0, 0, 0, 0.01);
 }
 
-.sandbox360OverlayTvNoise::before {
-  content: '';
+.sandbox360OverlayTvNoiseContent {
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0;
+  transform: none;
+  transform-origin: center center;
   mix-blend-mode: screen;
   background-image:
     repeating-linear-gradient(to bottom, rgba(196, 230, 255, 0.65) 0, rgba(196, 230, 255, 0.65) 1px, rgba(12, 18, 32, 0) 1px, rgba(12, 18, 32, 0) 3px),
@@ -98,8 +99,16 @@
   opacity: 1;
 }
 
-.sandbox360OverlayTvNoise[data-active='true']::before {
+.sandbox360OverlayTvNoiseContent[data-active='true'] {
   animation: sandbox360TvNoiseFlicker 1200ms steps(12, end);
+}
+
+.sandbox360OverlayTvNoise[data-viz='true'] {
+  outline: 2px solid rgba(52, 211, 153, 0.92);
+}
+
+.sandbox360OverlayTvNoise[data-viz='true'] .sandbox360OverlayTvNoiseContent {
+  box-shadow: inset 0 0 0 2px rgba(248, 113, 113, 0.9);
 }
 
 @keyframes sandbox360TvNoiseFlicker {

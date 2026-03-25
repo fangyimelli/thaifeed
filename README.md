@@ -1,3 +1,18 @@
+## 2026-03-25 Sandbox 360 TV 最終像素對位修復（renderer vs content bounds）
+
+- Scope 僅 `sandbox_360_test`，classic mode 完全未改。
+- 根因：先前 debug 只驗證 rect 數字一致，沒有量測 effect 內容層實際可見區；當 debug/renderer 同步吃到同一錯誤或內容層另有 transform 時，仍會出現「看起來欄位一致但畫面偏移」。
+- 修正：
+  - `Sandbox360Viewer` 新增 `resolveTvEffectRect()` 作為 TV scene→screen 唯一輸出路徑。
+  - TV noise 改成顯式 inner layer `sandbox360OverlayTvNoiseContent`，固定 `transform:none`、`transform-origin:center center`，避免內層自帶位移。
+  - 新增像素級觀測：`baseTvSceneRect`、`resolvedTvScreenRect`、`renderedEffectRect`、`rectDiffX/Y/W/H`、`effectContentInset`、`effectInnerTransform`、`tvRectSource`、`transformChain`。
+  - Debug 面板新增 `TV effect bounds visualization` 開關（僅 Debug 啟用，不把右下大型資訊面板帶回主畫面）。
+- 主畫面左上 Shot/Trigger/`FORCE TV` 保留不變。
+
+### Removed / Deprecated Log
+
+- 2026-03-25：移除 `sandbox360OverlayTvNoise::before` 作為 TV effect 內容層，改為顯式 DOM inner layer 以支援像素量測與 transform guard。
+
 ## 2026-03-25 Sandbox 360 force replay 修復 + 主畫面控制/Debug 責任切分
 
 - Scope 僅 `sandbox_360_test`，classic / `sandbox_story` 無改動。
