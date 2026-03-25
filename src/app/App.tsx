@@ -141,6 +141,8 @@ type EventTxn = {
 type Sandbox360RoomEventType = 'LIGHT_FLASH_LEFT' | 'TV_STATIC' | 'DOLL_REFLECT' | 'DOOR_SHADOW';
 type Sandbox360RoomEventTriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scripted';
 type Sandbox360RoomEventTriggerMode = 'normal' | 'force';
+type Sandbox360RoomEventRuntime = { active: boolean; triggerCount: number; triggerSeq: number };
+type Sandbox360RoomEventState = Record<Sandbox360RoomEventType, Sandbox360RoomEventRuntime>;
 
 type DebugForceExecuteOptions = {
   ignoreCooldown?: boolean;
@@ -716,11 +718,11 @@ export default function App() {
     lastCommand: '-' as string,
     lastParseMatched: false
   });
-  const [sandbox360RoomEvents, setSandbox360RoomEvents] = useState<Record<Sandbox360RoomEventType, number>>({
-    LIGHT_FLASH_LEFT: 0,
-    TV_STATIC: 0,
-    DOLL_REFLECT: 0,
-    DOOR_SHADOW: 0
+  const [sandbox360RoomEvents, setSandbox360RoomEvents] = useState<Sandbox360RoomEventState>({
+    LIGHT_FLASH_LEFT: { active: false, triggerCount: 0, triggerSeq: 0 },
+    TV_STATIC: { active: false, triggerCount: 0, triggerSeq: 0 },
+    DOLL_REFLECT: { active: false, triggerCount: 0, triggerSeq: 0 },
+    DOOR_SHADOW: { active: false, triggerCount: 0, triggerSeq: 0 }
   });
   const [sandbox360RoomEventDebug, setSandbox360RoomEventDebug] = useState({
     eventType: null as Sandbox360RoomEventType | null,
@@ -728,6 +730,7 @@ export default function App() {
     cooldownBypassed: false,
     lastTriggeredAt: null as number | null,
     lastBlockedReason: '-',
+    renderedActive: false,
     forceAllowed: true,
     forceReason: 'debug_force_enabled'
   });
@@ -1832,10 +1835,10 @@ export default function App() {
         lastParseMatched: false
       });
       setSandbox360RoomEvents({
-        LIGHT_FLASH_LEFT: 0,
-        TV_STATIC: 0,
-        DOLL_REFLECT: 0,
-        DOOR_SHADOW: 0
+        LIGHT_FLASH_LEFT: { active: false, triggerCount: 0, triggerSeq: 0 },
+        TV_STATIC: { active: false, triggerCount: 0, triggerSeq: 0 },
+        DOLL_REFLECT: { active: false, triggerCount: 0, triggerSeq: 0 },
+        DOOR_SHADOW: { active: false, triggerCount: 0, triggerSeq: 0 }
       });
       setSandbox360RoomEventDebug({
         eventType: null,
@@ -1843,6 +1846,7 @@ export default function App() {
         cooldownBypassed: false,
         lastTriggeredAt: null,
         lastBlockedReason: '-',
+        renderedActive: false,
         forceAllowed: true,
         forceReason: 'debug_force_enabled'
       });
@@ -4945,6 +4949,7 @@ export default function App() {
         triggerMode,
         cooldownBypassed,
         lastBlockedReason: 'cooldown_blocked',
+        renderedActive: prev.renderedActive,
         forceAllowed: options?.force ? true : prev.forceAllowed,
         forceReason: options?.force ? 'debug_force_enabled' : prev.forceReason
       }));
@@ -4956,16 +4961,31 @@ export default function App() {
       cooldownBypassed,
       lastTriggeredAt: now,
       lastBlockedReason: '-',
+      renderedActive: true,
       forceAllowed: Boolean(options?.force) || true,
       forceReason: options?.force ? 'forced_by_debug_gate' : source
     });
-    setSandbox360RoomEvents((prev) => ({ ...prev, [eventType]: prev[eventType] + 1 }));
+    setSandbox360RoomEvents((prev) => ({
+      ...prev,
+      [eventType]: {
+        active: true,
+        triggerCount: prev[eventType].triggerCount + 1,
+        triggerSeq: prev[eventType].triggerSeq + 1
+      }
+    }));
     const durationMs = eventType === 'LIGHT_FLASH_LEFT' ? 180 : eventType === 'TV_STATIC' ? 1200 : eventType === 'DOLL_REFLECT' ? 520 : 900;
     const cooldownMs = eventType === 'LIGHT_FLASH_LEFT' ? 3000 : eventType === 'TV_STATIC' ? 4000 : 5000;
     sandbox360RoomEventCooldownRef.current[eventType] = now + cooldownMs;
     clearSandbox360RoomEventTimer(eventType);
     sandbox360RoomEventTimeoutRef.current[eventType] = window.setTimeout(() => {
-      setSandbox360RoomEvents((prev) => ({ ...prev, [eventType]: 0 }));
+      setSandbox360RoomEvents((prev) => ({
+        ...prev,
+        [eventType]: { ...prev[eventType], active: false }
+      }));
+      setSandbox360RoomEventDebug((prev) => ({
+        ...prev,
+        renderedActive: prev.eventType === eventType ? false : prev.renderedActive
+      }));
       sandbox360RoomEventTimeoutRef.current[eventType] = null;
     }, durationMs);
     return true;
@@ -8082,48 +8102,66 @@ export default function App() {
           </button>
           {!hasFatalInitError ? (
             modeIdRef.current === 'sandbox_360_test' ? (
-              <Sandbox360Viewer
-                curse={state.curse}
-                questionConsonant={getSandboxOverlayConsonant()}
-                questionVisible={getSandboxAuthoritativePromptVisible()}
-                pinnedReplyText={sandbox360ModeRef.current.getState().pinnedReply?.text ?? ''}
-                onDebugShotSelect={(shot) => {
-                  applySandbox360Shot(shot, 'debug_button');
-                }}
-                onTriggerRoomEvent={(eventType, options) => triggerSandbox360RoomEvent(eventType, options)}
-                roomEventCounts={sandbox360RoomEvents}
-                roomEventObservability={sandbox360RoomEventDebug}
-                onViewerDebugStateChange={(payload) => {
-                  setSandbox360OverlayDebug({
-                    tvAnchor: payload.tvAnchor,
-                    tvDebugRect: payload.tvDebugRect,
-                    tvOverlayRect: payload.tvOverlayRect,
-                    tvSharesTransformContainer: payload.tvSharesTransformContainer,
-                    questionVisible: payload.questionVisible,
-                    questionConsonant: payload.questionConsonant,
-                    roomEventLast: payload.roomEventLast
-                  });
-                }}
-                viewerState={{
-                  currentShot: sandbox360ViewerState.currentShot,
-                  targetShot: sandbox360ViewerState.targetShot,
-                  currentPosX: sandbox360ViewerState.currentPosX,
-                  targetPosX: sandbox360ViewerState.targetPosX,
-                  isTransitioning: sandbox360ViewerState.isTransitioning,
-                  cameraOffsetX: sandbox360ViewerState.cameraOffsetX,
-                  cameraOffsetY: sandbox360ViewerState.cameraOffsetY,
-                  cameraRotationDeg: sandbox360ViewerState.cameraRotationDeg,
-                  cameraScaleOffset: sandbox360ViewerState.cameraScaleOffset,
-                  cameraVelocityX: sandbox360ViewerState.cameraVelocityX,
-                  cameraVelocityY: sandbox360ViewerState.cameraVelocityY,
-                  shotTransitionStartedAt: sandbox360ViewerState.shotTransitionStartedAt,
-                  shotTransitionDurationMs: sandbox360ViewerState.shotTransitionDurationMs,
-                  shotTransitionFromPosX: sandbox360ViewerState.shotTransitionFromPosX,
-                  posY: sandbox360ViewerState.posY,
-                  scale: sandbox360ViewerState.scale,
-                  lastCommand: sandbox360ViewerState.lastCommand
-                }}
-              />
+              <>
+                <div className="sandbox360-live-controls" aria-label="Sandbox 360 Live Controls">
+                  <div className="sandbox360-live-controls-group">
+                    <strong>Shot</strong>
+                    <button type="button" onClick={() => applySandbox360Shot('left', 'debug_button')}>LEFT</button>
+                    <button type="button" onClick={() => applySandbox360Shot('center', 'debug_button')}>CENTER</button>
+                    <button type="button" onClick={() => applySandbox360Shot('right', 'debug_button')}>RIGHT</button>
+                  </div>
+                  <div className="sandbox360-live-controls-group">
+                    <strong>Trigger</strong>
+                    <button type="button" onClick={() => triggerSandbox360RoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>FLASH</button>
+                    <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual' })}>TV</button>
+                    <button type="button" onClick={() => triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
+                    <button type="button" onClick={() => triggerSandbox360RoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
+                    <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual', force: true })}>FORCE TV</button>
+                  </div>
+                </div>
+                <Sandbox360Viewer
+                  curse={state.curse}
+                  questionConsonant={getSandboxOverlayConsonant()}
+                  questionVisible={getSandboxAuthoritativePromptVisible()}
+                  pinnedReplyText={sandbox360ModeRef.current.getState().pinnedReply?.text ?? ''}
+                  onDebugShotSelect={(shot) => {
+                    applySandbox360Shot(shot, 'debug_button');
+                  }}
+                  onTriggerRoomEvent={(eventType, options) => triggerSandbox360RoomEvent(eventType, options)}
+                  roomEventState={sandbox360RoomEvents}
+                  roomEventObservability={sandbox360RoomEventDebug}
+                  onViewerDebugStateChange={(payload) => {
+                    setSandbox360OverlayDebug({
+                      tvAnchor: payload.tvAnchor,
+                      tvDebugRect: payload.tvDebugRect,
+                      tvOverlayRect: payload.tvOverlayRect,
+                      tvSharesTransformContainer: payload.tvSharesTransformContainer,
+                      questionVisible: payload.questionVisible,
+                      questionConsonant: payload.questionConsonant,
+                      roomEventLast: payload.roomEventLast
+                    });
+                  }}
+                  viewerState={{
+                    currentShot: sandbox360ViewerState.currentShot,
+                    targetShot: sandbox360ViewerState.targetShot,
+                    currentPosX: sandbox360ViewerState.currentPosX,
+                    targetPosX: sandbox360ViewerState.targetPosX,
+                    isTransitioning: sandbox360ViewerState.isTransitioning,
+                    cameraOffsetX: sandbox360ViewerState.cameraOffsetX,
+                    cameraOffsetY: sandbox360ViewerState.cameraOffsetY,
+                    cameraRotationDeg: sandbox360ViewerState.cameraRotationDeg,
+                    cameraScaleOffset: sandbox360ViewerState.cameraScaleOffset,
+                    cameraVelocityX: sandbox360ViewerState.cameraVelocityX,
+                    cameraVelocityY: sandbox360ViewerState.cameraVelocityY,
+                    shotTransitionStartedAt: sandbox360ViewerState.shotTransitionStartedAt,
+                    shotTransitionDurationMs: sandbox360ViewerState.shotTransitionDurationMs,
+                    shotTransitionFromPosX: sandbox360ViewerState.shotTransitionFromPosX,
+                    posY: sandbox360ViewerState.posY,
+                    scale: sandbox360ViewerState.scale,
+                    lastCommand: sandbox360ViewerState.lastCommand
+                  }}
+                />
+              </>
             ) : (
               <SceneView
                 targetConsonant={getSandboxOverlayConsonant()}
@@ -8387,23 +8425,9 @@ export default function App() {
               )}
               {mode === 'sandbox_360_test' && (
                 <>
-                  <div className="debug-event-tester" aria-label="Sandbox360 Debug">
-                    <h4>Sandbox 360 Debug Tools</h4>
-                    <div className="debug-route-controls">
-                      <button type="button" onClick={() => applySandbox360Shot('left', 'debug_button')}>Shot LEFT</button>
-                      <button type="button" onClick={() => applySandbox360Shot('center', 'debug_button')}>Shot CENTER</button>
-                      <button type="button" onClick={() => applySandbox360Shot('right', 'debug_button')}>Shot RIGHT</button>
-                    </div>
-                    <div className="debug-route-controls" style={{ marginTop: 8 }}>
-                      <button type="button" onClick={() => triggerSandbox360RoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>Trigger FLASH</button>
-                      <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual' })}>Trigger TV</button>
-                      <button type="button" onClick={() => triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'manual' })}>Trigger DOLL</button>
-                      <button type="button" onClick={() => triggerSandbox360RoomEvent('DOOR_SHADOW', { source: 'manual' })}>Trigger DOOR</button>
-                      <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual', force: true })}>Force TV</button>
-                    </div>
-                  </div>
                   <div className="debug-route-meta" style={{ marginTop: 8 }}>
                     <div><strong>Sandbox360 Viewer / Effect SSOT</strong></div>
+                    <div>live controls location: main_view_top_left</div>
                     <div>currentShot / targetShot: {sandbox360ViewerState.currentShot} / {sandbox360ViewerState.targetShot}</div>
                     <div>transition.durationMs / isTransitioning: {sandbox360ViewerState.shotTransitionDurationMs} / {String(sandbox360ViewerState.isTransitioning)}</div>
                     <div>currentPosX / targetPosX: {sandbox360ViewerState.currentPosX.toFixed(2)} / {sandbox360ViewerState.targetPosX.toFixed(2)}</div>
@@ -8413,8 +8437,11 @@ export default function App() {
                     <div>roomEvent.last: {sandbox360RoomEventDebug.eventType ?? '-'}</div>
                     <div>effect.force.mode/reason: {sandbox360RoomEventDebug.triggerMode} / {sandbox360RoomEventDebug.forceReason}</div>
                     <div>effect.cooldownBypassed/blockedReason: {String(sandbox360RoomEventDebug.cooldownBypassed)} / {sandbox360RoomEventDebug.lastBlockedReason}</div>
+                    <div>effect.renderedActive: {String(sandbox360RoomEventDebug.renderedActive)}</div>
                     <div>effect.lastTriggeredAt: {sandbox360RoomEventDebug.lastTriggeredAt ?? 0}</div>
-                    <div>event.counts: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT}, tv={sandbox360RoomEvents.TV_STATIC}, doll={sandbox360RoomEvents.DOLL_REFLECT}, door={sandbox360RoomEvents.DOOR_SHADOW}</div>
+                    <div>event.counts: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerCount}, tv={sandbox360RoomEvents.TV_STATIC.triggerCount}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerCount}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerCount}</div>
+                    <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
+                    <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
                     <div>TV_ANCHOR: x={sandbox360OverlayDebug.tvAnchor.x}, y={sandbox360OverlayDebug.tvAnchor.y}, w={sandbox360OverlayDebug.tvAnchor.w}, h={sandbox360OverlayDebug.tvAnchor.h}</div>
                     <div>tvDebugRect: left={sandbox360OverlayDebug.tvDebugRect.left}, top={sandbox360OverlayDebug.tvDebugRect.top}, width={sandbox360OverlayDebug.tvDebugRect.width}, height={sandbox360OverlayDebug.tvDebugRect.height}</div>
                     <div>tvOverlayRect: left={sandbox360OverlayDebug.tvOverlayRect.left}, top={sandbox360OverlayDebug.tvOverlayRect.top}, width={sandbox360OverlayDebug.tvOverlayRect.width}, height={sandbox360OverlayDebug.tvOverlayRect.height}</div>

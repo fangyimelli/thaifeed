@@ -372,6 +372,42 @@ body {
   background: rgba(23, 34, 54, 0.75);
 }
 
+.sandbox360-live-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 45;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(120, 165, 244, 0.42);
+  border-radius: 10px;
+  background: rgba(6, 11, 20, 0.58);
+  pointer-events: auto;
+}
+
+.sandbox360-live-controls-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sandbox360-live-controls-group strong {
+  color: #9ec7ff;
+  font-size: 11px;
+  min-width: 46px;
+}
+
+.sandbox360-live-controls-group button {
+  border: 1px solid rgba(88, 127, 190, 0.85);
+  background: rgba(18, 33, 54, 0.86);
+  color: #d5e6ff;
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
 .debug-route-meta {
   display: grid;
   gap: 4px;

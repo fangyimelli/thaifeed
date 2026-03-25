@@ -1,3 +1,5 @@
+> 2026-03-25 sandbox_360_test 補充（第二波）：主畫面左上保留 Shot/Trigger live controls；Debug panel 僅承接資訊觀測。effect runtime SSOT 升級為 `active + triggerCount + triggerSeq`，renderer/debug 共讀並以 `triggerSeq` 重播 force 效果。
+
 # Sandbox Flow Table
 
 > 2026-03-25 sandbox_360_test 補充：effect/room-event force gate 與 debug 顯示改為 App SSOT（`sandbox360RoomEvents` + `sandbox360RoomEventDebug`），viewer 不再持有本地 debug overlay 狀態。

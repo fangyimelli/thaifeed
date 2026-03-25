@@ -1,3 +1,29 @@
+## 2026-03-25 Sandbox 360 effect force replay + live controls ownership split
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic / `sandbox_story`.
+
+### Summary
+- `src/app/App.tsx`
+  - Consolidated room-event runtime SSOT to `sandbox360RoomEvents` with `active + triggerCount + triggerSeq` per event.
+  - Force/normal trigger path now updates the same SSOT and debug observability (`effect.renderedActive`, `event.active`, `event.seq`).
+  - Added main-view top-left live controls (Shot + Trigger + `FORCE TV`) to keep direct scene operation in frontend view.
+  - Removed sandbox_360_test trigger controls from Debug panel (debug now observes, does not own scene controls).
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Viewer now reads `roomEventState` (shared SSOT) instead of local count-only behavior.
+  - Overlay nodes use `triggerSeq` key remount so repeated/forced triggers replay visual effects reliably.
+  - Removed main-view shot-state text overlay (`sandbox360ShotState`) to keep large state inspection inside Debug panel only.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Guard updated for room-event SSOT shape, trigger sequence replay token, main-view controls ownership, and no shot-state overlay regression.
+
+### Removed / Deprecated Log
+- Deprecated sandbox_360_test main-view `sandbox360ShotState` overlay text; debug observability is centralized in Debug panel.
+
+### Verification
+- `npm run test:sandbox360-shot-events`
+- `npm run build`
+
 ## 2026-03-25 Sandbox 360 TV anchor lock + handheld transition smoothing
 
 ### Scope

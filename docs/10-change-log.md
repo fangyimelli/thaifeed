@@ -1,3 +1,16 @@
+## 2026-03-25 Sandbox360 force replay root-cause fix + controls/debug split
+
+- Root cause：effect active 期間再觸發（含 force）只更新 count，不會重啟 overlay animation，造成「debug 有觸發、畫面未重播」不一致。
+- 修正：
+  - `sandbox360RoomEvents` 收斂成單一 runtime SSOT（`active/triggerCount/triggerSeq`）。
+  - renderer 讀同一份 `roomEventState`，並以 `triggerSeq` remount overlay，確保 force 一定重播視覺。
+  - debug 增補 `effect.renderedActive` + `event.active/event.seq`，對齊 renderer 實際狀態。
+- UI 責任切分：
+  - 主畫面左上保留 Shot/Trigger（含 `FORCE TV`）直接操作控制。
+  - Debug panel 專注觀測，不再承接 shot/trigger 操作控制。
+  - 主畫面移除 `sandbox360ShotState` 疊層，避免雙軌資訊面板。
+- regression guard 更新：鎖定主畫面 controls 存在、debug metadata 欄位存在、event seq replay token 存在。
+
 ## 2026-03-25 Sandbox360 effect force 與 debug 面板收斂（single SSOT）
 
 - Root cause：`Sandbox360Viewer` 同時承擔 render + effect local gate + debug overlay，造成 App/debug page 與 renderer 並非讀同一份 state，force observability 與實際套用存在漂移。

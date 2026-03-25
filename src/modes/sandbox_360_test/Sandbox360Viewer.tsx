@@ -41,6 +41,7 @@ type RoomEventObservabilityState = {
   forceAllowed?: boolean;
   forceReason?: string;
 };
+type RoomEventRuntimeState = Record<RoomEventType, { active: boolean; triggerCount: number; triggerSeq: number }>;
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type SceneCameraState = {
   sceneWidth: number;
@@ -60,7 +61,7 @@ type Props = {
   pinnedReplyText?: string;
   onDebugShotSelect: (shot: ShotType) => void;
   onTriggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
-  roomEventCounts: Record<RoomEventType, number>;
+  roomEventState: RoomEventRuntimeState;
   roomEventObservability: RoomEventObservabilityState;
   onViewerDebugStateChange?: (payload: {
     tvDebugRect: { left: string; top: string; width: string; height: string };
@@ -109,7 +110,7 @@ export default function Sandbox360Viewer({
   pinnedReplyText = '',
   onDebugShotSelect,
   onTriggerRoomEvent,
-  roomEventCounts,
+  roomEventState,
   roomEventObservability,
   onViewerDebugStateChange
 }: Props) {
@@ -295,11 +296,11 @@ export default function Sandbox360Viewer({
           />
         </div>
         <div className="sandbox360OverlayLayer" aria-hidden="true">
-          <div className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={roomEventCounts.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
-          <div ref={tvDebugRef} className="sandbox360OverlayTvDebug" style={tvDebugRect} data-active={roomEventCounts.TV_STATIC > 0 ? 'true' : 'false'} />
-          <div ref={tvOverlayRef} className="sandbox360OverlayTvNoise" style={tvOverlayRect} data-active={roomEventCounts.TV_STATIC > 0 ? 'true' : 'false'} />
-          <div className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={roomEventCounts.DOLL_REFLECT > 0 ? 'true' : 'false'} />
-          <div className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={roomEventCounts.DOOR_SHADOW > 0 ? 'true' : 'false'} />
+          <div key={`LIGHT_FLASH_LEFT-${roomEventState.LIGHT_FLASH_LEFT.triggerSeq}`} className="sandbox360OverlayRoomLight" style={toScreenRect(overlaySceneRects.roomLight)} data-active={roomEventState.LIGHT_FLASH_LEFT.active ? 'true' : 'false'} />
+          <div key={`TV_STATIC_DEBUG-${roomEventState.TV_STATIC.triggerSeq}`} ref={tvDebugRef} className="sandbox360OverlayTvDebug" style={tvDebugRect} data-active={roomEventState.TV_STATIC.active ? 'true' : 'false'} />
+          <div key={`TV_STATIC_OVERLAY-${roomEventState.TV_STATIC.triggerSeq}`} ref={tvOverlayRef} className="sandbox360OverlayTvNoise" style={tvOverlayRect} data-active={roomEventState.TV_STATIC.active ? 'true' : 'false'} />
+          <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDoll" style={toScreenRect(overlaySceneRects.doll)} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
+          <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRect(overlaySceneRects.door)} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
         </div>
       </div>
 
@@ -312,7 +313,6 @@ export default function Sandbox360Viewer({
         </div>
         <div className="sandbox360ChatLayer">
           {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
-          <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
         </div>
       </div>
     </div>
