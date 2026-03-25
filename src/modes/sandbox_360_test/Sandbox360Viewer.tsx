@@ -307,7 +307,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
         }
       },
       debug: {
-        triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
+        triggerRoomEvent: (eventType) => forceRoomEvent(eventType),
         forceRoomEvent,
         triggerShot
       }
@@ -372,10 +372,10 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
           <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
         </div>
         <div className="sandbox360RoomEventButtons">
-          <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', { source: 'manual' })}>FLASH</button>
-          <button type="button" onClick={() => triggerRoomEvent('TV_STATIC', { source: 'manual' })}>TV</button>
-          <button type="button" onClick={() => triggerRoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
-          <button type="button" onClick={() => triggerRoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
+          <button type="button" onClick={() => forceRoomEvent('LIGHT_FLASH_LEFT')}>FLASH</button>
+          <button type="button" onClick={() => forceRoomEvent('TV_STATIC')}>TV</button>
+          <button type="button" onClick={() => forceRoomEvent('DOLL_REFLECT')}>DOLL</button>
+          <button type="button" onClick={() => forceRoomEvent('DOOR_SHADOW')}>DOOR</button>
         </div>
         <div className="sandbox360Debug" aria-live="polite">
           <div>currentShot: {viewerState.currentShot}</div>
