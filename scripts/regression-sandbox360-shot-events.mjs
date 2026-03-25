@@ -19,6 +19,14 @@ assertHas(viewerFile, 'data-active={roomEventState.TV_STATIC.active ? \'true\' :
 assertHas(viewerFile, 'tvDebugRect', 'viewer should keep authoritative rect projection');
 assertHas(viewerFile, 'tvOverlayRect', 'viewer should keep authoritative overlay rect projection');
 assertHas(viewerFile, 'const tvScreenRect = useMemo<OverlayRect>(() => {', 'viewer must resolve TV screen rect from TV anchor in scene space');
+assertHas(viewerFile, "import { TV_ANCHOR_CALIBRATION } from './tvAnchorCalibration';", 'viewer must load TV anchor from versioned calibration source');
+assertHas(viewerFile, 'const TV_ANCHOR = TV_ANCHOR_CALIBRATION.anchor;', 'viewer should resolve TV anchor from calibration artifact instead of bare literal');
+assertHas(viewerFile, 'tvAnchorVersion: TV_ANCHOR_CALIBRATION.version,', 'viewer debug payload must expose tv anchor version metadata');
+assertHas(viewerFile, 'tvAnchorCalibratedAt: TV_ANCHOR_CALIBRATION.calibratedAt,', 'viewer debug payload must expose calibration timestamp');
+assertHas(viewerFile, 'tvAnchorSource: TV_ANCHOR_CALIBRATION.source,', 'viewer debug payload must expose calibration source metadata');
+if (viewerFile.includes('const TV_ANCHOR = {')) {
+  throw new Error('viewer TV anchor must not regress to bare literal constant without source/version metadata');
+}
 assertHas(viewerFile, 'const resolveTvEffectRect = ({ rect, camera }: ResolveTvEffectRectInput): NumericScreenRect => ({', 'viewer must keep a single resolveTvEffectRect path');
 assertHas(viewerFile, 'const resolvedTvScreenRect = useMemo(() => toScreenRectStyle(resolvedTvScreenRectNumeric), [resolvedTvScreenRectNumeric, toScreenRectStyle]);', 'viewer must project a single resolved TV rect for renderer/debug');
 assertHas(viewerFile, 'const tvRendererRect = resolvedTvScreenRect;', 'renderer must consume the same resolved rect');
@@ -46,6 +54,9 @@ if (viewerFile.includes('className="sandbox360ShotButtons"')) {
 assertHas(appFile, 'type Sandbox360RoomEventState = Record<Sandbox360RoomEventType, Sandbox360RoomEventRuntime>;', 'app should keep a typed room event SSOT');
 assertHas(appFile, 'const [sandbox360RoomEvents, setSandbox360RoomEvents] = useState<Sandbox360RoomEventState>({', 'app must own sandbox360 room event SSOT');
 assertHas(appFile, 'const [sandbox360RoomEventDebug, setSandbox360RoomEventDebug] = useState({', 'app must own sandbox360 room event debug SSOT');
+assertHas(appFile, 'tvAnchorVersion: \'-\',', 'app overlay debug state should include tv anchor version metadata');
+assertHas(appFile, 'tvAnchorCalibratedAt: \'-\',', 'app overlay debug state should include tv anchor calibration time metadata');
+assertHas(appFile, 'tvAnchorSource: \'-\',', 'app overlay debug state should include tv anchor source metadata');
 assertHas(appFile, 'tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },', 'app overlay debug state should include scene-space TV rect');
 assertHas(appFile, 'resolvedTvScreenRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved tv screen rect');
 assertHas(appFile, 'tvRendererRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include renderer rect');
@@ -66,6 +77,9 @@ assertHas(appFile, 'className="sandbox360-live-controls"', 'main view should ret
 assertHas(appFile, 'FORCE TV', 'main view must expose force effect trigger control');
 assertHas(appFile, 'onViewerDebugStateChange={(payload) => {', 'viewer debug snapshot must be projected into app debug state');
 assertHas(appFile, 'tvScreenRect: payload.tvScreenRect,', 'app should consume scene-space TV screen rect from viewer SSOT');
+assertHas(appFile, 'tvAnchorVersion: payload.tvAnchorVersion,', 'app should consume tv anchor version metadata');
+assertHas(appFile, 'tvAnchorCalibratedAt: payload.tvAnchorCalibratedAt,', 'app should consume tv anchor calibratedAt metadata');
+assertHas(appFile, 'tvAnchorSource: payload.tvAnchorSource,', 'app should consume tv anchor source metadata');
 assertHas(appFile, 'tvRendererRect: payload.tvRendererRect,', 'app should consume renderer TV rect from viewer SSOT');
 assertHas(appFile, 'renderedEffectRect: payload.renderedEffectRect,', 'app should consume rendered effect rect from viewer SSOT');
 assertHas(appFile, 'TV effect bounds visualization:', 'debug page must expose tv effect bounds visualization toggle');
