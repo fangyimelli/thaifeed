@@ -1,3 +1,36 @@
+## 2026-03-25 Sandbox 360 TV final render alignment root-cause fix
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic / `sandbox_story`.
+
+### Root cause
+- Previous fix aligned debug and renderer rect fields, but did not measure the final TV effect content bounds.
+- TV noise content lived in a pseudo-element path without explicit transform observability, so pixel-level drift could remain invisible even when rect fields matched.
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Added single-path resolver: `resolveTvEffectRect({ rect, camera })`.
+  - Added explicit content layer: `.sandbox360OverlayTvNoiseContent` (no extra offset transform).
+  - Added rendered bounds measurement and debug payload fields:
+    - `baseTvSceneRect`
+    - `resolvedTvScreenRect`
+    - `renderedEffectRect`
+    - `effectContentInset`
+    - `effectInnerTransform`
+    - `rectDiffX/Y/W/H`
+    - `tvRectSource`
+    - `transformChain`
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Moved TV noise visual content from `::before` to explicit inner layer.
+  - Added visualization outlines for debug-only bounds inspection mode.
+- `src/app/App.tsx`
+  - Added TV bounds visualization toggle in Debug panel.
+  - Added all new observability fields to Debug panel output.
+  - Passed visualization toggle down to viewer.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added guards for `resolveTvEffectRect` single path, rendered rect observability, rect diff fields, transform chain, and visualization toggle.
+
 ## 2026-03-25 Sandbox 360 effect force replay + live controls ownership split
 
 ### Scope

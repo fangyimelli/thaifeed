@@ -3,6 +3,7 @@
 # Sandbox Flow Table
 
 > 2026-03-25 sandbox_360_test 補充：effect/room-event force gate 與 debug 顯示改為 App SSOT（`sandbox360RoomEvents` + `sandbox360RoomEventDebug`），viewer 不再持有本地 debug overlay 狀態。
+> 2026-03-25 sandbox_360_test 補充：TV effect 新增 `resolveTvEffectRect` 單一路徑 + rendered content bounds 量測（`renderedEffectRect`/`rectDiff*`/`transformChain`）用於最終像素對位驗證。
 
 Generated from mode-specific flow definition and content map for **sandbox** mode.
 
@@ -34,6 +35,18 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 Notes:
 - TV anchor now follows scene-space SSOT and remains stable across camera crop/zoom.
 - Debug box is observability-only; authority remains in scene-space anchor constants.
+
+## Sandbox 360 TV effect final-render alignment guard（sandbox_360_test only）
+
+| item | authority |
+| --- | --- |
+| single rect resolver | `resolveTvEffectRect({ rect, camera })` |
+| renderer rect source | `resolvedTvScreenRect -> tvRendererRect` |
+| effect content layer | `sandbox360OverlayTvNoiseContent` (`transform:none`, `transform-origin:center center`) |
+| pixel observability | `renderedEffectRect`, `rectDiffX/Y/W/H` |
+| debug transform steps | `transformChain`（base rect → camera → aspect → shot offset → transition → final rect） |
+| visualization toggle | `TV effect bounds visualization` (Debug panel only) |
+| anti-mask policy | clip/mask 僅保護，不可替代定位修正 |
 
 
 ## Sandbox 360 zoom-crop framing authority (sandbox_360_test only)

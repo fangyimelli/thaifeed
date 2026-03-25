@@ -19,11 +19,16 @@ assertHas(viewerFile, 'data-active={roomEventState.TV_STATIC.active ? \'true\' :
 assertHas(viewerFile, 'tvDebugRect', 'viewer should keep authoritative rect projection');
 assertHas(viewerFile, 'tvOverlayRect', 'viewer should keep authoritative overlay rect projection');
 assertHas(viewerFile, 'const tvScreenRect = useMemo<OverlayRect>(() => {', 'viewer must resolve TV screen rect from TV anchor in scene space');
-assertHas(viewerFile, 'const resolvedTvScreenRect = useMemo(() => toScreenRect(tvScreenRect), [toScreenRect, tvScreenRect]);', 'viewer must project a single resolved TV rect for renderer/debug');
+assertHas(viewerFile, 'const resolveTvEffectRect = ({ rect, camera }: ResolveTvEffectRectInput): NumericScreenRect => ({', 'viewer must keep a single resolveTvEffectRect path');
+assertHas(viewerFile, 'const resolvedTvScreenRect = useMemo(() => toScreenRectStyle(resolvedTvScreenRectNumeric), [resolvedTvScreenRectNumeric, toScreenRectStyle]);', 'viewer must project a single resolved TV rect for renderer/debug');
 assertHas(viewerFile, 'const tvRendererRect = resolvedTvScreenRect;', 'renderer must consume the same resolved rect');
 assertHas(viewerFile, 'tvUsesResolvedRect', 'viewer debug payload must expose resolved-rect gate state');
 assertHas(viewerFile, 'style={tvRendererRect}', 'TV overlay renderer should bind to the resolved renderer rect SSOT');
 assertHas(viewerFile, 'tvScreenRect,', 'debug payload should include scene-space TV screen rect');
+assertHas(viewerFile, 'renderedEffectRect', 'viewer debug payload should include rendered effect rect');
+assertHas(viewerFile, 'effectInnerTransform', 'viewer debug payload should include effect inner transform');
+assertHas(viewerFile, 'transformChain', 'viewer debug payload should include transform chain');
+assertHas(viewerFile, 'className="sandbox360OverlayTvNoiseContent"', 'tv effect should render through explicit inner content layer');
 if (viewerFile.includes('sandbox360ShotState')) {
   throw new Error('main view should not retain standalone shot state overlay');
 }
@@ -42,7 +47,9 @@ assertHas(appFile, 'type Sandbox360RoomEventState = Record<Sandbox360RoomEventTy
 assertHas(appFile, 'const [sandbox360RoomEvents, setSandbox360RoomEvents] = useState<Sandbox360RoomEventState>({', 'app must own sandbox360 room event SSOT');
 assertHas(appFile, 'const [sandbox360RoomEventDebug, setSandbox360RoomEventDebug] = useState({', 'app must own sandbox360 room event debug SSOT');
 assertHas(appFile, 'tvScreenRect: { x: 0, y: 0, w: 0, h: 0 },', 'app overlay debug state should include scene-space TV rect');
+assertHas(appFile, 'resolvedTvScreenRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved tv screen rect');
 assertHas(appFile, 'tvRendererRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include renderer rect');
+assertHas(appFile, 'renderedEffectRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include rendered effect rect');
 assertHas(appFile, 'tvUsesResolvedRect: false,', 'app overlay debug state should expose resolved-rect identity flag');
 assertHas(appFile, 'const triggerSandbox360RoomEvent = useCallback((eventType: Sandbox360RoomEventType', 'app must own room event gate + force pipeline');
 assertHas(appFile, 'triggerSeq: prev[eventType].triggerSeq + 1', 'force/event triggers must increment sequence to replay visual effect');
@@ -60,6 +67,9 @@ assertHas(appFile, 'FORCE TV', 'main view must expose force effect trigger contr
 assertHas(appFile, 'onViewerDebugStateChange={(payload) => {', 'viewer debug snapshot must be projected into app debug state');
 assertHas(appFile, 'tvScreenRect: payload.tvScreenRect,', 'app should consume scene-space TV screen rect from viewer SSOT');
 assertHas(appFile, 'tvRendererRect: payload.tvRendererRect,', 'app should consume renderer TV rect from viewer SSOT');
+assertHas(appFile, 'renderedEffectRect: payload.renderedEffectRect,', 'app should consume rendered effect rect from viewer SSOT');
+assertHas(appFile, 'TV effect bounds visualization:', 'debug page must expose tv effect bounds visualization toggle');
+assertHas(appFile, 'rectDiffX / rectDiffY / rectDiffW / rectDiffH:', 'debug page must show rect diff observability');
 assertHas(appFile, 'tv.usesResolvedRect: {String(sandbox360OverlayDebug.tvUsesResolvedRect)}', 'debug panel should show renderer/debug rect identity gate');
 
 console.log('regression-sandbox360-shot-events: ok');
