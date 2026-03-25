@@ -52,6 +52,8 @@ type ResolveTvEffectRectInput = {
   camera: SceneCameraState;
   handheld: Pick<Sandbox360ViewerState, 'cameraOffsetX' | 'cameraOffsetY' | 'cameraRotationDeg' | 'cameraScaleOffset'>;
 };
+type ResolveTvEffectRectResult = { preTransformRect: NumericScreenRect; finalResolvedRect: NumericScreenRect };
+type HandheldTransformState = { offsetX: number; offsetY: number; rotationDeg: number; scale: number };
 type TransitionState = {
   isTransitioning: boolean;
   startedAt: number;
@@ -105,6 +107,9 @@ type Props = {
     rendererUsesResolvedRect: boolean;
     effectContentUsesResolvedRect: boolean;
     tvAnchor: OverlayRect;
+    tvAnchorVersion: string;
+    tvAnchorCalibratedAt: string;
+    tvAnchorSource: string;
     tvSharesTransformContainer: boolean;
     questionVisible: boolean;
     questionConsonant: string;
@@ -141,48 +146,8 @@ const SCENE_DEFAULT_HEIGHT = 2048;
 const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
 const TV_ANCHOR = TV_ANCHOR_CALIBRATION.anchor;
 
-const resolveTvEffectRect = ({ rect, camera, handheld, viewerSize }: ResolveTvEffectRectInput): ResolveTvEffectRectResult => {
-  const preHandheldRect: NumericScreenRect = {
-    x: (rect.x - camera.cameraX) * camera.cameraScale,
-    y: (rect.y - camera.cameraY) * camera.cameraScale,
-    w: rect.w * camera.cameraScale,
-    h: rect.h * camera.cameraScale
-  };
-
-  const originX = viewerSize.width / 2;
-  const originY = viewerSize.height / 2;
-  const theta = handheld.rotationDeg * (Math.PI / 180);
-  const cosTheta = Math.cos(theta);
-  const sinTheta = Math.sin(theta);
-
-  const transformPoint = (x: number, y: number) => {
-    const localX = x - originX;
-    const localY = y - originY;
-    const scaledX = localX * handheld.scale;
-    const scaledY = localY * handheld.scale;
-    const rotatedX = scaledX * cosTheta - scaledY * sinTheta;
-    const rotatedY = scaledX * sinTheta + scaledY * cosTheta;
-    return {
-      x: rotatedX + originX + handheld.offsetX,
-      y: rotatedY + originY + handheld.offsetY
-    };
-  };
-
-  const corners = [
-    transformPoint(preHandheldRect.x, preHandheldRect.y),
-    transformPoint(preHandheldRect.x + preHandheldRect.w, preHandheldRect.y),
-    transformPoint(preHandheldRect.x, preHandheldRect.y + preHandheldRect.h),
-    transformPoint(preHandheldRect.x + preHandheldRect.w, preHandheldRect.y + preHandheldRect.h)
-  ];
-  const xs = corners.map((corner) => corner.x);
-  const ys = corners.map((corner) => corner.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-
-const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInput): { preTransformRect: NumericScreenRect; finalResolvedRect: NumericScreenRect } => {
-  const preTransformRect = {
+const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInput): ResolveTvEffectRectResult => {
+  const preTransformRect: NumericScreenRect = {
     x: (rect.x - camera.cameraX) * camera.cameraScale,
     y: (rect.y - camera.cameraY) * camera.cameraScale,
     w: rect.w * camera.cameraScale,
@@ -194,6 +159,7 @@ const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInpu
   const sin = Math.sin(theta);
   const originX = camera.viewportWidth / 2;
   const originY = camera.viewportHeight / 2;
+
   const points = [
     { x: preTransformRect.x, y: preTransformRect.y },
     { x: preTransformRect.x + preTransformRect.w, y: preTransformRect.y },
@@ -211,12 +177,14 @@ const resolveTvEffectRect = ({ rect, camera, handheld }: ResolveTvEffectRectInpu
       y: rotatedY + originY + handheld.cameraOffsetY
     };
   });
+
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
+
   return {
     preTransformRect,
     finalResolvedRect: { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
@@ -493,6 +461,9 @@ export default function Sandbox360Viewer({
       rendererUsesResolvedRect,
       effectContentUsesResolvedRect,
       tvAnchor: TV_ANCHOR,
+      tvAnchorVersion: TV_ANCHOR_CALIBRATION.version,
+      tvAnchorCalibratedAt: TV_ANCHOR_CALIBRATION.calibratedAt,
+      tvAnchorSource: TV_ANCHOR_CALIBRATION.source,
       tvSharesTransformContainer,
       questionVisible,
       questionConsonant,
