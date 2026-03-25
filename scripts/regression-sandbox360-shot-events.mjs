@@ -17,10 +17,13 @@ assertHas(viewerFile, 'forceRoomEvent: (eventType) => onTriggerRoomEvent(eventTy
 assertHas(viewerFile, 'key={`TV_STATIC_OVERLAY-${roomEventState.TV_STATIC.triggerSeq}`}', 'renderer overlay must re-mount on each trigger sequence to force effect replay');
 assertHas(viewerFile, 'data-active={roomEventState.TV_STATIC.active ? \'true\' : \'false\'}', 'renderer overlay must consume shared room event active state');
 assertHas(viewerFile, 'const tvScreenGeometryByShot = useMemo(() => ({', 'viewer must resolve tv quad by shot from calibration');
-assertHas(viewerFile, 'const resolveTvEffectGeometry = ({ baseQuad, camera, handheld }: ResolveTvEffectGeometryInput): ResolveTvEffectGeometryResult => {', 'viewer must keep single resolveTvEffectGeometry path');
+assertHas(viewerFile, 'const resolveTvScreenInnerGeometryFromBaseCalibration = ({', 'viewer must keep single base calibration resolve path');
 assertHas(viewerFile, 'const TV_SCREEN_GEOMETRY_BY_SHOT = \'TV_SCREEN_GEOMETRY_BY_SHOT\';', 'viewer must expose single authored screen geometry source token');
+assertHas(viewerFile, 'TV_SCREEN_INNER_QUAD_BY_SHOT.CENTER', 'viewer must consume authored base-scene absolute calibration by shot');
 assertHas(viewerFile, 'return interpolateQuad(currentQuad, targetQuad, transitionProgress);', 'viewer must interpolate geometry between shots during transition');
+assertHas(viewerFile, 'calibrationSource: TV_ANCHOR_CALIBRATION.source,', 'viewer debug payload must expose calibration source');
 assertHas(viewerFile, 'tvGeometryKind: TV_GEOMETRY_KIND,', 'viewer debug payload must expose geometry kind');
+assertHas(viewerFile, 'baseTvScreenInnerQuad: baseTvScreenQuad,', 'viewer debug payload must expose base screen-inner quad alias');
 assertHas(viewerFile, 'baseTvScreenQuad,', 'viewer debug payload must expose base quad');
 assertHas(viewerFile, 'resolvedTvScreenQuad,', 'viewer debug payload must expose resolved quad');
 assertHas(viewerFile, 'resolvedTvBoundingRect,', 'viewer debug payload must expose resolved bounding rect');
@@ -66,7 +69,9 @@ assertHas(appFile, 'const [sandbox360RoomEvents, setSandbox360RoomEvents] = useS
 assertHas(appFile, 'const [sandbox360RoomEventDebug, setSandbox360RoomEventDebug] = useState({', 'app must own sandbox360 room event debug SSOT');
 assertHas(appFile, 'baseSceneWidth: 0,', 'app overlay debug state should include base scene width');
 assertHas(appFile, 'baseSceneHeight: 0,', 'app overlay debug state should include base scene height');
+assertHas(appFile, 'calibrationSource: \'-\',', 'app overlay debug state should include calibration source');
 assertHas(appFile, "tvGeometryKind: 'rect' as 'rect' | 'quad',", 'app overlay debug state should include geometry kind');
+assertHas(appFile, 'baseTvScreenInnerQuad:', 'app overlay debug state should include base tv screen-inner quad');
 assertHas(appFile, 'baseTvScreenQuad:', 'app overlay debug state should include base tv screen quad');
 assertHas(appFile, 'resolvedTvScreenQuad:', 'app overlay debug state should include resolved tv screen quad');
 assertHas(appFile, 'resolvedTvBoundingRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved bounding rect');
@@ -89,6 +94,8 @@ assertHas(appFile, 'live controls location: main_view_top_left', 'debug panel mu
 assertHas(appFile, 'className="sandbox360-live-controls"', 'main view should retain sandbox direct control buttons');
 assertHas(appFile, 'FORCE TV', 'main view must expose force effect trigger control');
 assertHas(appFile, 'onViewerDebugStateChange={(payload) => {', 'viewer debug snapshot must be projected into app debug state');
+assertHas(appFile, 'calibrationSource: payload.calibrationSource,', 'app should consume calibration source');
+assertHas(appFile, 'baseTvScreenInnerQuad: payload.baseTvScreenInnerQuad,', 'app should consume base tv screen-inner quad');
 assertHas(appFile, 'resolvedTvScreenQuad: payload.resolvedTvScreenQuad,', 'app should consume resolved tv quad from viewer SSOT');
 assertHas(appFile, 'resolvedTvBoundingRect: payload.resolvedTvBoundingRect,', 'app should consume resolved tv bounding rect from viewer SSOT');
 assertHas(appFile, 'renderedEffectRect: payload.renderedEffectRect,', 'app should consume rendered effect rect from viewer SSOT');
@@ -105,6 +112,7 @@ assertHas(appFile, 'rendererUsesResolvedQuad: {String(sandbox360OverlayDebug.ren
 assertHas(appFile, 'effectContentUsesResolvedQuad: {String(sandbox360OverlayDebug.effectContentUsesResolvedQuad)}', 'debug panel should show effect content quad identity gate');
 assertHas(appFile, 'rendererGeometrySource: {sandbox360OverlayDebug.rendererGeometrySource}', 'debug panel should show renderer geometry source');
 assertHas(appFile, 'rendererUsesResolvedGeometry: {String(sandbox360OverlayDebug.rendererUsesResolvedGeometry)}', 'debug panel should show renderer resolved geometry identity');
+assertHas(appFile, 'calibrationSource: {sandbox360OverlayDebug.calibrationSource}', 'debug panel should show calibration source');
 if (appFile.includes('resolvedTvScreenRect')) {
   throw new Error('legacy resolvedTvScreenRect naming should be removed from app debug schema');
 }

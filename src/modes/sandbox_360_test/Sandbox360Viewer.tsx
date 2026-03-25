@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import { SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
-import { TV_ANCHOR_CALIBRATION, type TvScreenQuad, type TvScreenQuadPoint } from './tvAnchorCalibration';
+import {
+  BASE_SCENE_HEIGHT,
+  BASE_SCENE_WIDTH,
+  TV_ANCHOR_CALIBRATION,
+  TV_SCREEN_INNER_QUAD_BY_SHOT,
+  type TvScreenQuad,
+  type TvScreenQuadPoint
+} from './tvAnchorCalibration';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -50,12 +57,12 @@ type NumericScreenRect = { x: number; y: number; w: number; h: number };
 type TransformChainStep = { step: string; summary: string; data: Record<string, number | string | boolean | undefined> };
 type TvGeometryKind = 'rect' | 'quad';
 type RendererGeometryKind = 'authored_quad' | 'fallback_rect';
-type ResolveTvEffectGeometryInput = {
+type ResolveTvScreenInnerGeometryFromBaseCalibrationInput = {
   baseQuad: TvScreenQuad;
   camera: SceneCameraState;
   handheld: Pick<Sandbox360ViewerState, 'cameraOffsetX' | 'cameraOffsetY' | 'cameraRotationDeg' | 'cameraScaleOffset'>;
 };
-type ResolveTvEffectGeometryResult = {
+type ResolveTvScreenInnerGeometryFromBaseCalibrationResult = {
   preTransformQuad: TvScreenQuad;
   finalResolvedQuad: TvScreenQuad;
   preTransformBoundingRect: NumericScreenRect;
@@ -94,13 +101,19 @@ type Props = {
   onViewerDebugStateChange?: (payload: {
     baseSceneWidth: number;
     baseSceneHeight: number;
+    calibrationSource: string;
     tvGeometryKind: TvGeometryKind;
     tvTargetRegionKind: TvTargetRegionKind;
     geometrySource: string;
     rendererGeometrySource: string;
     rendererGeometryKind: RendererGeometryKind;
     rendererFallbackReason: string;
+    baseTvScreenInnerQuad: TvScreenQuad;
     baseTvScreenQuad: TvScreenQuad;
+    resolvedTvScreenInnerGeometry: {
+      quad: TvScreenQuad;
+      boundingRect: ScreenRectStyle;
+    };
     resolvedTvScreenQuad: TvScreenQuad;
     resolvedTvBoundingRect: ScreenRectStyle;
     renderedEffectBounds: ScreenRectStyle;
@@ -151,14 +164,18 @@ declare global {
   }
 }
 
-const SCENE_DEFAULT_WIDTH = 4096;
-const SCENE_DEFAULT_HEIGHT = 2048;
+const SCENE_DEFAULT_WIDTH = BASE_SCENE_WIDTH;
+const SCENE_DEFAULT_HEIGHT = BASE_SCENE_HEIGHT;
 const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
 const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
 const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
 
-const resolveTvEffectGeometry = ({ baseQuad, camera, handheld }: ResolveTvEffectGeometryInput): ResolveTvEffectGeometryResult => {
+const resolveTvScreenInnerGeometryFromBaseCalibration = ({
+  baseQuad,
+  camera,
+  handheld
+}: ResolveTvScreenInnerGeometryFromBaseCalibrationInput): ResolveTvScreenInnerGeometryFromBaseCalibrationResult => {
   const toPreTransformPoint = (point: TvScreenQuadPoint): TvScreenQuadPoint => ({
     x: (point.x - camera.cameraX) * camera.cameraScale,
     y: (point.y - camera.cameraY) * camera.cameraScale
@@ -280,9 +297,9 @@ export default function Sandbox360Viewer({
   }, [cameraState.sceneHeight, cameraState.sceneWidth]);
 
   const tvScreenGeometryByShot = useMemo(() => ({
-    left: scaleQuad(TV_ANCHOR_CALIBRATION.quadByShot.left),
-    center: scaleQuad(TV_ANCHOR_CALIBRATION.quadByShot.center),
-    right: scaleQuad(TV_ANCHOR_CALIBRATION.quadByShot.right)
+    left: scaleQuad(TV_SCREEN_INNER_QUAD_BY_SHOT.LEFT),
+    center: scaleQuad(TV_SCREEN_INNER_QUAD_BY_SHOT.CENTER),
+    right: scaleQuad(TV_SCREEN_INNER_QUAD_BY_SHOT.RIGHT)
   }), [scaleQuad]);
   const transitionProgress = useMemo(() => {
     const from = viewerState.shotTransitionFromPosX;
@@ -317,7 +334,7 @@ export default function Sandbox360Viewer({
   }), [viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
 
   const toScreenRect = useCallback((rect: OverlayRect): NumericScreenRect => (
-    resolveTvEffectGeometry({
+    resolveTvScreenInnerGeometryFromBaseCalibration({
       baseQuad: {
         topLeft: { x: rect.x, y: rect.y },
         topRight: { x: rect.x + rect.w, y: rect.y },
@@ -339,7 +356,7 @@ export default function Sandbox360Viewer({
     width: `${rect.w.toFixed(3)}px`,
     height: `${rect.h.toFixed(3)}px`
   }), []);
-  const resolvedTvGeometry = useMemo(() => resolveTvEffectGeometry({
+  const resolvedTvGeometry = useMemo(() => resolveTvScreenInnerGeometryFromBaseCalibration({
     baseQuad: baseTvScreenQuad,
     camera: cameraState,
     handheld: {
@@ -374,7 +391,7 @@ export default function Sandbox360Viewer({
   const rendererUsesResolvedGeometry = true;
   const effectContentUsesResolvedGeometry = true;
   const rendererGeometryKind: RendererGeometryKind = 'authored_quad';
-  const rendererGeometrySource = `${TV_SCREEN_GEOMETRY_BY_SHOT}.${viewerState.currentShot}${viewerState.isTransitioning ? `->${viewerState.targetShot}@${transitionProgress.toFixed(3)}` : ''} -> resolveTvEffectGeometry(base+camera+handheld)`;
+  const rendererGeometrySource = `${TV_SCREEN_GEOMETRY_BY_SHOT}.${viewerState.currentShot}${viewerState.isTransitioning ? `->${viewerState.targetShot}@${transitionProgress.toFixed(3)}` : ''} -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)`;
   const rendererFallbackReason = 'none';
   const transitionState = useMemo<TransitionState>(() => ({
     isTransitioning: viewerState.isTransitioning,
@@ -498,15 +515,21 @@ export default function Sandbox360Viewer({
 
   useEffect(() => {
     onViewerDebugStateChange?.({
-      baseSceneWidth: cameraState.sceneWidth,
-      baseSceneHeight: cameraState.sceneHeight,
+      baseSceneWidth: SCENE_REFERENCE_SIZE.width,
+      baseSceneHeight: SCENE_REFERENCE_SIZE.height,
+      calibrationSource: TV_ANCHOR_CALIBRATION.source,
       tvGeometryKind: TV_GEOMETRY_KIND,
       tvTargetRegionKind: TV_TARGET_REGION_KIND,
       geometrySource: rendererGeometrySource,
       rendererGeometrySource,
       rendererGeometryKind,
       rendererFallbackReason,
+      baseTvScreenInnerQuad: baseTvScreenQuad,
       baseTvScreenQuad,
+      resolvedTvScreenInnerGeometry: {
+        quad: resolvedTvScreenQuad,
+        boundingRect: resolvedTvBoundingRect
+      },
       resolvedTvScreenQuad,
       resolvedTvBoundingRect,
       renderedEffectBounds: renderedEffectRect,
@@ -522,7 +545,7 @@ export default function Sandbox360Viewer({
       effectContentUsesResolvedQuad,
       rendererUsesResolvedGeometry,
       effectContentUsesResolvedGeometry,
-      tvAnchor: TV_ANCHOR_CALIBRATION.quadByShot.center,
+      tvAnchor: TV_ANCHOR_CALIBRATION.quadByShot.CENTER,
       tvAnchorVersion: TV_ANCHOR_CALIBRATION.version,
       tvAnchorCalibratedAt: TV_ANCHOR_CALIBRATION.calibratedAt,
       tvAnchorSource: TV_ANCHOR_CALIBRATION.source,

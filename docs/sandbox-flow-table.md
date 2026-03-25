@@ -1,3 +1,5 @@
+> 2026-03-25 sandbox_360_test 補充（第七波）：依使用者紅框 follow-up，`TV_SCREEN_INNER_QUAD_BY_SHOT` 再收斂為更小 screen-inner 發光區，校準版本 `v2026-03-25.6`。
+
 > 2026-03-25 sandbox_360_test 補充（第五波）：TV 幾何主路徑強制收斂為 `TV_SCREEN_GEOMETRY_BY_SHOT`（LEFT/CENTER/RIGHT authored screen-inner quad），transition 期間使用 quad interpolation；renderer/debug/visualization 必須共讀同一 resolved geometry。
 
 > 2026-03-25 sandbox_360_test 補充（第四波）：TV 幾何改為 `TV_SCREEN_QUAD_BY_SHOT`（LEFT/CENTER/RIGHT 作者標定四角），並以 `resolveTvEffectGeometry` 作唯一輸出；`resolvedTvBoundingRect` 僅由 quad 派生。
@@ -30,11 +32,11 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 
 | item | authority |
 | --- | --- |
-| authoritative TV anchor | `TV_ANCHOR_CALIBRATION.anchor`（from `src/modes/sandbox_360_test/tvAnchorCalibration.ts`） |
+| authoritative TV anchor | `TV_SCREEN_INNER_QUAD_BY_SHOT`（from `src/modes/sandbox_360_test/tvAnchorCalibration.ts`） |
 | anchor metadata | `TV_ANCHOR_CALIBRATION.version / calibratedAt / source`（debug 必須顯示） |
 | reference scene | `4096x2048` scene-space |
 | runtime mapping | `scaleX = sceneWidth/referenceScene.width`, `scaleY = sceneHeight/referenceScene.height`, then map calibration anchor |
-| shared consumers | `sandbox360OverlayTvDebug` + `sandbox360OverlayTvNoise` both read `overlaySceneRects.tv` |
+| shared consumers | `renderer/debug/clip/visualization/hit` all read resolved geometry from base calibration path |
 | debug observability | `TV_ANCHOR`, `tvAnchorVersion`, `tvAnchorCalibratedAt`, `tvAnchorSource`, `tvDebugRect`, `tvOverlayRect`, `tv.sharedTransformContainer` |
 | anti-drift policy | do not use screen-space percentage for TV positioning |
 
@@ -47,12 +49,12 @@ Notes:
 
 | item | authority |
 | --- | --- |
-| authoritative geometry | `TV_ANCHOR_CALIBRATION.quadByShot.{left|center|right}` |
+| authoritative geometry | `TV_SCREEN_INNER_QUAD_BY_SHOT.{LEFT|CENTER|RIGHT}` |
 | geometry semantic | `tvGeometryKind=quad`, `tvTargetRegionKind=tv_screen_inner` |
-| resolver path | `resolveTvEffectGeometry(baseQuad, camera, handheld, shot)` |
+| resolver path | `resolveTvScreenInnerGeometryFromBaseCalibration(baseQuad, camera, handheld)` |
 | final outputs | `resolvedTvScreenQuad` + `resolvedTvBoundingRect(from quad)` |
 | effect mapping | overlay container = bounding rect, effect content = quad polygon clip-path |
-| debug observability | `baseTvScreenQuad`, `resolvedTvScreenQuad`, `quadDiff`, `quadPolygon`, `geometrySource` |
+| debug observability | `baseSceneWidth/baseSceneHeight`, `calibrationSource`, `baseTvScreenInnerQuad`, `resolvedTvScreenInnerGeometry`, `rendererUsesResolvedGeometry`, `effectContentUsesResolvedGeometry` |
 | anti-regression | 禁止回歸 rect-only 主路徑；rect 僅作 quad 派生資料 |
 
 ## Sandbox 360 TV effect final-render alignment guard（sandbox_360_test only）
@@ -151,3 +153,4 @@ Notes:
 | sandbox_debug_text | mode_specific | active | WAIT_REPLY_x, DEBUG_SMOKE | Smoke-test and debug helper text. | false |  |
 | sandbox_crowd_reaction | legacy_adapter | parallel | ANSWER_EVAL | Crowd reaction placeholders around answer evaluation. | true | Reserved for current/ future crowd-react registry; may still be stubbed. |
 | sandbox_stub | legacy_adapter | parallel | DEBUG_SMOKE | Legacy runtime wrapper / stub-only sandbox text. | false | Parallel/runtime-wrapper-only sources remain compatibility layer, not future SSOT. |
+> 2026-03-25 sandbox_360_test 補充（第六波）：建立 base scene absolute calibration SSOT：`BASE_SCENE_WIDTH/HEIGHT` + `TV_SCREEN_INNER_QUAD_BY_SHOT.{LEFT|CENTER|RIGHT}`，主路徑統一 `resolveTvScreenInnerGeometryFromBaseCalibration(...)`，禁止 viewport 反推。

@@ -1,3 +1,23 @@
+## 2026-03-25 Sandbox360 TV red-box follow-up calibration（screen-inner）
+
+- `src/modes/sandbox_360_test/tvAnchorCalibration.ts`
+  - `TV_SCREEN_INNER_QUAD_BY_SHOT.{LEFT|CENTER|RIGHT}` 依紅框目標再次縮框重標，降低過寬覆蓋。
+  - calibration metadata 升版為 `tv-screen-inner-base-scene-calibration.v2026-03-25.6`，source 記錄為 `red_box_followup`。
+
+## 2026-03-25 Sandbox360 TV base-scene absolute calibration SSOT（screen-inner）
+
+- `src/modes/sandbox_360_test/tvAnchorCalibration.ts`
+  - 新增 `BASE_SCENE_WIDTH/BASE_SCENE_HEIGHT`，並以 base scene 絕對像素定義 `TV_SCREEN_INNER_QUAD_BY_SHOT.{LEFT|CENTER|RIGHT}`。
+  - calibration 版本升級為 `tv-screen-inner-base-scene-calibration.v2026-03-25.5`。
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 主幾何 resolve 路徑改為 `resolveTvScreenInnerGeometryFromBaseCalibration(...)`。
+  - `TV_SCREEN_INNER_QUAD_BY_SHOT` 成為 shot base calibration 來源；renderer/debug/effect/clip/visualization 共用同一 resolved geometry。
+  - debug payload 新增 `calibrationSource`、`baseTvScreenInnerQuad`、`resolvedTvScreenInnerGeometry`。
+- `src/app/App.tsx`
+  - overlay debug schema/面板同步新增上述欄位，直接驗證 renderer 使用 base calibration resolve 結果。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - guard 新增 base-calibration resolve path 與 calibration/debug 欄位透傳檢查。
+
 ## 2026-03-25 Sandbox360 TV renderer path hard-switch（authoritative screen-inner quad）
 
 - `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
