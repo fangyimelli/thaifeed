@@ -4,6 +4,20 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 
 - Companion review packet: `docs/sandbox-shared-message-review.md` for editable sandbox/shared review.
 
+
+## Sandbox 360 shot-driven room-event flow (sandbox_360_test only)
+
+| trigger | condition | delay | room event | cooldown |
+| --- | --- | --- | --- | --- |
+| Shot transition | `CENTER -> RIGHT` | 500ms | `LIGHT_FLASH_LEFT` | 3s |
+| Shot dwell | stay on `RIGHT` for 3s | none after dwell satisfied | `TV_STATIC` | 4s |
+| Shot transition | `RIGHT -> CENTER` | none | `DOOR_SHADOW` | 5s |
+| Shot transition | `LEFT -> CENTER` | none | `DOLL_REFLECT` | 5s |
+
+Notes:
+- This flow is scoped to `src/modes/sandbox_360_test/Sandbox360Viewer.tsx` only.
+- `eventCooldownMap` is the authoritative gate to avoid rapid retrigger from debug spam or fast camera oscillation.
+
 ## Flow definition
 
 | stepId | purpose | canReply | gateType | uiSurface | allowed categories | next steps | blocked reasons | notes |

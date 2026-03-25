@@ -1,3 +1,21 @@
+## 2026-03-25 Sandbox 360 shot-driven overlay events
+
+### Scope
+- Enforced integration mode: patch on current branch.
+- Scoped only to `sandbox_360_test`.
+- No changes in classic mode, sandbox_story, parser, or chat flow.
+
+### Summary
+- Added `onShotChange(prevShot, nextShot)` listener in `Sandbox360Viewer` and connected transition/dwell event triggers.
+- Added state refs for `lastShot`, `shotEnterTime`, and `eventCooldownMap`.
+- Added per-event cooldown gate to prevent back-to-back retrigger.
+- Kept debug event buttons and global `triggerRoomEvent` API, now guarded by same cooldown SSOT.
+- Added regression guard script `scripts/regression-sandbox360-shot-events.mjs` and npm script `test:sandbox360-shot-events`.
+
+### Verification
+- `npm run test:sandbox360-shot-events`
+- `npm run build`
+
 ## 2026-03-22 Classic flow-first review packet
 
 ### Scope

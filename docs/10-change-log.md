@@ -1,3 +1,24 @@
+## 2026-03-25 Sandbox 360 視角驅動事件系統（shot-driven overlay events）
+
+### Scope
+- 只修改 `sandbox_360_test`。
+- classic / sandbox_story / shared parser / chat flow 完全不動。
+
+### Implemented
+- 在 `src/modes/sandbox_360_test/Sandbox360Viewer.tsx` 新增 `onShotChange(prevShot, nextShot)` 監聽。
+- 事件規則落地：
+  - `CENTER -> RIGHT`：延遲 500ms 觸發 `LIGHT_FLASH_LEFT`
+  - `RIGHT` 停留 3 秒：觸發 `TV_STATIC`
+  - `RIGHT -> CENTER`：觸發 `DOOR_SHADOW`
+  - `LEFT -> CENTER`：觸發 `DOLL_REFLECT`
+- 新增 shot/event state（ref-based SSOT）：`lastShot`、`shotEnterTime`、`eventCooldownMap`。
+- 新增 cooldown：`LIGHT_FLASH_LEFT=3s`、`TV_STATIC=4s`、`DOOR_SHADOW=5s`、`DOLL_REFLECT=5s`。
+- 保留原 debug buttons 與 `triggerRoomEvent` API，並統一套用 cooldown gate，避免雙邏輯漂移。
+
+### Regression guard
+- 新增 `scripts/regression-sandbox360-shot-events.mjs`。
+- guard 鎖定 shot transition 規則、cooldown 常數、以及必要 state ref，避免後續回歸。
+
 ## 2026-03-23 Sandbox 360 fake first-person pan viewer
 
 - 問題根因：`sandbox_360_test` 原本直接把整個 `SceneView` 主畫面套 `rotateY/rotateX`，因此視覺效果像被翻轉的平面海報，而不是第一人稱在同一場景內平移視角。
