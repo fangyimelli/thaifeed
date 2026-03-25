@@ -1,3 +1,23 @@
+## 2026-03-25 Sandbox 360 namespace-only trigger API convergence
+
+### Scope
+- sandbox_360_test only (plus required docs/guard sync).
+- No changes to classic, sandbox_story, shared submitChat, or verified shot/overlay behavior.
+
+### Summary
+- Removed legacy global mount `window.triggerRoomEvent` from `Sandbox360Viewer`.
+- Added sandbox-local API namespace `window.__sandbox360` exposing:
+  - `triggerRoomEvent(eventType)`
+  - `overlay.triggerRoomEvent(eventType)`
+  - `viewer.triggerShot(shot)` and `viewer.shot.left/center/right()`
+  - `debug.triggerRoomEvent(eventType)` and `debug.triggerShot(shot)`
+- LEFT/CENTER/RIGHT + FLASH/TV/DOLL/DOOR debug buttons continue to run the same local handlers/event rules.
+- Regression guard now rejects any reintroduction of `window.triggerRoomEvent`.
+
+### Verification
+- `node scripts/regression-sandbox360-shot-events.mjs`
+- `rg -n 'window\.triggerRoomEvent|window\.__sandbox360' src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+
 ## 2026-03-25 Sandbox 360 shot-driven overlay events
 
 ### Scope

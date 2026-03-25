@@ -32,9 +32,24 @@ type Props = {
   };
 };
 
+type Sandbox360DebugApi = {
+  triggerRoomEvent: (eventType: RoomEventType) => boolean;
+  overlay: {
+    triggerRoomEvent: (eventType: RoomEventType) => boolean;
+  };
+  viewer: {
+    triggerShot: (shot: ShotType) => void;
+    shot: Record<ShotType, () => void>;
+  };
+  debug: {
+    triggerRoomEvent: (eventType: RoomEventType) => boolean;
+    triggerShot: (shot: ShotType) => void;
+  };
+};
+
 declare global {
   interface Window {
-    triggerRoomEvent?: (eventType: RoomEventType) => void;
+    __sandbox360?: Sandbox360DebugApi;
   }
 }
 
@@ -164,6 +179,10 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
     }
   }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent]);
 
+  const triggerShot = useCallback((shot: ShotType) => {
+    onDebugShotSelect(shot);
+  }, [onDebugShotSelect]);
+
   useEffect(() => {
     const prevShot = lastShotRef.current;
     const nextShot = viewerState.currentShot;
@@ -174,12 +193,29 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
   }, [onShotChange, viewerState.currentShot]);
 
   useEffect(() => {
-    const previousApi = window.triggerRoomEvent;
-    window.triggerRoomEvent = (eventType: RoomEventType) => {
-      triggerRoomEvent(eventType, 'manual');
+    const previousApi = window.__sandbox360;
+    const debugApi: Sandbox360DebugApi = {
+      triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual'),
+      overlay: {
+        triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual')
+      },
+      viewer: {
+        triggerShot,
+        shot: {
+          left: () => triggerShot('left'),
+          center: () => triggerShot('center'),
+          right: () => triggerShot('right')
+        }
+      },
+      debug: {
+        triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual'),
+        triggerShot
+      }
     };
+    window.__sandbox360 = debugApi;
+
     return () => {
-      window.triggerRoomEvent = previousApi;
+      window.__sandbox360 = previousApi;
       clearDelayedLightFlashTimer();
       clearRightStayTimer();
       (Object.keys(timeoutsRef.current) as RoomEventType[]).forEach((eventType) => {
@@ -190,7 +226,7 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
         }
       });
     };
-  }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent]);
+  }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent, triggerShot]);
 
   return (
     <div
@@ -208,9 +244,9 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
       <div className="sandbox360UiLayer">
         <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
         <div className="sandbox360ShotButtons">
-          <button type="button" onClick={() => onDebugShotSelect('left')}>LEFT</button>
-          <button type="button" onClick={() => onDebugShotSelect('center')}>CENTER</button>
-          <button type="button" onClick={() => onDebugShotSelect('right')}>RIGHT</button>
+          <button type="button" onClick={() => triggerShot('left')}>LEFT</button>
+          <button type="button" onClick={() => triggerShot('center')}>CENTER</button>
+          <button type="button" onClick={() => triggerShot('right')}>RIGHT</button>
         </div>
         <div className="sandbox360RoomEventButtons">
           <button type="button" onClick={() => triggerRoomEvent('LIGHT_FLASH_LEFT', 'manual')}>FLASH</button>

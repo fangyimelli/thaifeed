@@ -24,6 +24,12 @@ assertHas("triggerRoomEvent('LIGHT_FLASH_LEFT', 'shot_flow')", 'LIGHT_FLASH_LEFT
 assertHas("rightStayTimerRef.current = window.setTimeout", 'RIGHT stay timer missing');
 assertHas("triggerRoomEvent('TV_STATIC', 'shot_flow')", 'TV_STATIC stay trigger missing');
 
+assertHas('window.__sandbox360 = debugApi', 'sandbox360 namespace API mount missing');
+assertHas("triggerRoomEvent: (eventType) => triggerRoomEvent(eventType, 'manual')", 'sandbox360 room event API should delegate to local trigger');
+if (viewerFile.includes('window.triggerRoomEvent')) {
+  throw new Error('legacy global window.triggerRoomEvent must not be mounted');
+}
+
 assertHas('const eventCooldownMapRef = useRef<Record<RoomEventType, number>>({', 'eventCooldownMap state missing');
 assertHas('const shotEnterTimeRef = useRef<number>(Date.now())', 'shotEnterTime state missing');
 assertHas('const lastShotRef = useRef<ShotType>(viewerState.currentShot)', 'lastShot state missing');

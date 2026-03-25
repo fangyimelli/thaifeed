@@ -16,6 +16,7 @@ Generated from mode-specific flow definition and content map for **sandbox** mod
 
 Notes:
 - This flow is scoped to `src/modes/sandbox_360_test/Sandbox360Viewer.tsx` only.
+- Sandbox debug/event API is namespace-local: `window.__sandbox360.*` (no `window.triggerRoomEvent`).
 - `eventCooldownMap` is the authoritative gate to avoid rapid retrigger from debug spam or fast camera oscillation.
 
 ## Flow definition
