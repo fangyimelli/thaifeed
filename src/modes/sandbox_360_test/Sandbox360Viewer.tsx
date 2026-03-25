@@ -53,6 +53,7 @@ const ROOM_EVENT_COOLDOWN_MS: Record<RoomEventType, number> = {
 };
 
 export default function Sandbox360Viewer({ viewerState, curse, debugState, onDebugShotSelect }: Props) {
+  const [roomLoadFailed, setRoomLoadFailed] = useState(false);
   const [activeEvents, setActiveEvents] = useState<Record<RoomEventType, number>>({
     LIGHT_FLASH_LEFT: 0,
     TV_STATIC: 0,
@@ -199,13 +200,22 @@ export default function Sandbox360Viewer({ viewerState, curse, debugState, onDeb
       data-shot-target={viewerState.targetShot}
       style={sceneStyle}
     >
-      <img className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()} src={SANDBOX360_SCENE_IMAGE_SRC} alt="" />
+      <img
+        className={`sandbox360Scene ${curseVisualClass(curse)}`.trim()}
+        src={SANDBOX360_SCENE_IMAGE_SRC}
+        alt=""
+        onError={() => {
+          setRoomLoadFailed(true);
+          console.error('FAILED TO LOAD ROOM_360');
+        }}
+      />
       <div className="sandbox360OverlayRoomLight" aria-hidden="true" data-active={activeEvents.LIGHT_FLASH_LEFT > 0 ? 'true' : 'false'} />
       <div className="sandbox360OverlayTvNoise" aria-hidden="true" data-active={activeEvents.TV_STATIC > 0 ? 'true' : 'false'} />
       <div className="sandbox360OverlayDoll" aria-hidden="true" data-active={activeEvents.DOLL_REFLECT > 0 ? 'true' : 'false'} />
       <div className="sandbox360OverlayDoor" aria-hidden="true" data-active={activeEvents.DOOR_SHADOW > 0 ? 'true' : 'false'} />
 
       <div className="sandbox360UiLayer">
+        {roomLoadFailed ? <div className="sandbox360RoomLoadError">FAILED TO LOAD ROOM_360</div> : null}
         <div className="sandbox360ShotState">shot: {viewerState.currentShot} → {viewerState.targetShot}</div>
         <div className="sandbox360ShotButtons">
           <button type="button" onClick={() => onDebugShotSelect('left')}>LEFT</button>
