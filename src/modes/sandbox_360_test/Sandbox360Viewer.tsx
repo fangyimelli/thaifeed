@@ -49,6 +49,7 @@ type ScreenRectStyle = { left: string; top: string; width: string; height: strin
 type NumericScreenRect = { x: number; y: number; w: number; h: number };
 type TransformChainStep = { step: string; summary: string; data: Record<string, number | string | boolean | undefined> };
 type TvGeometryKind = 'rect' | 'quad';
+type RendererGeometryKind = 'authored_quad' | 'fallback_rect';
 type ResolveTvEffectGeometryInput = {
   baseQuad: TvScreenQuad;
   camera: SceneCameraState;
@@ -96,6 +97,9 @@ type Props = {
     tvGeometryKind: TvGeometryKind;
     tvTargetRegionKind: TvTargetRegionKind;
     geometrySource: string;
+    rendererGeometrySource: string;
+    rendererGeometryKind: RendererGeometryKind;
+    rendererFallbackReason: string;
     baseTvScreenQuad: TvScreenQuad;
     resolvedTvScreenQuad: TvScreenQuad;
     resolvedTvBoundingRect: ScreenRectStyle;
@@ -106,8 +110,12 @@ type Props = {
     quadPolygon: QuadStyle;
     transformChain: TransformChainStep[];
     transitionState: TransitionState;
+    currentShot: ShotType;
+    targetShot: ShotType;
     rendererUsesResolvedQuad: boolean;
     effectContentUsesResolvedQuad: boolean;
+    rendererUsesResolvedGeometry: boolean;
+    effectContentUsesResolvedGeometry: boolean;
     tvAnchor: TvScreenQuad;
     tvAnchorVersion: string;
     tvAnchorCalibratedAt: string;
@@ -148,6 +156,7 @@ const SCENE_DEFAULT_HEIGHT = 2048;
 const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
 const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
+const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
 
 const resolveTvEffectGeometry = ({ baseQuad, camera, handheld }: ResolveTvEffectGeometryInput): ResolveTvEffectGeometryResult => {
   const toPreTransformPoint = (point: TvScreenQuadPoint): TvScreenQuadPoint => ({
@@ -214,6 +223,16 @@ export default function Sandbox360Viewer({
   onViewerDebugStateChange,
   tvBoundsVisualizationEnabled = false
 }: Props) {
+  const interpolateQuad = useCallback((from: TvScreenQuad, to: TvScreenQuad, progress: number): TvScreenQuad => {
+    const t = Math.min(1, Math.max(0, progress));
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+    return {
+      topLeft: { x: lerp(from.topLeft.x, to.topLeft.x), y: lerp(from.topLeft.y, to.topLeft.y) },
+      topRight: { x: lerp(from.topRight.x, to.topRight.x), y: lerp(from.topRight.y, to.topRight.y) },
+      bottomRight: { x: lerp(from.bottomRight.x, to.bottomRight.x), y: lerp(from.bottomRight.y, to.bottomRight.y) },
+      bottomLeft: { x: lerp(from.bottomLeft.x, to.bottomLeft.x), y: lerp(from.bottomLeft.y, to.bottomLeft.y) }
+    };
+  }, []);
   const [roomLoadFailed, setRoomLoadFailed] = useState(false);
   const [sceneImageSrc, setSceneImageSrc] = useState(SANDBOX360_SCENE_IMAGE_SRC);
   const [sceneDimensions, setSceneDimensions] = useState({ width: SCENE_DEFAULT_WIDTH, height: SCENE_DEFAULT_HEIGHT });
@@ -260,12 +279,25 @@ export default function Sandbox360Viewer({
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth]);
 
-  const tvScreenQuadByShot = useMemo(() => ({
+  const tvScreenGeometryByShot = useMemo(() => ({
     left: scaleQuad(TV_ANCHOR_CALIBRATION.quadByShot.left),
     center: scaleQuad(TV_ANCHOR_CALIBRATION.quadByShot.center),
     right: scaleQuad(TV_ANCHOR_CALIBRATION.quadByShot.right)
   }), [scaleQuad]);
-  const baseTvScreenQuad = useMemo(() => tvScreenQuadByShot[viewerState.currentShot], [tvScreenQuadByShot, viewerState.currentShot]);
+  const transitionProgress = useMemo(() => {
+    const from = viewerState.shotTransitionFromPosX;
+    const to = viewerState.targetPosX;
+    const current = viewerState.currentPosX;
+    const delta = to - from;
+    if (!viewerState.isTransitioning || Math.abs(delta) < 0.0001) return 1;
+    return Math.min(1, Math.max(0, (current - from) / delta));
+  }, [viewerState.currentPosX, viewerState.isTransitioning, viewerState.shotTransitionFromPosX, viewerState.targetPosX]);
+  const baseTvScreenQuad = useMemo(() => {
+    const currentQuad = tvScreenGeometryByShot[viewerState.currentShot];
+    const targetQuad = tvScreenGeometryByShot[viewerState.targetShot];
+    if (!viewerState.isTransitioning || viewerState.currentShot === viewerState.targetShot) return currentQuad;
+    return interpolateQuad(currentQuad, targetQuad, transitionProgress);
+  }, [interpolateQuad, transitionProgress, tvScreenGeometryByShot, viewerState.currentShot, viewerState.isTransitioning, viewerState.targetShot]);
 
   const overlaySceneRects = useMemo<Record<'doll' | 'door' | 'roomLight', OverlayRect>>(() => {
     const sceneWidth = cameraState.sceneWidth;
@@ -339,6 +371,11 @@ export default function Sandbox360Viewer({
   ]), [resolvedTvScreenQuad.bottomLeft.x, resolvedTvScreenQuad.bottomLeft.y, resolvedTvScreenQuad.bottomRight.x, resolvedTvScreenQuad.bottomRight.y, resolvedTvScreenQuad.topLeft.x, resolvedTvScreenQuad.topLeft.y, resolvedTvScreenQuad.topRight.x, resolvedTvScreenQuad.topRight.y]);
   const rendererUsesResolvedQuad = true;
   const effectContentUsesResolvedQuad = true;
+  const rendererUsesResolvedGeometry = true;
+  const effectContentUsesResolvedGeometry = true;
+  const rendererGeometryKind: RendererGeometryKind = 'authored_quad';
+  const rendererGeometrySource = `${TV_SCREEN_GEOMETRY_BY_SHOT}.${viewerState.currentShot}${viewerState.isTransitioning ? `->${viewerState.targetShot}@${transitionProgress.toFixed(3)}` : ''} -> resolveTvEffectGeometry(base+camera+handheld)`;
+  const rendererFallbackReason = 'none';
   const transitionState = useMemo<TransitionState>(() => ({
     isTransitioning: viewerState.isTransitioning,
     startedAt: viewerState.shotTransitionStartedAt,
@@ -348,13 +385,13 @@ export default function Sandbox360Viewer({
     targetPosX: viewerState.targetPosX
   }), [viewerState.currentPosX, viewerState.isTransitioning, viewerState.shotTransitionDurationMs, viewerState.shotTransitionFromPosX, viewerState.shotTransitionStartedAt, viewerState.targetPosX]);
   const transformChain = useMemo<TransformChainStep[]>(() => [
-    { step: 'geometry_source', summary: `TV_SCREEN_QUAD_BY_SHOT.${viewerState.currentShot}`, data: { shot: viewerState.currentShot, tvGeometryKind: TV_GEOMETRY_KIND } },
+    { step: 'geometry_source', summary: `${TV_SCREEN_GEOMETRY_BY_SHOT}.${viewerState.currentShot}${viewerState.isTransitioning ? `->${viewerState.targetShot}` : ''}`, data: { shot: viewerState.currentShot, targetShot: viewerState.targetShot, tvGeometryKind: TV_GEOMETRY_KIND, transitionProgress: transitionProgress.toFixed(3) } },
     { step: 'base_scene_quad', summary: `tl(${baseTvScreenQuad.topLeft.x.toFixed(2)},${baseTvScreenQuad.topLeft.y.toFixed(2)}) tr(${baseTvScreenQuad.topRight.x.toFixed(2)},${baseTvScreenQuad.topRight.y.toFixed(2)}) br(${baseTvScreenQuad.bottomRight.x.toFixed(2)},${baseTvScreenQuad.bottomRight.y.toFixed(2)}) bl(${baseTvScreenQuad.bottomLeft.x.toFixed(2)},${baseTvScreenQuad.bottomLeft.y.toFixed(2)})`, data: { x: baseTvScreenQuad.topLeft.x, y: baseTvScreenQuad.topLeft.y } },
     { step: 'camera_to_screen_pre_transform', summary: `cameraX=${cameraState.cameraX.toFixed(3)}, cameraY=${cameraState.cameraY.toFixed(3)}, cameraScale=${cameraState.cameraScale.toFixed(6)}`, data: { cameraX: cameraState.cameraX, cameraY: cameraState.cameraY, cameraScale: cameraState.cameraScale } },
     { step: 'handheld_transform', summary: `translate=(${viewerState.cameraOffsetX.toFixed(3)}, ${viewerState.cameraOffsetY.toFixed(3)}), rotate=${viewerState.cameraRotationDeg.toFixed(3)}, scale=${(1 + viewerState.cameraScaleOffset).toFixed(6)}`, data: { cameraOffsetX: viewerState.cameraOffsetX, cameraOffsetY: viewerState.cameraOffsetY, cameraRotationDeg: viewerState.cameraRotationDeg, cameraScale: 1 + viewerState.cameraScaleOffset } },
     { step: 'transition_state', summary: `from=${transitionState.fromPosX.toFixed(3)}, current=${transitionState.currentPosX.toFixed(3)}, target=${transitionState.targetPosX.toFixed(3)}, durationMs=${transitionState.durationMs}, transitioning=${String(transitionState.isTransitioning)}`, data: transitionState },
     { step: 'final_screen_quad', summary: `tl(${resolvedTvScreenQuad.topLeft.x.toFixed(2)},${resolvedTvScreenQuad.topLeft.y.toFixed(2)}) tr(${resolvedTvScreenQuad.topRight.x.toFixed(2)},${resolvedTvScreenQuad.topRight.y.toFixed(2)}) br(${resolvedTvScreenQuad.bottomRight.x.toFixed(2)},${resolvedTvScreenQuad.bottomRight.y.toFixed(2)}) bl(${resolvedTvScreenQuad.bottomLeft.x.toFixed(2)},${resolvedTvScreenQuad.bottomLeft.y.toFixed(2)})`, data: { x: resolvedTvScreenQuad.topLeft.x, y: resolvedTvScreenQuad.topLeft.y } }
-  ], [baseTvScreenQuad.bottomLeft.x, baseTvScreenQuad.bottomLeft.y, baseTvScreenQuad.bottomRight.x, baseTvScreenQuad.bottomRight.y, baseTvScreenQuad.topLeft.x, baseTvScreenQuad.topLeft.y, baseTvScreenQuad.topRight.x, baseTvScreenQuad.topRight.y, cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, resolvedTvScreenQuad.bottomLeft.x, resolvedTvScreenQuad.bottomLeft.y, resolvedTvScreenQuad.bottomRight.x, resolvedTvScreenQuad.bottomRight.y, resolvedTvScreenQuad.topLeft.x, resolvedTvScreenQuad.topLeft.y, resolvedTvScreenQuad.topRight.x, resolvedTvScreenQuad.topRight.y, transitionState, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset, viewerState.currentShot]);
+  ], [baseTvScreenQuad.bottomLeft.x, baseTvScreenQuad.bottomLeft.y, baseTvScreenQuad.bottomRight.x, baseTvScreenQuad.bottomRight.y, baseTvScreenQuad.topLeft.x, baseTvScreenQuad.topLeft.y, baseTvScreenQuad.topRight.x, baseTvScreenQuad.topRight.y, cameraState.cameraScale, cameraState.cameraX, cameraState.cameraY, resolvedTvScreenQuad.bottomLeft.x, resolvedTvScreenQuad.bottomLeft.y, resolvedTvScreenQuad.bottomRight.x, resolvedTvScreenQuad.bottomRight.y, resolvedTvScreenQuad.topLeft.x, resolvedTvScreenQuad.topLeft.y, resolvedTvScreenQuad.topRight.x, resolvedTvScreenQuad.topRight.y, transitionProgress, transitionState, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset, viewerState.currentShot, viewerState.isTransitioning, viewerState.targetShot]);
 
   const sceneImageStyle = useMemo(() => ({
     left: `${(-cameraState.cameraX * cameraState.cameraScale).toFixed(3)}px`,
@@ -465,7 +502,10 @@ export default function Sandbox360Viewer({
       baseSceneHeight: cameraState.sceneHeight,
       tvGeometryKind: TV_GEOMETRY_KIND,
       tvTargetRegionKind: TV_TARGET_REGION_KIND,
-      geometrySource: 'TV_SCREEN_QUAD_BY_SHOT -> resolveTvEffectGeometry(base+camera+containCover+handheld+transition)',
+      geometrySource: rendererGeometrySource,
+      rendererGeometrySource,
+      rendererGeometryKind,
+      rendererFallbackReason,
       baseTvScreenQuad,
       resolvedTvScreenQuad,
       resolvedTvBoundingRect,
@@ -476,8 +516,12 @@ export default function Sandbox360Viewer({
       quadPolygon: resolvedQuadStyle,
       transformChain,
       transitionState,
+      currentShot: viewerState.currentShot,
+      targetShot: viewerState.targetShot,
       rendererUsesResolvedQuad,
       effectContentUsesResolvedQuad,
+      rendererUsesResolvedGeometry,
+      effectContentUsesResolvedGeometry,
       tvAnchor: TV_ANCHOR_CALIBRATION.quadByShot.center,
       tvAnchorVersion: TV_ANCHOR_CALIBRATION.version,
       tvAnchorCalibratedAt: TV_ANCHOR_CALIBRATION.calibratedAt,
@@ -487,7 +531,7 @@ export default function Sandbox360Viewer({
       questionConsonant,
       roomEventLast: roomEventObservability.eventType
     });
-  }, [baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedQuad, effectVisibleBounds, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer]);
+  }, [baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
 
   return (
     <div

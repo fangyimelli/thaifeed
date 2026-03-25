@@ -749,6 +749,9 @@ export default function App() {
     tvGeometryKind: 'rect' as 'rect' | 'quad',
     tvTargetRegionKind: 'tv_outer_frame' as 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner',
     geometrySource: '-',
+    rendererGeometrySource: '-',
+    rendererGeometryKind: '-' as 'authored_quad' | 'fallback_rect' | '-',
+    rendererFallbackReason: '-',
     baseTvScreenQuad: {
       topLeft: { x: 0, y: 0 },
       topRight: { x: 0, y: 0 },
@@ -776,8 +779,12 @@ export default function App() {
       currentPosX: 0,
       targetPosX: 0
     },
+    currentShot: 'center' as 'left' | 'center' | 'right',
+    targetShot: 'center' as 'left' | 'center' | 'right',
     rendererUsesResolvedQuad: false,
     effectContentUsesResolvedQuad: false,
+    rendererUsesResolvedGeometry: false,
+    effectContentUsesResolvedGeometry: false,
     tvSharesTransformContainer: false,
     questionVisible: false,
     questionConsonant: '',
@@ -8178,6 +8185,9 @@ export default function App() {
                       tvGeometryKind: payload.tvGeometryKind,
                       tvTargetRegionKind: payload.tvTargetRegionKind,
                       geometrySource: payload.geometrySource,
+                      rendererGeometrySource: payload.rendererGeometrySource,
+                      rendererGeometryKind: payload.rendererGeometryKind,
+                      rendererFallbackReason: payload.rendererFallbackReason,
                       tvAnchor: payload.tvAnchor,
                       tvAnchorVersion: payload.tvAnchorVersion,
                       tvAnchorCalibratedAt: payload.tvAnchorCalibratedAt,
@@ -8192,8 +8202,12 @@ export default function App() {
                       quadPolygon: payload.quadPolygon,
                       transformChain: payload.transformChain,
                       transitionState: payload.transitionState,
+                      currentShot: payload.currentShot,
+                      targetShot: payload.targetShot,
                       rendererUsesResolvedQuad: payload.rendererUsesResolvedQuad,
                       effectContentUsesResolvedQuad: payload.effectContentUsesResolvedQuad,
+                      rendererUsesResolvedGeometry: payload.rendererUsesResolvedGeometry,
+                      effectContentUsesResolvedGeometry: payload.effectContentUsesResolvedGeometry,
                       tvSharesTransformContainer: payload.tvSharesTransformContainer,
                       questionVisible: payload.questionVisible,
                       questionConsonant: payload.questionConsonant,
@@ -8506,6 +8520,9 @@ export default function App() {
                     <div>tvGeometryKind: {sandbox360OverlayDebug.tvGeometryKind}</div>
                     <div>tvTargetRegionKind: {sandbox360OverlayDebug.tvTargetRegionKind}</div>
                     <div>geometrySource: {sandbox360OverlayDebug.geometrySource}</div>
+                    <div>rendererGeometrySource: {sandbox360OverlayDebug.rendererGeometrySource}</div>
+                    <div>rendererGeometryKind: {sandbox360OverlayDebug.rendererGeometryKind}</div>
+                    <div>rendererFallbackReason: {sandbox360OverlayDebug.rendererFallbackReason}</div>
                     <div>TV_ANCHOR(center): tl=({sandbox360OverlayDebug.tvAnchor.topLeft.x},{sandbox360OverlayDebug.tvAnchor.topLeft.y}) tr=({sandbox360OverlayDebug.tvAnchor.topRight.x},{sandbox360OverlayDebug.tvAnchor.topRight.y}) br=({sandbox360OverlayDebug.tvAnchor.bottomRight.x},{sandbox360OverlayDebug.tvAnchor.bottomRight.y}) bl=({sandbox360OverlayDebug.tvAnchor.bottomLeft.x},{sandbox360OverlayDebug.tvAnchor.bottomLeft.y})</div>
                     <div>TV_ANCHOR metadata: version={sandbox360OverlayDebug.tvAnchorVersion}, calibratedAt={sandbox360OverlayDebug.tvAnchorCalibratedAt}, source={sandbox360OverlayDebug.tvAnchorSource}</div>
                     <div>baseTvScreenQuad: tl=({sandbox360OverlayDebug.baseTvScreenQuad.topLeft.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.topLeft.y.toFixed(2)}) tr=({sandbox360OverlayDebug.baseTvScreenQuad.topRight.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.topRight.y.toFixed(2)}) br=({sandbox360OverlayDebug.baseTvScreenQuad.bottomRight.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.bottomRight.y.toFixed(2)}) bl=({sandbox360OverlayDebug.baseTvScreenQuad.bottomLeft.x.toFixed(2)},{sandbox360OverlayDebug.baseTvScreenQuad.bottomLeft.y.toFixed(2)})</div>
@@ -8517,8 +8534,11 @@ export default function App() {
                     <div>quadPolygon: {sandbox360OverlayDebug.quadPolygon.topLeft} | {sandbox360OverlayDebug.quadPolygon.topRight} | {sandbox360OverlayDebug.quadPolygon.bottomRight} | {sandbox360OverlayDebug.quadPolygon.bottomLeft}</div>
                     <div>quadDiff: {sandbox360OverlayDebug.quadDiff}</div>
                     <div>transitionState: from={sandbox360OverlayDebug.transitionState.fromPosX.toFixed(2)}, current={sandbox360OverlayDebug.transitionState.currentPosX.toFixed(2)}, target={sandbox360OverlayDebug.transitionState.targetPosX.toFixed(2)}, duration={sandbox360OverlayDebug.transitionState.durationMs}, transitioning={String(sandbox360OverlayDebug.transitionState.isTransitioning)}</div>
+                    <div>currentShot / targetShot (viewer payload): {sandbox360OverlayDebug.currentShot} / {sandbox360OverlayDebug.targetShot}</div>
                     <div>rendererUsesResolvedQuad: {String(sandbox360OverlayDebug.rendererUsesResolvedQuad)}</div>
                     <div>effectContentUsesResolvedQuad: {String(sandbox360OverlayDebug.effectContentUsesResolvedQuad)}</div>
+                    <div>rendererUsesResolvedGeometry: {String(sandbox360OverlayDebug.rendererUsesResolvedGeometry)}</div>
+                    <div>effectContentUsesResolvedGeometry: {String(sandbox360OverlayDebug.effectContentUsesResolvedGeometry)}</div>
                     <div>tv.sharedTransformContainer: {String(sandbox360OverlayDebug.tvSharesTransformContainer)}</div>
                     <div>question.visible / consonant: {String(sandbox360OverlayDebug.questionVisible)} / {sandbox360OverlayDebug.questionConsonant || '-'}</div>
                     <div style={{ marginTop: 6 }}>

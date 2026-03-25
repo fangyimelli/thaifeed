@@ -1,3 +1,14 @@
+## 2026-03-25 Sandbox360 TV 主 render geometry 強制切換（screen-inner authored）
+
+### Bug root cause
+- debug 有 quad，但 renderer 驗證資訊不足；且 transition 期間基礎 quad 未插值，會在 shot 交界吃到不正確幾何。
+
+### Fix summary
+- viewer 主路徑改為 `TV_SCREEN_GEOMETRY_BY_SHOT` + transition interpolation。
+- renderer/debug/hit/clip/visualization 全部依賴同一 `resolvedTvScreenQuad` 與 `resolvedTvBoundingRect`。
+- debug 新增 renderer 幾何責任欄位，明確區分 source/kind/fallback。
+- calibration 升版 `v2026-03-25.4`，收斂 CENTER 內框過大與左上外擴。
+
 ## 2026-03-25 Sandbox 360 TV quad / 四角定位主路徑落地
 
 ### Root cause

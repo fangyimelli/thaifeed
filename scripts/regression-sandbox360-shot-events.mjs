@@ -16,8 +16,10 @@ assertHas(viewerFile, 'window.__sandbox360 = debugApi;', 'sandbox360 debug API s
 assertHas(viewerFile, 'forceRoomEvent: (eventType) => onTriggerRoomEvent(eventType, { force: true, source: \'manual\' })', 'force room event must delegate to force gate callback');
 assertHas(viewerFile, 'key={`TV_STATIC_OVERLAY-${roomEventState.TV_STATIC.triggerSeq}`}', 'renderer overlay must re-mount on each trigger sequence to force effect replay');
 assertHas(viewerFile, 'data-active={roomEventState.TV_STATIC.active ? \'true\' : \'false\'}', 'renderer overlay must consume shared room event active state');
-assertHas(viewerFile, 'const tvScreenQuadByShot = useMemo(() => ({', 'viewer must resolve tv quad by shot from calibration');
+assertHas(viewerFile, 'const tvScreenGeometryByShot = useMemo(() => ({', 'viewer must resolve tv quad by shot from calibration');
 assertHas(viewerFile, 'const resolveTvEffectGeometry = ({ baseQuad, camera, handheld }: ResolveTvEffectGeometryInput): ResolveTvEffectGeometryResult => {', 'viewer must keep single resolveTvEffectGeometry path');
+assertHas(viewerFile, 'const TV_SCREEN_GEOMETRY_BY_SHOT = \'TV_SCREEN_GEOMETRY_BY_SHOT\';', 'viewer must expose single authored screen geometry source token');
+assertHas(viewerFile, 'return interpolateQuad(currentQuad, targetQuad, transitionProgress);', 'viewer must interpolate geometry between shots during transition');
 assertHas(viewerFile, 'tvGeometryKind: TV_GEOMETRY_KIND,', 'viewer debug payload must expose geometry kind');
 assertHas(viewerFile, 'baseTvScreenQuad,', 'viewer debug payload must expose base quad');
 assertHas(viewerFile, 'resolvedTvScreenQuad,', 'viewer debug payload must expose resolved quad');
@@ -27,13 +29,21 @@ assertHas(viewerFile, 'effectContentUsesResolvedQuad', 'viewer debug payload mus
 assertHas(viewerFile, 'effectVisibleBounds', 'viewer debug payload should include effect visible bounds');
 assertHas(viewerFile, "const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';", 'viewer geometry kind must stay quad');
 assertHas(viewerFile, "const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;", 'viewer target region semantic must stay tv_screen_inner');
-assertHas(viewerFile, 'TV_SCREEN_QUAD_BY_SHOT', 'viewer should document per-shot quad source');
+assertHas(viewerFile, 'TV_SCREEN_GEOMETRY_BY_SHOT', 'viewer should document per-shot quad source');
 assertHas(viewerFile, 'tvTargetRegionKind: TV_TARGET_REGION_KIND,', 'viewer debug payload must expose tv target region kind');
+assertHas(viewerFile, 'rendererGeometrySource,', 'viewer debug payload must expose renderer geometry source');
+assertHas(viewerFile, 'rendererGeometryKind,', 'viewer debug payload must expose renderer geometry kind');
+assertHas(viewerFile, 'rendererFallbackReason,', 'viewer debug payload must expose fallback reason');
+assertHas(viewerFile, 'rendererUsesResolvedGeometry', 'viewer should expose renderer resolved geometry identity');
+assertHas(viewerFile, 'effectContentUsesResolvedGeometry', 'viewer should expose effect content resolved geometry identity');
 assertHas(viewerFile, 'transitionState', 'viewer debug payload should include structured transition state');
 assertHas(viewerFile, 'className="sandbox360OverlayTvNoiseContent"', 'tv effect should render through explicit inner content layer');
 assertHas(viewerFile, 'className="sandbox360OverlayTvBoundsViz"', 'tv bounds visualization should render explicit dual-frame overlay');
 assertHas(viewerFile, 'className="sandbox360OverlayTvBoundsVizCorner"', 'tv bounds visualization should expose quad corners');
 assertHas(viewerFile, 'clipPath: `polygon(', 'tv effect content must use quad polygon clip path');
+if (viewerFile.includes('TV_SCREEN_QUAD_BY_SHOT')) {
+  throw new Error('legacy TV_SCREEN_QUAD_BY_SHOT wording should be removed');
+}
 if (viewerFile.includes('resolvedTvScreenRect')) {
   throw new Error('legacy resolvedTvScreenRect naming should be removed in viewer');
 }
@@ -84,10 +94,17 @@ assertHas(appFile, 'resolvedTvBoundingRect: payload.resolvedTvBoundingRect,', 'a
 assertHas(appFile, 'renderedEffectRect: payload.renderedEffectRect,', 'app should consume rendered effect rect from viewer SSOT');
 assertHas(appFile, 'effectVisibleBounds: payload.effectVisibleBounds,', 'app should consume effect visible bounds from viewer SSOT');
 assertHas(appFile, 'tvTargetRegionKind: payload.tvTargetRegionKind,', 'app should consume tv target region semantic from viewer SSOT');
+assertHas(appFile, 'rendererGeometrySource: payload.rendererGeometrySource,', 'app should consume renderer geometry source');
+assertHas(appFile, 'rendererGeometryKind: payload.rendererGeometryKind,', 'app should consume renderer geometry kind');
+assertHas(appFile, 'rendererFallbackReason: payload.rendererFallbackReason,', 'app should consume renderer fallback reason');
+assertHas(appFile, 'rendererUsesResolvedGeometry: payload.rendererUsesResolvedGeometry,', 'app should consume renderer resolved geometry identity');
+assertHas(appFile, 'effectContentUsesResolvedGeometry: payload.effectContentUsesResolvedGeometry,', 'app should consume effect resolved geometry identity');
 assertHas(appFile, 'TV effect bounds visualization:', 'debug page must expose tv effect bounds visualization toggle');
 assertHas(appFile, 'quadDiff: {sandbox360OverlayDebug.quadDiff}', 'debug page must show quad diff observability');
 assertHas(appFile, 'rendererUsesResolvedQuad: {String(sandbox360OverlayDebug.rendererUsesResolvedQuad)}', 'debug panel should show renderer quad identity gate');
 assertHas(appFile, 'effectContentUsesResolvedQuad: {String(sandbox360OverlayDebug.effectContentUsesResolvedQuad)}', 'debug panel should show effect content quad identity gate');
+assertHas(appFile, 'rendererGeometrySource: {sandbox360OverlayDebug.rendererGeometrySource}', 'debug panel should show renderer geometry source');
+assertHas(appFile, 'rendererUsesResolvedGeometry: {String(sandbox360OverlayDebug.rendererUsesResolvedGeometry)}', 'debug panel should show renderer resolved geometry identity');
 if (appFile.includes('resolvedTvScreenRect')) {
   throw new Error('legacy resolvedTvScreenRect naming should be removed from app debug schema');
 }
