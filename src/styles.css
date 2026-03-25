@@ -539,8 +539,8 @@ body {
     height: 100%;
   }
 
-  .scene-view-mobile .scene-video-layer:not(.scene-video-layer-sandbox360) .scene-video {
-    object-fit: contain;
+  .scene-view-mobile .scene-video-layer-sandbox360 {
+    --sandbox360-object-fit: cover;
   }
 
   .scene-view-mobile .filter-layer.curse-mid,
