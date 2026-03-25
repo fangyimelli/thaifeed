@@ -22,11 +22,18 @@ export type Sandbox360ViewerState = {
 
 type ShotType = 'left' | 'center' | 'right';
 type RoomEventType = 'LIGHT_FLASH_LEFT' | 'TV_STATIC' | 'DOLL_REFLECT' | 'DOOR_SHADOW';
-type TriggerSource = 'manual' | 'shot_flow';
+type TriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scripted';
 type TriggerRoomEventOptions = {
   source: TriggerSource;
   force?: boolean;
   ignoreCooldown?: boolean;
+};
+type RoomEventTriggerMode = 'normal' | 'force';
+type RoomEventObservabilityState = {
+  eventType: RoomEventType | null;
+  triggerMode: RoomEventTriggerMode;
+  cooldownBypassed: boolean;
+  lastTriggeredAt: number | null;
 };
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type SceneCameraState = {
@@ -59,6 +66,7 @@ type Props = {
 
 type Sandbox360DebugApi = {
   triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
+  forceRoomEvent: (eventType: RoomEventType) => boolean;
   overlay: {
     triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
   };
@@ -68,6 +76,7 @@ type Sandbox360DebugApi = {
   };
   debug: {
     triggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
+    forceRoomEvent: (eventType: RoomEventType) => boolean;
     triggerShot: (shot: ShotType) => void;
   };
 };
@@ -106,6 +115,12 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     DOLL_REFLECT: 0,
     DOOR_SHADOW: 0
   });
+  const [roomEventObservability, setRoomEventObservability] = useState<RoomEventObservabilityState>({
+    eventType: null,
+    triggerMode: 'normal',
+    cooldownBypassed: false,
+    lastTriggeredAt: null
+  });
   const timeoutsRef = useRef<Record<RoomEventType, number | null>>({
     LIGHT_FLASH_LEFT: null,
     TV_STATIC: null,
@@ -122,6 +137,12 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     TV_STATIC: 0,
     DOLL_REFLECT: 0,
     DOOR_SHADOW: 0
+  });
+  const roomEventObservabilityRef = useRef<RoomEventObservabilityState>({
+    eventType: null,
+    triggerMode: 'normal',
+    cooldownBypassed: false,
+    lastTriggeredAt: null
   });
 
   const cameraState = useMemo<SceneCameraState>(() => {
@@ -189,12 +210,22 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
 
   const triggerRoomEvent = useCallback((eventType: RoomEventType, options?: TriggerRoomEventOptions) => {
     const source = options?.source ?? 'manual';
+    const triggerMode: RoomEventTriggerMode = options?.force === true ? 'force' : 'normal';
     const shouldBypassCooldown = Boolean(options?.force || options?.ignoreCooldown);
     const now = Date.now();
     const cooldownUntil = eventCooldownMapRef.current[eventType] ?? 0;
     if (!shouldBypassCooldown && cooldownUntil > now) {
       return false;
     }
+
+    const nextObservabilityState: RoomEventObservabilityState = {
+      eventType,
+      triggerMode,
+      cooldownBypassed: shouldBypassCooldown,
+      lastTriggeredAt: now
+    };
+    roomEventObservabilityRef.current = nextObservabilityState;
+    setRoomEventObservability(nextObservabilityState);
 
     setActiveEvents((prev) => ({
       ...prev,
@@ -222,6 +253,10 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
 
     return true;
   }, []);
+
+  const forceRoomEvent = useCallback((eventType: RoomEventType) => (
+    triggerRoomEvent(eventType, { force: true, source: 'manual' })
+  ), [triggerRoomEvent]);
 
   const onShotChange = useCallback((prevShot: ShotType, nextShot: ShotType) => {
     if (prevShot === nextShot) return;
@@ -291,6 +326,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
     const previousApi = window.__sandbox360;
     const debugApi: Sandbox360DebugApi = {
       triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
+      forceRoomEvent,
       overlay: {
         triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options)
       },
@@ -303,7 +339,8 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         }
       },
       debug: {
-        triggerRoomEvent: (eventType, options) => triggerRoomEvent(eventType, options),
+        triggerRoomEvent: (eventType) => forceRoomEvent(eventType),
+        forceRoomEvent,
         triggerShot
       }
     };
@@ -321,7 +358,7 @@ export default function Sandbox360Viewer({ viewerState, curse, questionConsonant
         }
       });
     };
-  }, [clearDelayedLightFlashTimer, clearRightStayTimer, triggerRoomEvent, triggerShot]);
+  }, [clearDelayedLightFlashTimer, clearRightStayTimer, forceRoomEvent, triggerRoomEvent, triggerShot]);
 
   return (
     <div
