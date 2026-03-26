@@ -1,3 +1,20 @@
+## 2026-03-26 Sandbox360 娃娃凝視修復（移除錯誤前景臉路徑，改為 scene-anchor SSOT）
+
+- Scope 僅 `sandbox_360_test`；classic mode 與 sandbox story 完全未改。
+- Root cause：
+  - 雖已切到 `dollSlotAnchors`，但 renderer 仍允許「僅部分可見」slot 在畫面邊角被渲染，造成看起來像貼在 viewport 前景的漂浮圓臉。
+  - doll debug 尚未輸出 per-doll anchor/visibility/apply reason，難以直接驗證「state 套到櫃內娃娃本體」是否成功。
+  - CSS 仍殘留舊 `sandbox360OverlayDoll` 單體假路徑樣式，造成雙軌混淆風險。
+- 修正：
+  - `Sandbox360Viewer` 新增 `dollSceneBindings`（每隻娃娃：anchor、viewport 可見比、gaze state、apply 成敗與原因）。
+  - 360 模式下，娃娃渲染 gate 改為「anchor center 在 viewport + 可見比 >= 0.45」才允許 render，避免邊角漂浮臉。
+  - debug payload 新增 `dollGazeSsot`（`mode=360`、`overlayFloatingFaceRemoved`、`controlledDolls`、`bindings[]`）。
+  - App debug panel 顯示每隻娃娃 anchor/visibility/gaze/apply reason；debug 只讀 state，不改 state。
+  - 刪除舊 `.sandbox360OverlayDoll` CSS 殘留，清除單體前景假路徑。
+
+### Removed / Deprecated Log
+- Removed legacy `.sandbox360OverlayDoll` CSS path（單體前景假 gaze）。
+
 ## 2026-03-26 Sandbox360 娃娃凝視錨點修復（移除漂浮前景臉路徑）
 
 - Scope 僅 `sandbox_360_test`；classic mode 與 sandbox story 完全未改。

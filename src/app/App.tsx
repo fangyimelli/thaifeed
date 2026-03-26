@@ -851,7 +851,29 @@ export default function App() {
     renderedVariantAssets: [] as string[],
     missingVariantAssets: [] as string[],
     fallbackVariantMap: {} as Record<string, string>,
-    variantRenderSource: '-'
+    variantRenderSource: '-',
+    dollGazeSsot: {
+      mode: '360' as const,
+      overlayFloatingFaceRemoved: false,
+      controlledDolls: [] as string[],
+      bindings: [] as Array<{
+        dollId: string;
+        slot: string;
+        anchor: { x: number; y: number; w: number; h: number };
+        requestedVariant: string;
+        resolvedVariant: string;
+        gazeState: 'idle' | 'trackingPlayer' | 'lockedOnPlayer';
+        visibility: {
+          inViewport: boolean;
+          visibleRatio: number;
+          reason: string;
+          visibleRect: { x: number; y: number; w: number; h: number };
+        };
+        applyStatus: 'applied' | 'skipped';
+        applyReason: string;
+        renderAssetId: string;
+      }>
+    }
   });
   const [sandbox360TvBoundsVisualizationEnabled, setSandbox360TvBoundsVisualizationEnabled] = useState(false);
   const sandbox360RoomEventCooldownRef = useRef<Record<Sandbox360RoomEventType, number>>({
@@ -8327,14 +8349,15 @@ export default function App() {
                       questionConsonant: payload.questionConsonant,
                       roomEventLast: payload.roomEventLast,
                       effectsDebugMap: payload.effectsDebugMap,
-                    dollCabinetStage: payload.dollCabinetStage,
-                    dollCabinetLookAtPlayerLevel: payload.dollCabinetLookAtPlayerLevel,
-                    dollCabinetStageEffectSource: payload.dollCabinetStageEffectSource,
-                    renderedDollSlots: payload.renderedDollSlots,
-                    renderedVariantAssets: payload.renderedVariantAssets,
-                    missingVariantAssets: payload.missingVariantAssets,
-                    fallbackVariantMap: payload.fallbackVariantMap,
-                    variantRenderSource: payload.variantRenderSource
+                      dollCabinetStage: payload.dollCabinetStage,
+                      dollCabinetLookAtPlayerLevel: payload.dollCabinetLookAtPlayerLevel,
+                      dollCabinetStageEffectSource: payload.dollCabinetStageEffectSource,
+                      renderedDollSlots: payload.renderedDollSlots,
+                      renderedVariantAssets: payload.renderedVariantAssets,
+                      missingVariantAssets: payload.missingVariantAssets,
+                      fallbackVariantMap: payload.fallbackVariantMap,
+                      variantRenderSource: payload.variantRenderSource,
+                      dollGazeSsot: payload.dollGazeSsot
                     });
                   }}
                   viewerState={{
@@ -8650,6 +8673,14 @@ export default function App() {
                     <div>dollCabinet.missingVariantAssets: {sandbox360OverlayDebug.missingVariantAssets.join(' | ') || '-'}</div>
                     <div>dollCabinet.fallbackVariantMap: {Object.entries(sandbox360OverlayDebug.fallbackVariantMap).map(([id, map]) => `${id}:${map}`).join(' | ') || '-'}</div>
                     <div>dollCabinet.variantRenderSource: {sandbox360OverlayDebug.variantRenderSource}</div>
+                    <div>dollGazeSsot.mode: {sandbox360OverlayDebug.dollGazeSsot.mode}</div>
+                    <div>dollGazeSsot.overlayFloatingFaceRemoved: {String(sandbox360OverlayDebug.dollGazeSsot.overlayFloatingFaceRemoved)}</div>
+                    <div>dollGazeSsot.controlledDolls: {sandbox360OverlayDebug.dollGazeSsot.controlledDolls.join(',') || '-'}</div>
+                    {sandbox360OverlayDebug.dollGazeSsot.bindings.map((binding) => (
+                      <div key={`dollBinding-${binding.dollId}`}>
+                        dollBinding[{binding.dollId}] slot={binding.slot} anchor=({binding.anchor.x.toFixed(1)},{binding.anchor.y.toFixed(1)},{binding.anchor.w.toFixed(1)},{binding.anchor.h.toFixed(1)}) inViewport={String(binding.visibility.inViewport)} ratio={binding.visibility.visibleRatio.toFixed(2)} gaze={binding.gazeState} apply={binding.applyStatus}:{binding.applyReason}
+                      </div>
+                    ))}
                     <div>current360Region: {sandbox360ViewerState.currentShot.toUpperCase()}</div>
                     <div>globalEffectsDebugSchema: effectType / active / forced / geometryKind / geometrySource / baseGeometry / resolvedGeometry / renderedBounds / visibleBounds / fallback</div>
                     <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>

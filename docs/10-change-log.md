@@ -1,3 +1,23 @@
+## 2026-03-26 Sandbox360 doll gaze hard-fix（remove viewport-floating faces）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Added per-doll scene binding SSOT (`dollSceneBindings`) with anchor, viewport visibility, gaze state, and apply result/reason.
+  - Enforced render gate: doll renders only when anchor center is in viewport and visible ratio >= 0.45.
+  - Added viewer debug payload `dollGazeSsot` (`mode=360`, controlled dolls, floating-face removal flag, per-doll bindings).
+- `src/app/App.tsx`
+  - Extended sandbox360 debug state and panel with `dollGazeSsot` details for direct validation.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Removed legacy `.sandbox360OverlayDoll` single-overlay style path.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added guards for `dollSceneBindings`, `dollGazeSsot`, render gate threshold token, and legacy CSS path removal.
+
+### Removed / Deprecated Log
+- Removed legacy viewport-like single doll overlay css token (`.sandbox360OverlayDoll`).
+
 ## 2026-03-26 Sandbox360 doll gaze anchor fix（remove floating-face path）
 
 ### Scope
