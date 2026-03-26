@@ -3,6 +3,7 @@ import { NIGHT1 } from '../../ssot/sandbox_story/night1';
 import type { NightScript } from '../../ssot/sandbox_story/types';
 import { isSandboxWaitReplyStep } from '../sandbox_story/waitReplyStep';
 import { SANDBOX_PROMPT_TEMPLATES, renderSandboxPromptTemplate } from '../../content/chat-content/appRuntimeContent';
+import { createInitialDollCabinetState } from './dollCabinetSystem';
 
 export type SandboxPrompt = {
   kind: 'consonant' | 'theory' | 'final';
@@ -225,6 +226,7 @@ export const createSandbox360InitialState = () => {
   unresolvedAmbient: { active: false, remaining: 0, completed: 0 },
   blockedReason: '',
   transitions: initialTransitions,
+  dollCabinet: createInitialDollCabinetState(),
   viewer: {
     currentShot: 'center',
     targetShot: 'center',
@@ -319,6 +321,11 @@ export function ensureSandbox360StateShape(raw: any) {
   next.nightId = raw?.nightId ?? base.nightId;
   next.round = { ...base.round, ...(raw?.round ?? {}) };
   next.blockedReason = raw?.blockedReason ?? raw?.blocked?.reason ?? base.blockedReason;
+  next.dollCabinet = { ...base.dollCabinet, ...(raw?.dollCabinet ?? {}) };
+  next.dollCabinet.dollCabinetCooldown = { ...base.dollCabinet.dollCabinetCooldown, ...(raw?.dollCabinet?.dollCabinetCooldown ?? {}) };
+  next.dollCabinet.stageEffectSource = { ...base.dollCabinet.stageEffectSource, ...(raw?.dollCabinet?.stageEffectSource ?? {}) };
+  next.dollCabinet.dollCabinetActiveVariantMap = { ...base.dollCabinet.dollCabinetActiveVariantMap, ...(raw?.dollCabinet?.dollCabinetActiveVariantMap ?? {}) };
+  next.dollCabinet.activeLookTargets = Array.isArray(raw?.dollCabinet?.activeLookTargets) ? raw.dollCabinet.activeLookTargets : base.dollCabinet.activeLookTargets;
   next.viewer = { ...base.viewer, ...(raw?.viewer ?? {}) };
   if (!next.viewer.currentShot || typeof next.viewer.currentShot !== 'string') {
     next.viewer.currentShot = 'center';

@@ -1,3 +1,19 @@
+## 2026-03-26 Sandbox360 Doll Cabinet Look-at-Player stage system（authored variants + SSOT + debug）
+
+- Scope 僅 `sandbox_360_test`，classic mode 無改動。
+- 新增 `src/modes/sandbox_360_test/dollCabinetSystem.ts` 作為娃娃櫃注視系統 SSOT：
+  - `dollCabinetStage / dollCabinetThreatLevel / dollCabinetFocusDuration / dollCabinetLookAtPlayerLevel`
+  - `dollCabinetActiveVariantMap / dollCabinetActiveScare / dollCabinetCooldown`
+  - `dollCabinetLastTriggerReason / dollCabinetCanEscalate / dollCabinetBlockReason / activeLookTargets`
+- 建立 authored per-doll targets（id/slot/allowedVariants/escalationOrder/scarePriority）與變體 `neutral/glance_to_player/stare_player/hard_stare`。
+- RIGHT 停留 / 回看 + TV/FLASH/DOOR/Story-tag return trigger 可驅動 stage gate 升級；scare 後進 cooldown，避免連發。
+- Viewer 改為依 `activeVariantMap` 渲染 per-slot doll variant，不再使用單一 `sandbox360OverlayDoll`。
+- `DOLL_REFLECT` 降級為輔助 cue（`sandbox360OverlayDollReflectCue`），不再作為唯一娃娃主效果。
+- 360 Debug 補齊 doll cabinet state + source 投影（overlay/audio/variant）。
+
+### Removed / Deprecated Log
+- Deprecated `sandbox360OverlayDoll` 單一娃娃反光主路徑；改為 per-doll authored variant render path + `DOLL_REFLECT` cue。
+
 ## 2026-03-26 Sandbox360 顯示責任重分配（主畫面乾淨化 + Debug 集中 SSOT）
 
 - Scope 僅 `sandbox_360_test`，classic mode 未改動。

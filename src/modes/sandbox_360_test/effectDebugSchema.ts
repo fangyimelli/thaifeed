@@ -40,6 +40,9 @@ export type EffectDebugEntry = {
   effectContentUsesResolvedGeometry: boolean;
   effectContentInset?: string;
   effectInnerTransform?: string;
+  variantSource?: string;
+  audioSource?: string;
+  overlaySource?: string;
 };
 
 export type EffectsDebugMap = Record<EffectType, EffectDebugEntry>;

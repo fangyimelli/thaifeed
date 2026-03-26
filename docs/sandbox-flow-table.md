@@ -1,3 +1,18 @@
+## Sandbox 360 doll cabinet look-at-player staged flow（sandbox_360_test only）
+
+| stage | behavior | primary variants | trigger gate | debug key |
+| --- | --- | --- | --- | --- |
+| 0 | 正常觀察 | all `neutral` | init / reset | `dollCabinetStage=0` |
+| 1 | 單隻偷看 | 1x `glance_to_player` | RIGHT revisit | `activeLookTargets(1)` |
+| 2 | 2~3 隻盯視 | `glance_to_player + stare_player` | RIGHT stay / TV/FLASH 回看 | `dollCabinetThreatLevel≈55` |
+| 3 | 多數盯視 | majority `stare_player` | DOOR/事件後回看 | `dollCabinetLookAtPlayerLevel≈0.84` |
+| 4 | scare 瞬發 | all `hard_stare` | escalation gate hit | `dollCabinetActiveScare=true` |
+
+Notes:
+- Scare 後進 `dollCabinetCooldown`，`dollCabinetCanEscalate=false`，避免連發。
+- Viewer 必須使用 `dollCabinetActiveVariantMap`，不得 local 推導誰在看玩家。
+- `DOLL_REFLECT` 僅作 cue（玻璃反光輔助），不再作娃娃主效果。
+
 > 2026-03-25 sandbox_360_test 補充（第七波）：依使用者紅框 follow-up，`TV_SCREEN_INNER_QUAD_BY_SHOT` 再收斂為更小 screen-inner 發光區，校準版本 `v2026-03-25.6`。
 > 2026-03-26 sandbox_360_test 補充（第八波）：主畫面移除 TV 常駐紅框，effect 定位資訊統一進入 `effectsDebugMap`（tv/flash/doll/door）並集中在 Debug `GLOBAL EFFECT RESOLVE`；renderer 與 debug 共用同一 resolved geometry/state。
 

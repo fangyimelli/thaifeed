@@ -10,6 +10,7 @@ import {
   type TvScreenQuadPoint
 } from './tvAnchorCalibration';
 import type { EffectBoundsStyle, EffectDebugEntry, EffectsDebugMap } from './effectDebugSchema';
+import type { DollCabinetState, DollCabinetTarget } from './dollCabinetSystem';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -99,6 +100,8 @@ type Props = {
   onTriggerRoomEvent: (eventType: RoomEventType, options?: TriggerRoomEventOptions) => boolean;
   roomEventState: RoomEventRuntimeState;
   roomEventObservability: RoomEventObservabilityState;
+  dollCabinetState: DollCabinetState;
+  dollCabinetTargets: DollCabinetTarget[];
   onViewerDebugStateChange?: (payload: {
     baseSceneWidth: number;
     baseSceneHeight: number;
@@ -141,6 +144,9 @@ type Props = {
     questionConsonant: string;
     roomEventLast: RoomEventType | null;
     effectsDebugMap: EffectsDebugMap;
+    dollCabinetStage: number;
+    dollCabinetLookAtPlayerLevel: number;
+    dollCabinetStageEffectSource: { overlaySource: string; audioSource: string; variantSource: string };
   }) => void;
   tvBoundsVisualizationEnabled?: boolean;
 };
@@ -241,6 +247,8 @@ export default function Sandbox360Viewer({
   onTriggerRoomEvent,
   roomEventState,
   roomEventObservability,
+  dollCabinetState,
+  dollCabinetTargets,
   onViewerDebugStateChange,
   tvBoundsVisualizationEnabled = false
 }: Props) {
@@ -594,7 +602,10 @@ export default function Sandbox360Viewer({
         forceReason: roomEventObservability.forceReason ?? '-',
         sourceStatus: roomEventObservability.eventType === null ? 'idle' : roomEventObservability.eventType,
         rendererUsesResolvedGeometry: true,
-        effectContentUsesResolvedGeometry: true
+        effectContentUsesResolvedGeometry: true,
+        variantSource: effectType === 'doll' ? dollCabinetState.stageEffectSource.variantSource : '-',
+        audioSource: effectType === 'doll' ? dollCabinetState.stageEffectSource.audioSource : '-',
+        overlaySource: effectType === 'doll' ? dollCabinetState.stageEffectSource.overlaySource : '-'
       };
     };
     return {
@@ -619,13 +630,16 @@ export default function Sandbox360Viewer({
         rendererUsesResolvedGeometry,
         effectContentUsesResolvedGeometry,
         effectContentInset: 'none',
-        effectInnerTransform: 'none'
+        effectInnerTransform: 'none',
+        variantSource: '-',
+        audioSource: '-',
+        overlaySource: '-'
       },
       flash: createRectEntry('flash', 'roomLight', flashRenderedBounds, roomEventState.LIGHT_FLASH_LEFT.active),
       doll: createRectEntry('doll', 'doll', dollRenderedBounds, roomEventState.DOLL_REFLECT.active),
       door: createRectEntry('door', 'door', doorRenderedBounds, roomEventState.DOOR_SHADOW.active)
     };
-  }, [baseTvScreenInnerRect, baseTvScreenQuad, dollRenderedBounds, doorRenderedBounds, effectContentUsesResolvedGeometry, effectVisibleBounds, flashRenderedBounds, renderedEffectRect, rendererFallbackReason, rendererGeometrySource, rendererUsesResolvedGeometry, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, roomEventObservability.forceReason, roomEventObservability.lastBlockedReason, roomEventObservability.triggerMode, roomEventState.DOLL_REFLECT.active, roomEventState.DOOR_SHADOW.active, roomEventState.LIGHT_FLASH_LEFT.active, roomEventState.TV_STATIC.active, toScreenRect, toScreenRectStyle, transitionState, viewerState.currentShot, viewerState.targetShot, overlaySceneRects]);
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, dollRenderedBounds, doorRenderedBounds, effectContentUsesResolvedGeometry, effectVisibleBounds, flashRenderedBounds, renderedEffectRect, rendererFallbackReason, rendererGeometrySource, rendererUsesResolvedGeometry, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, roomEventObservability.forceReason, roomEventObservability.lastBlockedReason, roomEventObservability.triggerMode, roomEventState.DOLL_REFLECT.active, roomEventState.DOOR_SHADOW.active, roomEventState.LIGHT_FLASH_LEFT.active, roomEventState.TV_STATIC.active, toScreenRect, toScreenRectStyle, transitionState, viewerState.currentShot, viewerState.targetShot, overlaySceneRects, dollCabinetState.stageEffectSource]);
 
   useEffect(() => {
     onViewerDebugStateChange?.({
@@ -669,9 +683,12 @@ export default function Sandbox360Viewer({
       questionVisible,
       questionConsonant,
       roomEventLast: roomEventObservability.eventType,
-      effectsDebugMap
+      effectsDebugMap,
+      dollCabinetStage: dollCabinetState.dollCabinetStage,
+      dollCabinetLookAtPlayerLevel: dollCabinetState.dollCabinetLookAtPlayerLevel,
+      dollCabinetStageEffectSource: dollCabinetState.stageEffectSource
     });
-  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, dollCabinetState.dollCabinetLookAtPlayerLevel, dollCabinetState.dollCabinetStage, dollCabinetState.stageEffectSource, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
 
   return (
     <div
@@ -734,7 +751,26 @@ export default function Sandbox360Viewer({
               ))}
             </div>
           ) : null}
-          <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDoll" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
+          <div className="sandbox360OverlayDollCabinet" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-stage={dollCabinetState.dollCabinetStage}>
+            <div className="sandbox360OverlayDollCabinetFx" data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
+            {dollCabinetTargets.map((target) => {
+              const variant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';
+              const looking = dollCabinetState.activeLookTargets.includes(target.id);
+              return (
+                <div
+                  key={target.id}
+                  className="sandbox360OverlayDollSlot"
+                  data-slot={target.cabinetSlot}
+                  data-variant={variant}
+                  data-looking={looking ? 'true' : 'false'}
+                >
+                  <div className="sandbox360OverlayDollHead" />
+                  <div className="sandbox360OverlayDollEyes" />
+                </div>
+              );
+            })}
+            <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
+          </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
         </div>
       </div>

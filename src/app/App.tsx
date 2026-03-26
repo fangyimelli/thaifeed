@@ -60,6 +60,7 @@ import {
 import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
 import { createSandbox360Mode, resolveSandbox360ViewerFraming, resolveSandbox360ViewerTarget } from '../modes/sandbox_360_test/sandbox360Mode';
+import { DOLL_CABINET_TARGETS, createInitialDollCabinetState, markDollCabinetReturnTrigger, reduceDollCabinetForEscalation, settleDollCabinet, type DollCabinetState } from '../modes/sandbox_360_test/dollCabinetSystem';
 import { isViewerCommandText, parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
 import type { EffectDebugEntry, EffectsDebugMap } from '../modes/sandbox_360_test/effectDebugSchema';
 import {
@@ -140,7 +141,7 @@ type EventTxn = {
 };
 
 type Sandbox360RoomEventType = 'LIGHT_FLASH_LEFT' | 'TV_STATIC' | 'DOLL_REFLECT' | 'DOOR_SHADOW';
-type Sandbox360RoomEventTriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scripted';
+type Sandbox360RoomEventTriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scripted' | 'doll_stage';
 type Sandbox360RoomEventTriggerMode = 'normal' | 'force';
 type Sandbox360RoomEventRuntime = { active: boolean; triggerCount: number; triggerSeq: number };
 type Sandbox360RoomEventState = Record<Sandbox360RoomEventType, Sandbox360RoomEventRuntime>;
@@ -765,6 +766,10 @@ export default function App() {
     forceAllowed: true,
     forceReason: 'debug_force_enabled'
   });
+  const [sandbox360DollCabinetState, setSandbox360DollCabinetState] = useState<DollCabinetState>(createInitialDollCabinetState());
+  const sandbox360DollCabinetRef = useRef<DollCabinetState>(createInitialDollCabinetState());
+  const sandbox360RightEnteredAtRef = useRef(0);
+
   const [sandbox360OverlayDebug, setSandbox360OverlayDebug] = useState({
     tvAnchor: {
       topLeft: { x: 0, y: 0 },
@@ -838,7 +843,10 @@ export default function App() {
     questionVisible: false,
     questionConsonant: '',
     roomEventLast: null as Sandbox360RoomEventType | null,
-    effectsDebugMap: EMPTY_EFFECTS_DEBUG_MAP
+    effectsDebugMap: EMPTY_EFFECTS_DEBUG_MAP,
+    dollCabinetStage: 0,
+    dollCabinetLookAtPlayerLevel: 0,
+    dollCabinetStageEffectSource: { overlaySource: '-', audioSource: '-', variantSource: '-' }
   });
   const [sandbox360TvBoundsVisualizationEnabled, setSandbox360TvBoundsVisualizationEnabled] = useState(false);
   const sandbox360RoomEventCooldownRef = useRef<Record<Sandbox360RoomEventType, number>>({
@@ -1938,6 +1946,7 @@ export default function App() {
         DOLL_REFLECT: { active: false, triggerCount: 0, triggerSeq: 0 },
         DOOR_SHADOW: { active: false, triggerCount: 0, triggerSeq: 0 }
       });
+      setSandbox360DollCabinetState(sandbox360State.dollCabinet ?? createInitialDollCabinetState());
       setSandbox360RoomEventDebug({
         eventType: null,
         triggerMode: 'normal',
@@ -5063,6 +5072,15 @@ export default function App() {
       forceAllowed: Boolean(options?.force) || true,
       forceReason: options?.force ? 'forced_by_debug_gate' : source
     });
+    if (eventType === 'TV_STATIC') {
+      setSandbox360DollCabinetState((prev) => markDollCabinetReturnTrigger(prev, 'tv'));
+    }
+    if (eventType === 'LIGHT_FLASH_LEFT') {
+      setSandbox360DollCabinetState((prev) => markDollCabinetReturnTrigger(prev, 'flash'));
+    }
+    if (eventType === 'DOOR_SHADOW') {
+      setSandbox360DollCabinetState((prev) => markDollCabinetReturnTrigger(prev, 'door'));
+    }
     setSandbox360RoomEvents((prev) => ({
       ...prev,
       [eventType]: {
@@ -5089,6 +5107,10 @@ export default function App() {
     return true;
   }, [clearSandbox360RoomEventTimer]);
   useEffect(() => {
+    sandbox360DollCabinetRef.current = sandbox360DollCabinetState;
+  }, []);
+
+  useEffect(() => {
     const base = (window.__CHAT_DEBUG__ ?? {}) as any;
     window.__CHAT_DEBUG__ = {
       ...base,
@@ -5097,10 +5119,11 @@ export default function App() {
         sandbox360ViewerState,
         sandbox360RoomEvents,
         sandbox360RoomEventDebug,
-        sandbox360OverlayDebug
+        sandbox360OverlayDebug,
+        sandbox360DollCabinetState
       }
     };
-  }, [sandbox360OverlayDebug, sandbox360RoomEventDebug, sandbox360RoomEvents, sandbox360ViewerState]);
+  }, [sandbox360DollCabinetState, sandbox360OverlayDebug, sandbox360RoomEventDebug, sandbox360RoomEvents, sandbox360ViewerState]);
 
   const applySandbox360Shot = useCallback((shot: 'left' | 'center' | 'right', source: 'chat_command' | 'debug_button') => {
     const now = Date.now();
@@ -5126,7 +5149,7 @@ export default function App() {
       cameraVelocityX: Number.isFinite(currentState.viewer?.cameraVelocityX) ? Number(currentState.viewer?.cameraVelocityX) : 0,
       cameraVelocityY: Number.isFinite(currentState.viewer?.cameraVelocityY) ? Number(currentState.viewer?.cameraVelocityY) : 0
     };
-    sandbox360ModeRef.current.setState({ viewer: nextViewer });
+    sandbox360ModeRef.current.setState({ viewer: nextViewer, dollCabinet: sandbox360DollCabinetRef.current });
     setSandbox360ViewerState((prev) => ({
       ...prev,
       targetShot: nextViewer.targetShot,
@@ -5153,7 +5176,7 @@ export default function App() {
       lastParseMatched: source === 'chat_command'
     }));
     return { now, resolvedTarget, nextViewer };
-  }, []);
+  }, [sandbox360DollCabinetState]);
 
   useEffect(() => {
     if (modeIdRef.current !== 'sandbox_360_test') return;
@@ -5164,7 +5187,16 @@ export default function App() {
     sandbox360ShotEnterAtRef.current = enteredAt;
     sandbox360ShotLastRef.current = nextShot;
     clearSandbox360ShotFlowTimers();
+
     if (nextShot === 'right') {
+      sandbox360RightEnteredAtRef.current = enteredAt;
+      setSandbox360DollCabinetState((prev) => {
+        const source = prev.pendingReturnTrigger;
+        if (source) {
+          return reduceDollCabinetForEscalation(prev, { now: enteredAt, source, focusDurationMs: prev.dollCabinetFocusDuration });
+        }
+        return reduceDollCabinetForEscalation(prev, { now: enteredAt, source: 'right_revisit', focusDurationMs: 0 });
+      });
       sandbox360ShotFlowTimersRef.current.delayedLightFlash = window.setTimeout(() => {
         if (sandbox360ShotLastRef.current !== 'right') return;
         triggerSandbox360RoomEvent('LIGHT_FLASH_LEFT', { source: 'shot_flow' });
@@ -5173,16 +5205,35 @@ export default function App() {
         const stillOnRight = sandbox360ShotLastRef.current === 'right';
         const sameEntry = sandbox360ShotEnterAtRef.current === enteredAt;
         if (!stillOnRight || !sameEntry) return;
+        const now = Date.now();
         triggerSandbox360RoomEvent('TV_STATIC', { source: 'shot_flow' });
+        setSandbox360DollCabinetState((prev) => reduceDollCabinetForEscalation(prev, { now, source: 'right_stay', focusDurationMs: Math.max(0, now - enteredAt) }));
       }, 3000);
     }
+
     if (prevShot === 'right' && nextShot === 'center') {
       triggerSandbox360RoomEvent('DOOR_SHADOW', { source: 'shot_flow' });
+      const now = Date.now();
+      setSandbox360DollCabinetState((prev) => ({
+        ...prev,
+        dollCabinetFocusDuration: Math.max(0, now - (sandbox360RightEnteredAtRef.current || now)),
+        pendingReturnTrigger: 'door'
+      }));
     }
+
     if (prevShot === 'left' && nextShot === 'center') {
-      triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'shot_flow' });
+      triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'doll_stage' });
     }
   }, [clearSandbox360ShotFlowTimers, sandbox360ViewerState.currentShot, triggerSandbox360RoomEvent]);
+
+  useEffect(() => {
+    if (modeIdRef.current !== 'sandbox_360_test') return;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setSandbox360DollCabinetState((prev) => settleDollCabinet(prev, now));
+    }, 120);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let rafId = 0;
@@ -5263,7 +5314,7 @@ export default function App() {
           posY,
           scale
         };
-        sandbox360ModeRef.current.setState({ viewer: nextViewer });
+        sandbox360ModeRef.current.setState({ viewer: nextViewer, dollCabinet: sandbox360DollCabinetRef.current });
         setSandbox360ViewerState((prev) => ({
           ...prev,
           currentShot: nextViewer.currentShot,
@@ -8215,6 +8266,7 @@ export default function App() {
                     <button type="button" onClick={() => triggerSandbox360RoomEvent('DOLL_REFLECT', { source: 'manual' })}>DOLL</button>
                     <button type="button" onClick={() => triggerSandbox360RoomEvent('DOOR_SHADOW', { source: 'manual' })}>DOOR</button>
                     <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual', force: true })}>FORCE TV</button>
+                    <button type="button" onClick={() => setSandbox360DollCabinetState((prev) => markDollCabinetReturnTrigger(prev, 'story_tag'))}>TAG→RIGHT</button>
                   </div>
                 </div>
                 <Sandbox360Viewer
@@ -8228,6 +8280,8 @@ export default function App() {
                   onTriggerRoomEvent={(eventType, options) => triggerSandbox360RoomEvent(eventType, options)}
                   roomEventState={sandbox360RoomEvents}
                   roomEventObservability={sandbox360RoomEventDebug}
+                  dollCabinetState={sandbox360DollCabinetState}
+                  dollCabinetTargets={DOLL_CABINET_TARGETS}
                   onViewerDebugStateChange={(payload) => {
                     setSandbox360OverlayDebug({
                       baseSceneWidth: payload.baseSceneWidth,
@@ -8267,7 +8321,10 @@ export default function App() {
                       questionVisible: payload.questionVisible,
                       questionConsonant: payload.questionConsonant,
                       roomEventLast: payload.roomEventLast,
-                      effectsDebugMap: payload.effectsDebugMap
+                      effectsDebugMap: payload.effectsDebugMap,
+                    dollCabinetStage: payload.dollCabinetStage,
+                    dollCabinetLookAtPlayerLevel: payload.dollCabinetLookAtPlayerLevel,
+                    dollCabinetStageEffectSource: payload.dollCabinetStageEffectSource
                     });
                   }}
                   viewerState={{
@@ -8572,6 +8629,13 @@ export default function App() {
                     <div>event.counts: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerCount}, tv={sandbox360RoomEvents.TV_STATIC.triggerCount}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerCount}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerCount}</div>
                     <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
                     <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
+                    <div>dollCabinet.stage/threat/lookLevel: {sandbox360DollCabinetState.dollCabinetStage} / {sandbox360DollCabinetState.dollCabinetThreatLevel} / {sandbox360DollCabinetState.dollCabinetLookAtPlayerLevel.toFixed(2)}</div>
+                    <div>dollCabinet.focusDuration/cooldownRemaining: {sandbox360DollCabinetState.dollCabinetFocusDuration} / {sandbox360DollCabinetState.dollCabinetCooldown.remainingMs}</div>
+                    <div>dollCabinet.lastTrigger/canEscalate/block: {sandbox360DollCabinetState.dollCabinetLastTriggerReason} / {String(sandbox360DollCabinetState.dollCabinetCanEscalate)} / {sandbox360DollCabinetState.dollCabinetBlockReason}</div>
+                    <div>dollCabinet.activeScare/activeLookTargets: {String(sandbox360DollCabinetState.dollCabinetActiveScare)} / {sandbox360DollCabinetState.activeLookTargets.join(',') || '-'}</div>
+                    <div>dollCabinet.activeVariantMap: {Object.entries(sandbox360DollCabinetState.dollCabinetActiveVariantMap).map(([id, variant]) => `${id}:${variant}`).join(' | ')}</div>
+                    <div>dollCabinet.overlay/audio/variant source: {sandbox360DollCabinetState.stageEffectSource.overlaySource} / {sandbox360DollCabinetState.stageEffectSource.audioSource} / {sandbox360DollCabinetState.stageEffectSource.variantSource}</div>
+                    <div>current360Region: {sandbox360ViewerState.currentShot.toUpperCase()}</div>
                     <div>globalEffectsDebugSchema: effectType / active / forced / geometryKind / geometrySource / baseGeometry / resolvedGeometry / renderedBounds / visibleBounds / fallback</div>
                     <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>
                     <div>calibrationSource: {sandbox360OverlayDebug.calibrationSource}</div>
