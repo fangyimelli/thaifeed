@@ -1,3 +1,28 @@
+## 2026-03-26 Sandbox360 右側娃娃櫃 stare MVP（頭部小角度變體 + 眼神 overlay）
+
+- Scope：`sandbox_360_test` only（classic mode untouched）。
+- 新增 `src/modes/sandbox_360_test/dollCabinetRenderLibrary.ts` 作為 `slot × variant` 正式渲染路徑：
+  - 關鍵娃娃先做 4 隻（`doll_02/03/05/06`）。
+  - 每隻先有 `neutral/glance_to_player/stare_player/hard_stare` + eye/highlight overlay。
+  - fallback 契約：`missing variant -> neutral`；`missing neutral -> hidden(no-op)`。
+- `Sandbox360Viewer` 改為讀 render library 輸出 `<img>` 資產層，不再用 CSS primitive head/eyes 當主路徑。
+- `dollCabinetSystem` stage 重新對齊 MVP 感知目標：
+  - stage1：1 隻 glance
+  - stage2：2 隻 stare
+  - stage3：3~4 隻多數 stare
+  - stage4：hard stare scare + cooldown
+- `App`/Debug 新增 renderer 同源可觀測欄位：
+  - `renderedDollSlots`
+  - `renderedVariantAssets`
+  - `missingVariantAssets`
+  - `fallbackVariantMap`
+  - `variantRenderSource`
+- regression guard `scripts/regression-sandbox360-shot-events.mjs` 補強：
+  - 鎖定 key dolls、render library token、fallback/debug 欄位與 cooldown/scare 契約。
+
+### Removed / Deprecated Log
+- Deprecated CSS primitive doll head/eyes 主路徑（改為 authored variant asset 渲染）。
+
 ## 2026-03-26 Sandbox360 Doll Cabinet staged stare system
 
 ### Scope

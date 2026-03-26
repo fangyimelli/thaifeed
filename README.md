@@ -1,3 +1,24 @@
+## 2026-03-26 Sandbox360 右側娃娃櫃「都看向我」MVP（頭部小角度變體 + 眼神 overlay）
+
+- Scope 僅 `sandbox_360_test`；classic mode 無改動。
+- 正式主路徑改為 `slot × variant` authored render path（不再以 CSS rotate/skew 假轉頭）：
+  - 新增 `src/modes/sandbox_360_test/dollCabinetRenderLibrary.ts`。
+  - 每隻關鍵娃娃提供 `neutral / glance_to_player / stare_player / hard_stare` 正式變體 + eye/highlight overlay。
+  - fallback 契約：`missing variant -> neutral`；`missing neutral -> hidden(no-op)`，禁止 broken layer。
+- 本次先聚焦 4 隻關鍵娃娃（`doll_02/03/05/06`，對應 `top_center/top_right/bottom_center/bottom_right`），並保留可擴充架構。
+- stage flow MVP：
+  - stage0 全 neutral
+  - stage1 1 隻 glance
+  - stage2 2 隻 stare
+  - stage3 3~4 隻多數 stare
+  - stage4 scare 短暫 hard_stare，之後 cooldown
+- Debug 新增 renderer/SSOT 同源欄位：
+  - `renderedDollSlots / renderedVariantAssets / missingVariantAssets / fallbackVariantMap / variantRenderSource`
+  - 搭配既有 `activeLookTargets / activeVariantMap / stage/cooldown/blockReason` 一起驗收。
+
+### Removed / Deprecated Log
+- Deprecated：以 CSS primitive head/eyes 當娃娃主渲染路徑（改為 authored variant asset path）。
+
 ## 2026-03-26 Sandbox360 Doll Cabinet Look-at-Player stage system（authored variants + SSOT + debug）
 
 - Scope 僅 `sandbox_360_test`，classic mode 無改動。

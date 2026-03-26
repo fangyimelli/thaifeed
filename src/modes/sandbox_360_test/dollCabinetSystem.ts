@@ -46,11 +46,9 @@ export type DollCabinetState = {
 };
 
 export const DOLL_CABINET_TARGETS: DollCabinetTarget[] = [
-  { id: 'doll_01', cabinetSlot: 'top_left', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 2 },
-  { id: 'doll_02', cabinetSlot: 'top_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 6 },
-  { id: 'doll_03', cabinetSlot: 'top_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 3 },
-  { id: 'doll_04', cabinetSlot: 'bottom_left', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 5 },
-  { id: 'doll_05', cabinetSlot: 'bottom_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 1 },
+  { id: 'doll_02', cabinetSlot: 'top_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 1 },
+  { id: 'doll_03', cabinetSlot: 'top_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 2 },
+  { id: 'doll_05', cabinetSlot: 'bottom_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 3 },
   { id: 'doll_06', cabinetSlot: 'bottom_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 4 }
 ];
 
@@ -95,16 +93,16 @@ const applyStageVariants = (stage: DollCabinetStage) => {
     return { variantMap, activeLookTargets: id ? [id] : [] };
   }
   if (stage === 2) {
-    const lookTargets = targetsByPriority.slice(0, 3).map((target) => target.id);
-    lookTargets.forEach((id, index) => {
-      variantMap[id] = index === 0 ? 'glance_to_player' : 'stare_player';
+    const lookTargets = targetsByPriority.slice(0, 2).map((target) => target.id);
+    lookTargets.forEach((id) => {
+      variantMap[id] = 'stare_player';
     });
     return { variantMap, activeLookTargets: lookTargets };
   }
   if (stage === 3) {
-    const lookTargets = targetsByPriority.slice(0, 5).map((target) => target.id);
-    lookTargets.forEach((id) => {
-      variantMap[id] = 'stare_player';
+    const lookTargets = targetsByPriority.slice(0, 4).map((target) => target.id);
+    lookTargets.forEach((id, index) => {
+      variantMap[id] = index === lookTargets.length - 1 ? 'glance_to_player' : 'stare_player';
     });
     return { variantMap, activeLookTargets: lookTargets };
   }

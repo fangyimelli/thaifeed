@@ -846,7 +846,12 @@ export default function App() {
     effectsDebugMap: EMPTY_EFFECTS_DEBUG_MAP,
     dollCabinetStage: 0,
     dollCabinetLookAtPlayerLevel: 0,
-    dollCabinetStageEffectSource: { overlaySource: '-', audioSource: '-', variantSource: '-' }
+    dollCabinetStageEffectSource: { overlaySource: '-', audioSource: '-', variantSource: '-' },
+    renderedDollSlots: [] as string[],
+    renderedVariantAssets: [] as string[],
+    missingVariantAssets: [] as string[],
+    fallbackVariantMap: {} as Record<string, string>,
+    variantRenderSource: '-'
   });
   const [sandbox360TvBoundsVisualizationEnabled, setSandbox360TvBoundsVisualizationEnabled] = useState(false);
   const sandbox360RoomEventCooldownRef = useRef<Record<Sandbox360RoomEventType, number>>({
@@ -5108,7 +5113,7 @@ export default function App() {
   }, [clearSandbox360RoomEventTimer]);
   useEffect(() => {
     sandbox360DollCabinetRef.current = sandbox360DollCabinetState;
-  }, []);
+  }, [sandbox360DollCabinetState]);
 
   useEffect(() => {
     const base = (window.__CHAT_DEBUG__ ?? {}) as any;
@@ -8324,7 +8329,12 @@ export default function App() {
                       effectsDebugMap: payload.effectsDebugMap,
                     dollCabinetStage: payload.dollCabinetStage,
                     dollCabinetLookAtPlayerLevel: payload.dollCabinetLookAtPlayerLevel,
-                    dollCabinetStageEffectSource: payload.dollCabinetStageEffectSource
+                    dollCabinetStageEffectSource: payload.dollCabinetStageEffectSource,
+                    renderedDollSlots: payload.renderedDollSlots,
+                    renderedVariantAssets: payload.renderedVariantAssets,
+                    missingVariantAssets: payload.missingVariantAssets,
+                    fallbackVariantMap: payload.fallbackVariantMap,
+                    variantRenderSource: payload.variantRenderSource
                     });
                   }}
                   viewerState={{
@@ -8635,6 +8645,11 @@ export default function App() {
                     <div>dollCabinet.activeScare/activeLookTargets: {String(sandbox360DollCabinetState.dollCabinetActiveScare)} / {sandbox360DollCabinetState.activeLookTargets.join(',') || '-'}</div>
                     <div>dollCabinet.activeVariantMap: {Object.entries(sandbox360DollCabinetState.dollCabinetActiveVariantMap).map(([id, variant]) => `${id}:${variant}`).join(' | ')}</div>
                     <div>dollCabinet.overlay/audio/variant source: {sandbox360DollCabinetState.stageEffectSource.overlaySource} / {sandbox360DollCabinetState.stageEffectSource.audioSource} / {sandbox360DollCabinetState.stageEffectSource.variantSource}</div>
+                    <div>dollCabinet.renderedDollSlots: {sandbox360OverlayDebug.renderedDollSlots.join(',') || '-'}</div>
+                    <div>dollCabinet.renderedVariantAssets: {sandbox360OverlayDebug.renderedVariantAssets.join(' | ') || '-'}</div>
+                    <div>dollCabinet.missingVariantAssets: {sandbox360OverlayDebug.missingVariantAssets.join(' | ') || '-'}</div>
+                    <div>dollCabinet.fallbackVariantMap: {Object.entries(sandbox360OverlayDebug.fallbackVariantMap).map(([id, map]) => `${id}:${map}`).join(' | ') || '-'}</div>
+                    <div>dollCabinet.variantRenderSource: {sandbox360OverlayDebug.variantRenderSource}</div>
                     <div>current360Region: {sandbox360ViewerState.currentShot.toUpperCase()}</div>
                     <div>globalEffectsDebugSchema: effectType / active / forced / geometryKind / geometrySource / baseGeometry / resolvedGeometry / renderedBounds / visibleBounds / fallback</div>
                     <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>
