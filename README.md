@@ -1,3 +1,18 @@
+## 2026-03-26 Sandbox360 顯示責任重分配（主畫面乾淨化 + Debug 集中 SSOT）
+
+- Scope 僅 `sandbox_360_test`，classic mode 未改動。
+- 主畫面移除 TV 常駐紅框/校正框（不是隱藏 CSS，而是移除渲染責任）。
+- Debug 新增 unified `effectsDebugMap`（tv/flash/doll/door），集中呈現：
+  - geometry kind/source
+  - base/resolved/rendered/visible bounds
+  - force/block/fallback reason
+  - currentShot/targetShot/transition 關聯
+  - renderer/effect content 是否共用同一 resolved geometry
+- TV bounds visualization 僅保留在 Debug toggle 開啟時顯示；常態主畫面不再有紅框。
+
+### Removed / Deprecated Log
+- Deprecated `sandbox360OverlayTvDebug` 主畫面常駐 TV 紅框節點（責任移轉到 Debug panel + debug-only visualization toggle）。
+
 ## 2026-03-25 Sandbox360 TV red-box follow-up calibration（CENTER/LEFT/RIGHT）
 
 - 依據使用者提供紅框目標區，將 `TV_SCREEN_INNER_QUAD_BY_SHOT` 再次收斂（`v2026-03-25.6`），把 screen-inner 從偏寬矩形改為更接近實際螢幕發光區的小範圍 quad。

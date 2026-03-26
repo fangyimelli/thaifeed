@@ -1,3 +1,24 @@
+## 2026-03-26 Sandbox360 display responsibility split (main clean / debug SSOT)
+
+### Root cause
+- 主畫面同時承擔「效果渲染」與「紅框校正可視化」，造成常態畫面持續疊紅框，且 Debug 與 renderer 觀測邏輯出現雙軌。
+- TV 以外 effect（FLASH/DOLL/DOOR）的定位資料沒有集中 schema，Debug 很難直接對照 renderer 真正使用值。
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 移除主畫面常駐 TV 紅框節點（`sandbox360OverlayTvDebug`）。
+  - 建立 `effectsDebugMap`（tv/flash/doll/door）並由 viewer resolve/render path 直接投影到 debug payload。
+  - TV 與其他 effect 統一輸出：base/resolved/rendered/visible、geometry source、force/fallback/block、shot/transition 關聯。
+  - bounds visualization 保留 Debug toggle 控制，不回到常駐紅框模式。
+- `src/modes/sandbox_360_test/effectDebugSchema.ts`
+  - 新增統一 effect debug schema（SSOT 型別）。
+- `src/app/App.tsx`
+  - 接收並呈現 `effectsDebugMap`，Debug 面板新增 `GLOBAL EFFECT RESOLVE` 區塊，集中顯示各 effect 實際定位資料。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 移除 TV 紅框樣式，保留僅 Debug visualization 使用的樣式。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增 guard：主畫面不得回歸 TV 紅框、必須存在 unified `effectsDebugMap` 並於 Debug 呈現。
+
 ## 2026-03-25 Sandbox360 TV red-box follow-up calibration
 
 ### What changed

@@ -48,6 +48,11 @@ assertHas(viewerFile, 'transitionState', 'viewer debug payload should include st
 assertHas(viewerFile, 'className="sandbox360OverlayTvNoiseContent"', 'tv effect should render through explicit inner content layer');
 assertHas(viewerFile, 'className="sandbox360OverlayTvBoundsViz"', 'tv bounds visualization should render explicit dual-frame overlay');
 assertHas(viewerFile, 'className="sandbox360OverlayTvBoundsVizCorner"', 'tv bounds visualization should expose quad corners');
+assertHas(viewerFile, 'effectsDebugMap: EffectsDebugMap;', 'viewer payload should expose unified effects debug map');
+assertHas(viewerFile, 'const effectsDebugMap = useMemo<EffectsDebugMap>(() => {', 'viewer should build effects debug ssot map');
+if (viewerFile.includes('className="sandbox360OverlayTvDebug"')) {
+  throw new Error('main view tv debug red box must be removed');
+}
 assertHas(viewerFile, 'clipPath: `polygon(', 'tv effect content must use quad polygon clip path');
 if (viewerFile.includes('TV_SCREEN_QUAD_BY_SHOT')) {
   throw new Error('legacy TV_SCREEN_QUAD_BY_SHOT wording should be removed');
@@ -81,6 +86,7 @@ assertHas(appFile, 'baseTvScreenInnerRect: { left: \'-\', top: \'-\', width: \'-
 assertHas(appFile, 'baseTvScreenQuad:', 'app overlay debug state should include base tv screen quad');
 assertHas(appFile, 'resolvedTvScreenQuad:', 'app overlay debug state should include resolved tv screen quad');
 assertHas(appFile, 'resolvedTvScreenInnerRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved screen-inner rect');
+assertHas(appFile, 'effectsDebugMap: EMPTY_EFFECTS_DEBUG_MAP', 'app overlay debug state should include unified effect map');
 assertHas(appFile, 'resolvedTvBoundingRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include resolved bounding rect');
 assertHas(appFile, 'renderedEffectRect: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include rendered effect rect');
 assertHas(appFile, 'effectVisibleBounds: { left: \'-\', top: \'-\', width: \'-\', height: \'-\' },', 'app overlay debug state should include effect visible bounds');
@@ -115,6 +121,7 @@ assertHas(appFile, 'rendererGeometryKind: payload.rendererGeometryKind,', 'app s
 assertHas(appFile, 'rendererFallbackReason: payload.rendererFallbackReason,', 'app should consume renderer fallback reason');
 assertHas(appFile, 'rendererUsesResolvedGeometry: payload.rendererUsesResolvedGeometry,', 'app should consume renderer resolved geometry identity');
 assertHas(appFile, 'effectContentUsesResolvedGeometry: payload.effectContentUsesResolvedGeometry,', 'app should consume effect resolved geometry identity');
+assertHas(appFile, 'effectsDebugMap: payload.effectsDebugMap', 'app should consume effects debug map payload');
 assertHas(appFile, 'TV effect bounds visualization:', 'debug page must expose tv effect bounds visualization toggle');
 assertHas(appFile, 'quadDiff: {sandbox360OverlayDebug.quadDiff}', 'debug page must show quad diff observability');
 assertHas(appFile, 'rendererUsesResolvedQuad: {String(sandbox360OverlayDebug.rendererUsesResolvedQuad)}', 'debug panel should show renderer quad identity gate');
@@ -124,6 +131,8 @@ assertHas(appFile, 'rendererUsesResolvedGeometry: {String(sandbox360OverlayDebug
 assertHas(appFile, 'calibrationSource: {sandbox360OverlayDebug.calibrationSource}', 'debug panel should show calibration source');
 assertHas(appFile, 'baseTvScreenInnerRect: left={sandbox360OverlayDebug.baseTvScreenInnerRect.left}', 'debug panel should show base screen-inner rect');
 assertHas(appFile, 'resolvedTvScreenInnerRect: left={sandbox360OverlayDebug.resolvedTvScreenInnerRect.left}', 'debug panel should show resolved screen-inner rect');
+assertHas(appFile, '<strong>GLOBAL EFFECT RESOLVE</strong>', 'debug panel should show unified effect resolve block');
+assertHas(appFile, 'Object.entries(sandbox360OverlayDebug.effectsDebugMap)', 'debug panel should render unified effect map entries');
 if (appFile.includes('resolvedTvScreenRect')) {
   throw new Error('legacy resolvedTvScreenRect naming should be removed from app debug schema');
 }
