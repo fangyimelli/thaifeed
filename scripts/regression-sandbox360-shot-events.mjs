@@ -35,6 +35,7 @@ assertHas(appFile, 'dollCabinet.renderedVariantAssets:', 'debug panel should exp
 assertHas(appFile, 'dollCabinet.missingVariantAssets:', 'debug panel should expose missing variant assets');
 assertHas(appFile, 'dollCabinet.fallbackVariantMap:', 'debug panel should expose fallback map');
 assertHas(appFile, 'dollGazeSsot.mode:', 'debug panel should expose 360 gaze mode');
+assertHas(appFile, 'dollGazeSsot.activeCabinetRegion:', 'debug panel should expose active doll cabinet region');
 assertHas(appFile, 'dollGazeSsot.overlayFloatingFaceRemoved:', 'debug panel should expose floating-face removal status');
 assertHas(appFile, 'dollBinding[', 'debug panel should expose per-doll anchor/apply status');
 assertHas(appFile, 'current360Region:', 'debug panel should expose current 360 region');
@@ -42,16 +43,18 @@ assertHas(appFile, 'current360Region:', 'debug panel should expose current 360 r
 assertHas(viewerFile, 'dollCabinetState: DollCabinetState;', 'viewer should consume doll cabinet ssot');
 assertHas(viewerFile, 'dollCabinetTargets: DollCabinetTarget[];', 'viewer should consume authored doll targets table');
 assertHas(viewerFile, "const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';", 'viewer should render from activeVariantMap ssot');
-assertHas(viewerFile, 'resolveDollVariantRenderPath', 'viewer should resolve per-slot render path by variant');
-assertHas(viewerFile, '${binding.requestedVariant}->${binding.resolvedVariant}', 'viewer debug should expose fallback variant mapping');
-assertHas(viewerFile, "variantRenderSource: 'slot_variant_render_library_v1'", 'viewer should expose variant source id');
+assertHas(viewerFile, 'DOLL_MOTION_BY_VARIANT', 'viewer should own cabinet doll motion profiles');
+assertHas(viewerFile, '${binding.requestedVariant}->${binding.resolvedVariant}@${binding.motionPreset}', 'viewer debug should expose motion preset mapping');
+assertHas(viewerFile, "variantRenderSource: 'cabinet_scene_clone_motion_v2'", 'viewer should expose scene clone render source id');
 assertHas(viewerFile, 'const dollSlotAnchors = useMemo<DollSlotAnchorMap>', 'viewer should author scene-space doll slot anchors');
 assertHas(viewerFile, 'const dollSceneBindings = useMemo<DollSceneBindingDebug[]>', 'viewer should project per-doll scene binding ssot');
+assertHas(viewerFile, "activeCabinetRegion: 'dollCabinet'", 'viewer should expose active cabinet region in gaze ssot');
 assertHas(viewerFile, "overlayFloatingFaceRemoved: true", 'viewer should explicitly expose floating-face path removal');
 assertHas(viewerFile, 'const inViewport = visibleRatio >= 0.45 && centerInViewport;', 'viewer should block partial edge-floating dolls');
 assertHas(viewerFile, ": 'applied_to_scene_anchor';", 'viewer should report successful scene-anchor application reason');
 assertHas(viewerFile, 'className="sandbox360OverlayDollWorldLayer"', 'viewer should render doll world layer in 360 scene');
 assertHas(viewerFile, 'className="sandbox360OverlayDollAnchor"', 'viewer should render anchored per-doll nodes');
+assertHas(viewerFile, 'className="sandbox360OverlayDollBodyClone"', 'viewer should render cabinet doll body clone layer');
 assertHas(viewerFile, "if (binding.applyStatus !== 'applied') return null;", 'viewer should cull non-applicable doll anchors');
 assertHas(viewerFile, "geometrySource: 'dollSlotAnchors(scene_space) -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)'", 'doll debug geometry must report scene-space anchor path');
 assertHas(viewerFile, 'className="sandbox360OverlayDollReflectCue"', 'legacy doll reflect should stay as cue only');
@@ -66,8 +69,8 @@ if (viewerCssFile.includes('.sandbox360OverlayDoll {')) {
   throw new Error('legacy single doll overlay css path should be removed');
 }
 
-if (viewerFile.includes('sandbox360OverlayDollHead"')) {
-  throw new Error('legacy css primitive doll head path must not remain primary renderer');
+if (viewerFile.includes('sandbox360OverlayDollHeadAsset')) {
+  throw new Error('legacy viewport floating doll head asset path must be removed');
 }
 
 if (viewerFile.includes('className="sandbox360OverlayDollCabinet"')) {

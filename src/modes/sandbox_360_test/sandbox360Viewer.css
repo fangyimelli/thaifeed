@@ -208,51 +208,41 @@
   overflow: hidden;
   transform: translateZ(0);
   contain: layout paint style;
+  isolation: isolate;
 }
 
-.sandbox360OverlayDollHeadAsset,
-.sandbox360OverlayDollEyeOverlayAsset,
-.sandbox360OverlayDollHighlightAsset {
+.sandbox360OverlayDollBodyClone,
+.sandbox360OverlayDollGazeTint {
   position: absolute;
-  left: 18%;
-  top: 11%;
-  width: 64%;
-  height: 68%;
-  object-fit: contain;
-  image-rendering: auto;
+  inset: 0;
+  pointer-events: none;
 }
 
-.sandbox360OverlayDollEyeOverlayAsset {
+.sandbox360OverlayDollBodyClone {
+  background-image: var(--doll-bg-image);
+  background-repeat: no-repeat;
+  background-size: var(--doll-bg-size-x) var(--doll-bg-size-y);
+  background-position: var(--doll-bg-pos-x) var(--doll-bg-pos-y);
+  transform-origin: 50% 62%;
+  animation: sandbox360DollBodyMotion var(--doll-motion-ms, 2800ms) ease-in-out infinite;
+  filter: saturate(1.04) contrast(1.05);
+}
+
+.sandbox360OverlayDollGazeTint {
   mix-blend-mode: screen;
-  opacity: 0.36;
+  opacity: 0.18;
+  background:
+    radial-gradient(circle at 52% 40%, rgba(190, 225, 255, 0.2), transparent 45%),
+    radial-gradient(circle at 48% 50%, rgba(132, 178, 255, 0.16), transparent 58%);
+  animation: sandbox360DollGazeShift calc(var(--doll-motion-ms, 2800ms) * 0.9) ease-in-out infinite;
 }
 
-.sandbox360OverlayDollHighlightAsset {
-  mix-blend-mode: lighten;
-  opacity: 0.24;
-}
+.sandbox360OverlayDollAnchor[data-variant='neutral'] .sandbox360OverlayDollGazeTint { opacity: 0.12; }
+.sandbox360OverlayDollAnchor[data-variant='glance_to_player'] .sandbox360OverlayDollGazeTint { opacity: 0.2; }
+.sandbox360OverlayDollAnchor[data-variant='stare_player'] .sandbox360OverlayDollGazeTint { opacity: 0.28; }
+.sandbox360OverlayDollAnchor[data-variant='hard_stare'] .sandbox360OverlayDollGazeTint { opacity: 0.36; }
 
-.sandbox360OverlayDollAnchor[data-variant='neutral'] .sandbox360OverlayDollEyeOverlayAsset { opacity: 0.22; }
-.sandbox360OverlayDollAnchor[data-variant='glance_to_player'] .sandbox360OverlayDollEyeOverlayAsset {
-  opacity: 0.56;
-  filter: brightness(1.2);
-}
-.sandbox360OverlayDollAnchor[data-variant='stare_player'] .sandbox360OverlayDollEyeOverlayAsset {
-  opacity: 0.86;
-  filter: brightness(1.36) contrast(1.22);
-}
-.sandbox360OverlayDollAnchor[data-variant='hard_stare'] .sandbox360OverlayDollEyeOverlayAsset {
-  opacity: 1;
-  filter: brightness(1.55) contrast(1.36) saturate(1.2);
-}
-
-.sandbox360OverlayDollAnchor[data-variant='hard_stare'] .sandbox360OverlayDollHighlightAsset {
-  opacity: 0.54;
-}
-
-.sandbox360OverlayDollAnchor[data-looking='true'] .sandbox360OverlayDollHeadAsset {
-  filter: brightness(1.08) contrast(1.06);
-}
+.sandbox360OverlayDollAnchor[data-looking='true'] .sandbox360OverlayDollBodyClone { filter: saturate(1.1) contrast(1.1) brightness(1.05); }
 
 .sandbox360OverlayDollReflectCue {
   position: absolute;
@@ -278,6 +268,28 @@
   0% { filter: brightness(0.95); }
   50% { filter: brightness(1.12); }
   100% { filter: brightness(0.95); }
+}
+
+@keyframes sandbox360DollBodyMotion {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  30% {
+    transform: translate3d(calc(var(--doll-gaze-offset-x) * 0.35), calc(var(--doll-gaze-offset-y) * 0.35), 0)
+      rotate(calc(var(--doll-head-tilt-deg) * 0.45))
+      scale(var(--doll-breathe-scale));
+  }
+  60% {
+    transform: translate3d(var(--doll-gaze-offset-x), calc(var(--doll-gaze-offset-y) + var(--doll-drift-px) * -0.25), 0)
+      rotate(var(--doll-head-tilt-deg))
+      scale(calc(var(--doll-breathe-scale) + 0.004));
+  }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+}
+
+@keyframes sandbox360DollGazeShift {
+  0% { transform: translate3d(0, 0, 0); }
+  40% { transform: translate3d(calc(var(--doll-gaze-offset-x) * 0.5), calc(var(--doll-gaze-offset-y) * 0.35), 0); }
+  80% { transform: translate3d(calc(var(--doll-gaze-offset-x) * -0.15), calc(var(--doll-gaze-offset-y) * 0.1), 0); }
+  100% { transform: translate3d(0, 0, 0); }
 }
 
 @keyframes sandbox360DollCabinetScare {

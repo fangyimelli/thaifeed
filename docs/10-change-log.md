@@ -1,3 +1,24 @@
+## 2026-03-26 Sandbox360 doll cabinet body-in-cabinet fix（replace floating round-face renderer）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Replaced doll render source with `cabinet_scene_clone_motion_v2` (scene pixel clone per cabinet slot, no standalone face sprite).
+  - Added per-variant motion profile SSOT and binding debug fields (`motionPreset`, `activeCabinetRegion`).
+  - Extended gaze state with `subtleMotion` and kept strict in-viewport gate.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Removed head/eye/highlight asset layers and introduced in-slot body clone + gaze tint motion styles.
+- `src/app/App.tsx`
+  - Debug panel now shows `dollGazeSsot.activeCabinetRegion` and per-doll `motion` status.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Replaced render-library tokens with scene-clone motion tokens; added guard preventing head-asset path reintroduction.
+- Removed file: `src/modes/sandbox_360_test/dollCabinetRenderLibrary.ts`.
+
+### Removed / Deprecated Log
+- Removed round-face render library path and related floating-face asset route.
+
 ## 2026-03-26 Sandbox360 doll gaze hard-fix（remove viewport-floating faces）
 
 ### Scope

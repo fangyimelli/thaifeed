@@ -854,6 +854,7 @@ export default function App() {
     variantRenderSource: '-',
     dollGazeSsot: {
       mode: '360' as const,
+      activeCabinetRegion: 'dollCabinet' as const,
       overlayFloatingFaceRemoved: false,
       controlledDolls: [] as string[],
       bindings: [] as Array<{
@@ -862,7 +863,7 @@ export default function App() {
         anchor: { x: number; y: number; w: number; h: number };
         requestedVariant: string;
         resolvedVariant: string;
-        gazeState: 'idle' | 'trackingPlayer' | 'lockedOnPlayer';
+        gazeState: 'idle' | 'subtleMotion' | 'trackingPlayer' | 'lockedOnPlayer';
         visibility: {
           inViewport: boolean;
           visibleRatio: number;
@@ -872,6 +873,7 @@ export default function App() {
         applyStatus: 'applied' | 'skipped';
         applyReason: string;
         renderAssetId: string;
+        motionPreset: string;
       }>
     }
   });
@@ -8674,11 +8676,12 @@ export default function App() {
                     <div>dollCabinet.fallbackVariantMap: {Object.entries(sandbox360OverlayDebug.fallbackVariantMap).map(([id, map]) => `${id}:${map}`).join(' | ') || '-'}</div>
                     <div>dollCabinet.variantRenderSource: {sandbox360OverlayDebug.variantRenderSource}</div>
                     <div>dollGazeSsot.mode: {sandbox360OverlayDebug.dollGazeSsot.mode}</div>
+                    <div>dollGazeSsot.activeCabinetRegion: {sandbox360OverlayDebug.dollGazeSsot.activeCabinetRegion}</div>
                     <div>dollGazeSsot.overlayFloatingFaceRemoved: {String(sandbox360OverlayDebug.dollGazeSsot.overlayFloatingFaceRemoved)}</div>
                     <div>dollGazeSsot.controlledDolls: {sandbox360OverlayDebug.dollGazeSsot.controlledDolls.join(',') || '-'}</div>
                     {sandbox360OverlayDebug.dollGazeSsot.bindings.map((binding) => (
                       <div key={`dollBinding-${binding.dollId}`}>
-                        dollBinding[{binding.dollId}] slot={binding.slot} anchor=({binding.anchor.x.toFixed(1)},{binding.anchor.y.toFixed(1)},{binding.anchor.w.toFixed(1)},{binding.anchor.h.toFixed(1)}) inViewport={String(binding.visibility.inViewport)} ratio={binding.visibility.visibleRatio.toFixed(2)} gaze={binding.gazeState} apply={binding.applyStatus}:{binding.applyReason}
+                        dollBinding[{binding.dollId}] slot={binding.slot} anchor=({binding.anchor.x.toFixed(1)},{binding.anchor.y.toFixed(1)},{binding.anchor.w.toFixed(1)},{binding.anchor.h.toFixed(1)}) inViewport={String(binding.visibility.inViewport)} ratio={binding.visibility.visibleRatio.toFixed(2)} gaze={binding.gazeState} motion={binding.motionPreset} apply={binding.applyStatus}:{binding.applyReason}
                       </div>
                     ))}
                     <div>current360Region: {sandbox360ViewerState.currentShot.toUpperCase()}</div>
