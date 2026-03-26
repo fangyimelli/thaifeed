@@ -1,5 +1,34 @@
 > 2026-03-26 sandbox_360_test 補充（第九波）：完成 Doll Cabinet Look-at-Player 正式系統（authored variants + stage/gate/trigger + SSOT + debug projection）。`DOLL_REFLECT` 降級為 cue，主路徑改為 per-doll variant map。
 
+## 2026-03-26 Sandbox360 右側娃娃櫃「都看向我」MVP（頭部小角度變體 + 眼神 overlay）
+
+### Scope
+- `sandbox_360_test` only（classic mode untouched）。
+
+### What changed
+- 新增 `src/modes/sandbox_360_test/dollCabinetRenderLibrary.ts`，建立 slot × variant 正式 render path。
+- 先鎖定 4 隻關鍵娃娃：`doll_02/03/05/06`（top_center/top_right/bottom_center/bottom_right）。
+- 每隻具備 4 種正式 variant：`neutral / glance_to_player / stare_player / hard_stare`，並加上 eye/highlight overlay。
+- `Sandbox360Viewer` 改為渲染 authored 變體資產層（`img`），不再用 CSS primitive 頭/眼作主路徑。
+- variant fallback 契約：
+  - `missing variant -> neutral`
+  - `missing neutral -> hidden(no-op)`（不顯示 broken block）
+- `dollCabinetSystem` stage 感知調整：
+  - stage1：1 隻 glance
+  - stage2：2 隻 stare
+  - stage3：3~4 隻多數 stare
+  - stage4：hard stare scare + cooldown
+- Debug 新增 renderer/variant 來源與 fallback 可觀測欄位：
+  - `renderedDollSlots`
+  - `renderedVariantAssets`
+  - `missingVariantAssets`
+  - `fallbackVariantMap`
+  - `variantRenderSource`
+- regression guard `scripts/regression-sandbox360-shot-events.mjs` 補強上述契約與 anti-regression token。
+
+### Removed / Deprecated
+- Deprecated CSS primitive doll head/eyes 主渲染路徑（改由 authored variant path 主導）。
+
 ## 2026-03-26 Sandbox360 display responsibility split (main clean / debug SSOT)
 
 ### Root cause

@@ -11,6 +11,7 @@ import {
 } from './tvAnchorCalibration';
 import type { EffectBoundsStyle, EffectDebugEntry, EffectsDebugMap } from './effectDebugSchema';
 import type { DollCabinetState, DollCabinetTarget } from './dollCabinetSystem';
+import { resolveDollVariantRenderPath } from './dollCabinetRenderLibrary';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -147,6 +148,11 @@ type Props = {
     dollCabinetStage: number;
     dollCabinetLookAtPlayerLevel: number;
     dollCabinetStageEffectSource: { overlaySource: string; audioSource: string; variantSource: string };
+    renderedDollSlots: string[];
+    renderedVariantAssets: string[];
+    missingVariantAssets: string[];
+    fallbackVariantMap: Record<string, string>;
+    variantRenderSource: string;
   }) => void;
   tvBoundsVisualizationEnabled?: boolean;
 };
@@ -642,6 +648,21 @@ export default function Sandbox360Viewer({
   }, [baseTvScreenInnerRect, baseTvScreenQuad, dollRenderedBounds, doorRenderedBounds, effectContentUsesResolvedGeometry, effectVisibleBounds, flashRenderedBounds, renderedEffectRect, rendererFallbackReason, rendererGeometrySource, rendererUsesResolvedGeometry, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, roomEventObservability.forceReason, roomEventObservability.lastBlockedReason, roomEventObservability.triggerMode, roomEventState.DOLL_REFLECT.active, roomEventState.DOOR_SHADOW.active, roomEventState.LIGHT_FLASH_LEFT.active, roomEventState.TV_STATIC.active, toScreenRect, toScreenRectStyle, transitionState, viewerState.currentShot, viewerState.targetShot, overlaySceneRects, dollCabinetState.stageEffectSource]);
 
   useEffect(() => {
+    const fallbackVariantMap: Record<string, string> = {};
+    const renderedVariantAssets: string[] = [];
+    const renderedDollSlots: string[] = [];
+    const missingVariantAssets: string[] = [];
+    dollCabinetTargets.forEach((target) => {
+      const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';
+      const resolved = resolveDollVariantRenderPath(target.cabinetSlot, requestedVariant);
+      fallbackVariantMap[target.id] = `${requestedVariant}->${resolved.resolvedVariant}`;
+      if (resolved.selectedAsset) {
+        renderedVariantAssets.push(`${target.id}:${resolved.selectedAsset.sourceId}`);
+        renderedDollSlots.push(target.cabinetSlot);
+      } else {
+        missingVariantAssets.push(`${target.id}:${requestedVariant}`);
+      }
+    });
     onViewerDebugStateChange?.({
       baseSceneWidth: SCENE_REFERENCE_SIZE.width,
       baseSceneHeight: SCENE_REFERENCE_SIZE.height,
@@ -686,9 +707,14 @@ export default function Sandbox360Viewer({
       effectsDebugMap,
       dollCabinetStage: dollCabinetState.dollCabinetStage,
       dollCabinetLookAtPlayerLevel: dollCabinetState.dollCabinetLookAtPlayerLevel,
-      dollCabinetStageEffectSource: dollCabinetState.stageEffectSource
+      dollCabinetStageEffectSource: dollCabinetState.stageEffectSource,
+      renderedDollSlots,
+      renderedVariantAssets,
+      missingVariantAssets,
+      fallbackVariantMap,
+      variantRenderSource: 'slot_variant_render_library_v1'
     });
-  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, dollCabinetState.dollCabinetLookAtPlayerLevel, dollCabinetState.dollCabinetStage, dollCabinetState.stageEffectSource, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, dollCabinetState.dollCabinetActiveVariantMap, dollCabinetState.dollCabinetLookAtPlayerLevel, dollCabinetState.dollCabinetStage, dollCabinetState.stageEffectSource, dollCabinetTargets, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
 
   return (
     <div
@@ -754,18 +780,22 @@ export default function Sandbox360Viewer({
           <div className="sandbox360OverlayDollCabinet" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-stage={dollCabinetState.dollCabinetStage}>
             <div className="sandbox360OverlayDollCabinetFx" data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
             {dollCabinetTargets.map((target) => {
-              const variant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';
+              const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';
+              const renderPath = resolveDollVariantRenderPath(target.cabinetSlot, requestedVariant);
               const looking = dollCabinetState.activeLookTargets.includes(target.id);
+              if (!renderPath.selectedAsset) return null;
               return (
                 <div
                   key={target.id}
                   className="sandbox360OverlayDollSlot"
                   data-slot={target.cabinetSlot}
-                  data-variant={variant}
+                  data-variant={renderPath.resolvedVariant}
+                  data-requested-variant={requestedVariant}
                   data-looking={looking ? 'true' : 'false'}
                 >
-                  <div className="sandbox360OverlayDollHead" />
-                  <div className="sandbox360OverlayDollEyes" />
+                  <img className="sandbox360OverlayDollHeadAsset" src={renderPath.selectedAsset.source} alt="" />
+                  {renderPath.slot.eyeOverlay ? <img className="sandbox360OverlayDollEyeOverlayAsset" src={renderPath.slot.eyeOverlay.source} alt="" /> : null}
+                  {renderPath.slot.highlightOverlay ? <img className="sandbox360OverlayDollHighlightAsset" src={renderPath.slot.highlightOverlay.source} alt="" /> : null}
                 </div>
               );
             })}
