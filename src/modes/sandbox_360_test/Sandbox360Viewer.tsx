@@ -9,6 +9,7 @@ import {
   type TvScreenQuad,
   type TvScreenQuadPoint
 } from './tvAnchorCalibration';
+import type { EffectBoundsStyle, EffectDebugEntry, EffectsDebugMap } from './effectDebugSchema';
 import './sandbox360Viewer.css';
 
 export type Sandbox360ViewerState = {
@@ -52,7 +53,7 @@ type RoomEventObservabilityState = {
 type RoomEventRuntimeState = Record<RoomEventType, { active: boolean; triggerCount: number; triggerSeq: number }>;
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type QuadStyle = { topLeft: string; topRight: string; bottomRight: string; bottomLeft: string };
-type ScreenRectStyle = { left: string; top: string; width: string; height: string };
+type ScreenRectStyle = EffectBoundsStyle;
 type NumericScreenRect = { x: number; y: number; w: number; h: number };
 type TransformChainStep = { step: string; summary: string; data: Record<string, number | string | boolean | undefined> };
 type TvGeometryKind = 'rect' | 'quad';
@@ -139,6 +140,7 @@ type Props = {
     questionVisible: boolean;
     questionConsonant: string;
     roomEventLast: RoomEventType | null;
+    effectsDebugMap: EffectsDebugMap;
   }) => void;
   tvBoundsVisualizationEnabled?: boolean;
 };
@@ -265,12 +267,14 @@ export default function Sandbox360Viewer({
   const [viewportSize, setViewportSize] = useState({ width: 1, height: 1 });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const transformLayerRef = useRef<HTMLDivElement | null>(null);
-  const tvDebugRef = useRef<HTMLDivElement | null>(null);
   const tvOverlayRef = useRef<HTMLDivElement | null>(null);
   const tvOverlayContentRef = useRef<HTMLDivElement | null>(null);
   const [tvSharesTransformContainer, setTvSharesTransformContainer] = useState(false);
   const [renderedEffectRect, setRenderedEffectRect] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
   const [effectVisibleBounds, setEffectVisibleBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
+  const [flashRenderedBounds, setFlashRenderedBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
+  const [dollRenderedBounds, setDollRenderedBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
+  const [doorRenderedBounds, setDoorRenderedBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
   const [quadDiff, setQuadDiff] = useState('-');
 
   const cameraState = useMemo<SceneCameraState>(() => {
@@ -497,16 +501,12 @@ export default function Sandbox360Viewer({
 
   useEffect(() => {
     const transformLayer = transformLayerRef.current;
-    const tvDebugEl = tvDebugRef.current;
     const tvOverlayEl = tvOverlayRef.current;
-    const debugContainer = tvDebugEl?.closest('.sandbox360TransformLayer');
     const overlayContainer = tvOverlayEl?.closest('.sandbox360TransformLayer');
     setTvSharesTransformContainer(Boolean(
       transformLayer &&
-      debugContainer &&
       overlayContainer &&
-      debugContainer === overlayContainer &&
-      debugContainer === transformLayer
+      overlayContainer === transformLayer
     ));
   }, [resolvedTvBoundingRect.height, resolvedTvBoundingRect.left, resolvedTvBoundingRect.top, resolvedTvBoundingRect.width]);
 
@@ -540,6 +540,92 @@ export default function Sandbox360Viewer({
       window.removeEventListener('resize', updateRenderedEffectRect);
     };
   }, [clampRectWithin, resolvedTvScreenInnerRectNumeric, roomEventState.TV_STATIC.active, roomEventState.TV_STATIC.triggerSeq, toScreenRectStyle, viewerState.cameraOffsetX, viewerState.cameraOffsetY, viewerState.cameraRotationDeg, viewerState.cameraScaleOffset]);
+
+  useEffect(() => {
+    const root = rootRef.current?.getBoundingClientRect();
+    const toRelativeBounds = (rect: NumericScreenRect): ScreenRectStyle => {
+      if (!root) return { left: '-', top: '-', width: '-', height: '-' };
+      return {
+        left: `${rect.x.toFixed(3)}px`,
+        top: `${rect.y.toFixed(3)}px`,
+        width: `${rect.w.toFixed(3)}px`,
+        height: `${rect.h.toFixed(3)}px`
+      };
+    };
+    const flashRect = toScreenRect(overlaySceneRects.roomLight);
+    const dollRect = toScreenRect(overlaySceneRects.doll);
+    const doorRect = toScreenRect(overlaySceneRects.door);
+    setFlashRenderedBounds(toRelativeBounds(flashRect));
+    setDollRenderedBounds(toRelativeBounds(dollRect));
+    setDoorRenderedBounds(toRelativeBounds(doorRect));
+  }, [overlaySceneRects.doll, overlaySceneRects.door, overlaySceneRects.roomLight, toScreenRect]);
+
+  const effectBoundsVisualizationEntries = useMemo(() => ({
+    tv: { resolved: resolvedTvBoundingRect, visible: effectVisibleBounds },
+    flash: { resolved: toScreenRectStyle(toScreenRect(overlaySceneRects.roomLight)), visible: toScreenRectStyle(toScreenRect(overlaySceneRects.roomLight)) },
+    doll: { resolved: toScreenRectStyle(toScreenRect(overlaySceneRects.doll)), visible: toScreenRectStyle(toScreenRect(overlaySceneRects.doll)) },
+    door: { resolved: toScreenRectStyle(toScreenRect(overlaySceneRects.door)), visible: toScreenRectStyle(toScreenRect(overlaySceneRects.door)) }
+  }), [effectVisibleBounds, overlaySceneRects.doll, overlaySceneRects.door, overlaySceneRects.roomLight, resolvedTvBoundingRect, toScreenRect, toScreenRectStyle]);
+
+  const effectsDebugMap = useMemo<EffectsDebugMap>(() => {
+    const createRectEntry = (
+      effectType: 'flash' | 'doll' | 'door',
+      sourceKey: keyof typeof overlaySceneRects,
+      renderedBounds: ScreenRectStyle,
+      active: boolean
+    ): EffectDebugEntry => {
+      const resolvedRect = toScreenRectStyle(toScreenRect(overlaySceneRects[sourceKey]));
+      return {
+        effectType,
+        active,
+        forced: roomEventObservability.triggerMode === 'force' && roomEventObservability.eventType === (effectType === 'flash' ? 'LIGHT_FLASH_LEFT' : effectType === 'doll' ? 'DOLL_REFLECT' : 'DOOR_SHADOW'),
+        geometryKind: 'rect',
+        geometrySource: `overlaySceneRects.${sourceKey} -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)`,
+        baseGeometry: { kind: 'rect', rect: toScreenRectStyle({ x: overlaySceneRects[sourceKey].x, y: overlaySceneRects[sourceKey].y, w: overlaySceneRects[sourceKey].w, h: overlaySceneRects[sourceKey].h }) },
+        resolvedGeometry: { kind: 'rect', rect: resolvedRect },
+        renderedBounds,
+        visibleBounds: resolvedRect,
+        currentShot: viewerState.currentShot,
+        targetShot: viewerState.targetShot,
+        transitionState,
+        usesResolvedGeometry: true,
+        blockReason: roomEventObservability.eventType === null ? '-' : (roomEventObservability.lastBlockedReason ?? '-'),
+        fallbackReason: 'none',
+        forceReason: roomEventObservability.forceReason ?? '-',
+        sourceStatus: roomEventObservability.eventType === null ? 'idle' : roomEventObservability.eventType,
+        rendererUsesResolvedGeometry: true,
+        effectContentUsesResolvedGeometry: true
+      };
+    };
+    return {
+      tv: {
+        effectType: 'tv',
+        active: roomEventState.TV_STATIC.active,
+        forced: roomEventObservability.triggerMode === 'force' && roomEventObservability.eventType === 'TV_STATIC',
+        geometryKind: 'quad',
+        geometrySource: rendererGeometrySource,
+        baseGeometry: { kind: 'quad', rect: baseTvScreenInnerRect, quad: baseTvScreenQuad },
+        resolvedGeometry: { kind: 'quad', rect: resolvedTvBoundingRect, quad: resolvedTvScreenQuad },
+        renderedBounds: renderedEffectRect,
+        visibleBounds: effectVisibleBounds,
+        currentShot: viewerState.currentShot,
+        targetShot: viewerState.targetShot,
+        transitionState,
+        usesResolvedGeometry: true,
+        blockReason: roomEventObservability.lastBlockedReason ?? '-',
+        fallbackReason: rendererFallbackReason,
+        forceReason: roomEventObservability.forceReason ?? '-',
+        sourceStatus: roomEventObservability.eventType === 'TV_STATIC' ? 'selected' : 'idle',
+        rendererUsesResolvedGeometry,
+        effectContentUsesResolvedGeometry,
+        effectContentInset: 'none',
+        effectInnerTransform: 'none'
+      },
+      flash: createRectEntry('flash', 'roomLight', flashRenderedBounds, roomEventState.LIGHT_FLASH_LEFT.active),
+      doll: createRectEntry('doll', 'doll', dollRenderedBounds, roomEventState.DOLL_REFLECT.active),
+      door: createRectEntry('door', 'door', doorRenderedBounds, roomEventState.DOOR_SHADOW.active)
+    };
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, dollRenderedBounds, doorRenderedBounds, effectContentUsesResolvedGeometry, effectVisibleBounds, flashRenderedBounds, renderedEffectRect, rendererFallbackReason, rendererGeometrySource, rendererUsesResolvedGeometry, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, roomEventObservability.forceReason, roomEventObservability.lastBlockedReason, roomEventObservability.triggerMode, roomEventState.DOLL_REFLECT.active, roomEventState.DOOR_SHADOW.active, roomEventState.LIGHT_FLASH_LEFT.active, roomEventState.TV_STATIC.active, toScreenRect, toScreenRectStyle, transitionState, viewerState.currentShot, viewerState.targetShot, overlaySceneRects]);
 
   useEffect(() => {
     onViewerDebugStateChange?.({
@@ -582,9 +668,10 @@ export default function Sandbox360Viewer({
       tvSharesTransformContainer,
       questionVisible,
       questionConsonant,
-      roomEventLast: roomEventObservability.eventType
+      roomEventLast: roomEventObservability.eventType,
+      effectsDebugMap
     });
-  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
 
   return (
     <div
@@ -619,7 +706,6 @@ export default function Sandbox360Viewer({
         </div>
         <div className="sandbox360OverlayLayer" aria-hidden="true">
           <div key={`LIGHT_FLASH_LEFT-${roomEventState.LIGHT_FLASH_LEFT.triggerSeq}`} className="sandbox360OverlayRoomLight" style={toScreenRectStyle(toScreenRect(overlaySceneRects.roomLight))} data-active={roomEventState.LIGHT_FLASH_LEFT.active ? 'true' : 'false'} />
-          <div key={`TV_STATIC_DEBUG-${roomEventState.TV_STATIC.triggerSeq}`} ref={tvDebugRef} className="sandbox360OverlayTvDebug" style={resolvedTvBoundingRect} data-active={roomEventState.TV_STATIC.active ? 'true' : 'false'} data-quad={JSON.stringify(resolvedQuadStyle)} />
           <div key={`TV_STATIC_OVERLAY-${roomEventState.TV_STATIC.triggerSeq}`} ref={tvOverlayRef} className="sandbox360OverlayTvNoise" style={resolvedTvBoundingRect} data-active={roomEventState.TV_STATIC.active ? 'true' : 'false'} data-viz={tvBoundsVisualizationEnabled ? 'true' : 'false'}>
             <div
               ref={tvOverlayContentRef}
@@ -639,6 +725,13 @@ export default function Sandbox360Viewer({
               <div className="sandbox360OverlayTvBoundsVizDelta">
                 {quadDiff}
               </div>
+              {(Object.entries(effectBoundsVisualizationEntries) as Array<[string, { resolved: ScreenRectStyle; visible: ScreenRectStyle }]>).map(([effectKey, bounds]) => (
+                <div key={effectKey} className="sandbox360OverlayTvBoundsVizEffectRow">
+                  <span>{effectKey}</span>
+                  <div className="sandbox360OverlayTvBoundsVizEffectResolved" style={bounds.resolved} />
+                  <div className="sandbox360OverlayTvBoundsVizEffectVisible" style={bounds.visible} />
+                </div>
+              ))}
             </div>
           ) : null}
           <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDoll" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />

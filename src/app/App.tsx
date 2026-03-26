@@ -61,6 +61,7 @@ import { createClassicMode } from '../modes/classic/classicMode';
 import { createSandboxStoryMode, type SandboxFearDebugState } from '../modes/sandbox_story/sandboxStoryMode';
 import { createSandbox360Mode, resolveSandbox360ViewerFraming, resolveSandbox360ViewerTarget } from '../modes/sandbox_360_test/sandbox360Mode';
 import { isViewerCommandText, parseViewerCommand } from '../modes/sandbox_360_test/chatCommandAdapter';
+import type { EffectDebugEntry, EffectsDebugMap } from '../modes/sandbox_360_test/effectDebugSchema';
 import {
   isSandboxWaitReplyStep,
   parseSandboxWaitReplyIndex,
@@ -143,6 +144,36 @@ type Sandbox360RoomEventTriggerSource = 'manual' | 'shot_flow' | 'auto' | 'scrip
 type Sandbox360RoomEventTriggerMode = 'normal' | 'force';
 type Sandbox360RoomEventRuntime = { active: boolean; triggerCount: number; triggerSeq: number };
 type Sandbox360RoomEventState = Record<Sandbox360RoomEventType, Sandbox360RoomEventRuntime>;
+const EMPTY_EFFECT_BOUNDS = { left: '-', top: '-', width: '-', height: '-' };
+const EMPTY_EFFECT_DEBUG_ENTRY = (effectType: EffectDebugEntry['effectType']): EffectDebugEntry => ({
+  effectType,
+  active: false,
+  forced: false,
+  geometryKind: 'none',
+  geometrySource: '-',
+  baseGeometry: null,
+  resolvedGeometry: { kind: 'none', rect: EMPTY_EFFECT_BOUNDS },
+  renderedBounds: EMPTY_EFFECT_BOUNDS,
+  visibleBounds: EMPTY_EFFECT_BOUNDS,
+  currentShot: 'center',
+  targetShot: 'center',
+  transitionState: { isTransitioning: false, startedAt: 0, durationMs: 0, fromPosX: 0, currentPosX: 0, targetPosX: 0 },
+  usesResolvedGeometry: false,
+  blockReason: '-',
+  fallbackReason: '-',
+  forceReason: '-',
+  sourceStatus: '-',
+  rendererUsesResolvedGeometry: false,
+  effectContentUsesResolvedGeometry: false,
+  effectContentInset: '-',
+  effectInnerTransform: '-'
+});
+const EMPTY_EFFECTS_DEBUG_MAP: EffectsDebugMap = {
+  tv: EMPTY_EFFECT_DEBUG_ENTRY('tv'),
+  flash: EMPTY_EFFECT_DEBUG_ENTRY('flash'),
+  doll: EMPTY_EFFECT_DEBUG_ENTRY('doll'),
+  door: EMPTY_EFFECT_DEBUG_ENTRY('door')
+};
 
 type DebugForceExecuteOptions = {
   ignoreCooldown?: boolean;
@@ -806,7 +837,8 @@ export default function App() {
     tvSharesTransformContainer: false,
     questionVisible: false,
     questionConsonant: '',
-    roomEventLast: null as Sandbox360RoomEventType | null
+    roomEventLast: null as Sandbox360RoomEventType | null,
+    effectsDebugMap: EMPTY_EFFECTS_DEBUG_MAP
   });
   const [sandbox360TvBoundsVisualizationEnabled, setSandbox360TvBoundsVisualizationEnabled] = useState(false);
   const sandbox360RoomEventCooldownRef = useRef<Record<Sandbox360RoomEventType, number>>({
@@ -8234,7 +8266,8 @@ export default function App() {
                       tvSharesTransformContainer: payload.tvSharesTransformContainer,
                       questionVisible: payload.questionVisible,
                       questionConsonant: payload.questionConsonant,
-                      roomEventLast: payload.roomEventLast
+                      roomEventLast: payload.roomEventLast,
+                      effectsDebugMap: payload.effectsDebugMap
                     });
                   }}
                   viewerState={{
@@ -8539,6 +8572,7 @@ export default function App() {
                     <div>event.counts: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerCount}, tv={sandbox360RoomEvents.TV_STATIC.triggerCount}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerCount}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerCount}</div>
                     <div>event.active: flash={String(sandbox360RoomEvents.LIGHT_FLASH_LEFT.active)}, tv={String(sandbox360RoomEvents.TV_STATIC.active)}, doll={String(sandbox360RoomEvents.DOLL_REFLECT.active)}, door={String(sandbox360RoomEvents.DOOR_SHADOW.active)}</div>
                     <div>event.seq: flash={sandbox360RoomEvents.LIGHT_FLASH_LEFT.triggerSeq}, tv={sandbox360RoomEvents.TV_STATIC.triggerSeq}, doll={sandbox360RoomEvents.DOLL_REFLECT.triggerSeq}, door={sandbox360RoomEvents.DOOR_SHADOW.triggerSeq}</div>
+                    <div>globalEffectsDebugSchema: effectType / active / forced / geometryKind / geometrySource / baseGeometry / resolvedGeometry / renderedBounds / visibleBounds / fallback</div>
                     <div>baseSceneWidth / baseSceneHeight: {sandbox360OverlayDebug.baseSceneWidth} / {sandbox360OverlayDebug.baseSceneHeight}</div>
                     <div>calibrationSource: {sandbox360OverlayDebug.calibrationSource}</div>
                     <div>tvGeometryKind: {sandbox360OverlayDebug.tvGeometryKind}</div>
@@ -8568,6 +8602,7 @@ export default function App() {
                     <div>rendererUsesResolvedGeometry: {String(sandbox360OverlayDebug.rendererUsesResolvedGeometry)}</div>
                     <div>effectContentUsesResolvedGeometry: {String(sandbox360OverlayDebug.effectContentUsesResolvedGeometry)}</div>
                     <div>tv.sharedTransformContainer: {String(sandbox360OverlayDebug.tvSharesTransformContainer)}</div>
+                    <div>rendererAndDebugSharedGeometrySSOT: {String(sandbox360OverlayDebug.effectsDebugMap.tv.rendererUsesResolvedGeometry && sandbox360OverlayDebug.effectsDebugMap.tv.effectContentUsesResolvedGeometry)}</div>
                     <div>question.visible / consonant: {String(sandbox360OverlayDebug.questionVisible)} / {sandbox360OverlayDebug.questionConsonant || '-'}</div>
                     <div style={{ marginTop: 6 }}>
                       <button type="button" onClick={() => setSandbox360TvBoundsVisualizationEnabled((prev) => !prev)}>
@@ -8577,6 +8612,26 @@ export default function App() {
                     <div>transformChain:</div>
                     {sandbox360OverlayDebug.transformChain.map((entry) => (
                       <div key={entry.step}>- {entry.step}: {entry.summary}</div>
+                    ))}
+                    <div style={{ marginTop: 8 }}><strong>CAMERA / SHOT / TRANSITION</strong></div>
+                    <div>currentShot / targetShot: {sandbox360OverlayDebug.currentShot} / {sandbox360OverlayDebug.targetShot}</div>
+                    <div>transition: from={sandbox360OverlayDebug.transitionState.fromPosX.toFixed(2)} current={sandbox360OverlayDebug.transitionState.currentPosX.toFixed(2)} target={sandbox360OverlayDebug.transitionState.targetPosX.toFixed(2)} duration={sandbox360OverlayDebug.transitionState.durationMs} transitioning={String(sandbox360OverlayDebug.transitionState.isTransitioning)}</div>
+                    <div style={{ marginTop: 8 }}><strong>GLOBAL EFFECT RESOLVE</strong></div>
+                    {(Object.entries(sandbox360OverlayDebug.effectsDebugMap) as Array<[string, EffectDebugEntry]>).map(([effectKey, effect]) => (
+                      <div key={effectKey} style={{ marginBottom: 8 }}>
+                        <div><strong>{effectKey.toUpperCase()}</strong></div>
+                        <div>effectType: {effect.effectType}</div>
+                        <div>active / forced: {String(effect.active)} / {String(effect.forced)}</div>
+                        <div>geometryKind / source: {effect.geometryKind} / {effect.geometrySource}</div>
+                        <div>baseGeometry: {effect.baseGeometry?.kind ?? 'none'} @ {effect.baseGeometry?.rect.left ?? '-'}, {effect.baseGeometry?.rect.top ?? '-'}, {effect.baseGeometry?.rect.width ?? '-'}, {effect.baseGeometry?.rect.height ?? '-'}</div>
+                        <div>resolvedGeometry: {effect.resolvedGeometry.kind} @ {effect.resolvedGeometry.rect.left}, {effect.resolvedGeometry.rect.top}, {effect.resolvedGeometry.rect.width}, {effect.resolvedGeometry.rect.height}</div>
+                        <div>renderedBounds: {effect.renderedBounds.left}, {effect.renderedBounds.top}, {effect.renderedBounds.width}, {effect.renderedBounds.height}</div>
+                        <div>visibleBounds: {effect.visibleBounds.left}, {effect.visibleBounds.top}, {effect.visibleBounds.width}, {effect.visibleBounds.height}</div>
+                        <div>shot+transition: {effect.currentShot}→{effect.targetShot}, transitioning={String(effect.transitionState.isTransitioning)}</div>
+                        <div>usesResolvedGeometry / rendererUsesResolvedGeometry / effectContentUsesResolvedGeometry: {String(effect.usesResolvedGeometry)} / {String(effect.rendererUsesResolvedGeometry)} / {String(effect.effectContentUsesResolvedGeometry)}</div>
+                        <div>blockReason / fallbackReason / forceReason: {effect.blockReason} / {effect.fallbackReason} / {effect.forceReason}</div>
+                        <div>sourceStatus: {effect.sourceStatus}</div>
+                      </div>
                     ))}
                   </div>
                 </>

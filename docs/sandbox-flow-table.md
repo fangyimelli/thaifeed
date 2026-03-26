@@ -1,4 +1,5 @@
 > 2026-03-25 sandbox_360_test 補充（第七波）：依使用者紅框 follow-up，`TV_SCREEN_INNER_QUAD_BY_SHOT` 再收斂為更小 screen-inner 發光區，校準版本 `v2026-03-25.6`。
+> 2026-03-26 sandbox_360_test 補充（第八波）：主畫面移除 TV 常駐紅框，effect 定位資訊統一進入 `effectsDebugMap`（tv/flash/doll/door）並集中在 Debug `GLOBAL EFFECT RESOLVE`；renderer 與 debug 共用同一 resolved geometry/state。
 
 > 2026-03-25 sandbox_360_test 補充（第五波）：TV 幾何主路徑強制收斂為 `TV_SCREEN_GEOMETRY_BY_SHOT`（LEFT/CENTER/RIGHT authored screen-inner quad），transition 期間使用 quad interpolation；renderer/debug/visualization 必須共讀同一 resolved geometry。
 
