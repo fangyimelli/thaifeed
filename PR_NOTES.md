@@ -1,3 +1,25 @@
+> 2026-03-26 sandbox_360_test 補充（第十一波）：360 娃娃凝視 hard-fix。移除殘留單體前景臉路徑，新增 per-doll scene binding SSOT + viewport 可見比 gate（center-in-view + ratio>=0.45），避免畫面邊角漂浮圓臉。
+
+## 2026-03-26 Sandbox360 doll gaze hard-fix（scene-anchor binding + strict viewport gate）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 新增 `dollSceneBindings`：每隻娃娃輸出 `anchor / requestedVariant / resolvedVariant / gazeState / visibility / applyStatus / applyReason`。
+  - render gate 改為 strict：`anchor center in viewport` 且 `visibleRatio >= 0.45` 才渲染。
+  - debug payload 新增 `dollGazeSsot`（`mode=360`、`overlayFloatingFaceRemoved=true`、`controlledDolls`、`bindings`）。
+- `src/app/App.tsx`
+  - Debug panel 新增 `dollGazeSsot.*` 與每隻 doll binding 行，直接驗證是否套用到 scene anchor。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 移除舊 `.sandbox360OverlayDoll` 路徑，避免單體前景假方案殘留。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 補 guard：`dollSceneBindings`、`dollGazeSsot`、strict gate token、legacy CSS 路徑禁止回歸。
+
+### Removed / Deprecated
+- Removed `.sandbox360OverlayDoll` CSS（legacy single-overlay fake gaze path）。
+
 > 2026-03-26 sandbox_360_test 補充（第十波）：修復 360 娃娃凝視錨點。移除舊 cabinet/slot 百分比容器主路徑，改為 scene-space slot anchor + viewport culling，避免漂浮前景臉/HUD 感。
 
 ## 2026-03-26 Sandbox360 doll gaze anchor fix（scene-space SSOT）

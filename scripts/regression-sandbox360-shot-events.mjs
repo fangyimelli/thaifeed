@@ -4,6 +4,7 @@ const viewerFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/Sandbo
 const appFile = fs.readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8');
 const modeFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/sandbox360Mode.ts', import.meta.url), 'utf8');
 const dollSystemFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/dollCabinetSystem.ts', import.meta.url), 'utf8');
+const viewerCssFile = fs.readFileSync(new URL('../src/modes/sandbox_360_test/sandbox360Viewer.css', import.meta.url), 'utf8');
 
 const assertHas = (file, token, message) => {
   if (!file.includes(token)) throw new Error(message);
@@ -33,18 +34,25 @@ assertHas(appFile, 'dollCabinet.overlay/audio/variant source:', 'debug panel sho
 assertHas(appFile, 'dollCabinet.renderedVariantAssets:', 'debug panel should expose rendered variant assets');
 assertHas(appFile, 'dollCabinet.missingVariantAssets:', 'debug panel should expose missing variant assets');
 assertHas(appFile, 'dollCabinet.fallbackVariantMap:', 'debug panel should expose fallback map');
+assertHas(appFile, 'dollGazeSsot.mode:', 'debug panel should expose 360 gaze mode');
+assertHas(appFile, 'dollGazeSsot.overlayFloatingFaceRemoved:', 'debug panel should expose floating-face removal status');
+assertHas(appFile, 'dollBinding[', 'debug panel should expose per-doll anchor/apply status');
 assertHas(appFile, 'current360Region:', 'debug panel should expose current 360 region');
 
 assertHas(viewerFile, 'dollCabinetState: DollCabinetState;', 'viewer should consume doll cabinet ssot');
 assertHas(viewerFile, 'dollCabinetTargets: DollCabinetTarget[];', 'viewer should consume authored doll targets table');
 assertHas(viewerFile, "const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';", 'viewer should render from activeVariantMap ssot');
 assertHas(viewerFile, 'resolveDollVariantRenderPath', 'viewer should resolve per-slot render path by variant');
-assertHas(viewerFile, '${requestedVariant}->${resolved.resolvedVariant}', 'viewer debug should expose fallback variant mapping');
+assertHas(viewerFile, '${binding.requestedVariant}->${binding.resolvedVariant}', 'viewer debug should expose fallback variant mapping');
 assertHas(viewerFile, "variantRenderSource: 'slot_variant_render_library_v1'", 'viewer should expose variant source id');
 assertHas(viewerFile, 'const dollSlotAnchors = useMemo<DollSlotAnchorMap>', 'viewer should author scene-space doll slot anchors');
+assertHas(viewerFile, 'const dollSceneBindings = useMemo<DollSceneBindingDebug[]>', 'viewer should project per-doll scene binding ssot');
+assertHas(viewerFile, "overlayFloatingFaceRemoved: true", 'viewer should explicitly expose floating-face path removal');
+assertHas(viewerFile, 'const inViewport = visibleRatio >= 0.45 && centerInViewport;', 'viewer should block partial edge-floating dolls');
+assertHas(viewerFile, ": 'applied_to_scene_anchor';", 'viewer should report successful scene-anchor application reason');
 assertHas(viewerFile, 'className="sandbox360OverlayDollWorldLayer"', 'viewer should render doll world layer in 360 scene');
 assertHas(viewerFile, 'className="sandbox360OverlayDollAnchor"', 'viewer should render anchored per-doll nodes');
-assertHas(viewerFile, 'if (slotVisibleRect.w <= 0 || slotVisibleRect.h <= 0) return null;', 'viewer should cull offscreen doll anchors');
+assertHas(viewerFile, "if (binding.applyStatus !== 'applied') return null;", 'viewer should cull non-applicable doll anchors');
 assertHas(viewerFile, "geometrySource: 'dollSlotAnchors(scene_space) -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)'", 'doll debug geometry must report scene-space anchor path');
 assertHas(viewerFile, 'className="sandbox360OverlayDollReflectCue"', 'legacy doll reflect should stay as cue only');
 assertHas(viewerFile, 'missingVariantAssets', 'viewer should expose missing variant assets');
@@ -53,6 +61,9 @@ assertHas(viewerFile, 'fallbackVariantMap', 'viewer should expose fallback varia
 
 if (viewerFile.includes('className="sandbox360OverlayDoll"')) {
   throw new Error('legacy single doll overlay path should be removed');
+}
+if (viewerCssFile.includes('.sandbox360OverlayDoll {')) {
+  throw new Error('legacy single doll overlay css path should be removed');
 }
 
 if (viewerFile.includes('sandbox360OverlayDollHead"')) {
