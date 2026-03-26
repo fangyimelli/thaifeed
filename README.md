@@ -1,3 +1,19 @@
+## 2026-03-26 Sandbox360 娃娃凝視錨點修復（移除漂浮前景臉路徑）
+
+- Scope 僅 `sandbox_360_test`；classic mode 與 sandbox story 完全未改。
+- Root cause：
+  - 舊實作把娃娃渲染綁在 `sandbox360OverlayDollCabinet + sandbox360OverlayDollSlot` 的容器百分比網格，呈現上容易被誤認為前景 HUD/貼臉層。
+  - debug `doll` 幾何仍以 cabinet rect 為語義，沒有明確標示「scene-space slot anchor」路徑。
+- 修正：
+  - `Sandbox360Viewer` 新增 `dollSlotAnchors`（scene-space SSOT），每個 slot 經同一 resolver 投影到畫面。
+  - 移除 `sandbox360OverlayDollCabinet` / `sandbox360OverlayDollSlot` 主路徑，改為 `sandbox360OverlayDollWorldLayer + sandbox360OverlayDollAnchor`。
+  - 新增 off-screen culling：slot 不在 viewport 內時不渲染，避免憑空浮現在畫面。
+  - `effectsDebugMap.doll.geometrySource` 改為 scene-space anchor 來源，與 renderer 行為對齊。
+  - `DOLL_REFLECT` 保留為 cue，不變更 story trigger intent。
+
+### Removed / Deprecated Log
+- Deprecated `sandbox360OverlayDollCabinet`/`sandbox360OverlayDollSlot` 百分比容器主路徑（改為 scene-space slot anchor 主路徑）。
+
 ## 2026-03-26 Sandbox360 右側娃娃櫃「都看向我」MVP（頭部小角度變體 + 眼神 overlay）
 
 - Scope 僅 `sandbox_360_test`；classic mode 無改動。

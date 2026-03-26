@@ -54,6 +54,7 @@ type RoomEventObservabilityState = {
 };
 type RoomEventRuntimeState = Record<RoomEventType, { active: boolean; triggerCount: number; triggerSeq: number }>;
 type OverlayRect = { x: number; y: number; w: number; h: number };
+type SceneRect = OverlayRect;
 type QuadStyle = { topLeft: string; topRight: string; bottomRight: string; bottomLeft: string };
 type ScreenRectStyle = EffectBoundsStyle;
 type NumericScreenRect = { x: number; y: number; w: number; h: number };
@@ -90,6 +91,7 @@ type SceneCameraState = {
   cameraScale: number;
 };
 type TvTargetRegionKind = 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner';
+type DollSlotAnchorMap = Record<DollCabinetTarget['cabinetSlot'], SceneRect>;
 
 type Props = {
   viewerState: Sandbox360ViewerState;
@@ -186,6 +188,14 @@ const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
 const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
 const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
+const DOLL_SLOT_ANCHOR_LAYOUT = {
+  top_left: { x: 0.02, y: 0.04, w: 0.28, h: 0.42 },
+  top_center: { x: 0.36, y: 0.04, w: 0.28, h: 0.42 },
+  top_right: { x: 0.7, y: 0.04, w: 0.28, h: 0.42 },
+  bottom_left: { x: 0.02, y: 0.52, w: 0.28, h: 0.42 },
+  bottom_center: { x: 0.36, y: 0.52, w: 0.28, h: 0.42 },
+  bottom_right: { x: 0.7, y: 0.52, w: 0.28, h: 0.42 }
+} satisfies Record<DollCabinetTarget['cabinetSlot'], { x: number; y: number; w: number; h: number }>;
 
 const resolveTvScreenInnerGeometryFromBaseCalibration = ({
   baseQuad,
@@ -352,6 +362,26 @@ export default function Sandbox360Viewer({
       door: { x: sceneWidth * 0.45, y: sceneHeight * 0.16, w: sceneWidth * 0.14, h: sceneHeight * 0.62 }
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth]);
+  const dollSlotAnchors = useMemo<DollSlotAnchorMap>(() => {
+    const cabinetRect = overlaySceneRects.doll;
+    const resolveSlotRect = (slot: DollCabinetTarget['cabinetSlot']): SceneRect => {
+      const unit = DOLL_SLOT_ANCHOR_LAYOUT[slot];
+      return {
+        x: cabinetRect.x + cabinetRect.w * unit.x,
+        y: cabinetRect.y + cabinetRect.h * unit.y,
+        w: cabinetRect.w * unit.w,
+        h: cabinetRect.h * unit.h
+      };
+    };
+    return {
+      top_left: resolveSlotRect('top_left'),
+      top_center: resolveSlotRect('top_center'),
+      top_right: resolveSlotRect('top_right'),
+      bottom_left: resolveSlotRect('bottom_left'),
+      bottom_center: resolveSlotRect('bottom_center'),
+      bottom_right: resolveSlotRect('bottom_right')
+    };
+  }, [overlaySceneRects.doll]);
 
   const handheldState = useMemo<HandheldTransformState>(() => ({
     offsetX: viewerState.cameraOffsetX,
@@ -642,7 +672,10 @@ export default function Sandbox360Viewer({
         overlaySource: '-'
       },
       flash: createRectEntry('flash', 'roomLight', flashRenderedBounds, roomEventState.LIGHT_FLASH_LEFT.active),
-      doll: createRectEntry('doll', 'doll', dollRenderedBounds, roomEventState.DOLL_REFLECT.active),
+      doll: {
+        ...createRectEntry('doll', 'doll', dollRenderedBounds, roomEventState.DOLL_REFLECT.active),
+        geometrySource: 'dollSlotAnchors(scene_space) -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)'
+      },
       door: createRectEntry('door', 'door', doorRenderedBounds, roomEventState.DOOR_SHADOW.active)
     };
   }, [baseTvScreenInnerRect, baseTvScreenQuad, dollRenderedBounds, doorRenderedBounds, effectContentUsesResolvedGeometry, effectVisibleBounds, flashRenderedBounds, renderedEffectRect, rendererFallbackReason, rendererGeometrySource, rendererUsesResolvedGeometry, resolvedTvBoundingRect, resolvedTvScreenQuad, roomEventObservability.eventType, roomEventObservability.forceReason, roomEventObservability.lastBlockedReason, roomEventObservability.triggerMode, roomEventState.DOLL_REFLECT.active, roomEventState.DOOR_SHADOW.active, roomEventState.LIGHT_FLASH_LEFT.active, roomEventState.TV_STATIC.active, toScreenRect, toScreenRectStyle, transitionState, viewerState.currentShot, viewerState.targetShot, overlaySceneRects, dollCabinetState.stageEffectSource]);
@@ -777,17 +810,27 @@ export default function Sandbox360Viewer({
               ))}
             </div>
           ) : null}
-          <div className="sandbox360OverlayDollCabinet" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-stage={dollCabinetState.dollCabinetStage}>
-            <div className="sandbox360OverlayDollCabinetFx" data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
+          <div className="sandbox360OverlayDollWorldLayer" data-stage={dollCabinetState.dollCabinetStage}>
+            <div className="sandbox360OverlayDollCabinetFx" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
             {dollCabinetTargets.map((target) => {
               const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';
               const renderPath = resolveDollVariantRenderPath(target.cabinetSlot, requestedVariant);
               const looking = dollCabinetState.activeLookTargets.includes(target.id);
+              const slotAnchor = dollSlotAnchors[target.cabinetSlot];
+              const slotRect = toScreenRect(slotAnchor);
+              const slotVisibleRect = clampRectWithin(slotRect, {
+                x: 0,
+                y: 0,
+                w: cameraState.viewportWidth,
+                h: cameraState.viewportHeight
+              });
               if (!renderPath.selectedAsset) return null;
+              if (slotVisibleRect.w <= 0 || slotVisibleRect.h <= 0) return null;
               return (
                 <div
                   key={target.id}
-                  className="sandbox360OverlayDollSlot"
+                  className="sandbox360OverlayDollAnchor"
+                  style={toScreenRectStyle(slotRect)}
                   data-slot={target.cabinetSlot}
                   data-variant={renderPath.resolvedVariant}
                   data-requested-variant={requestedVariant}
@@ -799,7 +842,7 @@ export default function Sandbox360Viewer({
                 </div>
               );
             })}
-            <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
+            <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
         </div>

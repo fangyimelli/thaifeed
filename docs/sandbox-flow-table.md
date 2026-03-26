@@ -1,5 +1,7 @@
 ## Sandbox 360 doll cabinet look-at-player staged flow（sandbox_360_test only）
 
+> 2026-03-26 sandbox_360_test 補充（第十波）：doll gaze 主渲染路徑改為 scene-space slot anchors（`dollSlotAnchors`），舊 `sandbox360OverlayDollCabinet` / `sandbox360OverlayDollSlot` 百分比容器主路徑停用；新增 viewport culling，off-screen 娃娃不渲染。
+
 ### Key doll targets（MVP）
 
 | doll id | slot | escalationOrder | scarePriority | allowedVariants |
@@ -21,6 +23,7 @@ Notes:
 - Scare 後進 `dollCabinetCooldown`，`dollCabinetCanEscalate=false`，避免連發。
 - Viewer 必須使用 `dollCabinetActiveVariantMap`，不得 local 推導誰在看玩家。
 - `DOLL_REFLECT` 僅作 cue（玻璃反光輔助），不再作娃娃主效果。
+- 娃娃渲染必須綁在 360 場景 slot anchor（scene-space）並經同一 resolver 投影，不可使用 screen-space 浮動頭像路徑。
 - Render path 由 `dollCabinetRenderLibrary(slot×variant)` 決定：
   - `missing variant -> neutral`
   - `missing neutral -> hidden(no-op)`
