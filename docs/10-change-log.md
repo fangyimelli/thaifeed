@@ -1,3 +1,22 @@
+## 2026-03-26 Sandbox360 doll gaze anchor fix（remove floating-face path）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Added scene-space doll slot SSOT: `dollSlotAnchors`.
+  - Replaced `sandbox360OverlayDollCabinet + sandbox360OverlayDollSlot` render path with anchored `sandbox360OverlayDollWorldLayer + sandbox360OverlayDollAnchor`.
+  - Added viewport culling (`slotVisibleRect`) so off-screen dolls are not rendered.
+  - Updated doll effect debug geometry source to explicit scene-space anchor pipeline.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Added anchored doll world/anchor styles and removed reliance on legacy percent-grid cabinet slot classes.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added guards for scene-space anchor SSOT, off-screen culling, and anti-regression checks preventing legacy cabinet/slot renderer path from returning.
+
+### Removed / Deprecated Log
+- Deprecated `sandbox360OverlayDollCabinet` and `sandbox360OverlayDollSlot` as primary doll gaze renderer path.
+
 ## 2026-03-26 Sandbox360 右側娃娃櫃 stare MVP（頭部小角度變體 + 眼神 overlay）
 
 - Scope：`sandbox_360_test` only（classic mode untouched）。

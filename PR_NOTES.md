@@ -1,3 +1,28 @@
+> 2026-03-26 sandbox_360_test 補充（第十波）：修復 360 娃娃凝視錨點。移除舊 cabinet/slot 百分比容器主路徑，改為 scene-space slot anchor + viewport culling，避免漂浮前景臉/HUD 感。
+
+## 2026-03-26 Sandbox360 doll gaze anchor fix（scene-space SSOT）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Added `dollSlotAnchors` scene-space map from cabinet region to per-slot authored anchors.
+  - Render path switched to `sandbox360OverlayDollWorldLayer` + `sandbox360OverlayDollAnchor`.
+  - Added off-screen culling (`slotVisibleRect`) so dolls do not appear when anchor is outside viewport.
+  - `effectsDebugMap.doll.geometrySource` now reports scene-space anchor resolver path.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Added `sandbox360OverlayDollWorldLayer` / `sandbox360OverlayDollAnchor` styles.
+  - Removed reliance on legacy cabinet-slot percent grid styling as primary gaze renderer.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added regression guards for:
+    - scene-space anchor SSOT token,
+    - off-screen culling token,
+    - prohibition of legacy `sandbox360OverlayDollCabinet` / `sandbox360OverlayDollSlot` render tokens.
+
+### Removed / Deprecated
+- Deprecated `sandbox360OverlayDollCabinet` + `sandbox360OverlayDollSlot` primary render path.
+
 > 2026-03-26 sandbox_360_test 補充（第九波）：完成 Doll Cabinet Look-at-Player 正式系統（authored variants + stage/gate/trigger + SSOT + debug projection）。`DOLL_REFLECT` 降級為 cue，主路徑改為 per-doll variant map。
 
 ## 2026-03-26 Sandbox360 右側娃娃櫃「都看向我」MVP（頭部小角度變體 + 眼神 overlay）

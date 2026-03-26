@@ -41,8 +41,11 @@ assertHas(viewerFile, "const requestedVariant = dollCabinetState.dollCabinetActi
 assertHas(viewerFile, 'resolveDollVariantRenderPath', 'viewer should resolve per-slot render path by variant');
 assertHas(viewerFile, '${requestedVariant}->${resolved.resolvedVariant}', 'viewer debug should expose fallback variant mapping');
 assertHas(viewerFile, "variantRenderSource: 'slot_variant_render_library_v1'", 'viewer should expose variant source id');
-assertHas(viewerFile, 'className="sandbox360OverlayDollCabinet"', 'viewer should render cabinet container');
-assertHas(viewerFile, 'className="sandbox360OverlayDollSlot"', 'viewer should render per-doll slot path');
+assertHas(viewerFile, 'const dollSlotAnchors = useMemo<DollSlotAnchorMap>', 'viewer should author scene-space doll slot anchors');
+assertHas(viewerFile, 'className="sandbox360OverlayDollWorldLayer"', 'viewer should render doll world layer in 360 scene');
+assertHas(viewerFile, 'className="sandbox360OverlayDollAnchor"', 'viewer should render anchored per-doll nodes');
+assertHas(viewerFile, 'if (slotVisibleRect.w <= 0 || slotVisibleRect.h <= 0) return null;', 'viewer should cull offscreen doll anchors');
+assertHas(viewerFile, "geometrySource: 'dollSlotAnchors(scene_space) -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)'", 'doll debug geometry must report scene-space anchor path');
 assertHas(viewerFile, 'className="sandbox360OverlayDollReflectCue"', 'legacy doll reflect should stay as cue only');
 assertHas(viewerFile, 'missingVariantAssets', 'viewer should expose missing variant assets');
 assertHas(viewerFile, 'renderedVariantAssets', 'viewer should expose rendered variant assets');
@@ -54,6 +57,14 @@ if (viewerFile.includes('className="sandbox360OverlayDoll"')) {
 
 if (viewerFile.includes('sandbox360OverlayDollHead"')) {
   throw new Error('legacy css primitive doll head path must not remain primary renderer');
+}
+
+if (viewerFile.includes('className="sandbox360OverlayDollCabinet"')) {
+  throw new Error('legacy cabinet screen-space container path should be removed');
+}
+
+if (viewerFile.includes('className="sandbox360OverlayDollSlot"')) {
+  throw new Error('legacy slot percent-grid container path should be removed');
 }
 
 console.log('regression-sandbox360-shot-events: ok');
