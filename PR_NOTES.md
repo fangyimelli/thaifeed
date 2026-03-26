@@ -1,3 +1,32 @@
+> 2026-03-26 sandbox_360_test 補充（第十二波）：紅框娃娃櫃本體修復。移除圓臉資產渲染，改為櫃內原娃娃 scene clone motion（限定 cabinet anchors，不做 viewport 臉貼圖）。
+
+## 2026-03-26 Sandbox360 doll cabinet body fix（scene clone motion in red-box cabinet）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### Root cause
+- 主渲染來源仍是 `dollCabinetRenderLibrary` 的獨立 SVG 圓臉，不是櫃內原有娃娃本體。
+- 因此即使 anchor 正確，視覺仍像外掛前景臉層，與需求不符。
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - doll 主渲染改為 `cabinet_scene_clone_motion_v2`：每個 controlled doll 在自身 slot 直接 clone scene 像素，並在該 slot 內做微動/凝視偏移。
+  - `dollGazeSsot` 新增 `activeCabinetRegion='dollCabinet'`，每隻 binding 新增 `motionPreset`。
+  - gaze state 新增 `subtleMotion`（idle 與 tracking 之間的櫃內微動狀態）。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 移除 `sandbox360OverlayDollHeadAsset` / eye / highlight 資產層。
+  - 新增 `sandbox360OverlayDollBodyClone` + `sandbox360OverlayDollGazeTint`（皆限制在 slot mask）。
+- `src/app/App.tsx`
+  - debug 面板新增 `dollGazeSsot.activeCabinetRegion` 與每隻 `motion` 欄位。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - guard 改為鎖定 scene-clone token，並禁止 head-asset 路徑回歸。
+- Removed:
+  - `src/modes/sandbox_360_test/dollCabinetRenderLibrary.ts`
+
+### Removed / Deprecated
+- Removed round-face render library route（不再允許 viewport/HUD 式娃娃臉替代）。
+
 > 2026-03-26 sandbox_360_test 補充（第十一波）：360 娃娃凝視 hard-fix。移除殘留單體前景臉路徑，新增 per-doll scene binding SSOT + viewport 可見比 gate（center-in-view + ratio>=0.45），避免畫面邊角漂浮圓臉。
 
 ## 2026-03-26 Sandbox360 doll gaze hard-fix（scene-anchor binding + strict viewport gate）

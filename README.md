@@ -1,3 +1,19 @@
+## 2026-03-26 Sandbox360 娃娃櫃本體修復（紅框櫃內原娃娃 clone-motion，移除圓臉假層）
+
+- Scope 嚴格限制 `sandbox_360_test`（classic / sandbox_story 完全未改）。
+- Root cause：
+  - 前版 `dollCabinetRenderLibrary` 使用獨立 SVG 圓臉資產覆蓋 slot，雖掛在 anchor，視覺上仍是「外加臉貼圖」，與櫃內原娃娃本體不一致。
+  - render source 不是場景原娃娃，導致需求（紅框櫃內本體微動/凝視）被錯接成替代頭像層。
+- 修正：
+  - `Sandbox360Viewer` 改為 `cabinet_scene_clone_motion_v2`：每隻娃娃直接 clone 當前 scene 在該 slot 的像素（背景裁切），只在櫃內 anchor/mask 範圍內做微動與凝視偏移。
+  - 移除 `dollCabinetRenderLibrary.ts` 與 `sandbox360OverlayDollHeadAsset` 路徑，不再生成獨立圓臉/頭像。
+  - `dollGazeSsot` 新增 `activeCabinetRegion='dollCabinet'`，並補 `motionPreset`（idle/subtle/tracking/locked）供 debug 驗證。
+  - App debug panel 同步輸出 `activeCabinetRegion` 與每隻娃娃 `motion`，可直接檢查是否僅控制紅框櫃內目標。
+
+### Removed / Deprecated Log
+- Removed `src/modes/sandbox_360_test/dollCabinetRenderLibrary.ts`（SVG 圓臉假渲染路徑）。
+- Removed `sandbox360OverlayDollHeadAsset` / eye/highlight 變體資產層（改為 scene clone motion）。
+
 ## 2026-03-26 Sandbox360 娃娃凝視修復（移除錯誤前景臉路徑，改為 scene-anchor SSOT）
 
 - Scope 僅 `sandbox_360_test`；classic mode 與 sandbox story 完全未改。
