@@ -1,3 +1,5 @@
+> 2026-03-26 sandbox_360_test 補充（第九波）：完成 Doll Cabinet Look-at-Player 正式系統（authored variants + stage/gate/trigger + SSOT + debug projection）。`DOLL_REFLECT` 降級為 cue，主路徑改為 per-doll variant map。
+
 ## 2026-03-26 Sandbox360 display responsibility split (main clean / debug SSOT)
 
 ### Root cause

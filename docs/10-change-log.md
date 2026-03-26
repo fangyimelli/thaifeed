@@ -1,3 +1,20 @@
+## 2026-03-26 Sandbox360 Doll Cabinet staged stare system
+
+### Scope
+- `sandbox_360_test` only.
+- No changes in classic mode.
+
+### Summary
+- Added SSOT doll cabinet state machine (`dollCabinetStage`, threat/focus/look-level, activeVariantMap, scare/cooldown, trigger/block observability).
+- Added authored target table and per-doll variant rendering (`neutral`, `glance_to_player`, `stare_player`, `hard_stare`).
+- Added RIGHT dwell/revisit + TV/FLASH/DOOR/story-tag return gates for deterministic stage escalation.
+- Downgraded `DOLL_REFLECT` to cue-only role, integrated under staged doll system.
+- Expanded Debug projection with activeLookTargets, activeVariantMap, stage trigger reason, cooldown, and stage effect sources.
+- Updated regression guard `scripts/regression-sandbox360-shot-events.mjs` to lock new doll-cabinet SSOT contracts.
+
+### Removed / Deprecated Log
+- Deprecated legacy single-overlay `sandbox360OverlayDoll` main path.
+
 ## 2026-03-26 Sandbox360 主畫面紅框移除 + Effect Debug SSOT 集中
 
 - Scope：`sandbox_360_test` only（classic / sandbox_story 不變）。
