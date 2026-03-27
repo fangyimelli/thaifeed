@@ -1,3 +1,27 @@
+## 2026-03-27 Sandbox360 娃娃櫃安全收斂（停用 clone/overlay 假本體動態，改 cabinet-local 非切片 FX）
+
+- Scope 嚴格限制 `sandbox_360_test`（classic / sandbox_story 完全未改）。
+- Root cause：
+  - 先前 `sandbox360OverlayDollAnchor` + `sandbox360OverlayDollBodyClone` 路徑仍屬 `room_360.png` 局部裁切 clone 後 transform，存在漂浮臉、黑塊、錯層風險。
+  - 在缺少 per-doll isolated assets / mask / anchor structure 的前提下，持續交付假本體動態會放大錯誤視覺。
+- 修正：
+  - 直接移除 per-doll clone/overlay 動態路徑（不再渲染 `sandbox360OverlayDollAnchor` / `sandbox360OverlayDollBodyClone` / `sandbox360OverlayDollGazeTint`）。
+  - `@keyframes sandbox360DollBodyMotion` 與等效切片位移動畫移除，改為只保留櫃體區域的 cabinet-local 非切片 FX（輕微亮度/色溫呼吸）。
+  - `dollGazeSsot` 明確輸出：
+    - `mode=360`
+    - `cabinetFx=enabled`
+    - `perDollBodyMotion=unavailable`
+    - `overlayDollClone=removed`
+    - `storyFlowUnchanged=true`
+    - `capabilityReason=lack of per-doll isolated assets / mask / anchor structure`
+  - debug 僅反映 state，不改 flow/state/trigger intent。
+
+### Removed / Deprecated Log
+- Removed `sandbox360OverlayDollAnchor` render path（per-doll screen/slot clone container）。
+- Removed `sandbox360OverlayDollBodyClone` / `sandbox360OverlayDollGazeTint` layer path。
+- Removed `@keyframes sandbox360DollBodyMotion` / `@keyframes sandbox360DollGazeShift` / `@keyframes sandbox360DollCabinetScare`（切片位移/縮放類假本體動畫）。
+- Deprecated `cabinet_scene_clone_motion_v2` as active render path（改為 `cabinet_local_non_slice_fx_v1`）。
+
 ## 2026-03-26 Sandbox360 娃娃櫃本體修復（紅框櫃內原娃娃 clone-motion，移除圓臉假層）
 
 - Scope 嚴格限制 `sandbox_360_test`（classic / sandbox_story 完全未改）。

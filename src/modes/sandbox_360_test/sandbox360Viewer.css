@@ -182,67 +182,28 @@
 .sandbox360OverlayDollCabinetFx {
   position: absolute;
   pointer-events: none;
-  opacity: 0.16;
-  background: radial-gradient(circle at 58% 14%, rgba(88, 120, 160, 0.08) 0%, rgba(12, 16, 26, 0.26) 54%, rgba(6, 7, 12, 0.36) 100%);
+  opacity: 0.12;
+  background:
+    radial-gradient(circle at 58% 14%, rgba(112, 146, 190, 0.09) 0%, rgba(12, 16, 26, 0.22) 54%, rgba(6, 7, 12, 0.34) 100%),
+    linear-gradient(128deg, rgba(162, 194, 240, 0.06) 0%, rgba(18, 22, 36, 0.02) 45%, rgba(240, 220, 182, 0.04) 100%);
   border-radius: 10px;
+  animation: sandbox360CabinetAmbientBreath 3200ms ease-in-out infinite;
 }
 
 .sandbox360OverlayDollCabinetFx[data-stage='2'] {
-  opacity: 0.34;
-  animation: sandbox360DollPulse 1400ms ease-in-out infinite;
+  opacity: 0.18;
+  animation: sandbox360CabinetAmbientBreath 2400ms ease-in-out infinite;
 }
 
 .sandbox360OverlayDollCabinetFx[data-stage='3'] {
-  opacity: 0.48;
-  animation: sandbox360DollPulse 980ms ease-in-out infinite;
+  opacity: 0.24;
+  animation: sandbox360CabinetAmbientBreath 1800ms ease-in-out infinite;
 }
 
 .sandbox360OverlayDollCabinetFx[data-stage='4'] {
-  opacity: 0.75;
-  animation: sandbox360DollCabinetScare 280ms ease-out;
+  opacity: 0.32;
+  animation: sandbox360CabinetEventPulse 360ms ease-out;
 }
-
-.sandbox360OverlayDollAnchor {
-  position: absolute;
-  border-radius: 10px;
-  overflow: hidden;
-  transform: translateZ(0);
-  contain: layout paint style;
-  isolation: isolate;
-}
-
-.sandbox360OverlayDollBodyClone,
-.sandbox360OverlayDollGazeTint {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.sandbox360OverlayDollBodyClone {
-  background-image: var(--doll-bg-image);
-  background-repeat: no-repeat;
-  background-size: var(--doll-bg-size-x) var(--doll-bg-size-y);
-  background-position: var(--doll-bg-pos-x) var(--doll-bg-pos-y);
-  transform-origin: 50% 62%;
-  animation: sandbox360DollBodyMotion var(--doll-motion-ms, 2800ms) ease-in-out infinite;
-  filter: saturate(1.04) contrast(1.05);
-}
-
-.sandbox360OverlayDollGazeTint {
-  mix-blend-mode: screen;
-  opacity: 0.18;
-  background:
-    radial-gradient(circle at 52% 40%, rgba(190, 225, 255, 0.2), transparent 45%),
-    radial-gradient(circle at 48% 50%, rgba(132, 178, 255, 0.16), transparent 58%);
-  animation: sandbox360DollGazeShift calc(var(--doll-motion-ms, 2800ms) * 0.9) ease-in-out infinite;
-}
-
-.sandbox360OverlayDollAnchor[data-variant='neutral'] .sandbox360OverlayDollGazeTint { opacity: 0.12; }
-.sandbox360OverlayDollAnchor[data-variant='glance_to_player'] .sandbox360OverlayDollGazeTint { opacity: 0.2; }
-.sandbox360OverlayDollAnchor[data-variant='stare_player'] .sandbox360OverlayDollGazeTint { opacity: 0.28; }
-.sandbox360OverlayDollAnchor[data-variant='hard_stare'] .sandbox360OverlayDollGazeTint { opacity: 0.36; }
-
-.sandbox360OverlayDollAnchor[data-looking='true'] .sandbox360OverlayDollBodyClone { filter: saturate(1.1) contrast(1.1) brightness(1.05); }
 
 .sandbox360OverlayDollReflectCue {
   position: absolute;
@@ -264,38 +225,16 @@
   100% { opacity: 0; transform: translateX(4%); }
 }
 
-@keyframes sandbox360DollPulse {
-  0% { filter: brightness(0.95); }
-  50% { filter: brightness(1.12); }
-  100% { filter: brightness(0.95); }
+@keyframes sandbox360CabinetAmbientBreath {
+  0% { filter: brightness(0.97) saturate(1) hue-rotate(0deg); }
+  50% { filter: brightness(1.05) saturate(1.03) hue-rotate(-2deg); }
+  100% { filter: brightness(0.97) saturate(1) hue-rotate(0deg); }
 }
 
-@keyframes sandbox360DollBodyMotion {
-  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-  30% {
-    transform: translate3d(calc(var(--doll-gaze-offset-x) * 0.35), calc(var(--doll-gaze-offset-y) * 0.35), 0)
-      rotate(calc(var(--doll-head-tilt-deg) * 0.45))
-      scale(var(--doll-breathe-scale));
-  }
-  60% {
-    transform: translate3d(var(--doll-gaze-offset-x), calc(var(--doll-gaze-offset-y) + var(--doll-drift-px) * -0.25), 0)
-      rotate(var(--doll-head-tilt-deg))
-      scale(calc(var(--doll-breathe-scale) + 0.004));
-  }
-  100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-}
-
-@keyframes sandbox360DollGazeShift {
-  0% { transform: translate3d(0, 0, 0); }
-  40% { transform: translate3d(calc(var(--doll-gaze-offset-x) * 0.5), calc(var(--doll-gaze-offset-y) * 0.35), 0); }
-  80% { transform: translate3d(calc(var(--doll-gaze-offset-x) * -0.15), calc(var(--doll-gaze-offset-y) * 0.1), 0); }
-  100% { transform: translate3d(0, 0, 0); }
-}
-
-@keyframes sandbox360DollCabinetScare {
-  0% { transform: scale(1); }
-  35% { transform: scale(1.03); }
-  100% { transform: scale(1); }
+@keyframes sandbox360CabinetEventPulse {
+  0% { filter: brightness(1) saturate(1.02); }
+  40% { filter: brightness(1.14) saturate(1.08); }
+  100% { filter: brightness(1) saturate(1.02); }
 }
 
 .sandbox360OverlayDoor {

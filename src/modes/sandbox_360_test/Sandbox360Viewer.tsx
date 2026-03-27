@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
 import { SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
 import {
@@ -92,7 +92,7 @@ type SceneCameraState = {
 type TvTargetRegionKind = 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner';
 type DollSlotAnchorMap = Record<DollCabinetTarget['cabinetSlot'], SceneRect>;
 type DollGazeState = 'idle' | 'subtleMotion' | 'trackingPlayer' | 'lockedOnPlayer';
-type DollApplyStatus = 'applied' | 'skipped';
+type DollApplyStatus = 'disabled';
 type DollViewportVisibility = {
   inViewport: boolean;
   visibleRatio: number;
@@ -112,16 +112,6 @@ type DollSceneBindingDebug = {
   renderAssetId: string;
   motionPreset: string;
 };
-type DollMotionProfile = {
-  preset: string;
-  gazeOffsetX: number;
-  gazeOffsetY: number;
-  headTiltDeg: number;
-  breatheScale: number;
-  driftPx: number;
-  animationMs: number;
-};
-
 type Props = {
   viewerState: Sandbox360ViewerState;
   curse: number;
@@ -187,7 +177,11 @@ type Props = {
     dollGazeSsot: {
       mode: '360';
       activeCabinetRegion: 'dollCabinet';
-      overlayFloatingFaceRemoved: boolean;
+      cabinetFx: 'enabled' | 'disabled';
+      perDollBodyMotion: 'unavailable' | 'enabled';
+      overlayDollClone: 'removed' | 'active';
+      storyFlowUnchanged: true;
+      capabilityReason: string;
       controlledDolls: string[];
       bindings: DollSceneBindingDebug[];
     };
@@ -233,12 +227,7 @@ const DOLL_SLOT_ANCHOR_LAYOUT = {
   bottom_center: { x: 0.36, y: 0.52, w: 0.28, h: 0.42 },
   bottom_right: { x: 0.7, y: 0.52, w: 0.28, h: 0.42 }
 } satisfies Record<DollCabinetTarget['cabinetSlot'], { x: number; y: number; w: number; h: number }>;
-const DOLL_MOTION_BY_VARIANT: Record<DollVariant, DollMotionProfile> = {
-  neutral: { preset: 'subtle_idle', gazeOffsetX: 0.2, gazeOffsetY: 0.1, headTiltDeg: 0.25, breatheScale: 1.012, driftPx: 0.8, animationMs: 3200 },
-  glance_to_player: { preset: 'subtle_glance', gazeOffsetX: 1.4, gazeOffsetY: 0.2, headTiltDeg: 0.65, breatheScale: 1.016, driftPx: 1.2, animationMs: 2600 },
-  stare_player: { preset: 'tracking_focus', gazeOffsetX: 2.1, gazeOffsetY: 0.4, headTiltDeg: 1.1, breatheScale: 1.02, driftPx: 1.6, animationMs: 2100 },
-  hard_stare: { preset: 'locked_focus', gazeOffsetX: 2.7, gazeOffsetY: 0.55, headTiltDeg: 1.35, breatheScale: 1.022, driftPx: 1.9, animationMs: 1700 }
-};
+const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
 
 const resolveTvScreenInnerGeometryFromBaseCalibration = ({
   baseQuad,
@@ -742,20 +731,9 @@ export default function Sandbox360Viewer({
       const centerY = slotRect.y + slotRect.h / 2;
       const centerInViewport = centerX >= 0 && centerX <= viewportRect.w && centerY >= 0 && centerY <= viewportRect.h;
       const inViewport = visibleRatio >= 0.45 && centerInViewport;
-      const looking = dollCabinetState.activeLookTargets.includes(target.id);
-      const gazeState: DollGazeState = requestedVariant === 'hard_stare'
-        ? 'lockedOnPlayer'
-        : looking
-          ? 'trackingPlayer'
-          : inViewport
-            ? 'subtleMotion'
-            : 'idle';
-      const applyStatus: DollApplyStatus = !inViewport ? 'skipped' : 'applied';
-      const applyReason = !centerInViewport
-        ? 'anchor_center_outside_viewport'
-        : visibleRatio < 0.45
-          ? `anchor_visible_ratio_below_threshold(${visibleRatio.toFixed(2)})`
-          : 'applied_to_scene_anchor';
+      const gazeState: DollGazeState = 'idle';
+      const applyStatus: DollApplyStatus = 'disabled';
+      const applyReason = `per_doll_motion_unavailable(${DOLL_MOTION_UNAVAILABLE_REASON})`;
       const visibilityReason = centerInViewport
         ? inViewport
           ? 'anchor_in_viewport'
@@ -766,7 +744,7 @@ export default function Sandbox360Viewer({
         slot: target.cabinetSlot,
         anchor: slotAnchor,
         requestedVariant,
-        resolvedVariant: requestedVariant,
+        resolvedVariant: 'hidden',
         gazeState,
         visibility: {
           inViewport,
@@ -776,11 +754,11 @@ export default function Sandbox360Viewer({
         },
         applyStatus,
         applyReason,
-        renderAssetId: `cabinet_scene_clone_${requestedVariant}`,
-        motionPreset: DOLL_MOTION_BY_VARIANT[requestedVariant].preset
+        renderAssetId: 'disabled',
+        motionPreset: 'unavailable'
       };
     });
-  }, [cameraState.viewportHeight, cameraState.viewportWidth, clampRectWithin, dollCabinetState.activeLookTargets, dollCabinetState.dollCabinetActiveVariantMap, dollCabinetTargets, dollSlotAnchors, toScreenRect]);
+  }, [cameraState.viewportHeight, cameraState.viewportWidth, clampRectWithin, dollCabinetState.dollCabinetActiveVariantMap, dollCabinetTargets, dollSlotAnchors, toScreenRect]);
 
   useEffect(() => {
     const fallbackVariantMap: Record<string, string> = {};
@@ -789,10 +767,7 @@ export default function Sandbox360Viewer({
     const missingVariantAssets: string[] = [];
     dollSceneBindings.forEach((binding) => {
       fallbackVariantMap[binding.dollId] = `${binding.requestedVariant}->${binding.resolvedVariant}@${binding.motionPreset}`;
-      if (binding.applyStatus === 'applied') {
-        renderedVariantAssets.push(`${binding.dollId}:${binding.renderAssetId}`);
-        renderedDollSlots.push(binding.slot);
-      }
+      missingVariantAssets.push(`${binding.dollId}:per_doll_motion_unavailable`);
     });
     onViewerDebugStateChange?.({
       baseSceneWidth: SCENE_REFERENCE_SIZE.width,
@@ -843,11 +818,15 @@ export default function Sandbox360Viewer({
       renderedVariantAssets,
       missingVariantAssets,
       fallbackVariantMap,
-      variantRenderSource: 'cabinet_scene_clone_motion_v2',
+      variantRenderSource: 'cabinet_local_non_slice_fx_v1',
       dollGazeSsot: {
         mode: SANDBOX360_MODE_TAG,
         activeCabinetRegion: 'dollCabinet',
-        overlayFloatingFaceRemoved: true,
+        cabinetFx: 'enabled',
+        perDollBodyMotion: 'unavailable',
+        overlayDollClone: 'removed',
+        storyFlowUnchanged: true,
+        capabilityReason: DOLL_MOTION_UNAVAILABLE_REASON,
         controlledDolls: dollCabinetTargets.map((target) => target.id),
         bindings: dollSceneBindings
       }
@@ -917,38 +896,6 @@ export default function Sandbox360Viewer({
           ) : null}
           <div className="sandbox360OverlayDollWorldLayer" data-stage={dollCabinetState.dollCabinetStage}>
             <div className="sandbox360OverlayDollCabinetFx" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
-            {dollSceneBindings.map((binding) => {
-              const slotRect = toScreenRect(binding.anchor);
-              if (binding.applyStatus !== 'applied') return null;
-              const motion = DOLL_MOTION_BY_VARIANT[binding.requestedVariant];
-              return (
-                <div
-                  key={binding.dollId}
-                  className="sandbox360OverlayDollAnchor"
-                  data-slot={binding.slot}
-                  data-variant={binding.resolvedVariant}
-                  data-requested-variant={binding.requestedVariant}
-                  data-looking={binding.gazeState === 'idle' ? 'false' : 'true'}
-                  style={{
-                    ...toScreenRectStyle(slotRect),
-                    '--doll-bg-image': `url("${sceneImageSrc}")`,
-                    '--doll-bg-size-x': `${sceneDimensions.width * cameraState.cameraScale}px`,
-                    '--doll-bg-size-y': `${sceneDimensions.height * cameraState.cameraScale}px`,
-                    '--doll-bg-pos-x': `${-slotRect.x}px`,
-                    '--doll-bg-pos-y': `${-slotRect.y}px`,
-                    '--doll-gaze-offset-x': `${motion.gazeOffsetX}px`,
-                    '--doll-gaze-offset-y': `${motion.gazeOffsetY}px`,
-                    '--doll-head-tilt-deg': `${motion.headTiltDeg}deg`,
-                    '--doll-breathe-scale': motion.breatheScale,
-                    '--doll-drift-px': `${motion.driftPx}px`,
-                    '--doll-motion-ms': `${motion.animationMs}ms`
-                  } as CSSProperties}
-                >
-                  <div className="sandbox360OverlayDollBodyClone" />
-                  <div className="sandbox360OverlayDollGazeTint" />
-                </div>
-              );
-            })}
             <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />

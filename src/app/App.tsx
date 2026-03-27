@@ -855,7 +855,11 @@ export default function App() {
     dollGazeSsot: {
       mode: '360' as const,
       activeCabinetRegion: 'dollCabinet' as const,
-      overlayFloatingFaceRemoved: false,
+      cabinetFx: 'disabled' as 'enabled' | 'disabled',
+      perDollBodyMotion: 'unavailable' as 'unavailable' | 'enabled',
+      overlayDollClone: 'removed' as 'removed' | 'active',
+      storyFlowUnchanged: true as const,
+      capabilityReason: 'lack of per-doll isolated assets / mask / anchor structure',
       controlledDolls: [] as string[],
       bindings: [] as Array<{
         dollId: string;
@@ -870,7 +874,7 @@ export default function App() {
           reason: string;
           visibleRect: { x: number; y: number; w: number; h: number };
         };
-        applyStatus: 'applied' | 'skipped';
+        applyStatus: 'applied' | 'skipped' | 'disabled';
         applyReason: string;
         renderAssetId: string;
         motionPreset: string;
@@ -8677,7 +8681,11 @@ export default function App() {
                     <div>dollCabinet.variantRenderSource: {sandbox360OverlayDebug.variantRenderSource}</div>
                     <div>dollGazeSsot.mode: {sandbox360OverlayDebug.dollGazeSsot.mode}</div>
                     <div>dollGazeSsot.activeCabinetRegion: {sandbox360OverlayDebug.dollGazeSsot.activeCabinetRegion}</div>
-                    <div>dollGazeSsot.overlayFloatingFaceRemoved: {String(sandbox360OverlayDebug.dollGazeSsot.overlayFloatingFaceRemoved)}</div>
+                    <div>dollGazeSsot.cabinetFx: {sandbox360OverlayDebug.dollGazeSsot.cabinetFx}</div>
+                    <div>dollGazeSsot.perDollBodyMotion: {sandbox360OverlayDebug.dollGazeSsot.perDollBodyMotion}</div>
+                    <div>dollGazeSsot.overlayDollClone: {sandbox360OverlayDebug.dollGazeSsot.overlayDollClone}</div>
+                    <div>dollGazeSsot.storyFlowUnchanged: {String(sandbox360OverlayDebug.dollGazeSsot.storyFlowUnchanged)}</div>
+                    <div>dollGazeSsot.capabilityReason: {sandbox360OverlayDebug.dollGazeSsot.capabilityReason}</div>
                     <div>dollGazeSsot.controlledDolls: {sandbox360OverlayDebug.dollGazeSsot.controlledDolls.join(',') || '-'}</div>
                     {sandbox360OverlayDebug.dollGazeSsot.bindings.map((binding) => (
                       <div key={`dollBinding-${binding.dollId}`}>

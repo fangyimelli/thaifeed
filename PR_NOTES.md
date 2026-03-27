@@ -1,3 +1,39 @@
+> 2026-03-27 sandbox_360_test 補充（第十三波）：停止交付錯誤 per-doll 假本體動態。移除 clone/overlay 切片路徑，改為 cabinet-local 安全非切片 FX，debug 明確標示 per-doll body motion unavailable。
+
+## 2026-03-27 Sandbox360 cabinet-safe convergence（remove clone/slice fake body motion）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### Root cause
+- `room_360.png` 局部 clone + transform 的 per-doll 路徑在目前資產條件下無法保證不漂浮、不黑塊、不錯層。
+- 在缺少 per-doll isolated assets / mask / anchor structure 前，任何假本體 motion 都屬高風險視覺錯交付。
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 移除 `sandbox360OverlayDollAnchor` / `sandbox360OverlayDollBodyClone` / `sandbox360OverlayDollGazeTint` 渲染路徑。
+  - `variantRenderSource` 切換為 `cabinet_local_non_slice_fx_v1`（只保留櫃體區域安全 FX）。
+  - `dollGazeSsot` 明確輸出：
+    - `mode=360`
+    - `cabinetFx=enabled`
+    - `perDollBodyMotion=unavailable`
+    - `overlayDollClone=removed`
+    - `storyFlowUnchanged=true`
+    - `capabilityReason=lack of per-doll isolated assets / mask / anchor structure`
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 移除 `sandbox360DollBodyMotion` / `sandbox360DollGazeShift` / `sandbox360DollCabinetScare` 舊切片位移動畫。
+  - 保留 cabinet-local 輕量呼吸 FX（亮度/色溫微幅變化）。
+- `src/app/App.tsx`
+  - debug panel 改顯示 capability 與 unavailable 狀態，避免 UI 假裝娃娃本體已動。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增 guard：禁止 overlay clone/anchor/keyframe 回歸；要求新 debug token 存在。
+
+### Removed / Deprecated
+- Removed `sandbox360OverlayDollAnchor`.
+- Removed `sandbox360OverlayDollBodyClone`.
+- Removed `@keyframes sandbox360DollBodyMotion` and equivalent clone-slice motion tokens.
+- Deprecated scene clone motion as active renderer until per-doll isolation capability exists.
+
 > 2026-03-26 sandbox_360_test 補充（第十二波）：紅框娃娃櫃本體修復。移除圓臉資產渲染，改為櫃內原娃娃 scene clone motion（限定 cabinet anchors，不做 viewport 臉貼圖）。
 
 ## 2026-03-26 Sandbox360 doll cabinet body fix（scene clone motion in red-box cabinet）

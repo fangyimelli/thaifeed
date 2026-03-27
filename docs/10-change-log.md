@@ -1,3 +1,30 @@
+## 2026-03-27 Sandbox360 cabinet-safe convergence（disable per-doll clone/overlay motion）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### Summary
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - Removed per-doll render nodes: `sandbox360OverlayDollAnchor` / `sandbox360OverlayDollBodyClone` / `sandbox360OverlayDollGazeTint`.
+  - Stopped `room_360.png` local clone transform path as active renderer.
+  - Kept only cabinet-local non-slice FX and preserved existing story/flow/state/trigger intent.
+  - Updated debug SSOT: `cabinetFx`, `perDollBodyMotion`, `overlayDollClone`, `storyFlowUnchanged`, `capabilityReason`.
+  - Set capability reason to `lack of per-doll isolated assets / mask / anchor structure`.
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - Removed per-doll clone motion styles and keyframes (`sandbox360DollBodyMotion`, `sandbox360DollGazeShift`).
+  - Replaced cabinet FX with mild cabinet-local ambient pulse (`sandbox360CabinetAmbientBreath`, `sandbox360CabinetEventPulse`) with no slice translation.
+- `src/app/App.tsx`
+  - Debug panel switched from floating-face token to explicit capability/unavailable status lines.
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - Added anti-regression guards that fail on per-doll anchor/body-clone path reintroduction.
+  - Added guards for new unavailable/removed debug tokens.
+
+### Removed / Deprecated Log
+- Removed `sandbox360OverlayDollAnchor` render path.
+- Removed `sandbox360OverlayDollBodyClone` / `sandbox360OverlayDollGazeTint`.
+- Removed per-doll slice-motion keyframes (`sandbox360DollBodyMotion`, `sandbox360DollGazeShift`, `sandbox360DollCabinetScare`).
+- Deprecated `cabinet_scene_clone_motion_v2` active route in favor of `cabinet_local_non_slice_fx_v1`.
+
 ## 2026-03-26 Sandbox360 doll cabinet body-in-cabinet fix（replace floating round-face renderer）
 
 ### Scope
