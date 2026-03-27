@@ -36,26 +36,29 @@ assertHas(appFile, 'dollCabinet.missingVariantAssets:', 'debug panel should expo
 assertHas(appFile, 'dollCabinet.fallbackVariantMap:', 'debug panel should expose fallback map');
 assertHas(appFile, 'dollGazeSsot.mode:', 'debug panel should expose 360 gaze mode');
 assertHas(appFile, 'dollGazeSsot.activeCabinetRegion:', 'debug panel should expose active doll cabinet region');
-assertHas(appFile, 'dollGazeSsot.overlayFloatingFaceRemoved:', 'debug panel should expose floating-face removal status');
+assertHas(appFile, 'dollGazeSsot.cabinetFx:', 'debug panel should expose cabinet fx status');
+assertHas(appFile, 'dollGazeSsot.perDollBodyMotion:', 'debug panel should expose per-doll motion status');
+assertHas(appFile, 'dollGazeSsot.overlayDollClone:', 'debug panel should expose overlay clone status');
+assertHas(appFile, 'dollGazeSsot.storyFlowUnchanged:', 'debug panel should expose story flow unchanged flag');
+assertHas(appFile, 'dollGazeSsot.capabilityReason:', 'debug panel should expose capability reason');
 assertHas(appFile, 'dollBinding[', 'debug panel should expose per-doll anchor/apply status');
 assertHas(appFile, 'current360Region:', 'debug panel should expose current 360 region');
 
 assertHas(viewerFile, 'dollCabinetState: DollCabinetState;', 'viewer should consume doll cabinet ssot');
 assertHas(viewerFile, 'dollCabinetTargets: DollCabinetTarget[];', 'viewer should consume authored doll targets table');
 assertHas(viewerFile, "const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';", 'viewer should render from activeVariantMap ssot');
-assertHas(viewerFile, 'DOLL_MOTION_BY_VARIANT', 'viewer should own cabinet doll motion profiles');
-assertHas(viewerFile, '${binding.requestedVariant}->${binding.resolvedVariant}@${binding.motionPreset}', 'viewer debug should expose motion preset mapping');
-assertHas(viewerFile, "variantRenderSource: 'cabinet_scene_clone_motion_v2'", 'viewer should expose scene clone render source id');
+assertHas(viewerFile, 'DOLL_MOTION_UNAVAILABLE_REASON', 'viewer should expose capability reason ssot');
+assertHas(viewerFile, '${binding.requestedVariant}->${binding.resolvedVariant}@${binding.motionPreset}', 'viewer debug should expose unavailable mapping');
+assertHas(viewerFile, "variantRenderSource: 'cabinet_local_non_slice_fx_v1'", 'viewer should expose cabinet-local non-slice render source id');
 assertHas(viewerFile, 'const dollSlotAnchors = useMemo<DollSlotAnchorMap>', 'viewer should author scene-space doll slot anchors');
 assertHas(viewerFile, 'const dollSceneBindings = useMemo<DollSceneBindingDebug[]>', 'viewer should project per-doll scene binding ssot');
 assertHas(viewerFile, "activeCabinetRegion: 'dollCabinet'", 'viewer should expose active cabinet region in gaze ssot');
-assertHas(viewerFile, "overlayFloatingFaceRemoved: true", 'viewer should explicitly expose floating-face path removal');
-assertHas(viewerFile, 'const inViewport = visibleRatio >= 0.45 && centerInViewport;', 'viewer should block partial edge-floating dolls');
-assertHas(viewerFile, ": 'applied_to_scene_anchor';", 'viewer should report successful scene-anchor application reason');
+assertHas(viewerFile, "perDollBodyMotion: 'unavailable'", 'viewer should explicitly expose unavailable per-doll motion');
+assertHas(viewerFile, "overlayDollClone: 'removed'", 'viewer should explicitly expose clone removal');
+assertHas(viewerFile, "storyFlowUnchanged: true", 'viewer should expose story unchanged flag');
 assertHas(viewerFile, 'className="sandbox360OverlayDollWorldLayer"', 'viewer should render doll world layer in 360 scene');
-assertHas(viewerFile, 'className="sandbox360OverlayDollAnchor"', 'viewer should render anchored per-doll nodes');
-assertHas(viewerFile, 'className="sandbox360OverlayDollBodyClone"', 'viewer should render cabinet doll body clone layer');
-assertHas(viewerFile, "if (binding.applyStatus !== 'applied') return null;", 'viewer should cull non-applicable doll anchors');
+assertHas(viewerFile, 'className="sandbox360OverlayDollCabinetFx"', 'viewer should render cabinet-local fx layer');
+assertHas(viewerFile, "applyReason = `per_doll_motion_unavailable(${DOLL_MOTION_UNAVAILABLE_REASON})`;", 'viewer should report disabled reason');
 assertHas(viewerFile, "geometrySource: 'dollSlotAnchors(scene_space) -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)'", 'doll debug geometry must report scene-space anchor path');
 assertHas(viewerFile, 'className="sandbox360OverlayDollReflectCue"', 'legacy doll reflect should stay as cue only');
 assertHas(viewerFile, 'missingVariantAssets', 'viewer should expose missing variant assets');
@@ -79,6 +82,16 @@ if (viewerFile.includes('className="sandbox360OverlayDollCabinet"')) {
 
 if (viewerFile.includes('className="sandbox360OverlayDollSlot"')) {
   throw new Error('legacy slot percent-grid container path should be removed');
+}
+if (viewerFile.includes('className="sandbox360OverlayDollAnchor"')) {
+  throw new Error('per-doll anchor clone path should be removed');
+}
+if (viewerFile.includes('className="sandbox360OverlayDollBodyClone"')) {
+  throw new Error('per-doll body clone layer should be removed');
+}
+
+if (viewerCssFile.includes('@keyframes sandbox360DollBodyMotion')) {
+  throw new Error('legacy per-doll body motion keyframes should be removed');
 }
 
 console.log('regression-sandbox360-shot-events: ok');

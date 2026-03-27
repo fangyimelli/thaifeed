@@ -1,5 +1,6 @@
 ## Sandbox 360 doll cabinet look-at-player staged flow（sandbox_360_test only）
 
+> 2026-03-27 sandbox_360_test 補充（第十三波）：承認目前無法安全做到 per-doll 本體位移，停用 `sandbox360OverlayDollAnchor` / `sandbox360OverlayDollBodyClone` / clone-slice motion；改為 cabinet-local 非切片 FX（輕微亮度/色溫呼吸），避免漂浮臉、黑塊、錯層。
 > 2026-03-26 sandbox_360_test 補充（第十波）：doll gaze 主渲染路徑改為 scene-space slot anchors（`dollSlotAnchors`），舊 `sandbox360OverlayDollCabinet` / `sandbox360OverlayDollSlot` 百分比容器主路徑停用；新增 viewport culling，off-screen 娃娃不渲染。
 > 2026-03-26 sandbox_360_test 補充（第十一波）：doll gaze render gate 升級為 strict（anchor center-in-viewport + visibleRatio>=0.45）；debug 新增 `dollGazeSsot`（mode/controlledDolls/bindings/applyReason）；移除 `.sandbox360OverlayDoll` 舊單體前景路徑。
 > 2026-03-26 sandbox_360_test 補充（第十二波）：doll render source 改為 `cabinet_scene_clone_motion_v2`（slot 內 scene clone），移除 `dollCabinetRenderLibrary` 圓臉資產路徑；`dollGazeSsot` 增加 `activeCabinetRegion` 與 `motionPreset`。
@@ -26,11 +27,11 @@ Notes:
 - Viewer 必須使用 `dollCabinetActiveVariantMap`，不得 local 推導誰在看玩家。
 - `DOLL_REFLECT` 僅作 cue（玻璃反光輔助），不再作娃娃主效果。
 - 娃娃渲染必須綁在 360 場景 slot anchor（scene-space）並經同一 resolver 投影，不可使用 screen-space 浮動頭像路徑。
-- 渲染 gate：`anchor center` 必須在 viewport 且 `visibleRatio >= 0.45`，否則 `applyStatus=skipped`（防邊角漂浮臉）。
-- debug 必須輸出 `dollGazeSsot.bindings[]`（anchor/visibility/gaze/apply reason），且 `dollGazeSsot.mode=360`。
-- Render path 由 `cabinet_scene_clone_motion_v2` 決定（每隻娃娃只在自己的 slot anchor 內 clone 原場景像素）：
-  - variant 只決定微動/凝視 motion profile，不生成獨立頭像資產。
-  - debug 必須顯示 `renderedVariantAssets / fallbackVariantMap / dollGazeSsot.activeCabinetRegion / motionPreset`。
+- per-doll body motion 現階段標記 `unavailable`；debug 必須反映 capability reason，不得假裝本體已動。
+- debug 必須輸出 `dollGazeSsot.bindings[]`（anchor/visibility/apply reason），且 `dollGazeSsot.mode=360`。
+- Render path 目前為 `cabinet_local_non_slice_fx_v1`（僅櫃體區域安全 FX）：
+  - 不可對 `room_360.png` 局部 clone 做 transform 位移。
+  - debug 必須顯示 `cabinetFx/perDollBodyMotion/overlayDollClone/storyFlowUnchanged/capabilityReason`。
 
 > 2026-03-25 sandbox_360_test 補充（第七波）：依使用者紅框 follow-up，`TV_SCREEN_INNER_QUAD_BY_SHOT` 再收斂為更小 screen-inner 發光區，校準版本 `v2026-03-25.6`。
 > 2026-03-26 sandbox_360_test 補充（第八波）：主畫面移除 TV 常駐紅框，effect 定位資訊統一進入 `effectsDebugMap`（tv/flash/doll/door）並集中在 Debug `GLOBAL EFFECT RESOLVE`；renderer 與 debug 共用同一 resolved geometry/state。
