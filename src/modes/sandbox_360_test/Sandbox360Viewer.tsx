@@ -109,6 +109,8 @@ type DollSceneBindingDebug = {
   fallbackVisibilityMode: 'motion_unavailable_visible_fallback' | 'fully_hidden';
   gazeState: DollGazeState;
   visibility: DollViewportVisibility;
+  anchorAfterShotTransform: NumericScreenRect;
+  viewportIntersectionRect: NumericScreenRect;
   applyStatus: DollApplyStatus;
   applyReason: string;
   renderAssetId: string;
@@ -222,6 +224,7 @@ declare global {
 const SCENE_DEFAULT_WIDTH = BASE_SCENE_WIDTH;
 const SCENE_DEFAULT_HEIGHT = BASE_SCENE_HEIGHT;
 const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
+const DOLL_ANCHOR_REFERENCE_SIZE = { width: 4096, height: BASE_SCENE_HEIGHT };
 const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
 const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
@@ -235,6 +238,18 @@ const DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX = {
   bottom_center: { leftPx: 3070, topPx: 768, widthPx: 280, heightPx: 430 },
   bottom_right: { leftPx: 3385, topPx: 768, widthPx: 280, heightPx: 430 }
 } satisfies Record<DollCabinetTarget['cabinetSlot'], AbsoluteRectPx>;
+const DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX: Record<ShotType, Partial<Record<DollCabinetTarget['cabinetSlot'], { offsetXPx: number; offsetYPx: number }>>> = {
+  left: {},
+  center: {},
+  right: {
+    top_left: { offsetXPx: -2048, offsetYPx: 0 },
+    top_center: { offsetXPx: -2048, offsetYPx: 0 },
+    top_right: { offsetXPx: -2048, offsetYPx: 0 },
+    bottom_left: { offsetXPx: -2048, offsetYPx: 0 },
+    bottom_center: { offsetXPx: -2048, offsetYPx: 0 },
+    bottom_right: { offsetXPx: -2048, offsetYPx: 0 }
+  }
+};
 // Tune only these four px values to fine-adjust doll placement in the cabinet top-left red-box slot.
 const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 2784, topPx: 316, widthPx: 212, heightPx: 318 };
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
@@ -387,9 +402,9 @@ export default function Sandbox360Viewer({
       cameraScale
     };
   }, [sceneDimensions.height, sceneDimensions.width, viewerState.currentPosX, viewerState.posY, viewerState.scale, viewportSize.height, viewportSize.width]);
-  const mapBaseRectPxToSceneRect = useCallback((rect: AbsoluteRectPx): SceneRect => {
-    const scaleX = cameraState.sceneWidth / SCENE_REFERENCE_SIZE.width;
-    const scaleY = cameraState.sceneHeight / SCENE_REFERENCE_SIZE.height;
+  const mapBaseRectPxToSceneRect = useCallback((rect: AbsoluteRectPx, referenceSize = SCENE_REFERENCE_SIZE): SceneRect => {
+    const scaleX = cameraState.sceneWidth / referenceSize.width;
+    const scaleY = cameraState.sceneHeight / referenceSize.height;
     return {
       x: rect.leftPx * scaleX,
       y: rect.topPx * scaleY,
@@ -439,16 +454,35 @@ export default function Sandbox360Viewer({
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth, mapBaseRectPxToSceneRect]);
   const dollAbsoluteRect = useMemo(() => mapBaseRectPxToSceneRect(DOLL_ABSOLUTE_RECT_BASE_SCENE_PX), [mapBaseRectPxToSceneRect]);
-  const dollSlotAnchors = useMemo<DollSlotAnchorMap>(() => {
+  const dollSlotAnchorsByShot = useMemo<Record<ShotType, DollSlotAnchorMap>>(() => {
+    const resolveShotAnchors = (shot: ShotType): DollSlotAnchorMap => {
+      const shotAdjustment = DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX[shot];
+      const resolveSlot = (slot: DollCabinetTarget['cabinetSlot']) => {
+        const authored = DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX[slot];
+        const adjust = shotAdjustment[slot] ?? { offsetXPx: 0, offsetYPx: 0 };
+        return mapBaseRectPxToSceneRect({
+          leftPx: authored.leftPx + adjust.offsetXPx,
+          topPx: authored.topPx + adjust.offsetYPx,
+          widthPx: authored.widthPx,
+          heightPx: authored.heightPx
+        }, DOLL_ANCHOR_REFERENCE_SIZE);
+      };
+      return {
+        top_left: resolveSlot('top_left'),
+        top_center: resolveSlot('top_center'),
+        top_right: resolveSlot('top_right'),
+        bottom_left: resolveSlot('bottom_left'),
+        bottom_center: resolveSlot('bottom_center'),
+        bottom_right: resolveSlot('bottom_right')
+      };
+    };
     return {
-      top_left: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_left),
-      top_center: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_center),
-      top_right: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_right),
-      bottom_left: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_left),
-      bottom_center: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_center),
-      bottom_right: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_right)
+      left: resolveShotAnchors('left'),
+      center: resolveShotAnchors('center'),
+      right: resolveShotAnchors('right')
     };
   }, [mapBaseRectPxToSceneRect]);
+  const dollSlotAnchors = useMemo<DollSlotAnchorMap>(() => dollSlotAnchorsByShot[viewerState.currentShot], [dollSlotAnchorsByShot, viewerState.currentShot]);
 
   const handheldState = useMemo<HandheldTransformState>(() => ({
     offsetX: viewerState.cameraOffsetX,
@@ -790,6 +824,8 @@ export default function Sandbox360Viewer({
           reason: visibilityReason,
           visibleRect
         },
+        anchorAfterShotTransform: slotRect,
+        viewportIntersectionRect: visibleRect,
         applyStatus,
         applyReason,
         renderAssetId,
