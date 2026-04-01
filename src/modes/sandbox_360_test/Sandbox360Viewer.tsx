@@ -251,7 +251,6 @@ const DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX: Record<ShotType, Partial<Record<
     bottom_right: { offsetXPx: -2048, offsetYPx: 0 }
   }
 };
-const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 3070, topPx: 292, widthPx: 280, heightPx: 430 };
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
 const DOLL_VARIANT_VISIBLE_FALLBACK: Record<DollVariant, DollVariant> = {
   neutral: 'neutral',
@@ -452,7 +451,6 @@ export default function Sandbox360Viewer({
       door: { x: sceneWidth * 0.45, y: sceneHeight * 0.16, w: sceneWidth * 0.14, h: sceneHeight * 0.62 }
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth, mapBaseRectPxToSceneRect]);
-  const dollAbsoluteRect = useMemo(() => mapBaseRectPxToSceneRect(DOLL_ABSOLUTE_RECT_BASE_SCENE_PX), [mapBaseRectPxToSceneRect]);
   const dollSlotAnchorsByShot = useMemo<Record<ShotType, DollSlotAnchorMap>>(() => {
     const resolveShotAnchors = (shot: ShotType): DollSlotAnchorMap => {
       const shotAdjustment = DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX[shot];
@@ -989,11 +987,6 @@ export default function Sandbox360Viewer({
                 <img className="doll" src={dollLayerSources[binding.renderAssetId]} alt={`${binding.dollId}-${binding.resolvedVariant}`} />
               </div>
             ))}
-            <div className="sandbox360OverlayDollAbsoluteAnchor" style={toScreenRectStyle(toScreenRect(dollAbsoluteRect))} aria-hidden="true">
-              <img id="layer-open" className="doll" src={dollLayerSources.open} alt="doll-open" />
-              <img id="layer-look" className="doll" src={dollLayerSources.look} alt="doll-look" data-visible="false" />
-              <img id="layer-closed" className="doll" src={dollLayerSources.closed} alt="doll-closed" data-visible="false" />
-            </div>
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
         </div>
