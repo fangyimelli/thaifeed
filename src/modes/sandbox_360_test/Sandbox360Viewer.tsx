@@ -94,6 +94,7 @@ type TvTargetRegionKind = 'tv_outer_frame' | 'tv_body' | 'tv_screen_inner';
 type DollSlotAnchorMap = Record<DollCabinetTarget['cabinetSlot'], SceneRect>;
 type DollGazeState = 'idle' | 'subtleMotion' | 'trackingPlayer' | 'lockedOnPlayer';
 type DollApplyStatus = 'disabled';
+type DollLayerAssetId = keyof typeof SANDBOX360_DOLL_LAYER_FALLBACK_ASSETS;
 type DollViewportVisibility = {
   inViewport: boolean;
   visibleRatio: number;
@@ -113,7 +114,7 @@ type DollSceneBindingDebug = {
   viewportIntersectionRect: NumericScreenRect;
   applyStatus: DollApplyStatus;
   applyReason: string;
-  renderAssetId: string;
+  renderAssetId: DollLayerAssetId;
   motionPreset: string;
 };
 type Props = {
@@ -250,8 +251,7 @@ const DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX: Record<ShotType, Partial<Record<
     bottom_right: { offsetXPx: -2048, offsetYPx: 0 }
   }
 };
-// Tune only these four px values to fine-adjust doll placement in the cabinet top-left red-box slot.
-const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 2784, topPx: 316, widthPx: 212, heightPx: 318 };
+const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 3070, topPx: 292, widthPx: 280, heightPx: 430 };
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
 const DOLL_VARIANT_VISIBLE_FALLBACK: Record<DollVariant, DollVariant> = {
   neutral: 'neutral',
@@ -334,7 +334,6 @@ export default function Sandbox360Viewer({
   roomEventObservability,
   dollCabinetState,
   dollCabinetTargets,
-  dollInteractionState,
   onViewerDebugStateChange,
   tvBoundsVisualizationEnabled = false
 }: Props) {
@@ -979,10 +978,21 @@ export default function Sandbox360Viewer({
           <div className="sandbox360OverlayDollWorldLayer" data-stage={dollCabinetState.dollCabinetStage}>
             <div className="sandbox360OverlayDollCabinetFx" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
             <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
-            <div className="sandbox360OverlayDollAbsoluteAnchor" style={toScreenRectStyle(toScreenRect(dollAbsoluteRect))}>
+            {dollSceneBindings.filter((binding) => binding.visibility.inViewport).map((binding) => (
+              <div
+                key={`doll-slot-${binding.dollId}`}
+                className="sandbox360OverlayDollSlotAnchor"
+                style={toScreenRectStyle(binding.anchorAfterShotTransform)}
+                data-doll-id={binding.dollId}
+                data-variant={binding.resolvedVariant}
+              >
+                <img className="doll" src={dollLayerSources[binding.renderAssetId]} alt={`${binding.dollId}-${binding.resolvedVariant}`} />
+              </div>
+            ))}
+            <div className="sandbox360OverlayDollAbsoluteAnchor" style={toScreenRectStyle(toScreenRect(dollAbsoluteRect))} aria-hidden="true">
               <img id="layer-open" className="doll" src={dollLayerSources.open} alt="doll-open" />
-              <img id="layer-look" className="doll" src={dollLayerSources.look} alt="doll-look" data-visible={dollInteractionState.lookAtPlayer ? 'true' : 'false'} />
-              <img id="layer-closed" className="doll" src={dollLayerSources.closed} alt="doll-closed" data-visible={dollInteractionState.eyesClosed ? 'true' : 'false'} />
+              <img id="layer-look" className="doll" src={dollLayerSources.look} alt="doll-look" data-visible="false" />
+              <img id="layer-closed" className="doll" src={dollLayerSources.closed} alt="doll-closed" data-visible="false" />
             </div>
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
