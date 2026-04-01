@@ -867,6 +867,7 @@ export default function App() {
         dollId: string;
         slot: string;
         anchor: { x: number; y: number; w: number; h: number };
+        anchorAfterShotTransform: { x: number; y: number; w: number; h: number };
         requestedVariant: string;
         resolvedVariant: string;
         gazeState: 'idle' | 'subtleMotion' | 'trackingPlayer' | 'lockedOnPlayer';
@@ -876,6 +877,7 @@ export default function App() {
           reason: string;
           visibleRect: { x: number; y: number; w: number; h: number };
         };
+        viewportIntersectionRect: { x: number; y: number; w: number; h: number };
         applyStatus: 'applied' | 'skipped' | 'disabled';
         applyReason: string;
         renderAssetId: string;
@@ -8700,7 +8702,7 @@ export default function App() {
                     <div>dollGazeSsot.controlledDolls: {sandbox360OverlayDebug.dollGazeSsot.controlledDolls.join(',') || '-'}</div>
                     {sandbox360OverlayDebug.dollGazeSsot.bindings.map((binding) => (
                       <div key={`dollBinding-${binding.dollId}`}>
-                        dollBinding[{binding.dollId}] slot={binding.slot} anchor=({binding.anchor.x.toFixed(1)},{binding.anchor.y.toFixed(1)},{binding.anchor.w.toFixed(1)},{binding.anchor.h.toFixed(1)}) inViewport={String(binding.visibility.inViewport)} ratio={binding.visibility.visibleRatio.toFixed(2)} gaze={binding.gazeState} motion={binding.motionPreset} apply={binding.applyStatus}:{binding.applyReason}
+                        dollBinding[{binding.dollId}] slot={binding.slot} anchor(scene)=({binding.anchor.x.toFixed(1)},{binding.anchor.y.toFixed(1)},{binding.anchor.w.toFixed(1)},{binding.anchor.h.toFixed(1)}) anchorAfterShotTransform=({binding.anchorAfterShotTransform.x.toFixed(1)},{binding.anchorAfterShotTransform.y.toFixed(1)},{binding.anchorAfterShotTransform.w.toFixed(1)},{binding.anchorAfterShotTransform.h.toFixed(1)}) viewportIntersectionRect=({binding.viewportIntersectionRect.x.toFixed(1)},{binding.viewportIntersectionRect.y.toFixed(1)},{binding.viewportIntersectionRect.w.toFixed(1)},{binding.viewportIntersectionRect.h.toFixed(1)}) inViewport={String(binding.visibility.inViewport)} ratio={binding.visibility.visibleRatio.toFixed(2)} gaze={binding.gazeState} motion={binding.motionPreset} apply={binding.applyStatus}:{binding.applyReason}
                       </div>
                     ))}
                     <div>current360Region: {sandbox360ViewerState.currentShot.toUpperCase()}</div>
