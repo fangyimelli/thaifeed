@@ -219,11 +219,13 @@
   animation: sandbox360DollReflect 520ms ease-out;
 }
 
+.sandbox360OverlayDollSlotAnchor,
 .sandbox360OverlayDollAbsoluteAnchor {
   position: absolute;
   pointer-events: none;
 }
 
+.sandbox360OverlayDollSlotAnchor .doll,
 .sandbox360OverlayDollAbsoluteAnchor .doll {
   position: absolute;
   inset: 0;
@@ -235,11 +237,9 @@
   user-select: none;
 }
 
-#layer-open { opacity: 1; z-index: 1; }
-#layer-look { opacity: 0; z-index: 3; transition: opacity 120ms ease-out; }
-#layer-closed { opacity: 0; z-index: 5; transition: opacity 80ms ease-in-out; }
-#layer-look[data-visible='true'] { opacity: 1; }
-#layer-closed[data-visible='true'] { opacity: 1; }
+.sandbox360OverlayDollAbsoluteAnchor {
+  opacity: 0;
+}
 
 @keyframes sandbox360DollReflect {
   0% { opacity: 0; transform: translateX(-4%); }
