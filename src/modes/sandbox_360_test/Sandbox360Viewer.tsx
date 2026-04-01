@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { curseVisualClass } from '../../core/systems/curseSystem';
-import { SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
+import { SANDBOX360_DOLL_LAYER_ASSETS, SANDBOX360_SCENE_IMAGE_FALLBACK_SRC, SANDBOX360_SCENE_IMAGE_SRC } from './assets';
 import {
   BASE_SCENE_HEIGHT,
   BASE_SCENE_WIDTH,
@@ -54,6 +54,7 @@ type RoomEventObservabilityState = {
 type RoomEventRuntimeState = Record<RoomEventType, { active: boolean; triggerCount: number; triggerSeq: number }>;
 type OverlayRect = { x: number; y: number; w: number; h: number };
 type SceneRect = OverlayRect;
+type AbsoluteRectPx = { leftPx: number; topPx: number; widthPx: number; heightPx: number };
 type QuadStyle = { topLeft: string; topRight: string; bottomRight: string; bottomLeft: string };
 type ScreenRectStyle = EffectBoundsStyle;
 type NumericScreenRect = { x: number; y: number; w: number; h: number };
@@ -124,6 +125,10 @@ type Props = {
   roomEventObservability: RoomEventObservabilityState;
   dollCabinetState: DollCabinetState;
   dollCabinetTargets: DollCabinetTarget[];
+  dollInteractionState: {
+    lookAtPlayer: boolean;
+    eyesClosed: boolean;
+  };
   onViewerDebugStateChange?: (payload: {
     baseSceneWidth: number;
     baseSceneHeight: number;
@@ -219,14 +224,17 @@ const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
 const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
 const SANDBOX360_MODE_TAG = '360' as const;
-const DOLL_SLOT_ANCHOR_LAYOUT = {
-  top_left: { x: 0.02, y: 0.04, w: 0.28, h: 0.42 },
-  top_center: { x: 0.36, y: 0.04, w: 0.28, h: 0.42 },
-  top_right: { x: 0.7, y: 0.04, w: 0.28, h: 0.42 },
-  bottom_left: { x: 0.02, y: 0.52, w: 0.28, h: 0.42 },
-  bottom_center: { x: 0.36, y: 0.52, w: 0.28, h: 0.42 },
-  bottom_right: { x: 0.7, y: 0.52, w: 0.28, h: 0.42 }
-} satisfies Record<DollCabinetTarget['cabinetSlot'], { x: number; y: number; w: number; h: number }>;
+const DOLL_CABINET_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 2720, topPx: 210, widthPx: 1120, heightPx: 1220 };
+const DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX = {
+  top_left: { leftPx: 2750, topPx: 292, widthPx: 280, heightPx: 430 },
+  top_center: { leftPx: 3070, topPx: 292, widthPx: 280, heightPx: 430 },
+  top_right: { leftPx: 3385, topPx: 292, widthPx: 280, heightPx: 430 },
+  bottom_left: { leftPx: 2750, topPx: 768, widthPx: 280, heightPx: 430 },
+  bottom_center: { leftPx: 3070, topPx: 768, widthPx: 280, heightPx: 430 },
+  bottom_right: { leftPx: 3385, topPx: 768, widthPx: 280, heightPx: 430 }
+} satisfies Record<DollCabinetTarget['cabinetSlot'], AbsoluteRectPx>;
+// Tune only these four px values to fine-adjust doll placement in the right cabinet red-box slot.
+const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 2760, topPx: 306, widthPx: 248, heightPx: 392 };
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
 
 const resolveTvScreenInnerGeometryFromBaseCalibration = ({
@@ -297,6 +305,7 @@ export default function Sandbox360Viewer({
   roomEventObservability,
   dollCabinetState,
   dollCabinetTargets,
+  dollInteractionState,
   onViewerDebugStateChange,
   tvBoundsVisualizationEnabled = false
 }: Props) {
@@ -353,6 +362,16 @@ export default function Sandbox360Viewer({
       cameraScale
     };
   }, [sceneDimensions.height, sceneDimensions.width, viewerState.currentPosX, viewerState.posY, viewerState.scale, viewportSize.height, viewportSize.width]);
+  const mapBaseRectPxToSceneRect = useCallback((rect: AbsoluteRectPx): SceneRect => {
+    const scaleX = cameraState.sceneWidth / SCENE_REFERENCE_SIZE.width;
+    const scaleY = cameraState.sceneHeight / SCENE_REFERENCE_SIZE.height;
+    return {
+      x: rect.leftPx * scaleX,
+      y: rect.topPx * scaleY,
+      w: rect.widthPx * scaleX,
+      h: rect.heightPx * scaleY
+    };
+  }, [cameraState.sceneHeight, cameraState.sceneWidth]);
 
   const scaleQuad = useCallback((quad: TvScreenQuad): TvScreenQuad => {
     const scaleX = cameraState.sceneWidth / SCENE_REFERENCE_SIZE.width;
@@ -390,30 +409,21 @@ export default function Sandbox360Viewer({
     const sceneHeight = cameraState.sceneHeight;
     return {
       roomLight: { x: 0, y: 0, w: sceneWidth * 0.4, h: sceneHeight * 0.6 },
-      doll: { x: sceneWidth * 0.66, y: sceneHeight * 0.11, w: sceneWidth * 0.34, h: sceneHeight * 0.74 },
+      doll: mapBaseRectPxToSceneRect(DOLL_CABINET_RECT_BASE_SCENE_PX),
       door: { x: sceneWidth * 0.45, y: sceneHeight * 0.16, w: sceneWidth * 0.14, h: sceneHeight * 0.62 }
     };
-  }, [cameraState.sceneHeight, cameraState.sceneWidth]);
+  }, [cameraState.sceneHeight, cameraState.sceneWidth, mapBaseRectPxToSceneRect]);
+  const dollAbsoluteRect = useMemo(() => mapBaseRectPxToSceneRect(DOLL_ABSOLUTE_RECT_BASE_SCENE_PX), [mapBaseRectPxToSceneRect]);
   const dollSlotAnchors = useMemo<DollSlotAnchorMap>(() => {
-    const cabinetRect = overlaySceneRects.doll;
-    const resolveSlotRect = (slot: DollCabinetTarget['cabinetSlot']): SceneRect => {
-      const unit = DOLL_SLOT_ANCHOR_LAYOUT[slot];
-      return {
-        x: cabinetRect.x + cabinetRect.w * unit.x,
-        y: cabinetRect.y + cabinetRect.h * unit.y,
-        w: cabinetRect.w * unit.w,
-        h: cabinetRect.h * unit.h
-      };
-    };
     return {
-      top_left: resolveSlotRect('top_left'),
-      top_center: resolveSlotRect('top_center'),
-      top_right: resolveSlotRect('top_right'),
-      bottom_left: resolveSlotRect('bottom_left'),
-      bottom_center: resolveSlotRect('bottom_center'),
-      bottom_right: resolveSlotRect('bottom_right')
+      top_left: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_left),
+      top_center: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_center),
+      top_right: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_right),
+      bottom_left: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_left),
+      bottom_center: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_center),
+      bottom_right: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_right)
     };
-  }, [overlaySceneRects.doll]);
+  }, [mapBaseRectPxToSceneRect]);
 
   const handheldState = useMemo<HandheldTransformState>(() => ({
     offsetX: viewerState.cameraOffsetX,
@@ -836,6 +846,7 @@ export default function Sandbox360Viewer({
   return (
     <div
       ref={rootRef}
+      id="stage"
       className="sandbox360Root"
       data-shot-current={viewerState.currentShot}
       data-shot-target={viewerState.targetShot}
@@ -897,6 +908,11 @@ export default function Sandbox360Viewer({
           <div className="sandbox360OverlayDollWorldLayer" data-stage={dollCabinetState.dollCabinetStage}>
             <div className="sandbox360OverlayDollCabinetFx" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
             <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
+            <div className="sandbox360OverlayDollAbsoluteAnchor" style={toScreenRectStyle(toScreenRect(dollAbsoluteRect))}>
+              <img id="layer-open" className="doll" src={SANDBOX360_DOLL_LAYER_ASSETS.open} alt="doll-open" />
+              <img id="layer-look" className="doll" src={SANDBOX360_DOLL_LAYER_ASSETS.look} alt="doll-look" data-visible={dollInteractionState.lookAtPlayer ? 'true' : 'false'} />
+              <img id="layer-closed" className="doll" src={SANDBOX360_DOLL_LAYER_ASSETS.closed} alt="doll-closed" data-visible={dollInteractionState.eyesClosed ? 'true' : 'false'} />
+            </div>
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
         </div>

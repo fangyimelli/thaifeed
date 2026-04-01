@@ -26,10 +26,10 @@ export default function LoadingOverlay({
   const hasErrors = errors.length > 0;
 
   return (
-    <div className="loading-overlay" role="status" aria-live="polite" aria-label="載入狀態">
+    <div id="loadingScreen" className="loading-overlay" role="status" aria-live="polite" aria-label="載入狀態">
       <div className="loading-overlay-content">
         {!hasErrors && <div className="loading-spinner" aria-hidden="true" />}
-        <p>{statusText ?? '正在連線'}</p>
+        <p id="statusText">{statusText ?? '正在連線'}</p>
         {!hasErrors && <p>載入直播畫面中{typeof progress === 'number' ? ` (${progress}%)` : ''}</p>}
         {hasErrors && (
           <div className="loading-error-block" role="alert">

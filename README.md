@@ -1,3 +1,20 @@
+## 2026-04-01 Sandbox360 娃娃絕對定位整合（同一控制列 + 三層娃娃 + base-scene px SSOT）
+
+- Scope 僅 `sandbox_360_test`（classic mode 未改）。
+- `Sandbox360Viewer` 新增 base-scene px SSOT：
+  - `DOLL_ABSOLUTE_RECT_BASE_SCENE_PX = { leftPx, topPx, widthPx, heightPx }`
+  - render 時透過 `mapBaseRectPxToSceneRect(...)` 映射到目前顯示容器（保留 px 作為設定來源，不儲存 `%`）。
+- 娃娃三層圖保留並整合到既有 360 場景：
+  - `#layer-open`
+  - `#layer-look`
+  - `#layer-closed`
+  - `.doll` 僅吃滿 absolute anchor（`position:absolute; inset:0; width/height:100%; object-fit:contain; object-position:center bottom`）。
+- 新按鈕「轉頭看我 / 閉上眼睛」整合到既有 `sandbox360-live-controls`（`#controlPanel`），未新增第二套獨立控制列。
+- 概念 ID 對位（整合而非另做 demo）：`#loadingScreen`、`#statusText`、`#stage`、`#controlPanel`、`#exportBtn`。
+- 娃娃素材路徑規範：
+  - 背景圖：`public/assets/scenes/room_360.png`
+  - 娃娃三層素材：`public/assets/sandbox360/dolls/`（`doll_layer_open.png` / `doll_layer_look.png` / `doll_layer_closed.png`）
+
 ## 2026-03-27 Sandbox360 娃娃櫃安全收斂（停用 clone/overlay 假本體動態，改 cabinet-local 非切片 FX）
 
 - Scope 嚴格限制 `sandbox_360_test`（classic / sandbox_story 完全未改）。

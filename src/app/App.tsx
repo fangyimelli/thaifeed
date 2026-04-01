@@ -767,6 +767,7 @@ export default function App() {
     forceReason: 'debug_force_enabled'
   });
   const [sandbox360DollCabinetState, setSandbox360DollCabinetState] = useState<DollCabinetState>(createInitialDollCabinetState());
+  const [sandbox360DollInteractionState, setSandbox360DollInteractionState] = useState({ lookAtPlayer: false, eyesClosed: false });
   const sandbox360DollCabinetRef = useRef<DollCabinetState>(createInitialDollCabinetState());
   const sandbox360RightEnteredAtRef = useRef(0);
 
@@ -8285,7 +8286,7 @@ export default function App() {
           {!hasFatalInitError ? (
             modeIdRef.current === 'sandbox_360_test' ? (
               <>
-                <div className="sandbox360-live-controls" aria-label="Sandbox 360 Live Controls">
+                <div id="controlPanel" className="sandbox360-live-controls" aria-label="Sandbox 360 Live Controls">
                   <div className="sandbox360-live-controls-group">
                     <strong>Shot</strong>
                     <button type="button" onClick={() => applySandbox360Shot('left', 'debug_button')}>LEFT</button>
@@ -8301,6 +8302,12 @@ export default function App() {
                     <button type="button" onClick={() => triggerSandbox360RoomEvent('TV_STATIC', { source: 'manual', force: true })}>FORCE TV</button>
                     <button type="button" onClick={() => setSandbox360DollCabinetState((prev) => markDollCabinetReturnTrigger(prev, 'story_tag'))}>TAG→RIGHT</button>
                   </div>
+                  <div className="sandbox360-live-controls-group">
+                    <strong>Doll</strong>
+                    <button type="button" onClick={() => setSandbox360DollInteractionState((prev) => ({ ...prev, lookAtPlayer: !prev.lookAtPlayer }))}>轉頭看我</button>
+                    <button type="button" onClick={() => setSandbox360DollInteractionState((prev) => ({ ...prev, eyesClosed: !prev.eyesClosed }))}>閉上眼睛</button>
+                    <button id="exportBtn" type="button" onClick={exportSandboxSSOT}>ExportSSOT</button>
+                  </div>
                 </div>
                 <Sandbox360Viewer
                   curse={state.curse}
@@ -8315,6 +8322,7 @@ export default function App() {
                   roomEventObservability={sandbox360RoomEventDebug}
                   dollCabinetState={sandbox360DollCabinetState}
                   dollCabinetTargets={DOLL_CABINET_TARGETS}
+                  dollInteractionState={sandbox360DollInteractionState}
                   onViewerDebugStateChange={(payload) => {
                     setSandbox360OverlayDebug({
                       baseSceneWidth: payload.baseSceneWidth,

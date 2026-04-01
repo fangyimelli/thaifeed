@@ -219,6 +219,28 @@
   animation: sandbox360DollReflect 520ms ease-out;
 }
 
+.sandbox360OverlayDollAbsoluteAnchor {
+  position: absolute;
+  pointer-events: none;
+}
+
+.sandbox360OverlayDollAbsoluteAnchor .doll {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+  user-select: none;
+}
+
+#layer-open { opacity: 1; z-index: 1; }
+#layer-look { opacity: 0; z-index: 3; transition: opacity 120ms ease-out; }
+#layer-closed { opacity: 0; z-index: 5; transition: opacity 80ms ease-in-out; }
+#layer-look[data-visible='true'] { opacity: 1; }
+#layer-closed[data-visible='true'] { opacity: 1; }
+
 @keyframes sandbox360DollReflect {
   0% { opacity: 0; transform: translateX(-4%); }
   40% { opacity: 0.65; transform: translateX(1%); }
