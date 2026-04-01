@@ -852,6 +852,7 @@ export default function App() {
     renderedVariantAssets: [] as string[],
     missingVariantAssets: [] as string[],
     fallbackVariantMap: {} as Record<string, string>,
+    fallbackVisibilityMap: {} as Record<string, 'motion_unavailable_visible_fallback' | 'fully_hidden'>,
     variantRenderSource: '-',
     dollGazeSsot: {
       mode: '360' as const,
@@ -8370,6 +8371,7 @@ export default function App() {
                       renderedVariantAssets: payload.renderedVariantAssets,
                       missingVariantAssets: payload.missingVariantAssets,
                       fallbackVariantMap: payload.fallbackVariantMap,
+                      fallbackVisibilityMap: payload.fallbackVisibilityMap,
                       variantRenderSource: payload.variantRenderSource,
                       dollGazeSsot: payload.dollGazeSsot
                     });
@@ -8686,6 +8688,7 @@ export default function App() {
                     <div>dollCabinet.renderedVariantAssets: {sandbox360OverlayDebug.renderedVariantAssets.join(' | ') || '-'}</div>
                     <div>dollCabinet.missingVariantAssets: {sandbox360OverlayDebug.missingVariantAssets.join(' | ') || '-'}</div>
                     <div>dollCabinet.fallbackVariantMap: {Object.entries(sandbox360OverlayDebug.fallbackVariantMap).map(([id, map]) => `${id}:${map}`).join(' | ') || '-'}</div>
+                    <div>dollCabinet.fallbackVisibilityMap: {Object.entries(sandbox360OverlayDebug.fallbackVisibilityMap).map(([id, mode]) => `${id}:${mode}`).join(' | ') || '-'}</div>
                     <div>dollCabinet.variantRenderSource: {sandbox360OverlayDebug.variantRenderSource}</div>
                     <div>dollGazeSsot.mode: {sandbox360OverlayDebug.dollGazeSsot.mode}</div>
                     <div>dollGazeSsot.activeCabinetRegion: {sandbox360OverlayDebug.dollGazeSsot.activeCabinetRegion}</div>

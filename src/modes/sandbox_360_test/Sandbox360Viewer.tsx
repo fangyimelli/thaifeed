@@ -106,6 +106,7 @@ type DollSceneBindingDebug = {
   anchor: SceneRect;
   requestedVariant: DollVariant;
   resolvedVariant: DollVariant | 'hidden';
+  fallbackVisibilityMode: 'motion_unavailable_visible_fallback' | 'fully_hidden';
   gazeState: DollGazeState;
   visibility: DollViewportVisibility;
   applyStatus: DollApplyStatus;
@@ -178,6 +179,7 @@ type Props = {
     renderedVariantAssets: string[];
     missingVariantAssets: string[];
     fallbackVariantMap: Record<string, string>;
+    fallbackVisibilityMap: Record<string, 'motion_unavailable_visible_fallback' | 'fully_hidden'>;
     variantRenderSource: string;
     dollGazeSsot: {
       mode: '360';
@@ -236,6 +238,18 @@ const DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX = {
 // Tune only these four px values to fine-adjust doll placement in the cabinet top-left red-box slot.
 const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 2784, topPx: 316, widthPx: 212, heightPx: 318 };
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
+const DOLL_VARIANT_VISIBLE_FALLBACK: Record<DollVariant, DollVariant> = {
+  neutral: 'neutral',
+  glance_to_player: 'neutral',
+  stare_player: 'stare_player',
+  hard_stare: 'stare_player'
+};
+const DOLL_VARIANT_ASSET_FALLBACK: Record<DollVariant, keyof typeof SANDBOX360_DOLL_LAYER_FALLBACK_ASSETS> = {
+  neutral: 'open',
+  glance_to_player: 'open',
+  stare_player: 'look',
+  hard_stare: 'look'
+};
 
 const resolveTvScreenInnerGeometryFromBaseCalibration = ({
   baseQuad,
@@ -742,6 +756,8 @@ export default function Sandbox360Viewer({
     };
     return dollCabinetTargets.map((target) => {
       const requestedVariant = dollCabinetState.dollCabinetActiveVariantMap[target.id] ?? 'neutral';
+      const resolvedVariant = DOLL_VARIANT_VISIBLE_FALLBACK[requestedVariant] ?? 'neutral';
+      const renderAssetId = DOLL_VARIANT_ASSET_FALLBACK[resolvedVariant] ?? 'open';
       const slotAnchor = dollSlotAnchors[target.cabinetSlot];
       const slotRect = toScreenRect(slotAnchor);
       const visibleRect = clampRectWithin(slotRect, viewportRect);
@@ -765,7 +781,8 @@ export default function Sandbox360Viewer({
         slot: target.cabinetSlot,
         anchor: slotAnchor,
         requestedVariant,
-        resolvedVariant: 'hidden',
+        resolvedVariant,
+        fallbackVisibilityMode: 'motion_unavailable_visible_fallback',
         gazeState,
         visibility: {
           inViewport,
@@ -775,7 +792,7 @@ export default function Sandbox360Viewer({
         },
         applyStatus,
         applyReason,
-        renderAssetId: 'disabled',
+        renderAssetId,
         motionPreset: 'unavailable'
       };
     });
@@ -783,12 +800,18 @@ export default function Sandbox360Viewer({
 
   useEffect(() => {
     const fallbackVariantMap: Record<string, string> = {};
+    const fallbackVisibilityMap: Record<string, 'motion_unavailable_visible_fallback' | 'fully_hidden'> = {};
     const renderedVariantAssets: string[] = [];
     const renderedDollSlots: string[] = [];
     const missingVariantAssets: string[] = [];
     dollSceneBindings.forEach((binding) => {
       fallbackVariantMap[binding.dollId] = `${binding.requestedVariant}->${binding.resolvedVariant}@${binding.motionPreset}`;
-      missingVariantAssets.push(`${binding.dollId}:per_doll_motion_unavailable`);
+      fallbackVisibilityMap[binding.dollId] = binding.fallbackVisibilityMode;
+      renderedDollSlots.push(`${binding.dollId}@${binding.slot}`);
+      renderedVariantAssets.push(`${binding.dollId}:${binding.renderAssetId}:${binding.resolvedVariant}`);
+      if (binding.fallbackVisibilityMode === 'fully_hidden') {
+        missingVariantAssets.push(`${binding.dollId}:hidden`);
+      }
     });
     onViewerDebugStateChange?.({
       baseSceneWidth: SCENE_REFERENCE_SIZE.width,
@@ -839,6 +862,7 @@ export default function Sandbox360Viewer({
       renderedVariantAssets,
       missingVariantAssets,
       fallbackVariantMap,
+      fallbackVisibilityMap,
       variantRenderSource: 'cabinet_local_non_slice_fx_v1',
       dollGazeSsot: {
         mode: SANDBOX360_MODE_TAG,
