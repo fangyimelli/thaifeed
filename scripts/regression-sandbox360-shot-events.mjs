@@ -30,6 +30,10 @@ assertHas(appFile, 'dollCabinet: sandbox360DollCabinetRef.current', 'app should 
 assertHas(appFile, "setSandbox360DollCabinetState((prev) => reduceDollCabinetForEscalation(prev, { now, source: 'right_stay'", 'right stay must escalate doll stage');
 assertHas(appFile, "setSandbox360DollCabinetState((prev) => markDollCabinetReturnTrigger(prev, 'story_tag'))", 'story tag return trigger should be wired');
 assertHas(appFile, 'dollCabinet.activeVariantMap:', 'debug panel should print active variant map');
+assertHas(appFile, 'id="controlPanel"', 'sandbox360 controls must expose a single shared control mount point');
+assertHas(appFile, '>轉頭看我<', 'doll look button must be mounted into the shared control panel');
+assertHas(appFile, '>閉上眼睛<', 'doll blink button must be mounted into the shared control panel');
+assertHas(appFile, 'id="exportBtn"', 'export button concept should map into existing sandbox360 control panel');
 assertHas(appFile, 'dollCabinet.overlay/audio/variant source:', 'debug panel should expose stage effect source');
 assertHas(appFile, 'dollCabinet.renderedVariantAssets:', 'debug panel should expose rendered variant assets');
 assertHas(appFile, 'dollCabinet.missingVariantAssets:', 'debug panel should expose missing variant assets');
@@ -51,6 +55,8 @@ assertHas(viewerFile, 'DOLL_MOTION_UNAVAILABLE_REASON', 'viewer should expose ca
 assertHas(viewerFile, '${binding.requestedVariant}->${binding.resolvedVariant}@${binding.motionPreset}', 'viewer debug should expose unavailable mapping');
 assertHas(viewerFile, "variantRenderSource: 'cabinet_local_non_slice_fx_v1'", 'viewer should expose cabinet-local non-slice render source id');
 assertHas(viewerFile, 'const dollSlotAnchors = useMemo<DollSlotAnchorMap>', 'viewer should author scene-space doll slot anchors');
+assertHas(viewerFile, 'const DOLL_ABSOLUTE_RECT_BASE_SCENE_PX', 'doll absolute anchor must be SSOT in base-scene px');
+assertHas(viewerFile, 'mapBaseRectPxToSceneRect', 'base-scene px rect must map through scene scaling');
 assertHas(viewerFile, 'const dollSceneBindings = useMemo<DollSceneBindingDebug[]>', 'viewer should project per-doll scene binding ssot');
 assertHas(viewerFile, "activeCabinetRegion: 'dollCabinet'", 'viewer should expose active cabinet region in gaze ssot');
 assertHas(viewerFile, "perDollBodyMotion: 'unavailable'", 'viewer should explicitly expose unavailable per-doll motion');
@@ -61,9 +67,16 @@ assertHas(viewerFile, 'className="sandbox360OverlayDollCabinetFx"', 'viewer shou
 assertHas(viewerFile, "applyReason = `per_doll_motion_unavailable(${DOLL_MOTION_UNAVAILABLE_REASON})`;", 'viewer should report disabled reason');
 assertHas(viewerFile, "geometrySource: 'dollSlotAnchors(scene_space) -> resolveTvScreenInnerGeometryFromBaseCalibration(base_scene+viewer_camera+handheld)'", 'doll debug geometry must report scene-space anchor path');
 assertHas(viewerFile, 'className="sandbox360OverlayDollReflectCue"', 'legacy doll reflect should stay as cue only');
+assertHas(viewerFile, 'className="sandbox360OverlayDollAbsoluteAnchor"', 'viewer must render doll in absolute anchor container');
+assertHas(viewerFile, 'id="layer-open"', 'open layer must stay in integrated viewer');
+assertHas(viewerFile, 'id="layer-look"', 'look layer must stay in integrated viewer');
+assertHas(viewerFile, 'id="layer-closed"', 'closed layer must stay in integrated viewer');
+assertHas(viewerFile, 'id="stage"', 'stage id concept should map to integrated 360 root');
 assertHas(viewerFile, 'missingVariantAssets', 'viewer should expose missing variant assets');
 assertHas(viewerFile, 'renderedVariantAssets', 'viewer should expose rendered variant assets');
 assertHas(viewerFile, 'fallbackVariantMap', 'viewer should expose fallback variant map');
+assertHas(viewerCssFile, '.sandbox360OverlayDollAbsoluteAnchor .doll', 'doll image must fill absolute anchor instead of full scene');
+assertHas(viewerCssFile, 'object-position: center bottom;', 'doll render rules must pin to center-bottom in anchor');
 
 if (viewerFile.includes('className="sandbox360OverlayDoll"')) {
   throw new Error('legacy single doll overlay path should be removed');

@@ -1,3 +1,41 @@
+> 2026-04-01 sandbox_360_test 補充（第十四波）：娃娃絕對定位整合。三層娃娃掛入既有 360 scene overlay，按鈕併入同一前端控制列，不新增平行 toolbar。
+
+## 2026-04-01 Sandbox360 doll absolute-anchor integration（single control mount + base-scene px SSOT）
+
+### Scope
+- `sandbox_360_test` only（classic / sandbox_story untouched）。
+
+### What changed
+- `src/modes/sandbox_360_test/Sandbox360Viewer.tsx`
+  - 新增 `DOLL_ABSOLUTE_RECT_BASE_SCENE_PX`（`leftPx/topPx/widthPx/heightPx`）作為娃娃絕對定位單一來源。
+  - 新增 `mapBaseRectPxToSceneRect(...)`，以 base scene px 設定映射到當前 viewport/camera 尺寸。
+  - 保留並整合三層娃娃：`#layer-open` / `#layer-look` / `#layer-closed`，掛入既有 overlay layer（非獨立 demo stage）。
+  - root 加上 `#stage` 便於對齊參考 HTML 概念。
+- `src/modes/sandbox_360_test/sandbox360Viewer.css`
+  - 新增 `.sandbox360OverlayDollAbsoluteAnchor` 與 `.doll` 規則：
+    - `position:absolute`
+    - `inset:0`
+    - `width:100%`
+    - `height:100%`
+    - `object-fit:contain`
+    - `object-position:center bottom`
+- `src/app/App.tsx`
+  - `sandbox360-live-controls` 加上 `#controlPanel`，並把「轉頭看我 / 閉上眼睛」整合到同一控制區（無雙軌控制列）。
+  - `ExportSSOT` 搬入同一控制區並加上 `#exportBtn`（對齊參考概念）。
+  - viewer 新增 `dollInteractionState`，只透過 state 驅動 layer 顯示（debug 不直改正式 state）。
+- `src/ui/hud/LoadingOverlay.tsx`
+  - 對齊概念 ID：`#loadingScreen` / `#statusText`。
+- `src/modes/sandbox_360_test/assets.ts`
+  - 新增 `SANDBOX360_DOLL_LAYER_ASSETS`，沿用專案資產規範 `assets/...`。
+- `scripts/regression-sandbox360-shot-events.mjs`
+  - 新增 guard：檢查 absolute rect SSOT、三層 ID、同一 control mount、`.doll` anchor-fit 規則。
+
+### Asset placement
+- 背景：`public/assets/scenes/room_360.png`
+- 娃娃：`public/assets/sandbox360/dolls/doll_layer_open.png`
+- 娃娃：`public/assets/sandbox360/dolls/doll_layer_look.png`
+- 娃娃：`public/assets/sandbox360/dolls/doll_layer_closed.png`
+
 > 2026-03-27 sandbox_360_test 補充（第十三波）：停止交付錯誤 per-doll 假本體動態。移除 clone/overlay 切片路徑，改為 cabinet-local 安全非切片 FX，debug 明確標示 per-doll body motion unavailable。
 
 ## 2026-03-27 Sandbox360 cabinet-safe convergence（remove clone/slice fake body motion）
