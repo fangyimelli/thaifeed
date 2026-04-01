@@ -340,13 +340,16 @@ export default function Sandbox360Viewer({
   const [flashRenderedBounds, setFlashRenderedBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
   const [dollRenderedBounds, setDollRenderedBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
   const [doorRenderedBounds, setDoorRenderedBounds] = useState<ScreenRectStyle>({ left: '-', top: '-', width: '-', height: '-' });
-  const [dollLayerSources, setDollLayerSources] = useState(SANDBOX360_DOLL_LAYER_ASSETS);
+  const [dollLayerSources, setDollLayerSources] = useState(SANDBOX360_DOLL_LAYER_FALLBACK_ASSETS);
   const [quadDiff, setQuadDiff] = useState('-');
 
-  const handleDollLayerError = useCallback((layer: keyof typeof SANDBOX360_DOLL_LAYER_ASSETS) => {
-    setDollLayerSources((prev) => {
-      if (prev[layer] === SANDBOX360_DOLL_LAYER_FALLBACK_ASSETS[layer]) return prev;
-      return { ...prev, [layer]: SANDBOX360_DOLL_LAYER_FALLBACK_ASSETS[layer] };
+  useEffect(() => {
+    (Object.keys(SANDBOX360_DOLL_LAYER_ASSETS) as Array<keyof typeof SANDBOX360_DOLL_LAYER_ASSETS>).forEach((layer) => {
+      const probe = new Image();
+      probe.onload = () => {
+        setDollLayerSources((prev) => ({ ...prev, [layer]: SANDBOX360_DOLL_LAYER_ASSETS[layer] }));
+      };
+      probe.src = SANDBOX360_DOLL_LAYER_ASSETS[layer];
     });
   }, []);
 
@@ -917,9 +920,9 @@ export default function Sandbox360Viewer({
             <div className="sandbox360OverlayDollCabinetFx" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
             <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
             <div className="sandbox360OverlayDollAbsoluteAnchor" style={toScreenRectStyle(toScreenRect(dollAbsoluteRect))}>
-              <img id="layer-open" className="doll" src={dollLayerSources.open} alt="doll-open" onError={() => handleDollLayerError('open')} />
-              <img id="layer-look" className="doll" src={dollLayerSources.look} alt="doll-look" data-visible={dollInteractionState.lookAtPlayer ? 'true' : 'false'} onError={() => handleDollLayerError('look')} />
-              <img id="layer-closed" className="doll" src={dollLayerSources.closed} alt="doll-closed" data-visible={dollInteractionState.eyesClosed ? 'true' : 'false'} onError={() => handleDollLayerError('closed')} />
+              <img id="layer-open" className="doll" src={dollLayerSources.open} alt="doll-open" />
+              <img id="layer-look" className="doll" src={dollLayerSources.look} alt="doll-look" data-visible={dollInteractionState.lookAtPlayer ? 'true' : 'false'} />
+              <img id="layer-closed" className="doll" src={dollLayerSources.closed} alt="doll-closed" data-visible={dollInteractionState.eyesClosed ? 'true' : 'false'} />
             </div>
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
