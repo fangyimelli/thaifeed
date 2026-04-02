@@ -831,6 +831,15 @@ export default function Sandbox360Viewer({
     };
   }, [dollSlotAnchorsByShot, overlaySceneRects.doll, toScreenRect, toScreenRectStyle]);
 
+  const cabinetLayerAssetId = useMemo<DollLayerAssetId>(() => {
+    const variants = dollSceneBindings
+      .filter((binding) => binding.visibility.inViewport)
+      .map((binding) => binding.resolvedVariant);
+    if (variants.includes('stare_player') || variants.includes('hard_stare')) return 'look';
+    if (variants.includes('glance_to_player')) return 'open';
+    return 'open';
+  }, [dollSceneBindings]);
+
   useEffect(() => {
     const fallbackVariantMap: Record<string, string> = {};
     const fallbackVisibilityMap: Record<string, 'motion_unavailable_visible_fallback' | 'fully_hidden'> = {};
@@ -977,17 +986,13 @@ export default function Sandbox360Viewer({
           <div className="sandbox360OverlayDollWorldLayer" data-stage={dollCabinetState.dollCabinetStage}>
             <div className="sandbox360OverlayDollCabinetFx" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-source={dollCabinetState.stageEffectSource.overlaySource} data-stage={dollCabinetState.dollCabinetStage} />
             <div key={`DOLL_REFLECT-${roomEventState.DOLL_REFLECT.triggerSeq}`} className="sandbox360OverlayDollReflectCue" style={toScreenRectStyle(toScreenRect(overlaySceneRects.doll))} data-active={roomEventState.DOLL_REFLECT.active ? 'true' : 'false'} />
-            {dollSceneBindings.filter((binding) => binding.visibility.inViewport).map((binding) => (
-              <div
-                key={`doll-slot-${binding.dollId}`}
-                className="sandbox360OverlayDollSlotAnchor"
-                style={toScreenRectStyle(binding.anchorAfterShotTransform)}
-                data-doll-id={binding.dollId}
-                data-variant={binding.resolvedVariant}
-              >
-                <img className="doll" src={dollLayerSources[binding.renderAssetId]} alt={`${binding.dollId}-${binding.resolvedVariant}`} />
-              </div>
-            ))}
+            <div
+              className="sandbox360OverlayDollAbsoluteAnchor"
+              style={{ ...toScreenRectStyle(toScreenRect(overlaySceneRects.doll)), opacity: 1 }}
+              data-variant-source={dollCabinetState.stageEffectSource.variantSource}
+            >
+              <img className="doll" src={dollLayerSources[cabinetLayerAssetId]} alt={`cabinet-${cabinetLayerAssetId}`} />
+            </div>
           </div>
           <div key={`DOOR_SHADOW-${roomEventState.DOOR_SHADOW.triggerSeq}`} className="sandbox360OverlayDoor" style={toScreenRectStyle(toScreenRect(overlaySceneRects.door))} data-active={roomEventState.DOOR_SHADOW.active ? 'true' : 'false'} />
         </div>
