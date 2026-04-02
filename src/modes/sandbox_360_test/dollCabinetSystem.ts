@@ -46,8 +46,10 @@ export type DollCabinetState = {
 };
 
 export const DOLL_CABINET_TARGETS: DollCabinetTarget[] = [
+  { id: 'doll_01', cabinetSlot: 'top_left', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 5 },
   { id: 'doll_02', cabinetSlot: 'top_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 1 },
   { id: 'doll_03', cabinetSlot: 'top_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 2 },
+  { id: 'doll_04', cabinetSlot: 'bottom_left', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 6 },
   { id: 'doll_05', cabinetSlot: 'bottom_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 3 },
   { id: 'doll_06', cabinetSlot: 'bottom_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 4 }
 ];
