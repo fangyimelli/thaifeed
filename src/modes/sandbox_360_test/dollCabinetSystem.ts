@@ -56,7 +56,7 @@ const STAGE_EFFECT_SOURCE: Record<DollCabinetStage, DollCabinetStageEffectSource
   0: { overlaySource: 'doll_stage0_neutral_shadow', audioSource: 'doll_wood_idle', variantSource: 'stage0_neutral' },
   1: { overlaySource: 'doll_stage1_darken_cabinet', audioSource: 'doll_glass_resonance_light', variantSource: 'stage1_single_glance' },
   2: { overlaySource: 'doll_stage2_local_light_pulse', audioSource: 'doll_wood_creak_mid', variantSource: 'stage2_multi_stare' },
-  3: { overlaySource: 'doll_stage3_breathing_pressure', audioSource: 'doll_breathing_loop_near', variantSource: 'stage3_majority_stare' },
+  3: { overlaySource: 'doll_stage3_static_dread_vignette', audioSource: 'doll_breathing_loop_near', variantSource: 'stage3_majority_stare' },
   4: { overlaySource: 'doll_stage4_hard_stare_burst', audioSource: 'doll_sting_hard_stare', variantSource: 'stage4_sync_hard_stare' }
 };
 

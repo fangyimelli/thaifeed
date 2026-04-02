@@ -184,25 +184,28 @@
   pointer-events: none;
   opacity: 0.12;
   background:
-    radial-gradient(circle at 58% 14%, rgba(112, 146, 190, 0.09) 0%, rgba(12, 16, 26, 0.22) 54%, rgba(6, 7, 12, 0.34) 100%),
-    linear-gradient(128deg, rgba(162, 194, 240, 0.06) 0%, rgba(18, 22, 36, 0.02) 45%, rgba(240, 220, 182, 0.04) 100%);
+    radial-gradient(circle at 50% 46%, rgba(0, 0, 0, 0) 48%, rgba(3, 4, 8, 0.44) 84%, rgba(2, 2, 6, 0.68) 100%),
+    repeating-linear-gradient(138deg, rgba(184, 214, 255, 0.045) 0 2px, rgba(22, 26, 38, 0.03) 2px 5px, rgba(10, 12, 20, 0.05) 5px 8px),
+    radial-gradient(circle at 58% 14%, rgba(112, 146, 190, 0.08) 0%, rgba(12, 16, 26, 0.2) 54%, rgba(6, 7, 12, 0.34) 100%),
+    linear-gradient(128deg, rgba(162, 194, 240, 0.05) 0%, rgba(18, 22, 36, 0.03) 45%, rgba(240, 220, 182, 0.03) 100%);
   border-radius: 10px;
-  animation: sandbox360CabinetAmbientBreath 3200ms ease-in-out infinite;
+  box-shadow: inset 0 0 58px rgba(3, 4, 9, 0.52), inset 0 0 120px rgba(0, 0, 0, 0.32);
+  filter: brightness(0.99) saturate(1.01);
 }
 
 .sandbox360OverlayDollCabinetFx[data-stage='2'] {
   opacity: 0.18;
-  animation: sandbox360CabinetAmbientBreath 2400ms ease-in-out infinite;
+  filter: brightness(0.95) saturate(1.02);
 }
 
 .sandbox360OverlayDollCabinetFx[data-stage='3'] {
   opacity: 0.24;
-  animation: sandbox360CabinetAmbientBreath 1800ms ease-in-out infinite;
+  filter: brightness(0.91) saturate(1.03);
 }
 
 .sandbox360OverlayDollCabinetFx[data-stage='4'] {
   opacity: 0.32;
-  animation: sandbox360CabinetEventPulse 360ms ease-out;
+  filter: brightness(0.88) saturate(1.05);
 }
 
 .sandbox360OverlayDollReflectCue {
@@ -247,17 +250,6 @@
   100% { opacity: 0; transform: translateX(4%); }
 }
 
-@keyframes sandbox360CabinetAmbientBreath {
-  0% { filter: brightness(0.97) saturate(1) hue-rotate(0deg); }
-  50% { filter: brightness(1.05) saturate(1.03) hue-rotate(-2deg); }
-  100% { filter: brightness(0.97) saturate(1) hue-rotate(0deg); }
-}
-
-@keyframes sandbox360CabinetEventPulse {
-  0% { filter: brightness(1) saturate(1.02); }
-  40% { filter: brightness(1.14) saturate(1.08); }
-  100% { filter: brightness(1) saturate(1.02); }
-}
 
 .sandbox360OverlayDoor {
   position: absolute;
