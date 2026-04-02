@@ -231,14 +231,14 @@ const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
 const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
 const SANDBOX360_MODE_TAG = '360' as const;
-const DOLL_CABINET_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 1360, topPx: 210, widthPx: 560, heightPx: 1220 };
+const DOLL_CABINET_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 1586, topPx: 176, widthPx: 438, heightPx: 1046 };
 const DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX = {
-  top_left: { leftPx: 1375, topPx: 292, widthPx: 140, heightPx: 430 },
-  top_center: { leftPx: 1535, topPx: 292, widthPx: 140, heightPx: 430 },
-  top_right: { leftPx: 1692.5, topPx: 292, widthPx: 140, heightPx: 430 },
-  bottom_left: { leftPx: 1375, topPx: 768, widthPx: 140, heightPx: 430 },
-  bottom_center: { leftPx: 1535, topPx: 768, widthPx: 140, heightPx: 430 },
-  bottom_right: { leftPx: 1692.5, topPx: 768, widthPx: 140, heightPx: 430 }
+  top_left: { leftPx: 1612, topPx: 236, widthPx: 84, heightPx: 118 },
+  top_center: { leftPx: 1714, topPx: 236, widthPx: 88, heightPx: 118 },
+  top_right: { leftPx: 1816, topPx: 236, widthPx: 84, heightPx: 118 },
+  bottom_left: { leftPx: 1612, topPx: 390, widthPx: 84, heightPx: 124 },
+  bottom_center: { leftPx: 1714, topPx: 390, widthPx: 88, heightPx: 124 },
+  bottom_right: { leftPx: 1816, topPx: 390, widthPx: 84, heightPx: 124 }
 } satisfies Record<DollCabinetTarget['cabinetSlot'], AbsoluteRectPx>;
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
 const DOLL_VARIANT_VISIBLE_FALLBACK: Record<DollVariant, DollVariant> = {
