@@ -46,8 +46,10 @@ export type DollCabinetState = {
 };
 
 export const DOLL_CABINET_TARGETS: DollCabinetTarget[] = [
+  { id: 'doll_01', cabinetSlot: 'top_left', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 5 },
   { id: 'doll_02', cabinetSlot: 'top_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 1 },
   { id: 'doll_03', cabinetSlot: 'top_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 2 },
+  { id: 'doll_04', cabinetSlot: 'bottom_left', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 6 },
   { id: 'doll_05', cabinetSlot: 'bottom_center', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 3 },
   { id: 'doll_06', cabinetSlot: 'bottom_right', allowedVariants: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], escalationOrder: ['neutral', 'glance_to_player', 'stare_player', 'hard_stare'], scarePriority: 4 }
 ];
@@ -56,7 +58,7 @@ const STAGE_EFFECT_SOURCE: Record<DollCabinetStage, DollCabinetStageEffectSource
   0: { overlaySource: 'doll_stage0_neutral_shadow', audioSource: 'doll_wood_idle', variantSource: 'stage0_neutral' },
   1: { overlaySource: 'doll_stage1_darken_cabinet', audioSource: 'doll_glass_resonance_light', variantSource: 'stage1_single_glance' },
   2: { overlaySource: 'doll_stage2_local_light_pulse', audioSource: 'doll_wood_creak_mid', variantSource: 'stage2_multi_stare' },
-  3: { overlaySource: 'doll_stage3_breathing_pressure', audioSource: 'doll_breathing_loop_near', variantSource: 'stage3_majority_stare' },
+  3: { overlaySource: 'doll_stage3_static_dread_vignette', audioSource: 'doll_breathing_loop_near', variantSource: 'stage3_majority_stare' },
   4: { overlaySource: 'doll_stage4_hard_stare_burst', audioSource: 'doll_sting_hard_stare', variantSource: 'stage4_sync_hard_stare' }
 };
 

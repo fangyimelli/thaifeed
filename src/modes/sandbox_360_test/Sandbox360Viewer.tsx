@@ -105,6 +105,7 @@ type DollSceneBindingDebug = {
   dollId: string;
   slot: DollCabinetTarget['cabinetSlot'];
   anchor: SceneRect;
+  authored_base_slot_rect: SceneRect;
   requestedVariant: DollVariant;
   resolvedVariant: DollVariant | 'hidden';
   fallbackVisibilityMode: 'motion_unavailable_visible_fallback' | 'fully_hidden';
@@ -193,6 +194,7 @@ type Props = {
       storyFlowUnchanged: true;
       capabilityReason: string;
       controlledDolls: string[];
+      topLeftSlotCabinetCheckByShot: Record<ShotType, { inCabinetRedBox: boolean; slotRect: ScreenRectStyle; cabinetRect: ScreenRectStyle }>;
       bindings: DollSceneBindingDebug[];
     };
   }) => void;
@@ -225,32 +227,19 @@ declare global {
 const SCENE_DEFAULT_WIDTH = BASE_SCENE_WIDTH;
 const SCENE_DEFAULT_HEIGHT = BASE_SCENE_HEIGHT;
 const SCENE_REFERENCE_SIZE = TV_ANCHOR_CALIBRATION.referenceScene;
-const DOLL_ANCHOR_REFERENCE_SIZE = { width: 4096, height: BASE_SCENE_HEIGHT };
 const TV_GEOMETRY_KIND: TvGeometryKind = 'quad';
 const TV_TARGET_REGION_KIND: TvTargetRegionKind = TV_ANCHOR_CALIBRATION.tvTargetRegionKind;
 const TV_SCREEN_GEOMETRY_BY_SHOT = 'TV_SCREEN_GEOMETRY_BY_SHOT';
 const SANDBOX360_MODE_TAG = '360' as const;
-const DOLL_CABINET_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 2720, topPx: 210, widthPx: 1120, heightPx: 1220 };
+const DOLL_CABINET_RECT_BASE_SCENE_PX: AbsoluteRectPx = { leftPx: 1360, topPx: 210, widthPx: 560, heightPx: 1220 };
 const DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX = {
-  top_left: { leftPx: 2750, topPx: 292, widthPx: 280, heightPx: 430 },
-  top_center: { leftPx: 3070, topPx: 292, widthPx: 280, heightPx: 430 },
-  top_right: { leftPx: 3385, topPx: 292, widthPx: 280, heightPx: 430 },
-  bottom_left: { leftPx: 2750, topPx: 768, widthPx: 280, heightPx: 430 },
-  bottom_center: { leftPx: 3070, topPx: 768, widthPx: 280, heightPx: 430 },
-  bottom_right: { leftPx: 3385, topPx: 768, widthPx: 280, heightPx: 430 }
+  top_left: { leftPx: 1375, topPx: 292, widthPx: 140, heightPx: 430 },
+  top_center: { leftPx: 1535, topPx: 292, widthPx: 140, heightPx: 430 },
+  top_right: { leftPx: 1692.5, topPx: 292, widthPx: 140, heightPx: 430 },
+  bottom_left: { leftPx: 1375, topPx: 768, widthPx: 140, heightPx: 430 },
+  bottom_center: { leftPx: 1535, topPx: 768, widthPx: 140, heightPx: 430 },
+  bottom_right: { leftPx: 1692.5, topPx: 768, widthPx: 140, heightPx: 430 }
 } satisfies Record<DollCabinetTarget['cabinetSlot'], AbsoluteRectPx>;
-const DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX: Record<ShotType, Partial<Record<DollCabinetTarget['cabinetSlot'], { offsetXPx: number; offsetYPx: number }>>> = {
-  left: {},
-  center: {},
-  right: {
-    top_left: { offsetXPx: -2048, offsetYPx: 0 },
-    top_center: { offsetXPx: -2048, offsetYPx: 0 },
-    top_right: { offsetXPx: -2048, offsetYPx: 0 },
-    bottom_left: { offsetXPx: -2048, offsetYPx: 0 },
-    bottom_center: { offsetXPx: -2048, offsetYPx: 0 },
-    bottom_right: { offsetXPx: -2048, offsetYPx: 0 }
-  }
-};
 const DOLL_MOTION_UNAVAILABLE_REASON = 'lack of per-doll isolated assets / mask / anchor structure';
 const DOLL_VARIANT_VISIBLE_FALLBACK: Record<DollVariant, DollVariant> = {
   neutral: 'neutral',
@@ -452,31 +441,18 @@ export default function Sandbox360Viewer({
     };
   }, [cameraState.sceneHeight, cameraState.sceneWidth, mapBaseRectPxToSceneRect]);
   const dollSlotAnchorsByShot = useMemo<Record<ShotType, DollSlotAnchorMap>>(() => {
-    const resolveShotAnchors = (shot: ShotType): DollSlotAnchorMap => {
-      const shotAdjustment = DOLL_SLOT_ANCHOR_SHOT_ADJUSTMENT_BASE_PX[shot];
-      const resolveSlot = (slot: DollCabinetTarget['cabinetSlot']) => {
-        const authored = DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX[slot];
-        const adjust = shotAdjustment[slot] ?? { offsetXPx: 0, offsetYPx: 0 };
-        return mapBaseRectPxToSceneRect({
-          leftPx: authored.leftPx + adjust.offsetXPx,
-          topPx: authored.topPx + adjust.offsetYPx,
-          widthPx: authored.widthPx,
-          heightPx: authored.heightPx
-        }, DOLL_ANCHOR_REFERENCE_SIZE);
-      };
-      return {
-        top_left: resolveSlot('top_left'),
-        top_center: resolveSlot('top_center'),
-        top_right: resolveSlot('top_right'),
-        bottom_left: resolveSlot('bottom_left'),
-        bottom_center: resolveSlot('bottom_center'),
-        bottom_right: resolveSlot('bottom_right')
-      };
+    const sharedAnchors: DollSlotAnchorMap = {
+      top_left: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_left),
+      top_center: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_center),
+      top_right: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.top_right),
+      bottom_left: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_left),
+      bottom_center: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_center),
+      bottom_right: mapBaseRectPxToSceneRect(DOLL_SLOT_ABSOLUTE_RECTS_BASE_SCENE_PX.bottom_right)
     };
     return {
-      left: resolveShotAnchors('left'),
-      center: resolveShotAnchors('center'),
-      right: resolveShotAnchors('right')
+      left: sharedAnchors,
+      center: sharedAnchors,
+      right: sharedAnchors
     };
   }, [mapBaseRectPxToSceneRect]);
   const dollSlotAnchors = useMemo<DollSlotAnchorMap>(() => dollSlotAnchorsByShot[viewerState.currentShot], [dollSlotAnchorsByShot, viewerState.currentShot]);
@@ -811,6 +787,7 @@ export default function Sandbox360Viewer({
         dollId: target.id,
         slot: target.cabinetSlot,
         anchor: slotAnchor,
+        authored_base_slot_rect: slotAnchor,
         requestedVariant,
         resolvedVariant,
         fallbackVisibilityMode: 'motion_unavailable_visible_fallback',
@@ -830,6 +807,29 @@ export default function Sandbox360Viewer({
       };
     });
   }, [cameraState.viewportHeight, cameraState.viewportWidth, clampRectWithin, dollCabinetState.dollCabinetActiveVariantMap, dollCabinetTargets, dollSlotAnchors, toScreenRect]);
+
+  const topLeftSlotCabinetCheckByShot = useMemo<Record<ShotType, { inCabinetRedBox: boolean; slotRect: ScreenRectStyle; cabinetRect: ScreenRectStyle }>>(() => {
+    const cabinetRect = toScreenRect(overlaySceneRects.doll);
+    const isContained = (slotRect: NumericScreenRect) => (
+      slotRect.x >= cabinetRect.x
+      && slotRect.y >= cabinetRect.y
+      && slotRect.x + slotRect.w <= cabinetRect.x + cabinetRect.w
+      && slotRect.y + slotRect.h <= cabinetRect.y + cabinetRect.h
+    );
+    const createShotCheck = (shot: ShotType) => {
+      const slotRect = toScreenRect(dollSlotAnchorsByShot[shot].top_left);
+      return {
+        inCabinetRedBox: isContained(slotRect),
+        slotRect: toScreenRectStyle(slotRect),
+        cabinetRect: toScreenRectStyle(cabinetRect)
+      };
+    };
+    return {
+      left: createShotCheck('left'),
+      center: createShotCheck('center'),
+      right: createShotCheck('right')
+    };
+  }, [dollSlotAnchorsByShot, overlaySceneRects.doll, toScreenRect, toScreenRectStyle]);
 
   useEffect(() => {
     const fallbackVariantMap: Record<string, string> = {};
@@ -906,10 +906,11 @@ export default function Sandbox360Viewer({
         storyFlowUnchanged: true,
         capabilityReason: DOLL_MOTION_UNAVAILABLE_REASON,
         controlledDolls: dollCabinetTargets.map((target) => target.id),
+        topLeftSlotCabinetCheckByShot,
         bindings: dollSceneBindings
       }
     });
-  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, dollCabinetState.dollCabinetLookAtPlayerLevel, dollCabinetState.dollCabinetStage, dollCabinetState.stageEffectSource, dollCabinetTargets, dollSceneBindings, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
+  }, [baseTvScreenInnerRect, baseTvScreenQuad, cameraState.sceneHeight, cameraState.sceneWidth, dollCabinetState.dollCabinetLookAtPlayerLevel, dollCabinetState.dollCabinetStage, dollCabinetState.stageEffectSource, dollCabinetTargets, dollSceneBindings, effectContentUsesResolvedGeometry, effectContentUsesResolvedQuad, effectVisibleBounds, effectsDebugMap, onViewerDebugStateChange, quadDiff, questionConsonant, questionVisible, renderedEffectRect, rendererFallbackReason, rendererGeometryKind, rendererGeometrySource, rendererUsesResolvedGeometry, rendererUsesResolvedQuad, resolvedQuadStyle, resolvedTvBoundingRect, resolvedTvScreenInnerRect, resolvedTvScreenQuad, roomEventObservability.eventType, topLeftSlotCabinetCheckByShot, transformChain, transitionState, tvSharesTransformContainer, viewerState.currentShot, viewerState.targetShot]);
 
   return (
     <div
